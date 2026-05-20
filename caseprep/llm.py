@@ -43,7 +43,7 @@ GUIDELINES:
 3. If sources provide numbers or rates, explain what they mean for decision-making, not just what they are.
 4. If sources conflict, present the tension rather than picking a side.
 5. If insufficient information exists for a section, write "Insufficient data in search results."
-6. Write in compact prose — 2-4 sentences per section is usually enough. No bullet lists, no filler.
+6. Use the format that serves the section: checklists for preparation tasks, short tables for tradeoffs or rescue triggers, and compact prose for evidence interpretation. Avoid filler.
 7. Be specific. "Endovascular coiling" is vague; "stent-assisted coiling with the jailing technique using a Neuroform Atlas" is useful.
 
 CRITICAL: NUMBER INTEGRITY
@@ -54,21 +54,19 @@ CRITICAL: NUMBER INTEGRITY
 - Do not perform arithmetic on source numbers (e.g., do not compute percentages from raw counts unless the source explicitly states the result)."""
 
 
-async def _synthesize_call(
+def _build_synthesis_user_prompt(
     template_sections: list[tuple[str, str]],
     source_sentences: list[str],
     topic: str,
-    config: LLMConfig,
 ) -> str:
-    """Single API call to the LLM. Separated for retry logic."""
+    """Build the user prompt for section synthesis."""
     sources_block = "\n".join(
         f"[S{i+1}] {s}" for i, s in enumerate(source_sentences)
     )
     sections_block = "\n\n".join(
         f"## {name}\n{placeholder}" for name, placeholder in template_sections
     )
-
-    user_prompt = f"""\
+    return f"""\
 Topic: {topic}
 
 SOURCE SENTENCES (use these as evidence):
@@ -77,18 +75,29 @@ SOURCE SENTENCES (use these as evidence):
 TEMPLATE TO FILL:
 {sections_block}
 
-For each section above, write 2-4 sentences of compact reasoning that a surgeon 
-can use for intraoperative decision-making. Weave citations [S1], [S2] into the 
-logic. If no source sentence supports a section, write "Insufficient data 
-in search results."
+For each section above, write surgeon-facing case-prep content using checklists, short tables, or compact prose as appropriate. Prefer structured bullets for operative setup, imaging review, complications, rescue triggers, and postop plans. Weave citations [S1], [S2] into factual claims. Mark unsupported fields as `needs input` rather than inventing missing patient-specific details.
 
 CITATION RULES:
 - Every factual claim must cite at least one source [S#].
 - If a claim draws on multiple sources, cite ALL of them: [S4, S18].
 - A number (percentage, rate, n=) MUST appear in the cited source VERBATIM.
 - Never combine numbers from different sources into one claim unless you cite all sources.
-- If you cannot find a number in any source, do NOT invent one — write "Insufficient data."
+- If you cannot find a number in any source, do NOT invent one - write `needs input`.
 """
+
+
+async def _synthesize_call(
+    template_sections: list[tuple[str, str]],
+    source_sentences: list[str],
+    topic: str,
+    config: LLMConfig,
+) -> str:
+    """Single API call to the LLM. Separated for retry logic."""
+    user_prompt = _build_synthesis_user_prompt(
+        template_sections=template_sections,
+        source_sentences=source_sentences,
+        topic=topic,
+    )
 
     headers = {
         "Authorization": f"Bearer {config.api_key}",

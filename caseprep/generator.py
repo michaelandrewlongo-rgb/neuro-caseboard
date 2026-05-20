@@ -4,6 +4,7 @@ import webbrowser
 from pathlib import Path
 
 from .links import build_search_links
+from .schema import build_caseprep_schema, render_caseprep_files
 
 # Template sections for each generated markdown file.
 # {topic} is replaced with the user-supplied topic string.
@@ -171,14 +172,12 @@ def generate_caseprep(
 
     links = build_search_links(topic)
 
-    for filename, template in TEMPLATES.items():
-        if filename == "literature.md":
-            content = template.format(
-                topic=topic,
-                search_links=_search_links_markdown(links),
-            )
-        else:
-            content = template.format(topic=topic)
+    schema = build_caseprep_schema(topic)
+    rendered_files = render_caseprep_files(
+        schema,
+        literature_summary="## Search Links\n\n" + _search_links_markdown(links),
+    )
+    for filename, content in rendered_files.items():
         (out / filename).write_text(content, encoding="utf-8")
 
     # resource-links.html

@@ -117,3 +117,38 @@ class TestGenerateCaseprep:
         generate_caseprep("glioma", out)
         assert (out / "notes.txt").read_text() == "keep me"
         assert (out / "README.md").is_file()
+
+    def test_creates_caseprep_schema_files(self, tmp_dir):
+        out = tmp_dir / "test-case"
+        generate_caseprep("vestibular schwannoma", out)
+        expected = [
+            "caseprep.yaml",
+            "provenance.json",
+            "01-case-summary.md",
+            "02-imaging-review.md",
+            "03-anatomy-at-risk.md",
+            "04-operative-plan.md",
+            "05-risk-and-rescue.md",
+            "06-postop-plan.md",
+            "07-evidence.md",
+            "08-checklists.md",
+            "09-open-questions.md",
+        ]
+        for filename in expected:
+            assert (out / filename).is_file(), f"missing {filename}"
+
+    def test_readme_uses_case_dossier_status(self, tmp_dir):
+        out = tmp_dir / "test-case"
+        generate_caseprep("vestibular schwannoma", out)
+        readme = (out / "README.md").read_text()
+        assert "## Preparation Status" in readme
+        assert "`needs clinician verification`" in readme
+        assert "01-case-summary.md" in readme
+
+    def test_legacy_files_are_schema_aliases(self, tmp_dir):
+        out = tmp_dir / "test-case"
+        generate_caseprep("vestibular schwannoma", out)
+        assert (out / "anatomy.md").read_text() == (out / "03-anatomy-at-risk.md").read_text()
+        assert (out / "approach.md").read_text() == (out / "04-operative-plan.md").read_text()
+        assert (out / "complications.md").read_text() == (out / "05-risk-and-rescue.md").read_text()
+        assert (out / "literature.md").read_text() == (out / "07-evidence.md").read_text()

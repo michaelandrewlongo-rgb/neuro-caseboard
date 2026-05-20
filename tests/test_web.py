@@ -160,12 +160,20 @@ def test_get_fulltext_mocked(client):
 
 def test_build_caseplan_mocked(client):
     with patch("caseprep.web._handle_build_caseplan", new_callable=AsyncMock) as mock:
-        mock.return_value = "## Case Plan\n\nOutcomes: 3 papers found"
+        mock.return_value = (
+            "## Case Plan\n\n"
+            "Outcomes: 3 papers found\n\n"
+            "---\n"
+            "Case plan written to /tmp/vestibular-schwannoma-caseprep/\n"
+            "Canonical files: caseprep.yaml, 01-case-summary.md"
+        )
         resp = client.post("/api/build?topic=vestibular+schwannoma")
         assert resp.status_code == 200
         data = resp.json()
         assert data["slug"] == "vestibular-schwannoma"
         assert "Case Plan" in data["summary"]
+        assert data["output_dir"].endswith("vestibular-schwannoma-caseprep")
+        assert "caseprep.yaml" in data["summary"]
 
 
 # ── DB persistence after API calls ──────────────────────────────────────────
