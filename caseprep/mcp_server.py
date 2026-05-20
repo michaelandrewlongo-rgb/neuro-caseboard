@@ -29,6 +29,11 @@ from mcp.types import TextContent, Tool
 from caseprep.generator import generate_caseprep as _generate_caseprep
 from caseprep.links import build_search_links
 from caseprep.pdfs import format_pdf_results, search_local_pdfs as _search_local_pdfs
+from caseprep.schema import (
+    build_caseprep_schema,
+    build_caseprep_schema_from_axis_data,
+    render_caseprep_files,
+)
 
 # ── Load .env file ───────────────────────────────────────────────────────────
 
@@ -449,115 +454,123 @@ def _corpus_search(
 
     top_n = min(max(top_n, 1), 25)
     conn = _corpus_conn()
-    cur = conn.cursor()
+    try:
+        cur = conn.cursor()
 
-    # Ranked FTS5 search with optional subdomain filter
-    if subdomain:
-        cur.execute("""
-            SELECT DISTINCT w.id, bm25(works_fts) AS rank
-            FROM works_fts
-            JOIN works w ON w.rowid = works_fts.rowid
-            JOIN subdomain_assignments sa ON sa.work_id = w.id
-            WHERE works_fts MATCH ? AND sa.subdomain_id = ?
-            ORDER BY rank LIMIT ?
-        """, (fts_query, subdomain, top_n))
-    else:
-        cur.execute("""
-            SELECT w.id, bm25(works_fts) AS rank
-            FROM works_fts
-            JOIN works w ON w.rowid = works_fts.rowid
-            WHERE works_fts MATCH ?
-            ORDER BY rank LIMIT ?
-        """, (fts_query, top_n))
-    top_ids = [(r["id"], r["rank"]) for r in cur.fetchall()]
+        # Ranked FTS5 search with optional subdomain filter
+        if subdomain:
+            cur.execute("""
+                SELECT DISTINCT w.id, bm25(works_fts) AS rank
+                FROM works_fts
+                JOIN works w ON w.rowid = works_fts.rowid
+                JOIN subdomain_assignments sa ON sa.work_id = w.id
+                WHERE works_fts MATCH ? AND sa.subdomain_id = ?
+                ORDER BY rank LIMIT ?
+            """, (fts_query, subdomain, top_n))
+        else:
+            cur.execute("""
+                SELECT w.id, bm25(works_fts) AS rank
+                FROM works_fts
+                JOIN works w ON w.rowid = works_fts.rowid
+                WHERE works_fts MATCH ?
+                ORDER BY rank LIMIT ?
+            """, (fts_query, top_n))
+        top_ids = [(r["id"], r["rank"]) for r in cur.fetchall()]
 
-    # Total match count + subdomain distribution
-    if subdomain:
-        cur.execute("""
-            SELECT COUNT(DISTINCT w.id) FROM works_fts
-            JOIN works w ON w.rowid = works_fts.rowid
-            JOIN subdomain_assignments sa ON sa.work_id = w.id
-            WHERE works_fts MATCH ? AND sa.subdomain_id = ?
-        """, (fts_query, subdomain))
-        total = cur.fetchone()[0]
-        subdomain_dist = {subdomain: total}
-    else:
-        cur.execute("SELECT COUNT(*) FROM works_fts WHERE works_fts MATCH ?", (fts_query,))
-        total = cur.fetchone()[0]
-        cur.execute("""
-            SELECT sa.subdomain_id, COUNT(DISTINCT w.id) AS n
-            FROM works_fts
-            JOIN works w ON w.rowid = works_fts.rowid
-            JOIN subdomain_assignments sa ON sa.work_id = w.id
-            WHERE works_fts MATCH ?
-            GROUP BY sa.subdomain_id ORDER BY n DESC
-        """, (fts_query,))
-        subdomain_dist = {r["subdomain_id"]: r["n"] for r in cur.fetchall()}
+        # Total match count + subdomain distribution
+        if subdomain:
+            cur.execute("""
+                SELECT COUNT(DISTINCT w.id) FROM works_fts
+                JOIN works w ON w.rowid = works_fts.rowid
+                JOIN subdomain_assignments sa ON sa.work_id = w.id
+                WHERE works_fts MATCH ? AND sa.subdomain_id = ?
+            """, (fts_query, subdomain))
+            total = cur.fetchone()[0]
+            subdomain_dist = {subdomain: total}
+        else:
+            cur.execute("SELECT COUNT(*) FROM works_fts WHERE works_fts MATCH ?", (fts_query,))
+            total = cur.fetchone()[0]
+            cur.execute("""
+                SELECT sa.subdomain_id, COUNT(DISTINCT w.id) AS n
+                FROM works_fts
+                JOIN works w ON w.rowid = works_fts.rowid
+                JOIN subdomain_assignments sa ON sa.work_id = w.id
+                WHERE works_fts MATCH ?
+                GROUP BY sa.subdomain_id ORDER BY n DESC
+            """, (fts_query,))
+            subdomain_dist = {r["subdomain_id"]: r["n"] for r in cur.fetchall()}
 
-    papers = []
-    for wid, rank in top_ids:
-        cur.execute("""
-            SELECT w.title, w.pub_year, w.study_design, w.evidence_tier,
-                   w.citation_count, w.article_type, j.title AS journal,
-                   (SELECT value FROM identifiers WHERE work_id=w.id AND scheme='pmid' LIMIT 1) AS pmid,
-                   (SELECT value FROM identifiers WHERE work_id=w.id AND scheme='doi' LIMIT 1) AS doi
-            FROM works w
-            LEFT JOIN journals j ON w.journal_id = j.id
-            WHERE w.id = ?
-        """, (wid,))
-        meta = cur.fetchone()
-        if not meta:
-            continue
+        papers = []
+        for wid, rank in top_ids:
+            cur.execute("""
+                SELECT w.title, w.pub_year, w.study_design, w.evidence_tier,
+                       w.citation_count, w.article_type, j.title AS journal,
+                       (SELECT value FROM identifiers WHERE work_id=w.id AND scheme='pmid' LIMIT 1) AS pmid,
+                       (SELECT value FROM identifiers WHERE work_id=w.id AND scheme='doi' LIMIT 1) AS doi
+                FROM works w
+                LEFT JOIN journals j ON w.journal_id = j.id
+                WHERE w.id = ?
+            """, (wid,))
+            meta = cur.fetchone()
+            if not meta:
+                continue
 
-        # Abstract from fulltext DB
-        cur.execute("SELECT abstract FROM ft.works WHERE id = ?", (wid,))
-        ft_row = cur.fetchone()
-        abstract = ft_row["abstract"] if ft_row and ft_row["abstract"] else None
+            # Abstract from fulltext DB
+            cur.execute("SELECT abstract FROM ft.works WHERE id = ?", (wid,))
+            ft_row = cur.fetchone()
+            abstract = ft_row["abstract"] if ft_row and ft_row["abstract"] else None
 
-        # Conclusion passages from fulltext
-        cur.execute("""
-            SELECT content FROM ft.text_passages
-            WHERE work_id = ? AND section_type = 'conclusion'
-            ORDER BY sequence_number
-        """, (wid,))
-        conclusion_parts = [r["content"] for r in cur.fetchall()]
-        conclusion = " ".join(conclusion_parts) if conclusion_parts else None
+            # Conclusion passages from fulltext
+            cur.execute("""
+                SELECT content FROM ft.text_passages
+                WHERE work_id = ? AND section_type = 'conclusion'
+                ORDER BY sequence_number
+            """, (wid,))
+            conclusion_parts = [r["content"] for r in cur.fetchall()]
+            conclusion = " ".join(conclusion_parts) if conclusion_parts else None
 
-        # Subdomain tags
-        cur.execute(
-            "SELECT DISTINCT subdomain_id FROM subdomain_assignments WHERE work_id = ?",
-            (wid,),
-        )
-        subdomains = [r["subdomain_id"] for r in cur.fetchall()]
+            # Subdomain tags
+            cur.execute(
+                "SELECT DISTINCT subdomain_id FROM subdomain_assignments WHERE work_id = ?",
+                (wid,),
+            )
+            subdomains = [r["subdomain_id"] for r in cur.fetchall()]
 
-        papers.append({
-            "work_id": wid,
-            "rank": rank,
-            "title": meta["title"],
-            "year": meta["pub_year"],
-            "journal": meta["journal"],
-            "study_design": meta["study_design"],
-            "evidence_tier": meta["evidence_tier"],
-            "article_type": meta["article_type"],
-            "citation_count": meta["citation_count"],
-            "subdomains": subdomains,
-            "pmid": meta["pmid"],
-            "doi": meta["doi"],
-            "pubmed_url": f"https://pubmed.ncbi.nlm.nih.gov/{meta['pmid']}/" if meta["pmid"] else None,
-            "doi_url": f"https://doi.org/{meta['doi']}" if meta["doi"] else None,
-            "abstract": abstract,
-            "conclusion": conclusion,
-        })
+            papers.append({
+                "work_id": wid,
+                "rank": rank,
+                "title": meta["title"],
+                "year": meta["pub_year"],
+                "journal": meta["journal"],
+                "study_design": meta["study_design"],
+                "evidence_tier": meta["evidence_tier"],
+                "article_type": meta["article_type"],
+                "citation_count": meta["citation_count"],
+                "subdomains": subdomains,
+                "pmid": meta["pmid"],
+                "doi": meta["doi"],
+                "pubmed_url": f"https://pubmed.ncbi.nlm.nih.gov/{meta['pmid']}/" if meta["pmid"] else None,
+                "doi_url": f"https://doi.org/{meta['doi']}" if meta["doi"] else None,
+                "abstract": abstract,
+                "conclusion": conclusion,
+            })
 
-    conn.close()
-    return {
-        "fts_query": fts_query,
-        "subdomain": subdomain,
-        "total_matches": total,
-        "returned": len(papers),
-        "subdomain_distribution": subdomain_dist,
-        "papers": papers,
-    }
+        return {
+            "fts_query": fts_query,
+            "subdomain": subdomain,
+            "total_matches": total,
+            "returned": len(papers),
+            "subdomain_distribution": subdomain_dist,
+            "papers": papers,
+        }
+    except sqlite3.OperationalError as exc:
+        return {
+            "error": f"Invalid FTS query: {exc}",
+            "papers": [],
+            "total_matches": 0,
+        }
+    finally:
+        conn.close()
 
 
 def _corpus_get_paper(work_id: str) -> dict | None:
@@ -843,6 +856,10 @@ def _fmt_corpus_paper(paper: dict, num: int) -> list[str]:
         lines.append(f"   *{journal}*")
     elif year:
         lines.append(f"   ({year})")
+
+    work_id = paper.get("work_id") or paper.get("id")
+    if work_id:
+        lines.append(f"   Work ID: {work_id}")
 
     # Evidence tier + study design
     meta_parts = []
@@ -1999,7 +2016,7 @@ async def _populate_section(
             print(f"  [guardrail] {len(fabricated)}/{result.total_count} claims had "
                   f"fabricated numbers — retrying with stronger instruction",
                   file=sys.stderr)
-            # Inject a reminder into source sentences and retry
+            # Keep source numbering stable; pass retry guidance outside the source list.
             reminder = (
                 "IMPORTANT REMINDER: Only use numbers that appear VERBATIM "
                 "in these source sentences. Do NOT compute, estimate, or "
@@ -2009,15 +2026,15 @@ async def _populate_section(
             try:
                 if split_complications:
                     synthesized = await synthesize_complications_split(
-                        source_sentences=[reminder] + extracted,
-                        topic=topic,
+                        source_sentences=extracted,
+                        topic=f"{topic}\n\n{reminder}",
                         template_sections=template_sections,
                     )
                 else:
                     synthesized = await synthesize_section(
                         template_sections=template_sections,
-                        source_sentences=[reminder] + extracted,
-                        topic=topic,
+                        source_sentences=extracted,
+                        topic=f"{topic}\n\n{reminder}",
                     )
                 if synthesized:
                     result = verify_synthesis(synthesized, extracted)
@@ -2074,40 +2091,25 @@ async def _write_filled_templates(
     axis_data: dict[str, list[dict]] | None = None,
 ) -> None:
     """Write filled-in markdown templates using keyword-extracted content from search results."""
+    profile_name, profile_confidence = _detect_profile(topic)
+    if axis_data:
+        schema = build_caseprep_schema_from_axis_data(
+            topic,
+            axis_data,
+            profile=profile_name,
+        )
+    else:
+        schema = build_caseprep_schema(topic, profile=profile_name)
 
-    (out_dir / "README.md").write_text(
-        f"# {topic}\n\n"
-        f"## Case Overview\n\n"
-        f"- **Topic:** {topic}\n"
-        f"- **Date:** (fill in)\n"
-        f"- **Presenter:** (fill in)\n\n"
-        f"## Literature Summary\n\n"
-        f"{summary}\n",
-        encoding="utf-8",
-    )
+    rendered_files = render_caseprep_files(schema, literature_summary=summary)
+    for filename, content in rendered_files.items():
+        (out_dir / filename).write_text(content, encoding="utf-8")
 
-    (out_dir / "literature.md").write_text(
-        f"# Literature Review — {topic}\n\n{summary}\n",
-        encoding="utf-8",
-    )
-
-    # If no axis_data (backwards compat), write blank templates
+    # If no axis_data (backwards compat), the schema renderer already wrote
+    # blank canonical and legacy templates.
     if not axis_data:
-        for name, template in [
-            ("anatomy.md", "Relevant Anatomy"),
-            ("approach.md", "Surgical Approach"),
-            ("complications.md", "Potential Complications"),
-        ]:
-            (out_dir / name).write_text(
-                f"# {template} — {topic}\n\n"
-                f"## (no data available)\n\n"
-                f"- (run build_caseplan to populate this section)\n",
-                encoding="utf-8",
-            )
         return
 
-    # Detect domain profile and build keywords
-    profile_name, profile_confidence = _detect_profile(topic)
     kw = _build_keywords(profile_name)
 
     # Extract and populate each section via extract→synthesize→guardrail pipeline
@@ -2137,7 +2139,6 @@ async def _write_filled_templates(
         profile_name=profile_name,
         keyword_count=len(kw["anatomy"]),
     )
-    (out_dir / "anatomy.md").write_text(anatomy_text, encoding="utf-8")
 
     # ── approach.md ────────────────────────────────────────────────────
     approach_text = await _populate_section(
@@ -2149,7 +2150,6 @@ async def _write_filled_templates(
         profile_name=profile_name,
         keyword_count=len(kw["approach"]),
     )
-    (out_dir / "approach.md").write_text(approach_text, encoding="utf-8")
 
     # ── complications.md ───────────────────────────────────────────────
     complications_text = await _populate_section(
@@ -2162,7 +2162,16 @@ async def _write_filled_templates(
         keyword_count=len(kw["complications"]),
         split_complications=True,  # use 2-call split to avoid token truncation
     )
-    (out_dir / "complications.md").write_text(complications_text, encoding="utf-8")
+
+    rendered_files = render_caseprep_files(
+        schema,
+        literature_summary=summary,
+        anatomy_body=anatomy_text,
+        operative_body=approach_text,
+        risk_body=complications_text,
+    )
+    for filename, content in rendered_files.items():
+        (out_dir / filename).write_text(content, encoding="utf-8")
 
 
 def _resource_html(topic: str, links: dict[str, str]) -> str:
@@ -2342,6 +2351,11 @@ def _handle_search_corpus(args: dict) -> str:
     result = _corpus_search(fts_query, subdomain, top_n)
 
     if "error" in result:
+        if str(result["error"]).startswith("Invalid FTS query:"):
+            return (
+                f"{result['error']}\n\n"
+                "Check the FTS5 syntax in fts_query, then retry the corpus search."
+            )
         return (
             f"Corpus search unavailable: {result['error']}\n\n"
             f"  Corpus: {_CORPUS_DB}\n"

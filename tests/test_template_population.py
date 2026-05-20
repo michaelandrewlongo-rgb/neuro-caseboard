@@ -1,5 +1,8 @@
 """Tests for template population — content extraction, domain profiles, guardrail verification."""
 
+import sqlite3
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from caseprep.mcp_server import (
     _extract_relevant_sentences,
@@ -8,6 +11,10 @@ from caseprep.mcp_server import (
     _BASE_ANATOMY,
     _BASE_APPROACH,
     _BASE_COMPLICATIONS,
+    _fmt_corpus_paper,
+    _handle_search_corpus,
+    _corpus_search,
+    _populate_section,
 )
 
 
@@ -63,6 +70,66 @@ class TestDomainProfiles:
         assert kw["anatomy"] == _BASE_ANATOMY
         assert kw["approach"] == _BASE_APPROACH
         assert kw["complications"] == _BASE_COMPLICATIONS
+
+
+class TestStructuredCaseDossierOutput:
+    @pytest.mark.asyncio
+    async def test_write_filled_templates_writes_canonical_schema_files(self, tmp_path):
+        from caseprep.mcp_server import _write_filled_templates
+
+        axis_data = {
+            "Anatomy / Relevant Structures": [
+                {
+                    "pmid": "12345",
+                    "title": "CPA Anatomy",
+                    "authors": "Doe J",
+                    "source": "J Neurosurg",
+                    "pubdate": "2024",
+                    "doi": "",
+                    "url": "https://pubmed.ncbi.nlm.nih.gov/12345/",
+                    "_abstract": "The cerebellopontine angle contains cranial nerves and vascular structures.",
+                    "_structured": {},
+                }
+            ],
+            "Surgical Technique": [],
+            "Reviews / Landmarks": [],
+            "Outcomes / Evidence": [],
+            "Complications": [],
+        }
+
+        async def fake_populate(**kwargs):
+            return f"# {kwargs['section_title']} - {kwargs['topic']}\n\nGenerated section body."
+
+        with patch("caseprep.mcp_server._populate_section", side_effect=fake_populate):
+            await _write_filled_templates(
+                tmp_path,
+                "retrosigmoid vestibular schwannoma",
+                "# Case Plan\n\nPaper summary",
+                axis_data,
+            )
+
+        for filename in [
+            "caseprep.yaml",
+            "provenance.json",
+            "README.md",
+            "01-case-summary.md",
+            "02-imaging-review.md",
+            "03-anatomy-at-risk.md",
+            "04-operative-plan.md",
+            "05-risk-and-rescue.md",
+            "06-postop-plan.md",
+            "07-evidence.md",
+            "08-checklists.md",
+            "09-open-questions.md",
+        ]:
+            assert (tmp_path / filename).is_file(), f"missing {filename}"
+
+        assert "Preparation Status" in (tmp_path / "README.md").read_text()
+        assert "pmid-12345" in (tmp_path / "07-evidence.md").read_text()
+        assert (tmp_path / "anatomy.md").read_text() == (tmp_path / "03-anatomy-at-risk.md").read_text()
+        assert (tmp_path / "approach.md").read_text() == (tmp_path / "04-operative-plan.md").read_text()
+        assert (tmp_path / "complications.md").read_text() == (tmp_path / "05-risk-and-rescue.md").read_text()
+        assert (tmp_path / "literature.md").read_text() == (tmp_path / "07-evidence.md").read_text()
 
 
 class TestExtractRelevantSentences:
@@ -344,3 +411,109 @@ class TestGuardrailVerify:
         result = verify_synthesis("# Short\n## Very short\nok\n", ["source sentence"])
         assert not result.passed
         assert result.total_count == 0
+
+
+class TestCorpusFormatting:
+    def test_fmt_corpus_paper_includes_work_id(self):
+        lines = _fmt_corpus_paper(
+            {
+                "work_id": "W123",
+                "title": "Treatment Outcomes",
+                "journal": "J Neurosurg",
+                "year": 2024,
+            },
+            1,
+        )
+
+        assert "   Work ID: W123" in lines
+
+    def test_handle_search_corpus_includes_work_id(self):
+        fake_result = {
+            "papers": [
+                {
+                    "work_id": "W123",
+                    "title": "Treatment Outcomes",
+                    "journal": "J Neurosurg",
+                    "year": 2024,
+                }
+            ],
+            "total_matches": 1,
+            "returned": 1,
+            "subdomain_distribution": {},
+        }
+        with patch("caseprep.mcp_server._corpus_search", return_value=fake_result):
+            output = _handle_search_corpus({"fts_query": "aneurysm"})
+
+        assert "Work ID: W123" in output
+        assert "get_paper with a work_id" in output
+
+    def test_handle_search_corpus_invalid_fts_query_is_user_facing(self):
+        fake_result = {
+            "error": "Invalid FTS query: unterminated string",
+            "papers": [],
+            "total_matches": 0,
+        }
+        with patch("caseprep.mcp_server._corpus_search", return_value=fake_result):
+            output = _handle_search_corpus({"fts_query": '"'})
+
+        assert "Invalid FTS query: unterminated string" in output
+        assert "Corpus search unavailable" not in output
+
+    def test_corpus_search_invalid_fts_query_closes_connection(self):
+        class FakeCursor:
+            def execute(self, *args, **kwargs):
+                raise sqlite3.OperationalError("unterminated string")
+
+        class FakeConnection:
+            def __init__(self):
+                self.closed = False
+
+            def cursor(self):
+                return FakeCursor()
+
+            def close(self):
+                self.closed = True
+
+        conn = FakeConnection()
+        with (
+            patch("caseprep.mcp_server._CORPUS_AVAILABLE", True),
+            patch("caseprep.mcp_server._corpus_conn", return_value=conn),
+        ):
+            result = _corpus_search('"')
+
+        assert result["error"] == "Invalid FTS query: unterminated string"
+        assert result["papers"] == []
+        assert result["total_matches"] == 0
+        assert conn.closed
+
+
+class TestGuardrailRetry:
+    @pytest.mark.asyncio
+    async def test_numeric_retry_preserves_source_numbering(self):
+        sources = [
+            "The retrosigmoid approach was used for tumor exposure.",
+            "Meningitis rate was 1.5% in the retrosigmoid approach group.",
+        ]
+
+        synthesize = AsyncMock(side_effect=[
+            "- Meningitis rate was 50% [S2]",
+            "- Meningitis rate was 1.5% [S2]",
+        ])
+
+        with (
+            patch("caseprep.mcp_server._extract_relevant_sentences", return_value=sources),
+            patch("caseprep.llm.synthesize_section", synthesize),
+        ):
+            output = await _populate_section(
+                articles=[{"_abstract": "unused", "_structured": {}}],
+                keywords=["meningitis"],
+                template_sections=[("Postoperative", "(infection rates)")],
+                topic="vestibular schwannoma",
+                section_title="Complications",
+            )
+
+        assert synthesize.await_count == 2
+        assert synthesize.await_args_list[1].kwargs["source_sentences"] == sources
+        assert "All 1 claims verified" in output
+        assert "LLM synthesis rejected" not in output
+        assert "- Meningitis rate was 1.5% [S2]" in output
