@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 import httpx
 
 # Defaults — override via env vars
-DEFAULT_MODEL = os.getenv("CASEPREP_LLM_MODEL", "deepseek/deepseek-chat")
+DEFAULT_MODEL = os.getenv("CASEPREP_LLM_MODEL", "google/gemini-2.0-flash-001")
 DEFAULT_API_KEY = os.getenv(
     "CASEPREP_LLM_KEY",
     os.getenv("OPENROUTER_API_KEY", ""),
@@ -44,7 +44,14 @@ GUIDELINES:
 4. If sources conflict, present the tension rather than picking a side.
 5. If insufficient information exists for a section, write "Insufficient data in search results."
 6. Write in compact prose — 2-4 sentences per section is usually enough. No bullet lists, no filler.
-7. Be specific. "Endovascular coiling" is vague; "stent-assisted coiling with the jailing technique using a Neuroform Atlas" is useful."""
+7. Be specific. "Endovascular coiling" is vague; "stent-assisted coiling with the jailing technique using a Neuroform Atlas" is useful.
+
+CRITICAL: NUMBER INTEGRITY
+- NEVER fabricate, estimate, or infer statistics, percentages, sample sizes, or rates.
+- Only use a number if it appears VERBATIM in a source sentence [S1], [S2], etc.
+- If you cannot find a specific number in the sources, write "Insufficient data" rather than guessing.
+- When quoting a number, cite the exact source sentence that contains it.
+- Do not perform arithmetic on source numbers (e.g., do not compute percentages from raw counts unless the source explicitly states the result)."""
 
 
 async def _synthesize_call(
@@ -74,6 +81,13 @@ For each section above, write 2-4 sentences of compact reasoning that a surgeon
 can use for intraoperative decision-making. Weave citations [S1], [S2] into the 
 logic. If no source sentence supports a section, write "Insufficient data 
 in search results."
+
+CITATION RULES:
+- Every factual claim must cite at least one source [S#].
+- If a claim draws on multiple sources, cite ALL of them: [S4, S18].
+- A number (percentage, rate, n=) MUST appear in the cited source VERBATIM.
+- Never combine numbers from different sources into one claim unless you cite all sources.
+- If you cannot find a number in any source, do NOT invent one — write "Insufficient data."
 """
 
     headers = {
@@ -335,8 +349,8 @@ class GuardrailResult:
 def verify_synthesis(
     synthesized_text: str,
     source_sentences: list[str],
-    threshold: float = 0.15,
-    max_flagged_ratio: float = 0.30,
+    threshold: float = 0.20,
+    max_flagged_ratio: float = 0.40,
 ) -> GuardrailResult:
     """Verify synthesized claims against their CITED source sentences.
 

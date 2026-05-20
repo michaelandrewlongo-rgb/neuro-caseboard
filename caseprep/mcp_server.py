@@ -2,7 +2,7 @@
 
 Tools:
   search_pubmed      — search with clinical query filters, optional abstracts
-  build_caseplan     — run 4 targeted searches, pull abstracts, write filled-in templates
+  build_caseplan     — run 5 targeted searches, pull abstracts, write filled-in templates
   generate_caseprep  — static template folder (quick scaffold)
   search_local_pdfs  — PyMuPDF local PDF search
   get_fulltext       — 3-tier best-available content for a PMID
@@ -13,7 +13,10 @@ Tools:
 from __future__ import annotations
 
 import asyncio
+import os
 import re
+import sqlite3
+import sys
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -77,6 +80,50 @@ def _client() -> httpx.AsyncClient:
 
 EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 OPENI = "https://openi.nlm.nih.gov/api"
+
+# ── Local corpus (NSGY_DB_lean) ─────────────────────────────────────────────
+
+_CORPUS_DB = os.environ.get(
+    "CASEPREP_CORPUS_DB",
+    "/mnt/c/dev/NSGY_DB_lean/corpus/neurointerventional.sqlite",
+)
+_FULLTEXT_DB = os.environ.get(
+    "CASEPREP_FULLTEXT_DB",
+    "/mnt/c/dev/NSGY_DB_lean/fulltext/neurointerventional_fulltext.sqlite",
+)
+
+_CORPUS_AVAILABLE = Path(_CORPUS_DB).exists() and Path(_FULLTEXT_DB).exists()
+
+# Subdomain descriptions (mirrors neurointerventional_mcp)
+SUBDOMAIN_DESCRIPTIONS: dict[str, str] = {
+    "stroke_thrombectomy": "Acute ischemic stroke, mechanical thrombectomy, LVO, thrombolysis",
+    "aneurysm_sah": "Intracranial aneurysm, subarachnoid hemorrhage, coiling, clipping, vasospasm",
+    "avm_vascular_malformation": "AVM, dAVF, cavernous malformations, vein of Galen",
+    "carotid_cervical_vascular": "Carotid stenosis/stenting, CEA, vertebral artery, extracranial vascular",
+    "intracranial_hemorrhage": "ICH, subdural hematoma, MMA embolization, intracerebral hemorrhage",
+    "flow_diversion": "Flow diverters (Pipeline, FRED, Surpass), WEB device, intrasaccular",
+    "venous_interventional": "Venous sinus stenting, IIH, cerebral venous thrombosis",
+    "moyamoya": "Moyamoya disease, EC-IC bypass, cerebral revascularization",
+    "intracranial_atherosclerosis": "ICAD, intracranial stenting, Wingspan, basilar stenosis",
+    "radiosurgery": "Gamma Knife, stereotactic radiosurgery, LINAC",
+    "tumor_skull_base": "Tumor embolization, meningioma, GBM, skull base",
+    "spine_interventional": "Vertebroplasty, kyphoplasty, spinal AVM/dAVF",
+    "neurocritical_care": "ICP, decompressive craniectomy, TBI, brain death",
+    "functional_epilepsy": "Epilepsy surgery, Wada test, SEEG, DBS, VNS",
+    "pediatric_neurointerventional": "Pediatric neurointerventional procedures",
+    "cerebrovascular_other": "CNS vasculitis, hydrocephalus, vessel wall imaging",
+    "general_neurointerventional": "Cross-cutting technique/access papers, general endovascular",
+}
+
+EVIDENCE_TIER_LABELS: dict[str, str] = {
+    "guideline": "Level 1 — Guideline",
+    "meta_analysis": "Level 1 — Meta-Analysis",
+    "RCT": "Level 2 — Randomized Controlled Trial",
+    "observational": "Level 3 — Observational Study",
+    "case_report": "Level 5 — Case Report / Series",
+    "narrative_review": "Level 5 — Narrative Review",
+    "technical_note": "Level 5 — Technical Note",
+}
 
 # ── Open-i radiology image type codes ────────────────────────────────────────
 # Codes are loosely tagged; prefer "x" (general radiology) as default.
@@ -354,6 +401,242 @@ async def _pubmed_fulltext(pmids: list[str]) -> dict[str, str]:
     return fulltexts
 
 
+# ── Local corpus search (FTS5) ─────────────────────────────────────────────
+
+
+def _corpus_conn() -> sqlite3.Connection:
+    """Open corpus DB with fulltext attached (read-only)."""
+    conn = sqlite3.connect(f"file:{_CORPUS_DB}?mode=ro", uri=True)
+    conn.execute("ATTACH DATABASE ? AS ft", (f"file:{_FULLTEXT_DB}?mode=ro",))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _corpus_list_subdomains() -> list[dict]:
+    """Return subdomain IDs with paper counts and descriptions."""
+    if not _CORPUS_AVAILABLE:
+        return []
+    conn = _corpus_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT subdomain_id, COUNT(DISTINCT work_id) AS n
+        FROM subdomain_assignments
+        GROUP BY subdomain_id ORDER BY n DESC
+    """)
+    rows = cur.fetchall()
+    conn.close()
+    return [
+        {
+            "id": r["subdomain_id"],
+            "paper_count": r["n"],
+            "description": SUBDOMAIN_DESCRIPTIONS.get(r["subdomain_id"], ""),
+        }
+        for r in rows
+    ]
+
+
+def _corpus_search(
+    fts_query: str,
+    subdomain: str | None = None,
+    top_n: int = 8,
+) -> dict:
+    """FTS5 search over the local neurointerventional corpus.
+
+    Returns ranked papers with metadata, abstract, and conclusion passages.
+    """
+    if not _CORPUS_AVAILABLE:
+        return {"error": "Local corpus not available", "papers": [], "total_matches": 0}
+
+    top_n = min(max(top_n, 1), 25)
+    conn = _corpus_conn()
+    cur = conn.cursor()
+
+    # Ranked FTS5 search with optional subdomain filter
+    if subdomain:
+        cur.execute("""
+            SELECT DISTINCT w.id, bm25(works_fts) AS rank
+            FROM works_fts
+            JOIN works w ON w.rowid = works_fts.rowid
+            JOIN subdomain_assignments sa ON sa.work_id = w.id
+            WHERE works_fts MATCH ? AND sa.subdomain_id = ?
+            ORDER BY rank LIMIT ?
+        """, (fts_query, subdomain, top_n))
+    else:
+        cur.execute("""
+            SELECT w.id, bm25(works_fts) AS rank
+            FROM works_fts
+            JOIN works w ON w.rowid = works_fts.rowid
+            WHERE works_fts MATCH ?
+            ORDER BY rank LIMIT ?
+        """, (fts_query, top_n))
+    top_ids = [(r["id"], r["rank"]) for r in cur.fetchall()]
+
+    # Total match count + subdomain distribution
+    if subdomain:
+        cur.execute("""
+            SELECT COUNT(DISTINCT w.id) FROM works_fts
+            JOIN works w ON w.rowid = works_fts.rowid
+            JOIN subdomain_assignments sa ON sa.work_id = w.id
+            WHERE works_fts MATCH ? AND sa.subdomain_id = ?
+        """, (fts_query, subdomain))
+        total = cur.fetchone()[0]
+        subdomain_dist = {subdomain: total}
+    else:
+        cur.execute("SELECT COUNT(*) FROM works_fts WHERE works_fts MATCH ?", (fts_query,))
+        total = cur.fetchone()[0]
+        cur.execute("""
+            SELECT sa.subdomain_id, COUNT(DISTINCT w.id) AS n
+            FROM works_fts
+            JOIN works w ON w.rowid = works_fts.rowid
+            JOIN subdomain_assignments sa ON sa.work_id = w.id
+            WHERE works_fts MATCH ?
+            GROUP BY sa.subdomain_id ORDER BY n DESC
+        """, (fts_query,))
+        subdomain_dist = {r["subdomain_id"]: r["n"] for r in cur.fetchall()}
+
+    papers = []
+    for wid, rank in top_ids:
+        cur.execute("""
+            SELECT w.title, w.pub_year, w.study_design, w.evidence_tier,
+                   w.citation_count, w.article_type, j.title AS journal,
+                   (SELECT value FROM identifiers WHERE work_id=w.id AND scheme='pmid' LIMIT 1) AS pmid,
+                   (SELECT value FROM identifiers WHERE work_id=w.id AND scheme='doi' LIMIT 1) AS doi
+            FROM works w
+            LEFT JOIN journals j ON w.journal_id = j.id
+            WHERE w.id = ?
+        """, (wid,))
+        meta = cur.fetchone()
+        if not meta:
+            continue
+
+        # Abstract from fulltext DB
+        cur.execute("SELECT abstract FROM ft.works WHERE id = ?", (wid,))
+        ft_row = cur.fetchone()
+        abstract = ft_row["abstract"] if ft_row and ft_row["abstract"] else None
+
+        # Conclusion passages from fulltext
+        cur.execute("""
+            SELECT content FROM ft.text_passages
+            WHERE work_id = ? AND section_type = 'conclusion'
+            ORDER BY sequence_number
+        """, (wid,))
+        conclusion_parts = [r["content"] for r in cur.fetchall()]
+        conclusion = " ".join(conclusion_parts) if conclusion_parts else None
+
+        # Subdomain tags
+        cur.execute(
+            "SELECT DISTINCT subdomain_id FROM subdomain_assignments WHERE work_id = ?",
+            (wid,),
+        )
+        subdomains = [r["subdomain_id"] for r in cur.fetchall()]
+
+        papers.append({
+            "work_id": wid,
+            "rank": rank,
+            "title": meta["title"],
+            "year": meta["pub_year"],
+            "journal": meta["journal"],
+            "study_design": meta["study_design"],
+            "evidence_tier": meta["evidence_tier"],
+            "article_type": meta["article_type"],
+            "citation_count": meta["citation_count"],
+            "subdomains": subdomains,
+            "pmid": meta["pmid"],
+            "doi": meta["doi"],
+            "pubmed_url": f"https://pubmed.ncbi.nlm.nih.gov/{meta['pmid']}/" if meta["pmid"] else None,
+            "doi_url": f"https://doi.org/{meta['doi']}" if meta["doi"] else None,
+            "abstract": abstract,
+            "conclusion": conclusion,
+        })
+
+    conn.close()
+    return {
+        "fts_query": fts_query,
+        "subdomain": subdomain,
+        "total_matches": total,
+        "returned": len(papers),
+        "subdomain_distribution": subdomain_dist,
+        "papers": papers,
+    }
+
+
+def _corpus_get_paper(work_id: str) -> dict | None:
+    """Retrieve full paper details including all section passages."""
+    if not _CORPUS_AVAILABLE:
+        return None
+    conn = _corpus_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT w.id, w.title, w.pub_year, w.study_design, w.evidence_tier,
+               w.citation_count, w.language, w.tier, j.title AS journal,
+               (SELECT value FROM identifiers WHERE work_id=w.id AND scheme='pmid' LIMIT 1) AS pmid,
+               (SELECT value FROM identifiers WHERE work_id=w.id AND scheme='doi' LIMIT 1) AS doi
+        FROM works w
+        LEFT JOIN journals j ON w.journal_id = j.id
+        WHERE w.id = ?
+    """, (work_id,))
+    meta = cur.fetchone()
+    if not meta:
+        conn.close()
+        return None
+
+    # Abstract
+    cur.execute("SELECT abstract FROM ft.works WHERE id = ?", (work_id,))
+    ft_row = cur.fetchone()
+    abstract = ft_row["abstract"] if ft_row and ft_row["abstract"] else None
+
+    # All section passages
+    from collections import defaultdict
+    cur.execute("""
+        SELECT section_type, content, sequence_number
+        FROM ft.text_passages WHERE work_id = ?
+        ORDER BY section_type, sequence_number
+    """, (work_id,))
+    sections = defaultdict(list)
+    for r in cur.fetchall():
+        sections[r["section_type"]].append(r["content"])
+    sections_out = {k: " ".join(v) for k, v in sections.items()}
+
+    # Subdomains
+    cur.execute(
+        "SELECT DISTINCT subdomain_id FROM subdomain_assignments WHERE work_id = ?",
+        (work_id,),
+    )
+    subdomains = [r["subdomain_id"] for r in cur.fetchall()]
+
+    # MeSH + keywords
+    cur.execute("""
+        SELECT s.scheme, s.value FROM work_subjects ws
+        JOIN subjects s ON ws.subject_id = s.id WHERE ws.work_id = ?
+    """, (work_id,))
+    mesh, keywords = [], []
+    for r in cur.fetchall():
+        (mesh if r["scheme"] == "mesh" else keywords).append(r["value"])
+
+    conn.close()
+    return {
+        "work_id": meta["id"],
+        "title": meta["title"],
+        "year": meta["pub_year"],
+        "journal": meta["journal"],
+        "language": meta["language"],
+        "study_design": meta["study_design"],
+        "evidence_tier": meta["evidence_tier"],
+        "journal_tier": meta["tier"],
+        "citation_count": meta["citation_count"],
+        "subdomains": subdomains,
+        "mesh_terms": mesh,
+        "keywords": keywords,
+        "pmid": meta["pmid"],
+        "doi": meta["doi"],
+        "pubmed_url": f"https://pubmed.ncbi.nlm.nih.gov/{meta['pmid']}/" if meta["pmid"] else None,
+        "doi_url": f"https://doi.org/{meta['doi']}" if meta["doi"] else None,
+        "abstract": abstract,
+        "sections": sections_out,
+    }
+
+
 # ── Open-i radiology image search ────────────────────────────────────────────
 
 async def _openi_search(
@@ -491,6 +774,9 @@ def _fmt_paper(
     abstract: str | None = None,
     structured: dict[str, str] | None = None,
     fulltext: str | None = None,
+    evidence_tier: str | None = None,
+    study_design: str | None = None,
+    citation_count: int | None = None,
 ) -> list[str]:
     """Format a paper with best-available content.
 
@@ -505,6 +791,18 @@ def _fmt_paper(
     if paper["doi"]:
         lines.append(f"   DOI: {paper['doi']}")
     lines.append(f"   {paper['url']}")
+
+    # Evidence tier + study design (when available from local corpus or PubMed)
+    meta_parts = []
+    if evidence_tier:
+        label = EVIDENCE_TIER_LABELS.get(evidence_tier, evidence_tier)
+        meta_parts.append(label)
+    if study_design:
+        meta_parts.append(study_design.replace("_", " ").title())
+    if citation_count is not None and citation_count > 0:
+        meta_parts.append(f"cited {citation_count}×")
+    if meta_parts:
+        lines.append(f"   Evidence: {' | '.join(meta_parts)}")
 
     # Show structured abstract sections (best quality)
     if structured:
@@ -521,6 +819,72 @@ def _fmt_paper(
     if fulltext:
         ft = fulltext[:1000] + ("…" if len(fulltext) > 1000 else "")
         lines.append(f"   PMC: {ft}")
+
+    lines.append("")
+    return lines
+
+
+def _fmt_corpus_paper(paper: dict, num: int) -> list[str]:
+    """Format a paper from the local corpus with evidence tier metadata.
+
+    Corpus papers have a different shape than PubMed summaries —
+    title, year, journal, study_design, evidence_tier, citation_count, etc.
+    """
+    title = paper.get("title", "") or "(untitled)"
+    title_display = title[:150] + ("…" if len(title) > 150 else "")
+
+    lines = [f"{num}. **{title_display}**"]
+
+    journal = paper.get("journal", "")
+    year = paper.get("year", "")
+    if journal and year:
+        lines.append(f"   *{journal}* ({year})")
+    elif journal:
+        lines.append(f"   *{journal}*")
+    elif year:
+        lines.append(f"   ({year})")
+
+    # Evidence tier + study design
+    meta_parts = []
+    evidence_tier = paper.get("evidence_tier", "")
+    if evidence_tier:
+        label = EVIDENCE_TIER_LABELS.get(evidence_tier, evidence_tier)
+        meta_parts.append(label)
+    study_design = paper.get("study_design", "")
+    if study_design:
+        meta_parts.append(study_design.replace("_", " ").title())
+    citation_count = paper.get("citation_count")
+    if citation_count and citation_count > 0:
+        meta_parts.append(f"cited {citation_count}×")
+    if meta_parts:
+        lines.append(f"   Evidence: {' | '.join(meta_parts)}")
+
+    # Subdomain tags
+    subdomains = paper.get("subdomains", [])
+    if subdomains:
+        subdomain_labels = [
+            SUBDOMAIN_DESCRIPTIONS.get(s, s).split(",")[0]
+            for s in subdomains[:3]
+        ]
+        lines.append(f"   Topics: {', '.join(subdomain_labels)}")
+
+    # Links
+    if paper.get("pubmed_url"):
+        lines.append(f"   PubMed: {paper['pubmed_url']}")
+    if paper.get("doi"):
+        lines.append(f"   DOI: {paper['doi']}")
+
+    # Abstract
+    abstract = paper.get("abstract", "")
+    if abstract:
+        ab = abstract[:500] + ("…" if len(abstract) > 500 else "")
+        lines.append(f"   Abstract: {ab}")
+
+    # Conclusion
+    conclusion = paper.get("conclusion", "")
+    if conclusion:
+        cc = conclusion[:400] + ("…" if len(conclusion) > 400 else "")
+        lines.append(f"   Conclusion: {cc}")
 
     lines.append("")
     return lines
@@ -575,9 +939,9 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="build_caseplan",
             description=(
-                "Run 4 targeted PubMed searches for a neurosurgical topic, fetch "
+                "Run 5 targeted PubMed searches for a neurosurgical topic, fetch "
                 "abstracts for the top results, and write a filled-in case prep folder. "
-                "Searches cover: outcomes/therapy, surgical technique, complications, "
+                "Searches cover: anatomy/relevant structures, outcomes/therapy, surgical technique, complications, "
                 "and landmark/systematic reviews. Returns organized findings and writes "
                 "completed templates to disk."
             ),
@@ -734,6 +1098,77 @@ async def list_tools() -> list[Tool]:
                 "required": ["to", "subject", "body"],
             },
         ),
+        Tool(
+            name="list_subdomains",
+            description=(
+                "List available clinical subdomains in the local neurointerventional "
+                "corpus with paper counts and descriptions. Use this first to see what "
+                "evidence buckets are available before searching the corpus."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
+        Tool(
+            name="search_corpus",
+            description=(
+                "Search the local neurointerventional literature corpus using FTS5 "
+                "(full-text search) with BM25 ranking, optionally filtered by subdomain. "
+                "Returns ranked papers with title, year, journal, study design, evidence "
+                "tier, citation count, abstract, and conclusion. Much faster than PubMed "
+                "— sub-second local search over 51,980 pre-indexed papers."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "fts_query": {
+                        "type": "string",
+                        "description": (
+                            "SQLite FTS5 query. Use boolean operators (AND, OR), "
+                            "quoted phrases, parentheses. Example: "
+                            "'thrombectomy AND (\"stent retriever\" OR aspiration)'"
+                        ),
+                    },
+                    "subdomain": {
+                        "type": "string",
+                        "description": (
+                            "Optional subdomain ID from list_subdomains() to filter. "
+                            "Use for clinically-bounded questions. Omit for "
+                            "cross-cutting topics."
+                        ),
+                    },
+                    "top_n": {
+                        "type": "integer",
+                        "description": "Number of top-ranked papers to return (default: 8, max: 25)",
+                        "default": 8,
+                    },
+                },
+                "required": ["fts_query"],
+            },
+        ),
+        Tool(
+            name="get_paper",
+            description=(
+                "Retrieve detailed information for a specific paper from the local "
+                "neurointerventional corpus by work_id. Returns full metadata (title, "
+                "journal, year, study design, evidence tier, citation count, MeSH terms, "
+                "keywords), plus all available full-text section passages (introduction, "
+                "methods, results, discussion, conclusion). Use for drill-down after "
+                "search_corpus surfaces a paper that needs deeper inspection."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "work_id": {
+                        "type": "string",
+                        "description": "The work_id from a search_corpus result",
+                    },
+                },
+                "required": ["work_id"],
+            },
+        ),
     ]
 
 
@@ -755,6 +1190,12 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 result = await _handle_radiology(arguments)
             case "send_email":
                 result = await _handle_send_email(arguments)
+            case "list_subdomains":
+                result = _handle_list_subdomains(arguments)
+            case "search_corpus":
+                result = _handle_search_corpus(arguments)
+            case "get_paper":
+                result = _handle_get_paper(arguments)
             case _:
                 result = f"Unknown tool: {name}"
         return [TextContent(type="text", text=result)]
@@ -801,9 +1242,25 @@ async def _handle_build_caseplan(args: dict) -> str:
         out_dir = Path.cwd() / out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # ── Define the 4 search axes ────────────────────────────────────────
+    # Detect profile early to inform search queries
+    profile_name, profile_confidence = _detect_profile(topic)
+    profile_kw = _build_keywords(profile_name)
+
+    # Build anatomy search query with profile-specific terms
+    # Generic "anatomy relevant structures" returns treatment papers;
+    # injecting top profile anatomy keywords focuses PubMed on actual anatomy.
+    top_anatomy_terms = profile_kw["anatomy"][:5]  # top 5 domain-specific terms
+    anatomy_query = f"{topic} {' '.join(top_anatomy_terms)}"
+    # Keep query under PubMed's practical length (~256 chars works well)
+    if len(anatomy_query) > 200:
+        anatomy_query = anatomy_query[:200].rsplit(" ", 1)[0]
+
+    # ── Define the 5 search axes ────────────────────────────────────────
+    # Anatomy axis uses profile-specific anatomical terms to find actual
+    # anatomy papers rather than generic treatment/outcome studies.
     searches: list[tuple[str, str, str | None]] = [
         # (label, query suffix, filter_type)
+        ("Anatomy / Relevant Structures", anatomy_query, None),
         ("Outcomes / Evidence", f"{topic} outcomes", "therapy"),
         ("Surgical Technique", f"{topic} surgical technique approach", None),
         ("Complications", f"{topic} complications adverse", "etiology"),
@@ -1535,6 +1992,38 @@ async def _populate_section(
     # Stage 3: Guardrail
     result = verify_synthesis(synthesized, extracted)
 
+    # If guardrail rejects due to fabricated numbers, retry once with explicit warning
+    if not result.passed and result.total_count > 0:
+        fabricated = [c for c in result.claims if not c.get("numeric_fidelity", True)]
+        if fabricated:
+            print(f"  [guardrail] {len(fabricated)}/{result.total_count} claims had "
+                  f"fabricated numbers — retrying with stronger instruction",
+                  file=sys.stderr)
+            # Inject a reminder into source sentences and retry
+            reminder = (
+                "IMPORTANT REMINDER: Only use numbers that appear VERBATIM "
+                "in these source sentences. Do NOT compute, estimate, or "
+                "infer any statistics. If a number is not here, write "
+                "\"Insufficient data\" instead."
+            )
+            try:
+                if split_complications:
+                    synthesized = await synthesize_complications_split(
+                        source_sentences=[reminder] + extracted,
+                        topic=topic,
+                        template_sections=template_sections,
+                    )
+                else:
+                    synthesized = await synthesize_section(
+                        template_sections=template_sections,
+                        source_sentences=[reminder] + extracted,
+                        topic=topic,
+                    )
+                if synthesized:
+                    result = verify_synthesis(synthesized, extracted)
+            except Exception:
+                pass  # Retry failed; use first synthesis for diagnostics
+
     # Handle 0/0 edge case explicitly
     if result.total_count == 0:
         lines = [f"# {section_title} — {topic}\n"]
@@ -1623,6 +2112,7 @@ async def _write_filled_templates(
 
     # Extract and populate each section via extract→synthesize→guardrail pipeline
     # Use profile-specific keywords with per-section sources
+    anatomy_articles = axis_data.get("Anatomy / Relevant Structures", [])
     technique_articles = axis_data.get("Surgical Technique", [])
     reviews_articles = axis_data.get("Reviews / Landmarks", [])
     outcomes_articles = axis_data.get("Outcomes / Evidence", [])
@@ -1636,8 +2126,10 @@ async def _write_filled_templates(
     templates = _get_template_sections(profile_name)
 
     # ── anatomy.md ─────────────────────────────────────────────────────
+    # Use anatomy-dedicated articles first, then reviews and technique as fallback.
+    # Anatomy papers discuss structures directly; technique/reviews rarely do.
     anatomy_text = await _populate_section(
-        articles=technique_articles + reviews_articles,
+        articles=anatomy_articles + reviews_articles + technique_articles,
         keywords=kw["anatomy"],
         template_sections=templates["anatomy"],
         topic=topic,
@@ -1815,6 +2307,160 @@ async def _handle_radiology(args: dict) -> str:
         elif local:
             lines.append(f"   Download error: {local}")
         lines.append("")
+
+    return "\n".join(lines)
+
+
+def _handle_list_subdomains(args: dict) -> str:
+    """List available clinical subdomains in the local corpus."""
+    if not _CORPUS_AVAILABLE:
+        return (
+            "Local corpus not available.\n\n"
+            "The neurointerventional corpus databases were not found at:\n"
+            f"  Corpus: {_CORPUS_DB}\n"
+            f"  Fulltext: {_FULLTEXT_DB}\n\n"
+            "Set CASEPREP_CORPUS_DB and CASEPREP_FULLTEXT_DB environment variables "
+            "to point to your NSGY_DB_lean databases."
+        )
+    subdomains = _corpus_list_subdomains()
+    lines = [
+        f"## Neurointerventional Corpus — {len(subdomains)} Subdomains",
+        f"({sum(s['paper_count'] for s in subdomains):,} total paper assignments across 51,980 papers)\n",
+    ]
+    for sd in subdomains:
+        desc = sd["description"][:80]
+        lines.append(f"- **{sd['id']}** ({sd['paper_count']:,} papers): {desc}")
+    return "\n".join(lines)
+
+
+def _handle_search_corpus(args: dict) -> str:
+    """Search the local corpus via FTS5."""
+    fts_query = args["fts_query"]
+    subdomain = args.get("subdomain")
+    top_n = min(args.get("top_n", 8), 25)
+
+    result = _corpus_search(fts_query, subdomain, top_n)
+
+    if "error" in result:
+        return (
+            f"Corpus search unavailable: {result['error']}\n\n"
+            f"  Corpus: {_CORPUS_DB}\n"
+            f"  Fulltext: {_FULLTEXT_DB}"
+        )
+
+    papers = result["papers"]
+    total = result["total_matches"]
+    returned = result["returned"]
+    subdomain_dist = result.get("subdomain_distribution", {})
+
+    sd_note = f" — subdomain: {subdomain}" if subdomain else ""
+
+    lines = [
+        f"## Corpus Search{sd_note} — `{fts_query}`",
+        f"({returned} shown of {total:,} total matches)\n",
+    ]
+
+    # Subdomain distribution (only when no subdomain filter)
+    if not subdomain and subdomain_dist:
+        top_sds = sorted(subdomain_dist.items(), key=lambda x: x[1], reverse=True)[:5]
+        sd_parts = []
+        for sd_id, count in top_sds:
+            desc = SUBDOMAIN_DESCRIPTIONS.get(sd_id, sd_id).split(",")[0]
+            sd_parts.append(f"{desc} ({count})")
+        lines.append(f"Top domains: {' | '.join(sd_parts)}\n")
+
+    for i, paper in enumerate(papers, 1):
+        lines.extend(_fmt_corpus_paper(paper, i))
+
+    # Corpus availability note
+    lines.append(
+        f"---\n*Searched local neurointerventional corpus ({total:,} papers indexed). "
+        "Use search_pubmed for live PubMed queries or get_paper with a work_id for "
+        "full section-by-section detail.*"
+    )
+
+    return "\n".join(lines)
+
+
+def _handle_get_paper(args: dict) -> str:
+    """Retrieve full paper details from the local corpus."""
+    work_id = args["work_id"]
+
+    if not _CORPUS_AVAILABLE:
+        return "Local corpus not available."
+
+    paper = _corpus_get_paper(work_id)
+    if not paper:
+        return f"Paper '{work_id}' not found in local corpus."
+
+    lines = [
+        f"## {paper['title']}",
+        f"*{paper['journal']}* ({paper['year']})",
+        "",
+    ]
+
+    # Evidence metadata
+    meta_parts = []
+    if paper["evidence_tier"]:
+        label = EVIDENCE_TIER_LABELS.get(paper["evidence_tier"], paper["evidence_tier"])
+        meta_parts.append(label)
+    if paper["study_design"]:
+        meta_parts.append(paper["study_design"].replace("_", " ").title())
+    if paper["citation_count"] and paper["citation_count"] > 0:
+        meta_parts.append(f"cited {paper['citation_count']}×")
+    if paper["journal_tier"]:
+        meta_parts.append(f"journal tier {paper['journal_tier']}")
+    if meta_parts:
+        lines.append(f"**Evidence:** {' | '.join(meta_parts)}")
+        lines.append("")
+
+    # Subdomains
+    if paper["subdomains"]:
+        sd_labels = [
+            f"{s} ({SUBDOMAIN_DESCRIPTIONS.get(s, '').split(',')[0]})"
+            for s in paper["subdomains"]
+        ]
+        lines.append(f"**Topics:** {', '.join(sd_labels)}")
+        lines.append("")
+
+    # Links
+    if paper["pubmed_url"]:
+        lines.append(f"PubMed: {paper['pubmed_url']}")
+    if paper["doi_url"]:
+        lines.append(f"DOI: {paper['doi_url']}")
+    lines.append("")
+
+    # MeSH and keywords
+    if paper["mesh_terms"]:
+        lines.append(f"**MeSH:** {', '.join(paper['mesh_terms'][:20])}")
+    if paper["keywords"]:
+        lines.append(f"**Keywords:** {', '.join(paper['keywords'][:20])}")
+    if paper["mesh_terms"] or paper["keywords"]:
+        lines.append("")
+
+    # Abstract
+    if paper["abstract"]:
+        lines.append("### Abstract\n")
+        lines.append(paper["abstract"][:2000])
+        lines.append("")
+
+    # Sections
+    sections = paper.get("sections", {})
+    for section_type in ("introduction", "methods", "results", "discussion", "conclusion"):
+        if section_type in sections:
+            content = sections[section_type]
+            display = content[:1500] + ("…" if len(content) > 1500 else "")
+            lines.append(f"### {section_type.title()}\n")
+            lines.append(display)
+            lines.append("")
+
+    # Other section types
+    for st, content in sections.items():
+        if st not in ("introduction", "methods", "results", "discussion", "conclusion"):
+            display = content[:800] + ("…" if len(content) > 800 else "")
+            lines.append(f"### {st.replace('_', ' ').title()}\n")
+            lines.append(display)
+            lines.append("")
 
     return "\n".join(lines)
 
