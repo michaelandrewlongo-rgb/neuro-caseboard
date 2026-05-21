@@ -529,6 +529,26 @@ def classify_clinical_applicability(
     if primary_m1 and m2_specific and not m1_context:
         return False, "M2-only/distal-MCA source for primary M1 case"
 
+    posterior_source_terms = (
+        "basilar",
+        "vertebrobasilar",
+        "posterior circulation",
+        "posterior-circulation",
+        "posterior cerebral",
+        "pca",
+    )
+    anterior_source_terms = (
+        "anterior circulation",
+        "anterior-circulation",
+        "m1",
+        "mca",
+        "middle cerebral",
+    )
+    if posterior_case and any(term in text_cf for term in anterior_source_terms) and not any(
+        term in text_cf for term in posterior_source_terms
+    ):
+        return False, "anterior-circulation-only source for posterior/basilar case"
+
     ai_terms = (
         "artificial intelligence",
         "deep learning",

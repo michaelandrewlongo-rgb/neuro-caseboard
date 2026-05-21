@@ -82,6 +82,9 @@ def test_resolve_thrombectomy_pack_only_for_specific_anterior_m1_lvo_cases():
     m2_only = parse_case_input(
         "mechanical thrombectomy for acute ischemic stroke due to left M2 MCA occlusion"
     )
+    ica_terminus = parse_case_input(
+        "mechanical thrombectomy for acute ischemic stroke due to right ICA terminus occlusion with M1 extension"
+    )
     basilar = parse_case_input(
         "mechanical thrombectomy for basilar artery occlusion acute ischemic stroke"
     )
@@ -95,4 +98,5 @@ def test_resolve_thrombectomy_pack_only_for_specific_anterior_m1_lvo_cases():
     assert resolve_thrombectomy_pack(bare_stroke) is None
     assert resolve_thrombectomy_pack(generic_mca) is None
     assert resolve_thrombectomy_pack(m2_only) is None
+    assert resolve_thrombectomy_pack(ica_terminus) is None
     assert resolve_thrombectomy_pack(basilar) is None

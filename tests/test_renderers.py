@@ -115,6 +115,70 @@ def test_markdown_renderer_thrombectomy_adds_morning_file_and_propagates_snapsho
     assert "right right m1" not in combined
 
 
+def _render_thrombectomy_case(case_text: str) -> dict[str, str]:
+    from caseprep.renderers.markdown import render_caseprep_files
+
+    case_spec = parse_case_input(case_text)
+    family = select_procedure_family(case_spec)
+    assert family is not None
+    schema = build_caseprep_schema(
+        case_spec.raw_input,
+        profile="vascular",
+        structured_case=case_spec.to_dict(),
+        procedure_family={
+            "id": family.id,
+            "display_name": family.display_name,
+            "broad_profile": family.broad_profile,
+            "required_fields": list(family.required_fields),
+            "missing_fact_prompts": list(family.missing_fact_prompts),
+        },
+    )
+    return render_caseprep_files(schema)
+
+
+def test_markdown_renderer_thrombectomy_variant_matrix_avoids_right_m1_overfit():
+    cases = [
+        (
+            "mechanical thrombectomy for acute ischemic stroke due to right M1 MCA occlusion",
+            ("right M1 MCA occlusion", "Right M1 MCA syndrome prep"),
+            ("left M1 MCA occlusion", "basilar artery occlusion", "target LVO"),
+        ),
+        (
+            "mechanical thrombectomy for acute ischemic stroke due to left M1 MCA occlusion",
+            ("left M1 MCA occlusion", "Left M1 MCA syndrome prep"),
+            ("right M1 MCA occlusion", "basilar artery occlusion", "target LVO"),
+        ),
+        (
+            "mechanical thrombectomy for acute ischemic stroke due to left M2 MCA occlusion",
+            ("left M2 MCA occlusion", "Left M2 MCA syndrome prep"),
+            ("right M1 MCA occlusion", "basilar artery occlusion", "target LVO"),
+        ),
+        (
+            "mechanical thrombectomy for basilar artery occlusion acute ischemic stroke",
+            ("basilar artery occlusion", "posterior circulation", "vertebral-basilar circulation"),
+            ("right M1 MCA occlusion", "left M1 MCA occlusion", "malignant MCA edema"),
+        ),
+        (
+            "mechanical thrombectomy for acute ischemic stroke due to right ICA terminus occlusion",
+            ("ICA terminus occlusion", "right anterior circulation"),
+            ("right M1 MCA occlusion", "left M1 MCA occlusion", "basilar artery occlusion"),
+        ),
+        (
+            "stroke thrombectomy",
+            ("target LVO", "access/occlusion anatomy needs input", "Degradation status: degraded/generic case summary"),
+            ("right M1 MCA occlusion", "left M1 MCA occlusion", "basilar artery occlusion"),
+        ),
+    ]
+
+    for case_text, expected_phrases, forbidden_phrases in cases:
+        rendered = _render_thrombectomy_case(case_text)
+        combined = "\n".join(rendered.values())
+        for phrase in expected_phrases:
+            assert phrase in combined, f"{phrase!r} missing for {case_text!r}"
+        for phrase in forbidden_phrases:
+            assert phrase not in combined, f"{phrase!r} leaked into {case_text!r}"
+
+
 def test_thrombectomy_evidence_renderer_shows_pack_coverage_and_hierarchy():
     from caseprep.renderers.markdown import render_caseprep_files
 

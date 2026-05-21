@@ -329,6 +329,16 @@ def resolve_thrombectomy_pack(case_spec: Any) -> EvidencePack | None:
         return None
     if any(term in text for term in ("basilar", "vertebrobasilar", "posterior circulation")):
         return None
+    if any(
+        term in text
+        for term in (
+            "ica terminus",
+            "carotid terminus",
+            "internal carotid terminus",
+            "internal carotid artery terminus",
+        )
+    ):
+        return None
     if re.search(r"\bm2\b", text) or "distal mca" in text:
         return None
     has_m1_target = bool(re.search(r"\bm1\b", text))

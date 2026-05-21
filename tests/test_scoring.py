@@ -232,6 +232,32 @@ def test_classify_clinical_applicability_allows_m2_sources_for_m2_case():
     assert reason == "clinically applicable"
 
 
+def test_classify_clinical_applicability_quarantines_anterior_m1_sources_for_basilar_case():
+    case = parse_case_input("mechanical thrombectomy for basilar artery occlusion acute ischemic stroke")
+    family = select_procedure_family(case)
+
+    anterior_record = EvidenceRecord(
+        id="anterior-m1-only",
+        source="pubmed",
+        title="Randomized trial of thrombectomy for anterior circulation M1 MCA occlusion",
+        text="M1 middle cerebral artery acute ischemic stroke endovascular therapy evidence.",
+    )
+    posterior_record = EvidenceRecord(
+        id="posterior-valid",
+        source="pubmed",
+        title="Endovascular thrombectomy for basilar artery occlusion",
+        text="Posterior circulation stroke thrombectomy outcomes for vertebrobasilar occlusion.",
+    )
+
+    include, reason = classify_clinical_applicability(anterior_record, case, family)
+    assert include is False
+    assert "anterior-circulation-only" in reason
+
+    include, reason = classify_clinical_applicability(posterior_record, case, family)
+    assert include is True
+    assert reason == "clinically applicable"
+
+
 def test_breast_tumor_resection_review_is_penalized_for_convexity_meningioma():
     case = parse_case_input(
         "right frontal convexity meningioma resection near the superior sagittal sinus"
