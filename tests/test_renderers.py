@@ -217,6 +217,47 @@ def test_markdown_renderer_parasagittal_meningioma_removes_generic_placeholders_
     assert "exact positioning/incision depends on AP location and venous imaging" in operative
 
 
+def test_parasagittal_sss_meningioma_operative_plan_renders_craniotomy_and_dural_opening_strategy():
+    from caseprep.renderers.markdown import render_caseprep_files
+
+    case_spec = parse_case_input("right parasagittal 4cm meningioma abutting SSS")
+    family = select_procedure_family(case_spec)
+    assert family is not None
+    schema = build_caseprep_schema(
+        case_spec.raw_input,
+        profile=family.broad_profile,
+        structured_case=case_spec.to_dict(),
+        procedure_family={
+            "id": family.id,
+            "display_name": family.display_name,
+            "broad_profile": family.broad_profile,
+            "required_fields": list(family.required_fields),
+            "missing_fact_prompts": list(family.missing_fact_prompts),
+        },
+    )
+
+    operative = render_caseprep_files(schema)["04-operative-plan.md"]
+    operative_lower = operative.casefold()
+
+    assert "## Parasagittal / SSS Craniotomy Strategy" in operative
+    assert "MRV/CTV" in operative
+    assert "patent/compressed SSS" in operative
+    assert "sinus wall invasion remains unproven" in operative_lower
+    assert "medial-side burr holes" in operative_lower
+    assert "lateral to the sss margin" in operative_lower
+    assert "dural opening" in operative_lower
+    assert "lateral-to-medial" in operative_lower
+    assert "leave a medial dural cuff" in operative_lower
+    assert "bridging veins" in operative_lower
+    assert "venous lacunae" in operative_lower
+    assert "planned residual" in operative_lower
+    assert "Approach Selection Matrix" in operative
+    assert "`needs input`" not in operative
+    assert "MEP" not in operative
+    assert "SSEP" not in operative
+    assert "Sindou" not in operative
+
+
 def test_parasagittal_sss_meningioma_evidence_renders_bottom_line_and_buckets():
     from caseprep.renderers.markdown import render_caseprep_files
 

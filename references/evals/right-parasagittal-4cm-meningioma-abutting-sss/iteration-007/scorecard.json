@@ -1,0 +1,16 @@
+{
+  "iteration": 7,
+  "score": 90,
+  "verdict": "PASS",
+  "grade_basis": "operative-plan specificity for right parasagittal 4cm meningioma abutting SSS",
+  "overall_usefulness": "operative plan is clinically usable and materially more specific about parasagittal/SSS craniotomy and dural-opening strategy",
+  "operative_plan_usefulness": "ties craniotomy, burr holes, dural opening, sinus-side sequence, and resection endpoint to MRV/CTV findings and venous anatomy",
+  "does_change_improve_caseprep_usefulness": true,
+  "commit_appropriate": true,
+  "constraints_verified": {
+    "abutting_not_overcalled_as_invasion": true,
+    "no_mandatory_mep_ssep": true,
+    "no_large_sindou_matrix_in_operative_plan": true,
+    "operative_plan_has_no_needs_input_placeholders": true
+  }
+}
