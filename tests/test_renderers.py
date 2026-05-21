@@ -115,6 +115,201 @@ def test_markdown_renderer_thrombectomy_adds_morning_file_and_propagates_snapsho
     assert "right right m1" not in combined
 
 
+def test_markdown_renderer_parasagittal_meningioma_adds_sss_specific_defaults():
+    from caseprep.renderers.markdown import render_caseprep_files
+
+    case_spec = parse_case_input("right parasagittal 4cm meningioma abutting SSS")
+    family = select_procedure_family(case_spec)
+    assert family is not None
+    schema = build_caseprep_schema(
+        case_spec.raw_input,
+        profile=family.broad_profile,
+        structured_case=case_spec.to_dict(),
+        procedure_family={
+            "id": family.id,
+            "display_name": family.display_name,
+            "broad_profile": family.broad_profile,
+            "required_fields": list(family.required_fields),
+            "missing_fact_prompts": list(family.missing_fact_prompts),
+        },
+    )
+
+    rendered = render_caseprep_files(schema)
+    combined = "\n".join(rendered.values())
+
+    assert "Profile: `supratentorial_tumor`" in rendered["README.md"]
+    assert "right 4cm" in rendered["01-case-summary.md"]
+    assert "superior sagittal sinus (SSS)" in combined
+    assert "MRV or CTV" in rendered["02-imaging-review.md"]
+    assert "bridging veins" in rendered["03-anatomy-at-risk.md"]
+    assert "parasagittal craniotomy" in rendered["04-operative-plan.md"].casefold()
+    assert "planned residual" in rendered["04-operative-plan.md"]
+    assert "Venous congestion" in rendered["00-morning-of-case.md"]
+    assert "skull_base" not in rendered["README.md"]
+
+
+def test_markdown_renderer_parasagittal_meningioma_stays_practical_not_over_specified():
+    from caseprep.renderers.markdown import render_caseprep_files
+
+    case_spec = parse_case_input("right parasagittal 4cm meningioma abutting SSS")
+    family = select_procedure_family(case_spec)
+    assert family is not None
+    schema = build_caseprep_schema(
+        case_spec.raw_input,
+        profile=family.broad_profile,
+        structured_case=case_spec.to_dict(),
+        procedure_family={
+            "id": family.id,
+            "display_name": family.display_name,
+            "broad_profile": family.broad_profile,
+            "required_fields": list(family.required_fields),
+            "missing_fact_prompts": list(family.missing_fact_prompts),
+        },
+    )
+
+    rendered = render_caseprep_files(schema)
+    combined = "\n".join(rendered.values())
+    combined_lower = combined.casefold()
+
+    assert "practical venous preservation questions" in rendered["04-operative-plan.md"].casefold()
+    assert "is the sss patent" in combined_lower
+    assert "dominant bridging veins" in combined_lower
+    assert "small planned residual" in combined_lower
+    assert "sinus bleeding occurs" in combined_lower
+    assert "MEP" not in combined
+    assert "SSEP" not in combined
+    assert "neuromonitoring" not in combined_lower
+    assert "Sindou" not in combined
+
+
+def test_markdown_renderer_parasagittal_meningioma_removes_generic_placeholders_and_preserves_uncertainty():
+    from caseprep.renderers.markdown import render_caseprep_files
+
+    case_spec = parse_case_input("right parasagittal 4cm meningioma abutting SSS")
+    family = select_procedure_family(case_spec)
+    assert family is not None
+    schema = build_caseprep_schema(
+        case_spec.raw_input,
+        profile=family.broad_profile,
+        structured_case=case_spec.to_dict(),
+        procedure_family={
+            "id": family.id,
+            "display_name": family.display_name,
+            "broad_profile": family.broad_profile,
+            "required_fields": list(family.required_fields),
+            "missing_fact_prompts": list(family.missing_fact_prompts),
+        },
+    )
+
+    rendered = render_caseprep_files(schema)
+    case_summary = rendered["01-case-summary.md"]
+    operative = rendered["04-operative-plan.md"]
+    non_evidence_combined = "\n".join(
+        body for name, body in rendered.items() if name not in {"07-evidence.md", "literature.md"}
+    )
+    non_evidence_lower = non_evidence_combined.casefold()
+
+    assert "Diagnosis: right 4cm parasagittal meningioma abutting superior sagittal sinus (SSS); invasion unknown" in case_summary
+    assert "superior sagittal sinus meningioma" not in non_evidence_lower
+    assert "Approach: `needs input`" not in operative
+    assert "Rationale: `needs input`" not in operative
+    assert "Likely approach: parasagittal craniotomy" in operative
+    assert "exact positioning/incision depends on AP location and venous imaging" in operative
+
+
+def test_parasagittal_sss_meningioma_evidence_renders_bottom_line_and_buckets():
+    from caseprep.renderers.markdown import render_caseprep_files
+
+    case_spec = parse_case_input("right parasagittal 4cm meningioma abutting SSS")
+    family = select_procedure_family(case_spec)
+    assert family is not None
+    schema = build_caseprep_schema(
+        case_spec.raw_input,
+        profile=family.broad_profile,
+        structured_case=case_spec.to_dict(),
+        procedure_family={
+            "id": family.id,
+            "display_name": family.display_name,
+            "broad_profile": family.broad_profile,
+            "required_fields": list(family.required_fields),
+            "missing_fact_prompts": list(family.missing_fact_prompts),
+        },
+    )
+
+    evidence_md = render_caseprep_files(schema)["07-evidence.md"]
+    evidence_lower = evidence_md.casefold()
+
+    assert "## Bottom line for this case" in evidence_md
+    assert "abutting" in evidence_lower
+    assert "invasion unknown" in evidence_lower or "invasion is unknown" in evidence_lower
+    assert "superior sagittal sinus" in evidence_lower
+    assert "bridging vein" in evidence_lower or "cortical vein" in evidence_lower
+    assert "planned residual" in evidence_lower or "residual" in evidence_lower
+    assert "radiosurgery" in evidence_lower or "adjuvant radiation" in evidence_lower
+    assert "recurrence" in evidence_lower
+    for heading in [
+        "## SSS / Parasagittal Surgical Outcomes",
+        "## Venous Complications / Bridging Veins",
+        "## Residual / Adjuvant Radiation",
+        "## Recurrence / Extent Of Resection",
+    ]:
+        assert heading in evidence_md
+    assert evidence_md.count("PMID ") >= 4
+    assert "MEP" not in evidence_md
+    assert "SSEP" not in evidence_md
+    assert "Sindou" not in evidence_md
+
+
+def test_parasagittal_sss_meningioma_evidence_provenance_and_takeaways_are_rendered():
+    from caseprep.renderers.markdown import render_caseprep_files
+
+    case_spec = parse_case_input("right parasagittal 4cm meningioma abutting SSS")
+    family = select_procedure_family(case_spec)
+    assert family is not None
+    schema = build_caseprep_schema(
+        case_spec.raw_input,
+        profile=family.broad_profile,
+        structured_case=case_spec.to_dict(),
+        procedure_family={
+            "id": family.id,
+            "display_name": family.display_name,
+            "broad_profile": family.broad_profile,
+            "required_fields": list(family.required_fields),
+            "missing_fact_prompts": list(family.missing_fact_prompts),
+        },
+    )
+
+    rendered = render_caseprep_files(
+        schema,
+        literature_summary="## Core Search Appendix\n\n## Evidence Retrieved\n- Total records: 1\n- pubmed: 1",
+    )
+    evidence_md = rendered["07-evidence.md"]
+    provenance = json.loads(rendered["provenance.json"])
+
+    assert any(
+        record["field_path"] == "case.evidence.curated_pack.parasagittal_sss"
+        and len(record["source_ids"]) == 10
+        and "pmid-30171502" in record["source_ids"]
+        for record in provenance
+    )
+
+    assert "## Evidence Pack Provenance" in evidence_md
+    assert "Curated parasagittal/SSS evidence-pack sources: 10" in evidence_md
+    assert "Live retrieval source counts are separate" in evidence_md
+    assert "Total records: 1" not in evidence_md
+    assert "## Study-Level Takeaways" in evidence_md
+    for phrase in [
+        "26 studies / 1614 patients",
+        "venous infarct 4% vs 2%",
+        "worsening preexisting motor deficits 34% vs 13%",
+        "Recurrence occurred in 37/110 patients (33.6%)",
+        "subtotal resection independently shortened time to recurrence (HR 3.10",
+        "5-year actuarial tumor control rate was 93",
+        "transient symptomatic edema after radiosurgery was 16%",
+    ]:
+        assert phrase in evidence_md
+
+
 def _render_thrombectomy_case(case_text: str) -> dict[str, str]:
     from caseprep.renderers.markdown import render_caseprep_files
 

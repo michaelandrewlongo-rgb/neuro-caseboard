@@ -122,6 +122,21 @@ def test_convexity_meningioma_surfaces_missing_venous_relationship():
     assert "venous/sinus relationship" in case.missing_critical_facts
 
 
+def test_parasagittal_meningioma_abutting_sss_routes_to_tumor_family_without_silent_guessing():
+    case = deterministic_parse_case("right parasagittal 4cm meningioma abutting SSS")
+
+    assert case.procedure_family.value == "tumor_convexity_meningioma"
+    assert case.broad_profile.value == "supratentorial_tumor"
+    assert_field_contains(case.pathology, "parasagittal meningioma")
+    assert_field_contains(case.procedure, "meningioma resection", "craniotomy prep")
+    assert case.procedure.source == "inferred"
+    assert_field_contains(case.laterality, "right")
+    assert_field_contains(case.size, "4cm")
+    assert_field_contains(case.anatomic_location, "parasagittal", "superior sagittal sinus")
+    assert "booked procedure confirmation" in case.missing_critical_facts
+    assert not case.degraded
+
+
 def test_topic_only_family_match_has_lower_confidence_than_full_canonical_case():
     full = deterministic_parse_case(
         "suboccipital craniectomy and C1 laminectomy for Chiari I malformation"

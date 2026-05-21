@@ -119,6 +119,7 @@ PROCEDURE_FAMILIES: Mapping[str, ProcedureFamily] = MappingProxyType({
         broad_profile="supratentorial_tumor",
         procedure_aliases=(
             "convexity meningioma resection",
+            "parasagittal meningioma resection",
             "meningioma craniotomy",
             "frontal convexity meningioma resection",
             "supratentorial meningioma resection",
@@ -127,6 +128,7 @@ PROCEDURE_FAMILIES: Mapping[str, ProcedureFamily] = MappingProxyType({
             "convexity meningioma",
             "frontal meningioma",
             "parasagittal meningioma",
+            "falcine meningioma",
             "dural based mass",
         ),
         approach_aliases=(

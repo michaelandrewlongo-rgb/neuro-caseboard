@@ -343,6 +343,22 @@ def _propagate_structured_case_snapshot(schema: dict[str, Any]) -> None:
             f"{ctx['diagnosis']} planned for {planned} at {ctx['level']}; key prep is level localization, "
             "anterior corridor safety, decompression target, and implant/fusion construct verification."
         )
+    elif _procedure_family_id(schema) == "tumor_convexity_meningioma":
+        ctx = _meningioma_context(schema)
+        planned = procedure or "meningioma resection / craniotomy prep domain"
+        snapshot["diagnosis"] = ctx["diagnosis"]
+        snapshot["planned_procedure"] = planned
+        if laterality:
+            snapshot["laterality"] = laterality
+        snapshot["operative_objective"] = (
+            f"Prepare for safe {ctx['corridor']} and resection strategy while preserving {ctx['sinus']} and cortical venous drainage."
+        )
+        snapshot["urgency"] = "Elective/urgent tumor workflow; verify symptoms, edema, venous imaging, and booked operative plan."
+        snapshot["anticipated_disposition"] = "PACU then floor/ICU depending on edema, venous sinus manipulation, and neurologic risk."
+        snapshot["one_line_thesis"] = (
+            f"{ctx['diagnosis']}; key prep is MRV/CTV-defined venous anatomy, abutment-vs-invasion uncertainty, "
+            "cortical/bridging vein preservation, and extent-of-resection stop points."
+        )
 
 
 def _yaml_scalar(value: Any) -> str:
@@ -414,6 +430,26 @@ def _is_thrombectomy(schema: dict[str, Any]) -> bool:
 
 def _is_acdf(schema: dict[str, Any]) -> bool:
     return _procedure_family_id(schema) == "spine_acdf"
+
+
+def _is_convexity_meningioma(schema: dict[str, Any]) -> bool:
+    return _procedure_family_id(schema) == "tumor_convexity_meningioma"
+
+
+def _is_parasagittal_sss_meningioma(schema: dict[str, Any]) -> bool:
+    if not _is_convexity_meningioma(schema):
+        return False
+    ctx = _meningioma_context(schema)
+    haystack = " ".join(
+        str(part)
+        for part in (
+            schema.get("topic", ""),
+            ctx.get("location", ""),
+            ctx.get("diagnosis", ""),
+            ctx.get("sinus", ""),
+        )
+    ).casefold()
+    return any(term in haystack for term in ("parasagittal", "superior sagittal", "sss", "sagittal sinus"))
 
 
 def _acdf_context(schema: dict[str, Any]) -> dict[str, str]:
@@ -946,11 +982,182 @@ def _thrombectomy_defaults(schema: dict[str, Any]) -> dict[str, dict[str, Any]]:
         },
     }
 
+def _meningioma_context(schema: dict[str, Any]) -> dict[str, str]:
+    """Derive parasagittal/convexity meningioma wording without inventing patient facts."""
+    topic = str(schema.get("topic", ""))
+    laterality = _structured_case_value(schema, "laterality").strip().casefold()
+    side = laterality if laterality in {"right", "left", "bilateral"} else ""
+    size = _structured_case_value(schema, "size") or "size needs input"
+    raw_location = _structured_case_value(schema, "anatomic_location") or "convexity/parasagittal location"
+    pathology = _structured_case_value(schema, "pathology") or "meningioma"
+    haystack = " ".join(part for part in (topic, raw_location, pathology) if part).casefold()
+    is_parasagittal = any(term in haystack for term in ("parasagittal", "superior sagittal", "sss", "sagittal sinus"))
+    location_parts = [part.strip() for part in raw_location.split(";") if part.strip()]
+    location = next((part for part in location_parts if "parasagittal" in part.casefold()), raw_location)
+    corridor = "parasagittal craniotomy" if is_parasagittal else "convexity craniotomy"
+    side_prefix = f"{side} " if side in {"right", "left"} else ""
+    lesion = f"{side_prefix}{size} {location} meningioma".replace("  ", " ").strip()
+    sinus = "superior sagittal sinus (SSS)" if is_parasagittal else "adjacent cortical veins and dural venous sinuses"
+    if is_parasagittal and "abutting" in haystack:
+        diagnosis = f"{lesion} abutting {sinus}; invasion unknown"
+    elif is_parasagittal:
+        diagnosis = f"{lesion} near {sinus}; sinus invasion unknown"
+    else:
+        diagnosis = lesion
+    return {
+        "topic": topic,
+        "side": side,
+        "size": size,
+        "location": location,
+        "pathology": pathology,
+        "lesion": lesion,
+        "diagnosis": diagnosis,
+        "corridor": corridor,
+        "sinus": sinus,
+    }
+
+
+def _meningioma_defaults(schema: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    ctx = _meningioma_context(schema)
+    lesion = ctx["lesion"]
+    sinus = ctx["sinus"]
+    corridor = ctx["corridor"]
+    return {
+        "imaging_review": {
+            "required_studies": [
+                "MRI brain with contrast to define dural attachment, tumor-cortex interface, edema, and relationship to eloquent cortex.",
+                "MRV or CTV when the tumor abuts the superior sagittal sinus to assess sinus patency, invasion versus compression, collateral venous drainage, and dominant cortical veins.",
+                "CT head/bone windows if hyperostosis, calcification, or planned bone removal/reconstruction may change the craniotomy.",
+            ],
+            "key_findings": [
+                f"Confirm {lesion} and whether the sinus relationship is abutment, narrowing, invasion, occlusion, or preserved flow.",
+                "Assess peritumoral edema, cortical invasion/cleft, mass effect, and proximity to motor/sensory cortex or supplementary motor area when the AP location suggests it.",
+                "Map cortical and bridging veins entering the SSS; identify venous lacunae and veins that must not be sacrificed.",
+            ],
+            "measurements": [
+                "Largest diameter, dural base, sinus contact length, degree of sinus narrowing, edema burden, and distance to eloquent cortex.",
+            ],
+            "anatomic_relationships": [
+                f"Tumor relationship to {sinus}, falx, parasagittal cortex, bridging veins, cortical draining veins, and arterial supply.",
+                "Review whether the tumor crosses midline/falx or involves bone/dura requiring reconstruction.",
+            ],
+            "red_flags": [
+                "Absent or narrowed SSS flow, dominant bridging-vein dependence, extensive edema, or unclear sinus wall involvement may change extent-of-resection goals.",
+            ],
+            "images_to_display_in_or": [
+                "Contrast T1 axial/coronal/sagittal through tumor and SSS, T2/FLAIR edema map, MRV/CTV venous phase, and navigation-loaded tumor/sinus/vein views.",
+            ],
+        },
+        "anatomy_at_risk": {
+            "surgical_corridor": [
+                f"{corridor.capitalize()} planned around the lesion while protecting the midline venous drainage route.",
+                "Expose the sinus edge deliberately; avoid blind medial burr holes or dural opening that can enter SSS, venous lacunae, or bridging veins.",
+            ],
+            "landmarks_in_order": [
+                "Midline/sagittal suture, craniotomy margins crossing or flanking the sinus as planned, dura, falx when relevant, tumor dural base, and tumor-cortex arachnoid plane.",
+                "Define cortical draining veins and bridging veins before dural opening and maintain venous outflow throughout dissection.",
+            ],
+            "neural_structures": [
+                "Parasagittal frontal/parietal cortex, motor strip, sensory cortex, and supplementary motor area depending on lesion AP position.",
+                "New leg-predominant weakness, SMA syndrome, seizure, or sensory deficit can result from cortical or venous injury.",
+            ],
+            "arteries_perforators_veins_sinuses": [
+                "Superior sagittal sinus, parasagittal venous lacunae, cortical bridging veins, and cortical draining veins are the dominant danger structures.",
+                "Arterial supply may include middle meningeal/dural feeders and pial/cortical supply; pial supply changes the safe devascularization sequence.",
+            ],
+            "functional_structures": [
+                "Motor/sensory cortex and SMA should be localized with imaging/navigation when close to the lesion.",
+            ],
+            "variants": [
+                "Patent versus occluded sinus, suspected sinus wall invasion, dominant parasagittal veins, falcine extension, hyperostotic bone, and marked edema all change the safe resection endpoint.",
+            ],
+            "no_fly_zones": [
+                "Do not sacrifice a patent SSS or dominant bridging vein for marginal Simpson-grade gain without an explicit attending plan.",
+                "Do not pursue tumor within a patent/invaded sinus if bleeding or venous outflow risk outweighs benefit; leave adherent sinus tumor when safer.",
+            ],
+        },
+        "operative_plan": {
+            "positioning": "Supine or lateral/park-bench variant per lesion location with head fixed, navigation registered, venous air embolism precautions considered for midline/sinus exposure, and access to both sides of midline if needed.",
+            "monitoring": [
+                "Baseline motor/sensory exam and seizure history; confirm whether lesion location makes cortical mapping relevant.",
+                "Navigation with tumor, sinus, and cortical vein anatomy reviewed before incision and dural opening.",
+            ],
+            "equipment_adjuncts": [
+                "Navigation, microscope/loupes, bipolar, ultrasonic aspirator, hemostatic agents, dural substitute/graft, bone flap fixation, and venous bleeding control materials.",
+            ],
+            "critical_steps": [
+                f"Plan {corridor} incision and bone work to expose tumor margins and safe sinus edge without injuring the SSS or bridging veins during burr holes and bone flap elevation.",
+                "Open dura based on tumor/sinus relationship, preserving cortical veins and leaving a cuff when needed near venous structures.",
+                "Early dural devascularization when safe, then internal debulking to relax the capsule before circumferential extracapsular dissection along the arachnoid plane.",
+                "Work around cortical/bridging veins rather than avulsing them; define the sinus interface last if adherent or invasive.",
+                "At the sinus/falx attachment, make a practical venous preservation decision: preserve SSS/veins first, peel/coagulate only if the plane is safe, and leave planned residual when the sinus or a dominant vein is threatened.",
+                "Close with watertight dural reconstruction as feasible, address involved/hyperostotic bone per plan, and maintain hemostasis after venous pressure changes.",
+            ],
+            "decision_points": [
+                "Practical venous preservation questions: is the SSS patent, is there convincing wall invasion rather than simple abutment/compression, and are there dominant bridging veins near the tumor?",
+                "If the sinus wall plane or a bridging vein is unsafe, bias toward work-around or small planned residual rather than chasing Simpson-grade escalation.",
+                "Observation or SRS/fractionated RT may be preferred for small/asymptomatic tumors, high-risk sinus involvement, poor surgical candidate, or planned residual.",
+            ],
+            "stop_points": [
+                "Stop sinus-side dissection for uncontrolled venous bleeding, unclear sinus wall plane, dominant bridging vein compromise, or cortical swelling/venous congestion.",
+                "Convert to subtotal resection/residual-on-sinus strategy when safe venous preservation conflicts with complete resection.",
+            ],
+            "closure_reconstruction": [
+                "Dural closure/graft, management of invaded dura/falx, bone flap or hyperostotic bone plan, hemostasis, drain decision, and postop venous imaging plan if sinus manipulation occurred.",
+            ],
+            "attending_preferences_questions": [
+                "Extent-of-resection goal at SSS, threshold for leaving sinus-adherent tumor, need for MRV/CTV, embolization consideration, mapping relevance, and postop steroid/AED/imaging protocol.",
+            ],
+        },
+        "risk_and_rescue": {
+            "likely_complications": [
+                "Seizure, cerebral edema, venous congestion, new motor/sensory deficit, wound/CSF leak issues, and residual/recurrent tumor if sinus-adherent disease is left.",
+            ],
+            "catastrophic_complications": [
+                "SSS or venous lacuna injury with major venous bleeding or air embolism risk.",
+                "Dominant bridging vein sacrifice or sinus thrombosis causing venous infarct, hemorrhagic venous conversion, swelling, seizure, or neurologic deficit.",
+                "Intracranial hemorrhage, malignant edema, or infarct requiring urgent imaging, ICU management, and possible reoperation/decompression.",
+            ],
+            "mitigation": [
+                "Preop MRV/CTV for SSS patency and venous anatomy; preserve dominant cortical/bridging veins and avoid unnecessary sinus manipulation.",
+                "Maintain meticulous hemostasis and avoid excessive retraction; use debulking to reduce traction on cortex and veins.",
+                "Steroid/AED and BP plans per surgeon; monitor for edema, seizure, and venous outflow complications.",
+            ],
+            "rescue_triggers": [
+                "If sinus bleeding occurs: tamponade/packing, lower venous pressure as appropriate, maintain visualization, repair only under the attending plan, and avoid blind coagulation of sinus or major veins.",
+                "New postop weakness, aphasia/SMA syndrome concern, seizure, declining mental status, or severe headache: urgent CT/CTA/CTV or MRI/MRV depending on suspected hemorrhage/venous thrombosis/edema.",
+                "Venous infarct or sinus thrombosis concern: urgent imaging, ICU-level monitoring, edema/ICP management, and attending-directed anticoagulation/reoperation decisions.",
+            ],
+        },
+        "postop_plan": {
+            "destination": "PACU then ICU/stepdown consideration for large parasagittal/SSS-adjacent tumors, edema, sinus manipulation, or neurologic risk.",
+            "neuro_checks": "Serial exam focused on contralateral leg/arm strength, sensory changes, SMA/language if frontal dominant-side risk, seizures, and mental status.",
+            "bp_goals": "Avoid hypertension that worsens hemorrhage/edema while maintaining venous/cerebral perfusion per surgeon/anesthesia plan.",
+            "imaging_timing": "Postop MRI for extent of resection/residual and CT/CTV/MRV urgently if deficit, hemorrhage, venous infarct, or sinus thrombosis is suspected.",
+            "medications": [
+                "Steroid taper, antiseizure plan, analgesia, antiemetics, and DVT prophylaxis timing per surgeon and hemorrhage/venous thrombosis risk.",
+            ],
+            "drains_devices": [
+                "Drain and head-wrap management per closure and sinus exposure; monitor wound for CSF leak or venous bleeding.",
+            ],
+            "labs_monitoring": [
+                "Monitor sodium, edema symptoms, seizure activity, wound drainage, new focal deficits, and signs of venous congestion/infarct.",
+            ],
+            "dvt_prophylaxis": "Mechanical prophylaxis immediately; chemoprophylaxis timing individualized to postoperative imaging and bleeding risk.",
+            "discharge_criteria": [
+                "Stable neurologic exam, seizure/edema plan, wound stability, safe mobility, steroid/AED instructions, and follow-up pathology/imaging plan.",
+            ],
+        },
+    }
+
+
 def _family_defaults(schema: dict[str, Any], section: str) -> dict[str, Any]:
     if _is_thrombectomy(schema):
         return _thrombectomy_defaults(schema).get(section, {})
     if _is_acdf(schema):
         return _acdf_defaults(schema).get(section, {})
+    if _is_convexity_meningioma(schema):
+        return _meningioma_defaults(schema).get(section, {})
     return {}
 
 
@@ -1095,6 +1302,21 @@ def _render_readme(schema: dict[str, Any]) -> str:
             "Anterior decompression/fusion durability and disc-space restoration vs dysphagia, recurrent laryngeal nerve/voice risk, "
             "hematoma/airway risk, vertebral artery risk during lateral uncinate work, pseudarthrosis, and adjacent-segment stress."
         )
+    elif _is_convexity_meningioma(schema):
+        ctx = _meningioma_context(schema)
+        target_descriptor = f"{ctx['lesion']} adjacent to {ctx['sinus']}"
+        management = (
+            f"Plan {ctx['corridor']} and meningioma resection strategy around MRV/CTV-defined sinus patency, "
+            "bridging veins, eloquent cortex proximity, and an explicit stop point for sinus-adherent tumor."
+        )
+        approaches = (
+            "Parasagittal/convexity craniotomy with dural devascularization, internal debulking, extracapsular dissection, "
+            "and sinus/bridging-vein preservation; observation or SRS/fractionated RT may fit selected asymptomatic, high-risk, or residual sinus disease."
+        )
+        tradeoff = (
+            "Maximal safe resection and Simpson-grade/recurrence benefit vs SSS injury, dominant bridging-vein sacrifice, venous infarct, edema/seizure, "
+            "and neurologic deficit; planned residual on a patent sinus may be safer than aggressive removal."
+        )
     else:
         target_descriptor = (snapshot.get("laterality") or "laterality `needs input`") + " target `needs input`"
         management = "`needs input`"
@@ -1181,6 +1403,48 @@ def _render_acdf_morning_of_case(schema: dict[str, Any]) -> str:
 def _render_morning_of_case(schema: dict[str, Any]) -> str:
     if _is_acdf(schema):
         return _render_acdf_morning_of_case(schema)
+    if _is_convexity_meningioma(schema):
+        ctx = _meningioma_context(schema)
+        snapshot = schema["case"]["case_snapshot"]
+        missing_facts = schema.get("structured_case", {}).get("missing_critical_facts", []) or []
+        missing_text = ", ".join(str(item) for item in missing_facts) or "none identified"
+        return f"""# Morning Of Case - {schema['topic']}
+
+## Diagnosis / Procedure / Objective
+
+- Diagnosis: {snapshot.get('diagnosis') or ctx['lesion']}
+- Planned procedure: {snapshot.get('planned_procedure') or 'meningioma resection / craniotomy prep domain'}
+- Objective: {snapshot.get('operative_objective') or f"Maximal safe resection while preserving {ctx['sinus']} and venous drainage."}
+- Missing critical facts: {missing_text}
+
+## Go / No-Go Missing Facts
+
+| Fact | Status before incision | Why it matters |
+|---|---|---|
+| SSS patency/invasion | incomplete/needs input | Determines whether to peel, reconstruct, leave residual, or avoid sinus entry. |
+| Bridging/cortical veins | incomplete/needs input | Dominant veins may be no-fly structures; injury can cause venous infarct/hemorrhage. |
+| AP location vs motor/SMA | incomplete/needs input | Drives whether mapping is relevant and focuses postop deficit watch. |
+| Edema/seizure history | incomplete/needs input | Affects steroids, AED plan, ICU threshold, and swelling risk. |
+| Extent-of-resection goal | incomplete/needs input | Sets Simpson-grade vs venous-safety tradeoff before the dangerous sinus interface. |
+
+## Imaging Must-Review
+
+- Contrast MRI: dural base, tumor-cortex cleft, edema, bone/falx involvement, and relationship to motor/sensory cortex or SMA.
+- MRV/CTV: SSS patency, narrowing/invasion versus abutment, venous lacunae, collateral drainage, and dominant bridging veins.
+- Navigation: load tumor, sinus, falx/midline, cortical veins, and eloquent cortex landmarks when available.
+
+## Operative Focus
+
+- Plan {ctx['corridor']} and burr holes around the sinus edge; avoid blind medial entry into SSS/lacunae.
+- Preserve cortical and bridging veins; internally debulk before mobilizing capsule off cortex/veins.
+- Treat the sinus interface as the late decision point: remove/peel/reconstruct only if safe, otherwise leave planned residual.
+
+## Rescue Focus
+
+- SSS bleeding: tamponade/packing, maintain visualization, control venous pressure with anesthesia, repair/reconstruct only under attending plan.
+- Venous congestion/new deficit/seizure: urgent imaging for hemorrhage, edema, venous infarct, or sinus thrombosis; escalate ICU management.
+- Stop dissection for dominant vein compromise, cortical swelling/venous congestion, or unclear sinus wall plane.
+"""
     if not _is_thrombectomy(schema):
         return f"""# Morning Of Case - {schema['topic']}
 
@@ -1479,13 +1743,22 @@ def _render_operative_plan(
 ) -> str:
     if _is_thrombectomy(schema):
         return _render_thrombectomy_operative_plan(schema, generated_body)
+    if _is_convexity_meningioma(schema):
+        ctx = _meningioma_context(schema)
+        selected_approach = (
+            f"- Likely approach: {ctx['corridor']} planned around SSS/bridging-vein preservation; "
+            "exact positioning/incision depends on AP location and venous imaging.\n"
+            "- Rationale: expose tumor and safe sinus edge while preserving cortical/bridging venous drainage; "
+            "leave sinus-adherent residual if complete resection risks SSS or a dominant vein.\n"
+            "- Must verify before incision: AP location, edema, sinus patency/narrowing, suspected wall invasion, dominant bridging veins, falx/bone involvement, and booked attending plan."
+        )
+    else:
+        selected_approach = "- Approach: `needs input`\n- Rationale: `needs input`\n- Verification: `needs clinician verification`"
     return f"""# Operative Plan - {schema["topic"]}
 
 ## Selected Approach
 
-- Approach: `needs input`
-- Rationale: `needs input`
-- Verification: `needs clinician verification`
+{selected_approach}
 
 ## Approach Selection Matrix
 
@@ -1628,6 +1901,10 @@ def _render_risk(schema: dict[str, Any], generated_body: str | None = None) -> s
 {_list_block(_section_list(schema, "risk_and_rescue", "mitigation"))}
 
 ## Rescue Triggers
+
+{_list_block(_section_list(schema, "risk_and_rescue", "rescue_triggers"))}
+
+## General Clinical Decline Triggers
 
 | Finding | Immediate Action | Notify | Likely Tests / Imaging |
 |---|---|---|---|
@@ -1887,9 +2164,212 @@ Landmark/guideline targets to verify: MR CLEAN, ESCAPE, EXTEND-IA, SWIFT PRIME, 
 {appendix}"""
 
 
+def _parasagittal_sss_evidence_sources() -> dict[str, list[dict[str, Any]]]:
+    """Deterministic source pack for parasagittal/SSS meningioma prep.
+
+    This is intentionally concise and operative: it anchors the renderer to
+    relevant parasagittal/SSS literature without pretending the topic string proves
+    sinus invasion or patient-specific applicability.
+    """
+    return {
+        "SSS / Parasagittal Surgical Outcomes": [
+            {
+                "id": "pmid-30171502",
+                "title": "Optimal surgical strategy for meningiomas involving the superior sagittal sinus: a systematic review",
+                "year": "2020",
+                "pmid": "30171502",
+                "doi": "10.1007/s10143-018-1026-1",
+                "evidence_level": "Systematic review",
+                "relevance": "Frames surgical strategy for SSS-involving meningiomas and the tradeoff between radicality and venous morbidity.",
+                "verification": "curated PubMed pack",
+            },
+            {
+                "id": "pmid-16607555",
+                "title": "Meningiomas infiltrating the superior sagittal sinus: surgical considerations of 328 cases",
+                "year": "2006",
+                "pmid": "16607555",
+                "evidence_level": "Large surgical series",
+                "relevance": "Large experience focused on SSS-infiltrating meningiomas; use for operative considerations, not to overcall invasion in this case.",
+                "verification": "curated PubMed pack",
+            },
+            {
+                "id": "pmid-20950085",
+                "title": "Results with judicious modern neurosurgical management of parasagittal and falcine meningiomas",
+                "year": "2011",
+                "pmid": "20950085",
+                "doi": "10.3171/2010.9.JNS10646",
+                "evidence_level": "Clinical surgical series",
+                "relevance": "Supports a judicious management frame for parasagittal/falcine tumors rather than maximal sinus-risk resection by default.",
+                "verification": "curated PubMed pack",
+            },
+        ],
+        "Venous Complications / Bridging Veins": [
+            {
+                "id": "pmid-23330997",
+                "title": "Venous preservation-guided resection: a changing paradigm in parasagittal meningioma surgery",
+                "year": "2013",
+                "pmid": "23330997",
+                "doi": "10.3171/2012.11.JNS112011",
+                "evidence_level": "Operative strategy article",
+                "relevance": "Directly supports prioritizing venous preservation, bridging/cortical vein anatomy, and safe resection limits.",
+                "verification": "curated PubMed pack",
+            },
+            {
+                "id": "pmid-33618045",
+                "title": "Classification of Peritumoral Veins in Convexity and Parasagittal Meningiomas and Its Significance in Preventing Cerebral Venous Infarction",
+                "year": "2021",
+                "pmid": "33618045",
+                "doi": "10.1016/j.wneu.2021.02.041",
+                "evidence_level": "Clinical classification / cohort",
+                "relevance": "Links peritumoral venous patterns to venous infarction prevention; useful for MRV/CTV and vein-preservation review.",
+                "verification": "curated PubMed pack",
+            },
+            {
+                "id": "pmid-40025371",
+                "title": "Complications after resection of parasagittal and superior sagittal sinus meningiomas",
+                "year": "2025",
+                "pmid": "40025371",
+                "doi": "10.1007/s10143-025-03430-3",
+                "evidence_level": "Complications series",
+                "relevance": "Recent source focused on complications after parasagittal/SSS meningioma resection.",
+                "verification": "curated PubMed pack",
+            },
+        ],
+        "Residual / Adjuvant Radiation": [
+            {
+                "id": "pmid-9733295",
+                "title": "Judicious resection and/or radiosurgery for parasagittal meningiomas: outcomes from a multicenter review",
+                "year": "1998",
+                "pmid": "9733295",
+                "evidence_level": "Multicenter review",
+                "relevance": "Supports considering planned residual and radiosurgery when sinus/venous risk makes aggressive resection unsafe.",
+                "verification": "curated PubMed pack",
+            },
+            {
+                "id": "pmid-37496660",
+                "title": "Meningioma involving the superior sagittal sinus: long-term outcome after robotic radiosurgery in primary and recurrent situation",
+                "year": "2023",
+                "pmid": "37496660",
+                "doi": "10.3389/fonc.2023.1206059",
+                "evidence_level": "Radiosurgery cohort",
+                "relevance": "Adjuvant/salvage radiosurgery option for SSS-involving or recurrent residual disease; not a reason to ignore safe surgical decompression goals.",
+                "verification": "curated PubMed pack",
+            },
+        ],
+        "Recurrence / Extent Of Resection": [
+            {
+                "id": "pmid-37987849",
+                "title": "Predictors of recurrence after surgical resection of parafalcine and parasagittal meningiomas",
+                "year": "2023",
+                "pmid": "37987849",
+                "doi": "10.1007/s00701-023-05848-4",
+                "evidence_level": "Recurrence predictors cohort",
+                "relevance": "Relevant to counseling and follow-up around extent of resection, residual tumor, and recurrence risk.",
+                "verification": "curated PubMed pack",
+            },
+            {
+                "id": "pmid-33544790",
+                "title": "Tumor recurrence in parasagittal and falcine atypical meningiomas invading the superior sagittal sinus",
+                "year": "2020",
+                "pmid": "33544790",
+                "doi": "10.47162/RJME.61.2.08",
+                "evidence_level": "Pathology-specific recurrence series",
+                "relevance": "Useful for atypical/invasive recurrence framing; do not apply unless grade/invasion is confirmed.",
+                "verification": "curated PubMed pack",
+            },
+        ],
+    }
+
+
+def _parasagittal_sss_evidence_source_count(sources_by_bucket: dict[str, list[dict[str, Any]]]) -> int:
+    return sum(len(sources) for sources in sources_by_bucket.values())
+
+
+def _parasagittal_sss_study_takeaways() -> list[str]:
+    return [
+        "Giordan et al. systematic review: 26 studies / 1614 patients; most tumors were middle-third SSS and 75% had a patent sinus at surgery; aggressive versus non-aggressive strategies had similar favorable outcome proportions, but aggressive management had higher venous infarct 4% vs 2% and worsening preexisting motor deficits 34% vs 13%.",
+        "Tomasello et al. venous-preservation series: 67 SSS-involving parasagittal meningiomas, mean 80-month follow-up; recurrence 10.4%, morbidity 10.4%, mortality 4.5%; authors found no evidence that aggressive SSS management improves recurrence enough to justify venous risk.",
+        "Cai et al. peritumoral-vein cohort: 57 convexity/parasagittal meningiomas; MRV/intraop venous patterns were type A 57.9%, type B 26.3%, type C 15.8%; 6 vein injuries caused serious complications including 1 death after central-vein injury, supporting preop venous mapping.",
+        "Peto et al. complications series: 62 parasagittal/SSS cases; postoperative intraparenchymal hemorrhage occurred after 8 surgeries (12.90%), procedure-related mortality was 3.2%, long-term headaches 22.58%, and CSF diversion 6.56%; prior surgery and higher WHO grade were independent ICH risk factors.",
+        "Khanna et al. recurrence cohort: Recurrence occurred in 37/110 patients (33.6%) at median 42-month follow-up; high-grade histology and complete sinus invasion were independent recurrence predictors; subtotal resection independently shortened time to recurrence (HR 3.10).",
+        "Kondziolka et al. multicenter radiosurgery review: 203 benign parasagittal meningioma patients; primary radiosurgery 5-year actuarial tumor control rate was 93 ± 4%, prior-surgery patients had lower 5-year control 60 ± 10%, and transient symptomatic edema after radiosurgery was 16%.",
+    ]
+
+
+def _parasagittal_sss_evidence_provenance(
+    sources_by_bucket: dict[str, list[dict[str, Any]]],
+    literature_summary: str | None,
+) -> list[str]:
+    notes = [
+        f"Curated parasagittal/SSS evidence-pack sources: {_parasagittal_sss_evidence_source_count(sources_by_bucket)} PubMed-indexed sources across 4 operative buckets.",
+        "Live retrieval source counts are separate from curated evidence-pack coverage; a narrow live search may retrieve fewer abstracts and should not be read as the pack source count.",
+    ]
+    if literature_summary:
+        notes.append(
+            "The raw live-search appendix is intentionally not reprinted here to avoid implying that a live retrieval count replaces the curated pack; use the bucket tables and study-level takeaways as the rendered evidence surface."
+        )
+    return notes
+
+
+def _render_parasagittal_sss_evidence(schema: dict[str, Any], literature_summary: str | None = None) -> str:
+    evidence = schema["case"]["evidence"]
+    ctx = _meningioma_context(schema)
+    sources_by_bucket = _parasagittal_sss_evidence_sources()
+    bottom_line = evidence.get("bottom_line") or (
+        f"For {ctx['diagnosis']}, the evidence supports a venous-preservation strategy rather than reflexively chasing maximal sinus-interface resection. "
+        "Because the case input says abutting SSS and sinus invasion is unknown, confirm MRV/CTV sinus patency, wall invasion versus compression, venous lacunae, and dominant bridging/cortical veins before setting the extent-of-resection endpoint. "
+        "Default bias: achieve safe extracapsular/devascularizing resection where the plane is safe, but leave planned residual and consider adjuvant radiosurgery/fractionated radiation when a patent sinus wall or critical vein would be endangered; recurrence/EOR evidence should guide follow-up and counseling after pathology and residual status are known."
+    )
+    clinical_questions = evidence.get("clinical_questions") or [
+        "Is the superior sagittal sinus patent on MRV/CTV, narrowed/compressed, invaded, or occluded?",
+        "Are dominant bridging or cortical draining veins entering the SSS near the tumor margin?",
+        "Where is the safe stop point between sinus-wall peeling/coagulation and planned residual?",
+        "If residual is left on the sinus/veins, what is the follow-up imaging and adjuvant radiosurgery/radiation threshold?",
+    ]
+    uncertainty_gaps = evidence.get("uncertainty_gaps") or [
+        "Topic string says abutting SSS; do not assume true sinus wall invasion without venous imaging and operative findings.",
+        "WHO grade, edema burden, sinus patency, venous dominance, and achieved extent of resection determine recurrence/adjuvant-therapy applicability.",
+        "Curated pack sources need clinician confirmation against full text before being used for numeric counseling or institutional recommendations.",
+    ]
+    appendix = ""
+    bucket_sections = []
+    for heading, sources in sources_by_bucket.items():
+        bucket_sections.append(f"## {heading}\n\n{_evidence_table(sources)}")
+    return f"""# Evidence - {schema["topic"]}
+
+## Clinical Questions
+
+{_list_block(clinical_questions)}
+
+## Bottom line for this case
+
+{bottom_line}
+
+## Evidence Pack Provenance
+
+{_list_block(_parasagittal_sss_evidence_provenance(sources_by_bucket, literature_summary))}
+
+## Study-Level Takeaways
+
+{_list_block(_parasagittal_sss_study_takeaways())}
+
+{chr(10).join(bucket_sections)}
+
+## Applicability To This Case
+
+{evidence.get("applicability_to_this_case") or "Apply this pack as operative framing for a parasagittal/SSS-adjacent meningioma, not as proof of sinus invasion. The practical decision is venous preservation versus incremental EOR at the sinus/bridging-vein interface."}
+
+## Uncertainty / Evidence Gaps
+
+{_list_block(uncertainty_gaps)}
+{appendix}"""
+
+
 def _render_evidence(schema: dict[str, Any], literature_summary: str | None = None) -> str:
     if _is_thrombectomy(schema):
         return _render_thrombectomy_evidence(schema, literature_summary)
+    if _is_parasagittal_sss_meningioma(schema):
+        return _render_parasagittal_sss_evidence(schema, literature_summary)
     evidence = schema["case"]["evidence"]
     rows = []
     for source in evidence.get("key_sources", []):

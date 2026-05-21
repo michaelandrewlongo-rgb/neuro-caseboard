@@ -17,6 +17,9 @@ from caseprep.schema import (
     _render_morning_of_case,
     _render_open_questions,
     _render_operative_plan,
+    _is_parasagittal_sss_meningioma,
+    _parasagittal_sss_evidence_source_count,
+    _parasagittal_sss_evidence_sources,
     _render_postop,
     _render_readme,
     _render_risk,
@@ -35,12 +38,46 @@ def _with_provenance(
     provenance: Sequence[ProvenanceRecord | dict[str, Any]] | None,
 ) -> dict[str, Any]:
     if provenance is None:
-        return case_object
-    rendered_object = deepcopy(case_object)
-    rendered_object["provenance"] = [
-        _provenance_to_dict(record) for record in provenance
-    ]
+        rendered_object = deepcopy(case_object)
+        rendered_object.setdefault("provenance", [])
+    else:
+        rendered_object = deepcopy(case_object)
+        rendered_object["provenance"] = [
+            _provenance_to_dict(record) for record in provenance
+        ]
+    _add_curated_pack_provenance(rendered_object)
     return rendered_object
+
+
+def _add_curated_pack_provenance(rendered_object: dict[str, Any]) -> None:
+    if not _is_parasagittal_sss_meningioma(rendered_object):
+        return
+    provenance_records = rendered_object.setdefault("provenance", [])
+    if any(
+        isinstance(record, dict)
+        and record.get("field_path") == "case.evidence.curated_pack.parasagittal_sss"
+        for record in provenance_records
+    ):
+        return
+    sources_by_bucket = _parasagittal_sss_evidence_sources()
+    source_ids = [
+        source["id"]
+        for sources in sources_by_bucket.values()
+        for source in sources
+        if source.get("id")
+    ]
+    provenance_records.append(
+        {
+            "field_path": "case.evidence.curated_pack.parasagittal_sss",
+            "source_ids": source_ids,
+            "value_status": "cited",
+            "generated_by": "caseprep.schema.parasagittal_sss_evidence_pack",
+            "notes": (
+                "Deterministic curated parasagittal/SSS meningioma evidence pack "
+                f"rendered separately from live retrieval counts; {_parasagittal_sss_evidence_source_count(sources_by_bucket)} PubMed-indexed sources."
+            ),
+        }
+    )
 
 
 def render_caseprep_files(

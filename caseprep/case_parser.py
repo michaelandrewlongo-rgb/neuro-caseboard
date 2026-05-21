@@ -89,6 +89,7 @@ _PATHOLOGY_PATTERNS: tuple[tuple[str, str, str, float], ...] = (
     (r"\bdisc osteophyte complex\b", "disc osteophyte complex", "extracted", 0.95),
     (r"\bfrontal convexity meningioma\b", "frontal convexity meningioma", "extracted", 0.99),
     (r"\bconvexity meningioma\b", "convexity meningioma", "extracted", 0.98),
+    (r"\bparasagittal\b.*\bmeningioma\b", "parasagittal meningioma", "extracted", 0.95),
     (r"\bmeningioma\b", "meningioma", "extracted", 0.75),
     (r"\bChiari\s*(?:I|1)?\s*malformation\b", "Chiari I malformation", "extracted", 0.99),
     (r"\bChiari\b", "Chiari", "extracted", 0.75),
@@ -107,13 +108,16 @@ _APPROACH_PATTERNS: tuple[tuple[str, str, str, float], ...] = (
     (r"\bsuboccipital\b", "suboccipital", "extracted", 0.95),
     (r"\bfrontal craniotomy\b", "frontal craniotomy", "extracted", 0.95),
     (r"\bconvexity craniotomy\b", "convexity craniotomy", "extracted", 0.95),
+    (r"\bparasagittal craniotomy\b", "parasagittal craniotomy", "extracted", 0.95),
     (r"\btransfemoral\b", "transfemoral access", "extracted", 0.9),
     (r"\bradial access\b", "radial access", "extracted", 0.9),
 )
 
 _LOCATION_PATTERNS: tuple[tuple[str, str, str, float], ...] = (
     (r"\bfrontal convexity\b", "frontal convexity", "extracted", 0.95),
+    (r"\bparasagittal\b", "parasagittal", "extracted", 0.95),
     (r"\bsuperior sagittal sinus\b", "superior sagittal sinus", "extracted", 0.95),
+    (r"\bSSS\b", "superior sagittal sinus", "synonym", 0.9),
     (r"\bmiddle cerebral artery\b", "middle cerebral artery", "extracted", 0.95),
     (r"\bMCA\b", "MCA", "synonym", 0.9),
     (r"\bforamen magnum\b", "foramen magnum", "extracted", 0.9),
@@ -263,7 +267,30 @@ def _extract_procedure(text: str) -> CaseField:
     procedure = _extract_first(text, _PROCEDURE_PATTERNS)
     if procedure.value == "resection" and "meningioma" in text.casefold():
         return CaseField("meningioma resection", 0.9, "inferred", span=procedure.span)
+    if procedure.value is None and _looks_like_operable_parasagittal_meningioma(text):
+        return CaseField(
+            "meningioma resection / craniotomy prep domain",
+            0.82,
+            "inferred",
+            notes="inferred from parasagittal/SSS meningioma wording; confirm booked procedure",
+        )
     return procedure
+
+
+def _looks_like_operable_parasagittal_meningioma(text: str) -> bool:
+    normalized = text.casefold()
+    if "meningioma" not in normalized:
+        return False
+    return any(
+        term in normalized
+        for term in (
+            "parasagittal",
+            "superior sagittal sinus",
+            "sagittal sinus",
+            "sss",
+            "abutting",
+        )
+    )
 
 
 def _normalize_level(level: str) -> str:
@@ -440,6 +467,8 @@ def _missing_critical_facts(
             missing.append("venous/sinus relationship")
         if procedure.value is None:
             missing.append("resection/craniotomy plan")
+        elif procedure.source == "inferred":
+            missing.append("booked procedure confirmation")
     elif family.id == "posterior_fossa_chiari":
         if procedure.value is None:
             missing.append("decompression plan")
