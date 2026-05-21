@@ -1,6 +1,5 @@
 from caseprep.case_parser import (
     CaseField,
-    CaseSpec,
     deterministic_parse_case,
     parse_case_input,
     select_procedure_family,
@@ -36,7 +35,7 @@ def test_acdf_full_case_extracts_fields_and_family():
     assert_field_contains(case.level_or_segment, "C5-6", "C6")
     assert_field_contains(case.pathology, "radiculopathy", "disc osteophyte")
     assert not case.degraded
-    assert case.missing_critical_facts == ()
+    assert "fusion construct" in case.missing_critical_facts
     assert select_procedure_family(case).id == "spine_acdf"
 
 

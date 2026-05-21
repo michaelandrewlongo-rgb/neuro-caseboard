@@ -157,6 +157,25 @@ def test_corpus_retriever_normalizes_local_papers_to_evidence_records():
     assert records[0].metadata["evidence_tier"] == "observational"
 
 
+def test_corpus_retriever_quotes_spinal_levels_before_fts_search():
+    seen_queries = []
+
+    def search_corpus(fts_query, subdomain=None, top_n=8):
+        seen_queries.append(fts_query)
+        return {"total_matches": 0, "papers": []}
+
+    retriever = CorpusRetriever(search_corpus=search_corpus)
+
+    records = retriever.retrieve(
+        "C5-6 anterior cervical discectomy and fusion",
+        subdomain="spine",
+        top_n=3,
+    )
+
+    assert records == []
+    assert seen_queries == ['"C5-6" anterior cervical discectomy and fusion']
+
+
 def test_corpus_retriever_raises_domain_error_for_provider_error():
     retriever = CorpusRetriever(
         search_corpus=lambda fts_query, subdomain=None, top_n=8: {

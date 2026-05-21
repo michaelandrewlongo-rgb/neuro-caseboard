@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -21,7 +22,24 @@ def _default_search_corpus(
     return _corpus_search(fts_query, subdomain, top_n)
 
 
+def _quote_spinal_level_terms(fts_query: str) -> str:
+    """Quote hyphenated spinal levels so SQLite FTS5 does not parse '-' as NOT."""
+
+    def replace(match: re.Match[str]) -> str:
+        if match.group("open") or match.group("close"):
+            return match.group(0)
+        level = re.sub(r"\s+", "", match.group("level").upper())
+        return f'"{level}"'
+
+    pattern = re.compile(
+        r'(?P<open>")?(?P<level>\b[CTLS]\d+\s*[-/]\s*\d+\b)(?P<close>")?',
+        re.IGNORECASE,
+    )
+    return pattern.sub(replace, fts_query)
+
+
 class CorpusRetriever:
+
     """Normalize local corpus search results into EvidenceRecord objects."""
 
     def __init__(self, *, search_corpus: CorpusSearch | None = None) -> None:
@@ -34,8 +52,9 @@ class CorpusRetriever:
         subdomain: str | None = None,
         top_n: int = 8,
     ) -> list[EvidenceRecord]:
+        safe_query = _quote_spinal_level_terms(fts_query)
         try:
-            result = self._search_corpus(fts_query, subdomain, top_n)
+            result = self._search_corpus(safe_query, subdomain, top_n)
         except Exception as exc:
             raise CasePrepExternalServiceError(
                 "Corpus search failed",
@@ -45,7 +64,7 @@ class CorpusRetriever:
         if result.get("error"):
             raise CasePrepExternalServiceError(
                 str(result["error"]),
-                details={"provider": "corpus", "query": fts_query},
+                details={"provider": "corpus", "query": safe_query},
             )
 
         total_matches = result.get("total_matches", 0)

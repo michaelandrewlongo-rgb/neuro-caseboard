@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import re
 from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any
@@ -325,6 +326,23 @@ def _propagate_structured_case_snapshot(schema: dict[str, Any]) -> None:
             f"Acute ischemic stroke from {target}; planned {planned} pending LKW/NIHSS, "
             "hemorrhage exclusion, ASPECTS/core, thrombolytic status, and goals-of-care verification."
         )
+    elif _procedure_family_id(schema) == "spine_acdf":
+        ctx = _acdf_context(schema)
+        planned = procedure or ctx["procedure"]
+        snapshot["diagnosis"] = ctx["diagnosis"]
+        snapshot["planned_procedure"] = planned
+        if laterality:
+            snapshot["laterality"] = laterality
+        snapshot["operative_objective"] = (
+            f"Decompress the {ctx['root_target']} at {ctx['level']}, remove foraminal disc-osteophyte compression, "
+            "and achieve stable fusion."
+        )
+        snapshot["urgency"] = "Elective/urgent spine workflow; verify neurologic deficit severity and myelopathy status."
+        snapshot["anticipated_disposition"] = "PACU then floor or higher-acuity monitoring if airway/myelopathy/comorbidity risk."
+        snapshot["one_line_thesis"] = (
+            f"{ctx['diagnosis']} planned for {planned} at {ctx['level']}; key prep is level localization, "
+            "anterior corridor safety, decompression target, and implant/fusion construct verification."
+        )
 
 
 def _yaml_scalar(value: Any) -> str:
@@ -392,6 +410,200 @@ def _procedure_family_id(schema: dict[str, Any]) -> str:
 
 def _is_thrombectomy(schema: dict[str, Any]) -> bool:
     return _procedure_family_id(schema) == "endovascular_thrombectomy"
+
+
+def _is_acdf(schema: dict[str, Any]) -> bool:
+    return _procedure_family_id(schema) == "spine_acdf"
+
+
+def _acdf_context(schema: dict[str, Any]) -> dict[str, str]:
+    """Derive ACDF case wording from structured facts without inventing specifics."""
+    topic = str(schema.get("topic", ""))
+    level = _structured_case_value(schema, "level_or_segment") or "cervical level"
+    laterality = _structured_case_value(schema, "laterality").strip().casefold()
+    side = laterality if laterality in {"right", "left", "bilateral"} else ""
+    procedure = _structured_case_value(schema, "procedure") or "anterior cervical discectomy and fusion"
+    pathology = _structured_case_value(schema, "pathology") or "cervical radiculopathy"
+    haystack = " ".join(part for part in (topic, pathology, level) if part)
+
+    nerve_root = ""
+    radiculopathy_match = re.search(r"\b(C[3-8])\s+radiculopathy\b", haystack, re.IGNORECASE)
+    if radiculopathy_match:
+        nerve_root = radiculopathy_match.group(1).upper()
+    else:
+        level_match = re.search(r"\bC(\d+)\s*[-/]\s*(\d+)\b", level, re.IGNORECASE)
+        if level_match:
+            nerve_root = f"C{level_match.group(2)}"
+
+    if nerve_root:
+        root_target = f"{side} {nerve_root} nerve root".strip()
+    elif side:
+        root_target = f"{side} symptomatic nerve root"
+    else:
+        root_target = "symptomatic nerve root"
+
+    if side and nerve_root:
+        diagnosis = f"{side} {nerve_root} radiculopathy"
+        if "disc osteophyte" in haystack.casefold():
+            diagnosis += " from foraminal disc osteophyte complex"
+    else:
+        diagnosis = pathology
+
+    return {
+        "level": level,
+        "side": side or "symptomatic side needs input",
+        "nerve_root": nerve_root or "nerve root needs input",
+        "root_target": root_target,
+        "procedure": procedure,
+        "pathology": pathology,
+        "diagnosis": diagnosis,
+    }
+
+
+def _acdf_defaults(schema: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    ctx = _acdf_context(schema)
+    level = ctx["level"]
+    root_target = ctx["root_target"]
+    return {
+        "imaging_review": {
+            "required_studies": [
+                f"MRI cervical spine confirming {level} foraminal/lateral recess compression and cord status.",
+                f"Lateral and AP cervical radiographs or fluoroscopy plan for side/site/level localization at {level}.",
+                "CT only if osteophyte/OPLL, calcified disc, prior fusion, or bony anatomy changes the decompression/implant plan.",
+            ],
+            "key_findings": [
+                f"Confirm the symptomatic level is {level} and matches the clinical {root_target} syndrome.",
+                "Define central canal stenosis, foraminal stenosis, disc-osteophyte complex, uncinate hypertrophy, and cord signal change.",
+            ],
+            "measurements": [
+                "Disc height/collapse, segmental alignment/kyphosis, osteophyte burden, and foraminal dimensions that affect distraction and cage sizing.",
+            ],
+            "anatomic_relationships": [
+                "Map vertebral artery course/laterality risk near the uncovertebral joint and foramen before aggressive lateral decompression.",
+                "Review prevertebral soft tissue, prior surgery, and esophagus/trachea corridor constraints.",
+            ],
+            "red_flags": [
+                "Wrong-level risk if level localization is not explicitly confirmed with fluoroscopy before discectomy.",
+                "OPLL/calcified disc, severe kyphosis/instability, myelopathy, infection/tumor, or multilevel disease may change the plan.",
+            ],
+            "images_to_display_in_or": [
+                f"Sagittal and axial MRI through {level}; lateral fluoroscopic localization image; AP/lateral final construct image.",
+            ],
+        },
+        "anatomy_at_risk": {
+            "surgical_corridor": [
+                "Anterior cervical exposure through the interval between sternocleidomastoid/carotid sheath laterally and tracheoesophageal complex medially.",
+                "Protect the esophagus and trachea medially; use atraumatic retraction and release periodically if prolonged.",
+                "Stay on the anterior spine after platysma and prevertebral fascia opening; elevate longus colli subperiosteally for retractor placement.",
+            ],
+            "landmarks_in_order": [
+                "Skin crease incision and platysma; identify sternocleidomastoid and carotid sheath lateral boundary.",
+                f"Prevertebral fascia, longus colli, disc space, and fluoroscopic level localization at {level} before annulotomy/discectomy.",
+                "Anterior osteophytes, annulus, disc space, posterior longitudinal ligament, uncinate joints, foramen, endplates, graft/cage, and plate/screws if used.",
+            ],
+            "neural_structures": [
+                "Recurrent laryngeal nerve is at risk during anterior cervical exposure/retraction; document baseline voice and approach-side considerations.",
+                f"{root_target.capitalize()} decompression target: follow disc-osteophyte/uncinate pathology to the foramen while avoiding over-distraction or traction injury.",
+                "Spinal cord and exiting nerve root are protected during posterior longitudinal ligament opening and foraminal decompression.",
+            ],
+            "arteries_perforators_veins_sinuses": [
+                "Vertebral artery lies lateral to the uncovertebral joint/transverse foramen; avoid overly lateral uncinate drilling or instrument passage.",
+                "Carotid sheath contents remain lateral in the approach corridor; avoid carotid/jugular/vagus injury during exposure and retractor placement.",
+            ],
+            "functional_structures": [
+                "Swallowing and voice function: esophagus, pharyngeal plexus/superior laryngeal region, and recurrent laryngeal nerve irritation can cause dysphagia or dysphonia.",
+            ],
+            "variants": [
+                "Prior anterior neck surgery, large osteophytes/OPLL, high-riding vertebral artery, obesity/short neck, or multilevel disease may change exposure and implant strategy.",
+            ],
+            "no_fly_zones": [
+                "Do not start discectomy until side/site/level localization is confirmed fluoroscopically.",
+                "Do not chase lateral uncinate/foraminal decompression beyond safe bony boundaries without rechecking vertebral artery risk.",
+            ],
+        },
+        "operative_plan": {
+            "positioning": "Supine on radiolucent table with neck neutral/slight extension as tolerated; shoulders taped only enough for lateral fluoroscopy; confirm airway and neuromonitoring plan per surgeon/anesthesia.",
+            "monitoring": [
+                "Baseline neurologic exam, voice/swallow symptoms, and myelopathy/radiculopathy findings documented preoperatively.",
+                "Fluoroscopy available for initial level localization, implant sizing, plate/screw trajectory, and final AP/lateral confirmation.",
+            ],
+            "equipment_adjuncts": [
+                "Anterior cervical retractors, Caspar pins/distraction system, microscope/loupes, high-speed drill, curettes, Kerrisons, nerve hooks, graft/cage trials, graft/cage, plate/screws or stand-alone device per attending plan.",
+            ],
+            "critical_steps": [
+                "Anterior cervical exposure: skin/platysma opening, develop medial sternocleidomastoid-carotid sheath and lateral tracheoesophageal interval, reach prevertebral fascia, and elevate longus colli.",
+                f"Level localization: confirm {level} with fluoroscopy before annulotomy; repeat if anatomy or exposure is ambiguous.",
+                "Caspar pin placement/distraction only after level confirmation; avoid excessive distraction, endplate violation, or wrong-level trajectory.",
+                "Discectomy and decompression: remove disc and posterior osteophytes, open posterior longitudinal ligament when indicated, decompress central canal and foraminal pathology.",
+                f"Foraminal decompression: address uncinate/disc-osteophyte complex until the {root_target} is decompressed, while respecting vertebral artery lateral boundary.",
+                "Endplate preparation: remove cartilaginous endplate while preserving bony endplate to reduce subsidence/pseudarthrosis risk.",
+                "Trial, place graft/cage with appropriate height/lordosis, then plate/screws or stand-alone fixation per implant / fusion construct plan; verify with fluoroscopy.",
+                "Hemostasis, irrigation, esophagus/trachea inspection if concern, drain decision, layered closure, and final neurologic/airway handoff.",
+            ],
+            "decision_points": [
+                "Confirm whether the implant / fusion construct is cage/graft alone, plate/screws, zero-profile, or stand-alone device before incision.",
+                "If decompression is primarily lateral foraminal/uncinate, define how far to drill before vertebral artery risk outweighs incremental decompression.",
+                "Consider posterior cervical foraminotomy as an alternative/rescue discussion for isolated foraminal radiculopathy without instability/kyphosis or need for anterior fusion.",
+            ],
+            "stop_points": [
+                "Stop and re-localize if fluoroscopy does not clearly confirm the intended level.",
+                "Stop lateral decompression if vertebral artery boundary is uncertain, bleeding is atypical, or the foramen cannot be safely defined.",
+                "Escalate immediately for airway-threatening hematoma, esophageal/tracheal injury concern, CSF leak, or neuromonitoring/new deficit concern.",
+            ],
+            "closure_reconstruction": [
+                "Confirm final AP/lateral fluoroscopy, hemostasis after retractor release, drain/collar plan, and wound closure layers.",
+            ],
+            "attending_preferences_questions": [
+                "Approach side and rationale, implant / fusion construct, use of plate/screws vs stand-alone cage, PLL opening threshold, drain/collar preferences, and postop imaging timing.",
+            ],
+        },
+        "risk_and_rescue": {
+            "likely_complications": [
+                "Dysphagia/odynophagia from esophageal and pharyngeal retraction; document baseline swallowing and minimize retraction time/force.",
+                "Hoarseness or recurrent laryngeal nerve palsy from traction or approach-side risk; document baseline voice and evaluate persistent dysphonia.",
+                "C5 palsy or new radiculopathy/myelopathy, graft/cage subsidence, pseudarthrosis, adjacent segment stress, and wound issues.",
+            ],
+            "catastrophic_complications": [
+                "Hematoma/airway compromise: neck swelling, stridor, respiratory distress, or rapidly progressive dysphagia requires immediate airway/surgeon response and possible wound opening.",
+                "Esophageal injury: suspect with violation, deep infection, severe dysphagia, fever, or mediastinal concern; stop, inspect, repair/consult as needed.",
+                "Vertebral artery injury during lateral uncinate/foraminal decompression: pack/tamponade, maintain exposure, call vascular/endovascular help, and avoid blind instrumentation.",
+                "Spinal cord or nerve root injury during PLL opening, posterior osteophyte removal, or foraminal decompression.",
+            ],
+            "mitigation": [
+                "Fluoroscopic side/site/level localization before discectomy and final AP/lateral imaging after graft/cage/plate/screws.",
+                "Subperiosteal longus colli elevation and retractor placement under muscle, with periodic release and esophagus/trachea protection.",
+                "Preserve bony endplates, avoid excessive distraction, and select graft/cage/plate construct deliberately to reduce subsidence and pseudarthrosis.",
+            ],
+            "rescue_triggers": [
+                "Airway symptoms or expanding hematoma: call anesthesia/surgeon immediately, prepare wound opening and airway control.",
+                "Voice change, dysphagia, fever, crepitus, or wound drainage: evaluate for RLN/esophageal injury and infection.",
+                "New neurologic deficit: urgent exam, imaging, and decompression/hematoma/implant-position assessment.",
+            ],
+        },
+        "postop_plan": {
+            "destination": "PACU with airway/neck hematoma vigilance; floor vs higher-acuity bed per comorbidities, myelopathy, airway risk, and surgeon preference.",
+            "neuro_checks": "Serial motor/sensory checks focused on deltoid/biceps/wrist extension, triceps/hand function, gait/myelopathy signs if present, and the decompressed nerve-root distribution.",
+            "bp_goals": "Avoid severe hypertension that could worsen neck hematoma risk; maintain cord/nerve perfusion per anesthesia/surgeon plan.",
+            "imaging_timing": "Upright cervical x-rays or AP/lateral radiographs per surgeon protocol to confirm graft/cage/plate/screws alignment and level.",
+            "medications": [
+                "Analgesia, antiemetics, bowel regimen, and steroid/antibiotic plan only if ordered by surgeon/protocol.",
+                "Anticoagulation/antiplatelet restart timing individualized to bleeding risk and indication.",
+            ],
+            "drains_devices": [
+                "Drain management and removal threshold if used; collar plan if prescribed by surgeon.",
+            ],
+            "labs_monitoring": [
+                "Monitor airway, dysphagia, voice change, neck swelling, wound drainage, fever, new radiculopathy/myelopathy, and signs of hematoma.",
+            ],
+            "dvt_prophylaxis": "Mechanical prophylaxis immediately; chemoprophylaxis timing per surgeon and bleeding risk.",
+            "discharge_criteria": [
+                "Stable airway, tolerating diet/swallowing plan, pain controlled, ambulatory/safe disposition, stable neurologic exam, and drain/collar/fusion precautions understood.",
+            ],
+            "follow_up": [
+                "Fusion precautions, wound check, activity/lifting limits, tobacco/NSAID guidance per surgeon, and follow-up imaging schedule.",
+            ],
+        },
+    }
 
 
 def _structured_case_value(schema: dict[str, Any], key: str) -> str:
@@ -737,6 +949,8 @@ def _thrombectomy_defaults(schema: dict[str, Any]) -> dict[str, dict[str, Any]]:
 def _family_defaults(schema: dict[str, Any], section: str) -> dict[str, Any]:
     if _is_thrombectomy(schema):
         return _thrombectomy_defaults(schema).get(section, {})
+    if _is_acdf(schema):
+        return _acdf_defaults(schema).get(section, {})
     return {}
 
 
@@ -862,10 +1076,27 @@ def _render_readme(schema: dict[str, Any]) -> str:
     evidence = schema["case"]["evidence"]
     if _is_thrombectomy(schema):
         ctx = _thrombectomy_target_context(schema)
+        target_descriptor = ctx["target"]
         management = f"Confirm EVT eligibility for {ctx['target']} and proceed with mechanical thrombectomy only if go/no-go facts support benefit."
         approaches = "Femoral vs radial access; guide/BGC plus DAC/aspiration catheter; aspiration-first, stent-retriever, or combined first pass per anatomy/operator preference."
         tradeoff = "Fast reperfusion vs hemorrhage/edema, perforation/dissection, futile passes, tandem/ICAD rescue antithrombotic risk, and goals of care."
+    elif _is_acdf(schema):
+        ctx = _acdf_context(schema)
+        target_descriptor = f"{ctx['root_target']} at {ctx['level']}"
+        management = (
+            f"Decompress the {ctx['root_target']} at {ctx['level']} and achieve a stable fusion while verifying "
+            "approach side, level localization, and implant / fusion construct before incision."
+        )
+        approaches = (
+            "Primary ACDF with discectomy/foraminal decompression, endplate preparation, graft/cage, and plate/screws or stand-alone device; "
+            "posterior cervical foraminotomy is the main motion-preserving alternative for selected isolated foraminal radiculopathy."
+        )
+        tradeoff = (
+            "Anterior decompression/fusion durability and disc-space restoration vs dysphagia, recurrent laryngeal nerve/voice risk, "
+            "hematoma/airway risk, vertebral artery risk during lateral uncinate work, pseudarthrosis, and adjacent-segment stress."
+        )
     else:
+        target_descriptor = (snapshot.get("laterality") or "laterality `needs input`") + " target `needs input`"
         management = "`needs input`"
         approaches = "`needs input`"
         tradeoff = "`needs input`"
@@ -884,7 +1115,7 @@ def _render_readme(schema: dict[str, Any]) -> str:
 
 ## Key Decisions
 
-- Diagnosis/target: {snapshot.get("diagnosis") or "`needs input`"}; {(_thrombectomy_target_context(schema)["target"] if _is_thrombectomy(schema) else (snapshot.get("laterality") or "laterality `needs input`") + " target `needs input`")}
+- Diagnosis/target: {snapshot.get("diagnosis") or "`needs input`"}; {target_descriptor}
 - Planned procedure: {snapshot.get("planned_procedure") or "`needs input`"}
 - Management question: {management}
 - Candidate approaches: {approaches}
@@ -900,7 +1131,56 @@ def _render_readme(schema: dict[str, Any]) -> str:
 """
 
 
+def _render_acdf_morning_of_case(schema: dict[str, Any]) -> str:
+    ctx = _acdf_context(schema)
+    snapshot = schema["case"]["case_snapshot"]
+    missing_facts = schema.get("structured_case", {}).get("missing_critical_facts", []) or []
+    missing_text = ", ".join(str(item) for item in missing_facts) or "none identified"
+    return f"""# Morning Of Case - {schema['topic']}
+
+## Diagnosis / Level / Procedure
+
+- Diagnosis: {snapshot.get('diagnosis') or ctx['diagnosis']}
+- Level: {ctx['level']}
+- Planned procedure: {snapshot.get('planned_procedure') or ctx['procedure']}
+- Objective: {snapshot.get('operative_objective') or f"Decompress the {ctx['root_target']} and achieve stable fusion."}
+- Missing critical facts: {missing_text}
+
+## Go / No-Go Missing Facts
+
+| Fact | Status before incision | Why it matters |
+|---|---|---|
+| Side/site/level localization | confirm with fluoroscopy before discectomy | Wrong-level ACDF is a never-event; localization must be explicit at {ctx['level']}. |
+| Approach side | incomplete/needs input unless attending specifies | Prior surgery, symptoms, RLN/voice history, and exposure preference affect side choice. |
+| Implant / fusion construct | incomplete/needs input | Cage/graft, plate/screws, zero-profile, or stand-alone device changes sizing, equipment, and postop restrictions. |
+| Airway/dysphagia baseline | incomplete/needs input | Baseline voice/swallow and airway risk determine postop monitoring and urgency for hematoma/dysphagia. |
+| Fluoroscopy | must be available | Needed for initial level localization, implant sizing, and final AP/lateral confirmation. |
+
+## Imaging / Anatomy Checklist
+
+- Confirm MRI/radiographs match {ctx['diagnosis']} at {ctx['level']} and the {ctx['root_target']}.
+- Review foraminal disc-osteophyte/uncinate compression, central canal stenosis, cord signal, alignment, and collapse/kyphosis.
+- Identify anterior cervical exposure constraints: sternocleidomastoid/carotid sheath lateral, tracheoesophageal complex/esophagus medial, longus colli over disc space.
+- Recheck vertebral artery risk before aggressive lateral uncinate/foraminal decompression.
+
+## Operative Flow Priorities
+
+- Exposure: anterior cervical corridor, protect esophagus/trachea and carotid sheath, elevate longus colli.
+- Localization: lateral fluoroscopy at {ctx['level']} before annulotomy/discectomy; repeat if uncertain.
+- Decompression: discectomy, posterior osteophyte/PLL work as indicated, and foraminal decompression of the {ctx['root_target']}.
+- Fusion: endplate preparation, graft/cage trial/placement, plate/screws or stand-alone fixation per implant / fusion construct plan, final fluoroscopy.
+
+## Rescue / Postop Watch
+
+- Hematoma/airway compromise: neck swelling, stridor, respiratory distress, rapidly progressive dysphagia = immediate airway/surgeon response.
+- Recurrent laryngeal nerve/voice change and dysphagia: document baseline, reassess early, escalate persistent or severe findings.
+- Esophageal injury or vertebral artery injury: stop, inspect/control, and escalate immediately.
+"""
+
+
 def _render_morning_of_case(schema: dict[str, Any]) -> str:
+    if _is_acdf(schema):
+        return _render_acdf_morning_of_case(schema)
     if not _is_thrombectomy(schema):
         return f"""# Morning Of Case - {schema['topic']}
 
@@ -1059,34 +1339,33 @@ def _render_case_summary(schema: dict[str, Any]) -> str:
 def _render_imaging(schema: dict[str, Any]) -> str:
     if _is_thrombectomy(schema):
         return _render_thrombectomy_imaging(schema)
-    imaging = schema["case"]["imaging_review"]
     return f"""# Imaging Review - {schema["topic"]}
 
 ## Imaging Review Checklist
 
 ### Required Studies
 
-{_list_block(imaging.get("required_studies", []))}
+{_list_block(_section_list(schema, "imaging_review", "required_studies"))}
 
 ### Key Findings
 
-{_list_block(imaging.get("key_findings", []))}
+{_list_block(_section_list(schema, "imaging_review", "key_findings"))}
 
 ### Measurements
 
-{_list_block(imaging.get("measurements", []))}
+{_list_block(_section_list(schema, "imaging_review", "measurements"))}
 
 ### Anatomic Relationships
 
-{_list_block(imaging.get("anatomic_relationships", []))}
+{_list_block(_section_list(schema, "imaging_review", "anatomic_relationships"))}
 
 ### Red Flags
 
-{_list_block(imaging.get("red_flags", []))}
+{_list_block(_section_list(schema, "imaging_review", "red_flags"))}
 
 ### Images To Display In OR
 
-{_list_block(imaging.get("images_to_display_in_or", []))}
+{_list_block(_section_list(schema, "imaging_review", "images_to_display_in_or"))}
 """
 
 
@@ -1200,7 +1479,6 @@ def _render_operative_plan(
 ) -> str:
     if _is_thrombectomy(schema):
         return _render_thrombectomy_operative_plan(schema, generated_body)
-    plan = schema["case"]["operative_plan"]
     return f"""# Operative Plan - {schema["topic"]}
 
 ## Selected Approach
@@ -1218,27 +1496,27 @@ def _render_operative_plan(
 
 ## Setup
 
-- Positioning: {plan.get("positioning") or "`needs input`"}
+- Positioning: {_section_scalar(schema, "operative_plan", "positioning")}
 
 ### Monitoring
 
-{_list_block(plan.get("monitoring", []))}
+{_list_block(_section_list(schema, "operative_plan", "monitoring"))}
 
 ### Equipment / Adjuncts
 
-{_list_block(plan.get("equipment_adjuncts", []))}
+{_list_block(_section_list(schema, "operative_plan", "equipment_adjuncts"))}
 
 ## Critical Steps
 
-{_list_block(plan.get("critical_steps", []))}
+{_list_block(_section_list(schema, "operative_plan", "critical_steps"))}
 
 ## Intraoperative Decision Points
 
-{_list_block(plan.get("decision_points", []))}
+{_list_block(_section_list(schema, "operative_plan", "decision_points"))}
 
 ## Bailout / Stop Points
 
-{_list_block(plan.get("stop_points", []))}
+{_list_block(_section_list(schema, "operative_plan", "stop_points"))}
 {_generated_section_thrombectomy(generated_body) if _is_thrombectomy(schema) else _generated_section("Evidence-Derived Notes", generated_body)}"""
 
 
@@ -1335,20 +1613,19 @@ def _render_thrombectomy_operative_plan(
 def _render_risk(schema: dict[str, Any], generated_body: str | None = None) -> str:
     if _is_thrombectomy(schema):
         return _render_thrombectomy_risk(schema, generated_body)
-    risk = schema["case"]["risk_and_rescue"]
     return f"""# Risk And Rescue - {schema["topic"]}
 
 ## Likely Complications
 
-{_list_block(risk.get("likely_complications", []))}
+{_list_block(_section_list(schema, "risk_and_rescue", "likely_complications"))}
 
 ## Catastrophic Complications
 
-{_list_block(risk.get("catastrophic_complications", []))}
+{_list_block(_section_list(schema, "risk_and_rescue", "catastrophic_complications"))}
 
 ## Mitigation
 
-{_list_block(risk.get("mitigation", []))}
+{_list_block(_section_list(schema, "risk_and_rescue", "mitigation"))}
 
 ## Rescue Triggers
 
@@ -1657,6 +1934,8 @@ def _render_evidence(schema: dict[str, Any], literature_summary: str | None = No
 def _render_checklists(schema: dict[str, Any]) -> str:
     if _is_thrombectomy(schema):
         return _render_thrombectomy_checklists(schema)
+    if _is_acdf(schema):
+        return _render_acdf_checklists(schema)
     return f"""# Checklists - {schema["topic"]}
 
 ## Day-Of Safety Checklist
@@ -1676,6 +1955,30 @@ def _render_checklists(schema: dict[str, Any]) -> str:
 - Consent-specific risks: `needs input`
 - Team alerts: `needs input`
 - Open questions: see `09-open-questions.md`
+"""
+
+
+def _render_acdf_checklists(schema: dict[str, Any]) -> str:
+    ctx = _acdf_context(schema)
+    return f"""# Checklists - {schema["topic"]}
+
+## Pre-Incision ACDF Safety Checklist
+
+- Confirm patient, consent, approach side, and side/site/level localization plan for {ctx['level']}.
+- Confirm baseline motor/sensory exam, myelopathy status, and baseline voice/swallow symptoms.
+- Confirm imaging displayed: sagittal/axial MRI through {ctx['level']}, radiographs/fluoro localization, and CT if osteophyte/OPLL/bony anatomy matters.
+- Confirm implant / fusion construct: graft/cage, plate/screws, zero-profile, or stand-alone device; ensure trials, screws, backup sizes, and fluoroscopy are available.
+- Confirm recurrent laryngeal nerve, esophagus/trachea, carotid sheath, and vertebral artery risk points are in the team brief.
+- Confirm hematoma/airway rescue plan: anesthesia awareness, postop neck checks, and immediate response pathway for stridor, swelling, or respiratory distress.
+- Confirm drain, collar, antibiotics, steroid, anticoagulation/antiplatelet restart, and postop imaging plan.
+
+## Must-Review Before Incision
+
+- Imaging: symptomatic {ctx['root_target']} compression at {ctx['level']}; cord signal/myelopathy, alignment, uncinate/foraminal osteophyte, and vertebral artery boundary.
+- Exposure: anterior cervical corridor between carotid sheath laterally and tracheoesophageal complex medially; protect esophagus and release retractors if prolonged.
+- Technique: fluoroscopic localization before annulotomy, discectomy/decompression, PLL/uncinate/foramen strategy, endplate preparation, graft/cage placement, plate/screws/fixation.
+- Consent-specific risks: dysphagia, dysphonia/recurrent laryngeal nerve palsy, esophageal injury, hematoma/airway compromise, vertebral artery injury, neurologic deficit/C5 palsy, pseudarthrosis/subsidence.
+- Open questions: see `09-open-questions.md`.
 """
 
 
@@ -1705,6 +2008,8 @@ def _render_thrombectomy_checklists(schema: dict[str, Any]) -> str:
 def _render_open_questions(schema: dict[str, Any]) -> str:
     if _is_thrombectomy(schema):
         return _render_thrombectomy_open_questions(schema)
+    if _is_acdf(schema):
+        return _render_acdf_open_questions(schema)
     return f"""# Open Questions - {schema["topic"]}
 
 ## Patient-Specific Missing Data
@@ -1730,6 +2035,35 @@ def _render_open_questions(schema: dict[str, Any]) -> str:
 - Special equipment availability?
 """
 
+
+
+def _render_acdf_open_questions(schema: dict[str, Any]) -> str:
+    ctx = _acdf_context(schema)
+    return f"""# Open Questions - {schema["topic"]}
+
+## Patient-Specific Missing Spine Facts
+
+- Is {ctx['level']} definitively the symptomatic level on exam, MRI, and radiographs/fluoroscopy?
+- What is the baseline motor/sensory deficit, reflex change, pain distribution, myelopathy status, and baseline voice/swallow function?
+- Any prior anterior neck surgery, vocal cord dysfunction, radiation, infection/tumor, OPLL/calcified disc, smoking/diabetes/osteoporosis, or bone-healing risk?
+- What anticoagulation/antiplatelet medication must be held or restarted, and what is the hematoma/airway risk plan?
+- What postop destination, diet/swallow pathway, collar plan, drain plan, and upright cervical x-ray timing are expected?
+
+## Attending / Team Questions
+
+- Approach side and rationale, especially with recurrent laryngeal nerve/voice history or prior surgery?
+- Implant / fusion construct: graft/cage type, plate/screws vs zero-profile vs stand-alone device, graft material, and backup sizes?
+- PLL opening threshold, uncinate/foraminal decompression extent, and vertebral artery lateral stop point?
+- Is posterior cervical foraminotomy a reasonable alternative or backup for this radiculopathy pattern, or is anterior fusion required by disc-space collapse, alignment, central disease, or instability?
+- Drain, collar, steroids, antibiotics, postop imaging, activity restrictions, and fusion precautions?
+
+## Safety-Critical Unknowns
+
+- Side/site/level localization workflow and who confirms final level before discectomy?
+- Airway/hematoma rescue plan and who can open the wound emergently if respiratory compromise occurs?
+- Escalation plan for esophageal injury, vertebral artery bleeding, CSF leak, neuromonitoring change, or new neurologic deficit?
+- Discharge readiness: swallowing, voice, airway, pain control, neurologic exam, ambulation, wound/drain, and follow-up imaging plan?
+"""
 
 
 def _thrombectomy_target_question(schema: dict[str, Any]) -> str:

@@ -449,6 +449,138 @@ async def test_core_builder_includes_parsed_case_and_family_profile_for_acdf():
 
 
 @pytest.mark.asyncio
+async def test_core_builder_writes_acdf_specific_dossier_and_missing_construct_fact(tmp_path):
+    output_dir = tmp_path / "acdf-c5-6"
+
+    result = await build_core_case_plan(
+        BuildCasePlanRequest(
+            case_input=(
+                "C5-6 anterior cervical discectomy and fusion for right C6 "
+                "radiculopathy from foraminal disc osteophyte complex"
+            ),
+            output_dir=output_dir,
+            max_per_category=1,
+        ),
+        retrievers=EMPTY_RETRIEVERS,
+    )
+
+    assert result.structured["procedure_family"]["id"] == "spine_acdf"
+    assert result.structured["case"]["degraded"] is False
+    assert "fusion construct" in result.structured["case"]["missing_critical_facts"]
+
+    summary = (output_dir / "01-case-summary.md").read_text(encoding="utf-8").casefold()
+    assert "missing critical facts:" in summary
+    assert "fusion construct" in summary
+    assert "none identified" not in summary
+    assert "operative objective: decompress the right c6 nerve root" in summary
+
+    morning = (output_dir / "00-morning-of-case.md").read_text(encoding="utf-8").casefold()
+    for term in (
+        "diagnosis / level / procedure",
+        "c5-6",
+        "right c6 radiculopathy",
+        "anterior cervical discectomy and fusion",
+        "decompress the right c6 nerve root",
+        "go / no-go missing facts",
+        "side/site/level localization",
+        "approach side",
+        "implant / fusion construct",
+        "airway/dysphagia baseline",
+        "fluoroscopy",
+    ):
+        assert term in morning
+
+    anatomy = (output_dir / "03-anatomy-at-risk.md").read_text(encoding="utf-8").casefold()
+    for term in (
+        "anterior cervical exposure",
+        "sternocleidomastoid",
+        "carotid sheath",
+        "tracheoesophageal",
+        "esophagus",
+        "recurrent laryngeal nerve",
+        "vertebral artery",
+        "longus colli",
+        "disc space",
+        "uncinate",
+        "foramen",
+        "c6 nerve root",
+    ):
+        assert term in anatomy
+
+    operative = (output_dir / "04-operative-plan.md").read_text(encoding="utf-8").casefold()
+    for term in (
+        "anterior cervical exposure",
+        "level localization",
+        "caspar",
+        "discectomy",
+        "posterior longitudinal ligament",
+        "foraminal decompression",
+        "uncinate",
+        "endplate preparation",
+        "graft/cage",
+        "plate/screws",
+        "fluoroscopy",
+        "closure",
+    ):
+        assert term in operative
+
+    risk = (output_dir / "05-risk-and-rescue.md").read_text(encoding="utf-8").casefold()
+    for term in (
+        "dysphagia",
+        "recurrent laryngeal nerve",
+        "esophageal injury",
+        "vertebral artery injury",
+        "hematoma/airway",
+        "c5 palsy",
+        "pseudarthrosis",
+    ):
+        assert term in risk
+
+    postop = (output_dir / "06-postop-plan.md").read_text(encoding="utf-8").casefold()
+    for term in (
+        "airway",
+        "dysphagia",
+        "voice change",
+        "upright cervical x-rays",
+        "collar",
+        "fusion precautions",
+    ):
+        assert term in postop
+
+    readme = (output_dir / "README.md").read_text(encoding="utf-8").casefold()
+    for term in (
+        "decompress the right c6 nerve root",
+        "posterior cervical foraminotomy",
+        "graft/cage",
+        "plate/screws",
+    ):
+        assert term in readme
+    assert "target `needs input`" not in readme
+
+    checklist = (output_dir / "08-checklists.md").read_text(encoding="utf-8").casefold()
+    for term in (
+        "pre-incision acdf safety checklist",
+        "side/site/level localization",
+        "implant / fusion construct",
+        "recurrent laryngeal nerve",
+        "hematoma/airway",
+    ):
+        assert term in checklist
+
+    questions = (output_dir / "09-open-questions.md").read_text(encoding="utf-8").casefold()
+    for term in (
+        "approach side",
+        "implant / fusion construct",
+        "posterior cervical foraminotomy",
+        "baseline voice/swallow",
+        "collar",
+    ):
+        assert term in questions
+    for generic_term in ("subtotal resection", "antiepileptic"):
+        assert generic_term not in questions
+
+
+@pytest.mark.asyncio
 async def test_core_builder_tags_radiology_and_corpus_with_trusted_family_metadata():
     class FakeRadiologyRetriever:
         async def retrieve(self, query, *, max_results=5, modality=None):

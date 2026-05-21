@@ -431,6 +431,8 @@ def _missing_critical_facts(
             missing.append("symptomatic laterality")
         if procedure.value is None:
             missing.append("fusion/decompression plan")
+        if not _has_acdf_fusion_construct(normalized):
+            missing.append("fusion construct")
     elif family.id == "tumor_convexity_meningioma":
         if anatomic_location.value is None:
             missing.append("tumor location")
@@ -453,6 +455,26 @@ def _missing_critical_facts(
         if not _has_thrombectomy_access_plan(normalized):
             missing.append("access plan")
     return _unique(missing)
+
+
+def _has_acdf_fusion_construct(normalized_text: str) -> bool:
+    return any(
+        term in normalized_text
+        for term in (
+            "cage",
+            "graft",
+            "plate",
+            "screw",
+            "interbody",
+            "allograft",
+            "autograft",
+            "stand-alone",
+            "standalone",
+            "zero profile",
+            "zero-profile",
+            "instrumentation",
+        )
+    )
 
 
 def _has_venous_or_sinus_relationship(normalized_text: str) -> bool:
