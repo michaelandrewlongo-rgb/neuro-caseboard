@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterable
 
+from caseprep.facts import CaseFact, FactStatus, facts_to_dict
 from caseprep.procedure_taxonomy import ProcedureFamily, iter_procedure_families
 
 
@@ -44,6 +45,7 @@ class CaseSpec:
     missing_critical_facts: tuple[str, ...]
     degraded: bool
     degradation_reason: str | None = None
+    facts: tuple[CaseFact, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -62,6 +64,7 @@ class CaseSpec:
             "missing_critical_facts": list(self.missing_critical_facts),
             "degraded": self.degraded,
             "degradation_reason": self.degradation_reason,
+            "facts": facts_to_dict(self.facts),
         }
 
 
@@ -76,6 +79,7 @@ _PROCEDURE_PATTERNS: tuple[tuple[str, str, str, float], ...] = (
     (r"\bmechanical thrombectomy\b", "mechanical thrombectomy", "extracted", 0.99),
     (r"\bendovascular thrombectomy\b", "endovascular thrombectomy", "extracted", 0.97),
     (r"\bstroke thrombectomy\b", "stroke thrombectomy", "extracted", 0.9),
+    (r"\bthrombectomy\b", "thrombectomy", "extracted", 0.85),
     (r"\b(?:frontal\s+)?convexity meningioma resection\b", "convexity meningioma resection", "extracted", 0.98),
     (r"\bmeningioma resection\b", "meningioma resection", "extracted", 0.95),
     (r"\bresection\b", "resection", "extracted", 0.8),
@@ -129,6 +133,37 @@ _LEVEL_RE = re.compile(
     re.IGNORECASE,
 )
 _LATERALITY_RE = re.compile(r"\b(right|left|bilateral)\b", re.IGNORECASE)
+_EXACT_INTEGER_SCORE_SUFFIX = r"(?!\.\d)(?!\s*(?:[-–—]|to)\s*\d)\b"
+_NIHSS_RE = re.compile(
+    rf"\bNIHSS\s*[:=]?\s*(\d{{1,2}}){_EXACT_INTEGER_SCORE_SUFFIX}",
+    re.IGNORECASE,
+)
+_ASPECTS_RE = re.compile(
+    rf"\bASPECTS\s*[:=]?\s*(\d{{1,2}}){_EXACT_INTEGER_SCORE_SUFFIX}",
+    re.IGNORECASE,
+)
+_LKW_RE = re.compile(
+    r"\b(?:LKW|last[-\s]+known[-\s]+well)\s*(?::|=|at)?\s*"
+    r"(\d+(?:\.\d+)?\s*(?:h|hr|hrs|hour|hours|m|min|mins|minute|minutes)\b|"
+    r"\d{1,2}:\d{2}\s*(?:am|pm)?\b|"
+    r"\d{1,2}\s*(?:am|pm)\b)",
+    re.IGNORECASE,
+)
+_PERFUSION_RE = re.compile(
+    r"\b(?:(CT)\s+perfusion|CTP|perfusion)(?:\s+(mismatch|core|penumbra))?\b",
+    re.IGNORECASE,
+)
+_ACCESS_PATTERNS: tuple[tuple[str, str], ...] = (
+    (r"\btransfemoral\b", "transfemoral"),
+    (r"\bfemoral access\b", "femoral access"),
+    (r"\btransradial\b", "transradial"),
+    (r"\bradial access\b", "radial access"),
+)
+_BALLOON_GUIDE_RE = re.compile(r"\b(?:BGC|balloon guide(?: catheter)?)\b", re.IGNORECASE)
+_ASPIRATION_RE = re.compile(r"\baspiration\b", re.IGNORECASE)
+_STENT_RETRIEVER_RE = re.compile(r"\bstent[-\s]+retriever\b", re.IGNORECASE)
+_VALID_IMAGING_SELECTION_RE = re.compile(r"\b(?:CTA|CT\s+angiography|MRI|DWI)\b", re.IGNORECASE)
+_VALID_EXTRA_ACCESS_PLAN_RE = re.compile(r"\bdistal\s+access\b", re.IGNORECASE)
 
 
 def parse_case_input(raw_input: str, *, use_llm: bool = False) -> CaseSpec:
@@ -162,6 +197,11 @@ def deterministic_parse_case(raw_input: str) -> CaseSpec:
         if family is not None
         else _MISSING
     )
+    facts = (
+        _extract_thrombectomy_facts(text)
+        if family is not None and family.id == "endovascular_thrombectomy"
+        else tuple()
+    )
 
     missing = _missing_critical_facts(
         text=text,
@@ -172,6 +212,7 @@ def deterministic_parse_case(raw_input: str) -> CaseSpec:
         laterality=laterality,
         level_or_segment=level_or_segment,
         anatomic_location=anatomic_location,
+        facts=facts,
     )
     degraded = _is_degraded(family=family, procedure=procedure, approach=approach, missing=missing)
     degradation_reason = None
@@ -198,6 +239,7 @@ def deterministic_parse_case(raw_input: str) -> CaseSpec:
         missing_critical_facts=tuple(missing),
         degraded=degraded,
         degradation_reason=degradation_reason,
+        facts=facts,
     )
 
 
@@ -328,6 +370,163 @@ def _extract_imaging_modifiers(text: str) -> tuple[CaseField, ...]:
     return tuple(modifiers)
 
 
+def _extract_thrombectomy_facts(text: str) -> tuple[CaseFact, ...]:
+    facts = (
+        _extract_numeric_fact(text, _NIHSS_RE, "nihss", "NIHSS", minimum=0, maximum=42),
+        _extract_numeric_fact(text, _ASPECTS_RE, "aspects", "ASPECTS", minimum=0, maximum=10),
+        _extract_lkw_fact(text),
+        _extract_perfusion_fact(text),
+        _extract_access_route_fact(text),
+        _extract_presence_fact(text, _BALLOON_GUIDE_RE, "balloon_guide", "Balloon guide", "BGC"),
+        _extract_presence_fact(text, _ASPIRATION_RE, "aspiration", "Aspiration", "aspiration"),
+        _extract_presence_fact(
+            text,
+            _STENT_RETRIEVER_RE,
+            "stent_retriever",
+            "Stent retriever",
+            "stent-retriever",
+        ),
+    )
+    return tuple(fact for fact in facts if fact.status == FactStatus.KNOWN)
+
+
+def _extract_numeric_fact(
+    text: str,
+    regex: re.Pattern[str],
+    key: str,
+    label: str,
+    *,
+    minimum: int | None = None,
+    maximum: int | None = None,
+) -> CaseFact:
+    found = regex.search(text)
+    if not found:
+        return _missing_fact(key, label)
+    value = int(found.group(1))
+    if minimum is not None and value < minimum:
+        return _missing_fact(key, label)
+    if maximum is not None and value > maximum:
+        return _missing_fact(key, label)
+    return CaseFact(
+        key=key,
+        label=label,
+        value=str(value),
+        status=FactStatus.KNOWN,
+        source="extracted",
+        confidence=0.95,
+        span=found.group(0),
+    )
+
+
+def _extract_lkw_fact(text: str) -> CaseFact:
+    found = _LKW_RE.search(text)
+    if not found:
+        return _missing_fact("last_known_well", "Last known well")
+    return CaseFact(
+        key="last_known_well",
+        label="Last known well",
+        value=_compact_time_value(found.group(1)),
+        status=FactStatus.KNOWN,
+        source="extracted",
+        confidence=0.92,
+        span=found.group(0),
+    )
+
+
+def _extract_perfusion_fact(text: str) -> CaseFact:
+    for found in _PERFUSION_RE.finditer(text):
+        if _is_obviously_negated(text, found):
+            continue
+        span = found.group(0)
+        normalized = span.casefold()
+        if "ct" in normalized or "ctp" in normalized:
+            value = "CT perfusion"
+        else:
+            value = "perfusion"
+        if any(term in normalized for term in ("mismatch", "core", "penumbra")):
+            qualifier = "mismatch" if "mismatch" in normalized else "core" if "core" in normalized else "penumbra"
+            value = f"{value} {qualifier}"
+        return CaseFact(
+            key="perfusion_selection",
+            label="Perfusion selection",
+            value=value,
+            status=FactStatus.KNOWN,
+            source="extracted",
+            confidence=0.9,
+            span=span,
+        )
+    return _missing_fact("perfusion_selection", "Perfusion selection")
+
+
+def _extract_access_route_fact(text: str) -> CaseFact:
+    for pattern, value in _ACCESS_PATTERNS:
+        for found in re.finditer(pattern, text, re.IGNORECASE):
+            if _is_obviously_negated(text, found):
+                continue
+            return CaseFact(
+                key="access_route",
+                label="Access route",
+                value=value,
+                status=FactStatus.KNOWN,
+                source="extracted",
+                confidence=0.9,
+                span=found.group(0),
+            )
+    return _missing_fact("access_route", "Access route")
+
+
+def _extract_presence_fact(
+    text: str,
+    regex: re.Pattern[str],
+    key: str,
+    label: str,
+    value: str,
+) -> CaseFact:
+    for found in regex.finditer(text):
+        if _is_obviously_negated(text, found):
+            continue
+        return CaseFact(
+            key=key,
+            label=label,
+            value=value,
+            status=FactStatus.KNOWN,
+            source="extracted",
+            confidence=0.88,
+            span=found.group(0),
+        )
+    return _missing_fact(key, label)
+
+
+def _is_obviously_negated(text: str, found: re.Match[str]) -> bool:
+    prefix = text[max(0, found.start() - 60): found.start()]
+    suffix = text[found.end(): min(len(text), found.end() + 60)]
+    pre_term_negation = re.search(
+        r"(?:^|[\s,;])(?:no|without)\s+(?:(?:a|an|the)\s+)?$|"
+        r"(?:^|[\s,;])not\s+(?:using|use|used|planning|planned|to\s+use)\s+"
+        r"(?:(?:a|an|the)\s+)?$",
+        prefix,
+        re.IGNORECASE,
+    )
+    post_term_negation = re.search(
+        r"^\s*(?:"
+        r"not\s+(?:used|planned|using|utilized|intended|performed|employed)|"
+        r"(?:was|were|is|are|be|being)\s+not\s+"
+        r"(?:used|planned|utilized|intended|performed|employed)"
+        r")\b",
+        suffix,
+        re.IGNORECASE,
+    )
+    return bool(pre_term_negation or post_term_negation)
+
+
+def _missing_fact(key: str, label: str) -> CaseFact:
+    return CaseFact(key=key, label=label, status=FactStatus.MISSING)
+
+
+def _compact_time_value(value: str) -> str:
+    return re.sub(r"\s+", "", value.strip())
+
+
 def _family_field(
     family: ProcedureFamily | None,
     *,
@@ -432,9 +631,11 @@ def _missing_critical_facts(
     laterality: CaseField,
     level_or_segment: CaseField,
     anatomic_location: CaseField,
+    facts: Iterable[CaseFact] = (),
 ) -> list[str]:
     missing: list[str] = []
     normalized = text.casefold()
+    known_fact_keys = _known_fact_keys(facts)
     if pathology.value is None:
         missing.append("pathology")
     if procedure.value is None:
@@ -475,13 +676,13 @@ def _missing_critical_facts(
     elif family.id == "endovascular_thrombectomy":
         if level_or_segment.value is None and "occlusion" not in (pathology.value or "").casefold():
             missing.append("occlusion location")
-        if not _has_last_known_well(normalized):
+        if "last_known_well" not in known_fact_keys:
             missing.append("last-known-well time")
-        if not _has_nihss(normalized):
+        if "nihss" not in known_fact_keys:
             missing.append("NIHSS")
-        if not _has_thrombectomy_imaging_selection(normalized):
+        if not _has_thrombectomy_imaging_selection(text, known_fact_keys):
             missing.append("imaging selection")
-        if not _has_thrombectomy_access_plan(normalized):
+        if not _has_thrombectomy_access_plan(text, known_fact_keys):
             missing.append("access plan")
     return _unique(missing)
 
@@ -520,38 +721,26 @@ def _has_venous_or_sinus_relationship(normalized_text: str) -> bool:
     )
 
 
-def _has_last_known_well(normalized_text: str) -> bool:
-    return any(
-        term in normalized_text
-        for term in ("last-known-well", "last known well", "lkw", "time from onset", "onset")
-    )
+def _known_fact_keys(facts: Iterable[CaseFact]) -> set[str]:
+    return {fact.key for fact in facts if fact.status == FactStatus.KNOWN}
 
 
-def _has_nihss(normalized_text: str) -> bool:
-    return "nihss" in normalized_text or "national institutes of health stroke scale" in normalized_text
+def _has_thrombectomy_imaging_selection(text: str, known_fact_keys: set[str]) -> bool:
+    if known_fact_keys.intersection({"aspects", "perfusion_selection"}):
+        return True
+    return _has_non_negated_match(text, _VALID_IMAGING_SELECTION_RE)
 
 
-def _has_thrombectomy_imaging_selection(normalized_text: str) -> bool:
-    return any(
-        term in normalized_text
-        for term in ("aspects", "perfusion", "ctp", "cta", "ct angiography", "mri", "dwi")
-    )
+def _has_thrombectomy_access_plan(text: str, known_fact_keys: set[str]) -> bool:
+    if known_fact_keys.intersection(
+        {"access_route", "balloon_guide", "aspiration", "stent_retriever"}
+    ):
+        return True
+    return _has_non_negated_match(text, _VALID_EXTRA_ACCESS_PLAN_RE)
 
 
-def _has_thrombectomy_access_plan(normalized_text: str) -> bool:
-    return any(
-        term in normalized_text
-        for term in (
-            "transfemoral",
-            "femoral access",
-            "radial access",
-            "transradial",
-            "balloon guide",
-            "distal access",
-            "aspiration",
-            "stent retriever",
-        )
-    )
+def _has_non_negated_match(text: str, regex: re.Pattern[str]) -> bool:
+    return any(not _is_obviously_negated(text, found) for found in regex.finditer(text))
 
 
 def _unique(items: Iterable[str]) -> list[str]:

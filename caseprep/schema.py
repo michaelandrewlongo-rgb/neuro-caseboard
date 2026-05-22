@@ -182,6 +182,7 @@ def build_caseprep_schema(
         "status": DEFAULT_STATUS,
         "generated_at": generated_at,
         "case": {
+            "facts": _structured_case_facts(structured_case),
             "case_snapshot": {
                 "diagnosis": topic,
                 "planned_procedure": "",
@@ -291,6 +292,24 @@ def build_caseprep_schema(
     }
     _propagate_structured_case_snapshot(schema)
     return schema
+
+
+def _structured_case_facts(structured_case: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(structured_case, dict):
+        return {}
+    facts = structured_case.get("facts")
+    return deepcopy(facts) if isinstance(facts, dict) else {}
+
+
+def _case_facts(schema: dict[str, Any]) -> dict[str, Any]:
+    case_section = schema.setdefault("case", {})
+    if not isinstance(case_section, dict):
+        return {}
+    facts = case_section.get("facts")
+    if not isinstance(facts, dict):
+        facts = {}
+        case_section["facts"] = facts
+    return facts
 
 
 def _propagate_structured_case_snapshot(schema: dict[str, Any]) -> None:

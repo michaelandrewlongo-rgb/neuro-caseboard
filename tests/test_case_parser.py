@@ -206,3 +206,131 @@ def test_case_fields_can_be_serialized_to_dicts():
     assert data["procedure"]["value"] == case.procedure.value
     assert isinstance(data["patient_modifiers"], list)
     assert isinstance(data["missing_critical_facts"], list)
+
+
+def test_thrombectomy_prompt_extracts_structured_facts():
+    prompt = (
+        "left M1 MCA occlusion NIHSS 18 ASPECTS 7 LKW 10h CT perfusion mismatch "
+        "planned transfemoral BGC aspiration stent-retriever thrombectomy"
+    )
+
+    case = deterministic_parse_case(prompt)
+    data = case.to_dict()
+    facts = data["facts"]
+    missing = " ".join(case.missing_critical_facts).casefold()
+
+    assert case.procedure_family.value == "endovascular_thrombectomy"
+    assert_field_contains(case.procedure, "thrombectomy")
+    assert facts["nihss"]["value"] == "18"
+    assert facts["aspects"]["value"] == "7"
+    assert facts["last_known_well"]["value"] == "10h"
+    assert facts["perfusion_selection"]["value"] == "CT perfusion mismatch"
+    assert facts["access_route"]["value"] == "transfemoral"
+    assert facts["balloon_guide"]["value"] == "BGC"
+    assert facts["aspiration"]["value"] == "aspiration"
+    assert facts["stent_retriever"]["value"] == "stent-retriever"
+    assert "nihss" not in missing
+    assert "last-known-well" not in missing
+    assert "imaging selection" not in missing
+    assert "access plan" not in missing
+    assert "procedure" not in missing
+
+
+def test_thrombectomy_prompt_rejects_invalid_values_and_negated_presence_facts():
+    prompt = (
+        "left M1 MCA occlusion NIHSS 99 ASPECTS 99 LKW 123 "
+        "no CT perfusion mismatch planned transfemoral no BGC no aspiration "
+        "without stent-retriever thrombectomy"
+    )
+
+    case = deterministic_parse_case(prompt)
+    facts = case.to_dict()["facts"]
+    assert isinstance(facts, dict)
+
+    assert case.procedure_family.value == "endovascular_thrombectomy"
+    assert facts["access_route"]["value"] == "transfemoral"
+    for key in (
+        "nihss",
+        "aspects",
+        "last_known_well",
+        "perfusion_selection",
+        "balloon_guide",
+        "aspiration",
+        "stent_retriever",
+    ):
+        assert key not in facts
+
+    alternate_negations = deterministic_parse_case(
+        "left M1 MCA occlusion NIHSS 18 ASPECTS 7 LKW 10h "
+        "without perfusion mismatch planned transfemoral without balloon guide "
+        "without aspiration no stent retriever thrombectomy"
+    ).to_dict()["facts"]
+    assert isinstance(alternate_negations, dict)
+    assert alternate_negations["nihss"]["value"] == "18"
+    assert alternate_negations["aspects"]["value"] == "7"
+    assert alternate_negations["last_known_well"]["value"] == "10h"
+    assert alternate_negations["access_route"]["value"] == "transfemoral"
+    for key in ("perfusion_selection", "balloon_guide", "aspiration", "stent_retriever"):
+        assert key not in alternate_negations
+
+
+def test_thrombectomy_rejected_facts_remain_missing_when_no_valid_alternative():
+    prompt = (
+        "left M1 MCA occlusion NIHSS 99 ASPECTS 99 LKW 123 "
+        "no CT perfusion mismatch BGC not used aspiration not planned "
+        "not using stent retriever thrombectomy"
+    )
+
+    case = deterministic_parse_case(prompt)
+    facts = case.to_dict()["facts"]
+    missing = " ".join(case.missing_critical_facts).casefold()
+    assert isinstance(facts, dict)
+
+    assert case.procedure_family.value == "endovascular_thrombectomy"
+    assert "nihss" not in facts
+    assert "aspects" not in facts
+    assert "last_known_well" not in facts
+    assert "perfusion_selection" not in facts
+    assert "balloon_guide" not in facts
+    assert "aspiration" not in facts
+    assert "stent_retriever" not in facts
+    assert "nihss" in missing
+    assert "last-known-well time" in missing
+    assert "imaging selection" in missing
+    assert "access plan" in missing
+
+
+def test_thrombectomy_decimal_and_range_scores_are_not_exact_known_facts():
+    for prompt in (
+        "left M1 MCA occlusion NIHSS 4.5 ASPECTS 7.5 LKW 10h thrombectomy",
+        "left M1 MCA occlusion NIHSS 4-5 ASPECTS 7-8 LKW 10h thrombectomy",
+    ):
+        case = deterministic_parse_case(prompt)
+        facts = case.to_dict()["facts"]
+        missing = " ".join(case.missing_critical_facts).casefold()
+        assert isinstance(facts, dict)
+
+        assert "nihss" not in facts
+        assert "aspects" not in facts
+        assert "nihss" in missing
+        assert "imaging selection" in missing
+
+
+def test_thrombectomy_post_and_pre_term_negations_do_not_create_known_facts():
+    case = deterministic_parse_case(
+        "left M1 MCA occlusion NIHSS 18 ASPECTS 7 LKW 10h "
+        "BGC not used aspiration not planned not using stent retriever "
+        "not using perfusion mismatch thrombectomy"
+    )
+    facts = case.to_dict()["facts"]
+    missing = " ".join(case.missing_critical_facts).casefold()
+    assert isinstance(facts, dict)
+
+    assert facts["nihss"]["value"] == "18"
+    assert facts["aspects"]["value"] == "7"
+    assert facts["last_known_well"]["value"] == "10h"
+    assert "balloon_guide" not in facts
+    assert "aspiration" not in facts
+    assert "stent_retriever" not in facts
+    assert "perfusion_selection" not in facts
+    assert "access plan" in missing
