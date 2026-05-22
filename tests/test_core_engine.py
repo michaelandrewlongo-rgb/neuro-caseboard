@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from caseprep.core import (
@@ -20,7 +18,7 @@ from caseprep.core import (
 from caseprep.adapters.caseplan import build_caseplan_request
 
 
-def test_build_case_plan_request_normalizes_topic_and_legacy_args(tmp_path):
+def test_build_case_plan_request_normalizes_topic_and_output_dir(tmp_path):
     output_dir = tmp_path / "vs-caseprep"
     request = BuildCasePlanRequest(
         topic="  vestibular schwannoma  ",
@@ -32,12 +30,7 @@ def test_build_case_plan_request_normalizes_topic_and_legacy_args(tmp_path):
 
     assert request.topic == "vestibular schwannoma"
     assert request.output_dir == output_dir
-    assert request.to_legacy_args() == {
-        "topic": "vestibular schwannoma",
-        "output_dir": str(output_dir),
-        "max_per_category": 4,
-        "profile_hint": "skull_base",
-    }
+    assert request.resolved_case_input() == "vestibular schwannoma"
 
 
 def test_build_case_plan_request_accepts_case_input_without_topic(tmp_path):
@@ -54,11 +47,6 @@ def test_build_case_plan_request_accepts_case_input_without_topic(tmp_path):
     assert request.resolved_case_input() == (
         "83F R ICA terminus aneurysm for right pterional clipping"
     )
-    assert request.to_legacy_args() == {
-        "topic": "83F R ICA terminus aneurysm for right pterional clipping",
-        "output_dir": str(output_dir),
-        "max_per_category": 2,
-    }
 
 
 def test_build_case_plan_request_topic_is_resolved_case_input_fallback():
@@ -76,9 +64,6 @@ def test_build_case_plan_request_case_input_takes_precedence_when_present():
     )
 
     assert request.resolved_case_input() == (
-        "left retrosigmoid vestibular schwannoma resection"
-    )
-    assert request.to_legacy_args()["topic"] == (
         "left retrosigmoid vestibular schwannoma resection"
     )
 
@@ -166,14 +151,15 @@ def test_artifact_ref_serializes_paths(tmp_path):
     }
 
 
-def test_resolve_core_mode_defaults_to_legacy(monkeypatch):
+def test_resolve_core_mode_defaults_to_core(monkeypatch):
     monkeypatch.delenv("CASEPREP_CORE_MODE", raising=False)
 
-    assert resolve_core_mode() == "legacy"
+    assert resolve_core_mode() == "core"
 
 
-def test_resolve_core_mode_rejects_unknown_value(monkeypatch):
-    monkeypatch.setenv("CASEPREP_CORE_MODE", "experimental")
+@pytest.mark.parametrize("retired_mode", ["legacy", "shadow", "experimental"])
+def test_resolve_core_mode_rejects_retired_modes(monkeypatch, retired_mode):
+    monkeypatch.setenv("CASEPREP_CORE_MODE", retired_mode)
 
     with pytest.raises(CasePrepConfigurationError) as exc:
         resolve_core_mode()
@@ -182,65 +168,56 @@ def test_resolve_core_mode_rejects_unknown_value(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_case_plan_builder_legacy_mode_delegates_to_legacy_builder(tmp_path):
+async def test_case_plan_builder_defaults_to_core_builder(tmp_path):
     calls = []
 
-    async def legacy_builder(request: BuildCasePlanRequest) -> str:
-        calls.append(request.to_legacy_args())
-        return "# Case Plan\n\nlegacy output"
+    async def core_builder(request: BuildCasePlanRequest) -> BuildCasePlanResult:
+        calls.append(request)
+        return BuildCasePlanResult(
+            topic=request.resolved_case_input(),
+            markdown="# Core Case Plan\n\ncore output",
+            output_dir=request.resolved_output_dir(),
+            mode="core",
+            evidence=[EvidenceRecord(id="pmid-1", source="pubmed", title="Trial")],
+        )
 
     request = BuildCasePlanRequest(
         topic="glioma",
         output_dir=tmp_path / "glioma-caseprep",
         max_per_category=2,
     )
-    builder = CasePlanBuilder(mode="legacy", legacy_builder=legacy_builder)
+    builder = CasePlanBuilder(core_builder=core_builder)
 
     result = await builder.build_case_plan(request)
 
-    assert calls == [
-        {
-            "topic": "glioma",
-            "output_dir": str(tmp_path / "glioma-caseprep"),
-            "max_per_category": 2,
-        }
-    ]
+    assert calls == [request]
     assert result.topic == "glioma"
-    assert result.markdown == "# Case Plan\n\nlegacy output"
+    assert result.markdown == "# Core Case Plan\n\ncore output"
     assert result.output_dir == tmp_path / "glioma-caseprep"
-    assert result.mode == "legacy"
-    assert result.evidence == []
-    assert result.provenance == []
+    assert result.mode == "core"
+    assert [record.id for record in result.evidence] == ["pmid-1"]
 
 
 @pytest.mark.asyncio
-async def test_case_plan_builder_legacy_mode_uses_case_input_for_result_topic(tmp_path):
-    async def legacy_builder(request: BuildCasePlanRequest) -> str:
-        return "# Case Plan\n\nlegacy output"
-
-    request = BuildCasePlanRequest(
-        case_input="  83F R ICA terminus aneurysm clipping  ",
-        output_dir=tmp_path / "caseprep",
-    )
-    builder = CasePlanBuilder(mode="legacy", legacy_builder=legacy_builder)
-
-    result = await builder.build_case_plan(request)
-
-    assert result.topic == "83F R ICA terminus aneurysm clipping"
-    assert isinstance(result.topic, str)
+async def test_case_plan_builder_rejects_retired_build_modes():
+    with pytest.raises(CasePrepConfigurationError):
+        CasePlanBuilder(mode="legacy")
+    with pytest.raises(CasePrepConfigurationError):
+        CasePlanBuilder(mode="shadow")
 
 
 @pytest.mark.asyncio
 async def test_case_plan_builder_coerces_empty_result_topic_from_case_input(tmp_path):
-    async def legacy_builder(request: BuildCasePlanRequest) -> BuildCasePlanResult:
+    async def core_builder(request: BuildCasePlanRequest) -> BuildCasePlanResult:
         return BuildCasePlanResult(
             topic="",
-            markdown="# Case Plan\n\nlegacy output",
+            markdown="# Core Case Plan\n\ncore output",
             output_dir=tmp_path / "caseprep",
+            mode="core",
         )
 
     request = BuildCasePlanRequest(case_input="right pterional clipping")
-    builder = CasePlanBuilder(mode="legacy", legacy_builder=legacy_builder)
+    builder = CasePlanBuilder(core_builder=core_builder)
 
     result = await builder.build_case_plan(request)
 
@@ -248,7 +225,7 @@ async def test_case_plan_builder_coerces_empty_result_topic_from_case_input(tmp_
 
 
 @pytest.mark.asyncio
-async def test_case_plan_builder_shadow_mode_runs_default_core_builder(monkeypatch):
+async def test_case_plan_builder_uses_default_core_builder(monkeypatch):
     async def fake_core_builder(request):
         return BuildCasePlanResult(
             topic=request.topic,
@@ -259,87 +236,19 @@ async def test_case_plan_builder_shadow_mode_runs_default_core_builder(monkeypat
                 EvidenceRecord(
                     id="pmid-1",
                     source="pubmed",
-                    title="Aneurysm evidence",
+                    title="Core Evidence",
                 )
             ],
             structured={"profile": {"name": "vascular"}},
-            warnings=["core warning"],
         )
 
-    monkeypatch.setattr(
-        "caseprep.core.builder.build_core_case_plan",
-        fake_core_builder,
-    )
+    import caseprep.core.engine as engine
 
-    async def legacy_builder(request: BuildCasePlanRequest) -> str:
-        return "legacy output"
-
-    builder = CasePlanBuilder(mode="shadow", legacy_builder=legacy_builder)
+    monkeypatch.setattr(engine, "_default_core_build_caseplan", fake_core_builder)
+    builder = CasePlanBuilder()
 
     result = await builder.build_case_plan(BuildCasePlanRequest(topic="aneurysm"))
 
-    assert result.markdown == "legacy output"
-    assert result.mode == "shadow"
-    assert result.warnings == []
-    assert result.shadow == {
-        "mode": "core",
-        "markdown": "core diagnostic output",
-        "structured": {"profile": {"name": "vascular"}},
-        "warnings": ["core warning"],
-        "artifacts": [],
-        "evidence": [
-            {
-                "id": "pmid-1",
-                "source": "pubmed",
-                "title": "Aneurysm evidence",
-                "url": None,
-                "text": "",
-                "metadata": {},
-            }
-        ],
-        "provenance": [],
-    }
-
-
-@pytest.mark.asyncio
-async def test_case_plan_builder_shadow_mode_preserves_legacy_when_core_fails():
-    async def legacy_builder(request: BuildCasePlanRequest) -> str:
-        return "legacy output"
-
-    async def core_builder(request: BuildCasePlanRequest) -> BuildCasePlanResult:
-        raise CasePrepExternalServiceError(
-            "PubMed retrieval failed",
-            details={"provider": "pubmed"},
-        )
-
-    builder = CasePlanBuilder(
-        mode="shadow",
-        legacy_builder=legacy_builder,
-        core_builder=core_builder,
-    )
-
-    result = await builder.build_case_plan(BuildCasePlanRequest(topic="aneurysm"))
-
-    assert result.markdown == "legacy output"
-    assert result.mode == "shadow"
-    assert result.shadow == {
-        "mode": "core",
-        "error": {
-            "error": "external_service_error",
-            "message": "PubMed retrieval failed",
-            "details": {"provider": "pubmed"},
-        },
-    }
-    assert result.warnings == [
-        "CASEPREP_CORE_MODE=shadow core builder failed: PubMed retrieval failed"
-    ]
-
-
-@pytest.mark.asyncio
-async def test_case_plan_builder_core_mode_requires_core_builder():
-    builder = CasePlanBuilder(mode="core", legacy_builder=lambda request: "legacy")
-
-    with pytest.raises(CasePrepConfigurationError) as exc:
-        await builder.build_case_plan(BuildCasePlanRequest(topic="aneurysm"))
-
-    assert "core builder is not configured" in str(exc.value)
+    assert result.mode == "core"
+    assert result.markdown == "core diagnostic output"
+    assert result.structured == {"profile": {"name": "vascular"}}

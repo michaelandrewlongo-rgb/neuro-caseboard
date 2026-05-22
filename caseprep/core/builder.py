@@ -705,7 +705,7 @@ async def build_core_case_plan(
     store: CasePrepRunStore | None = None,
     run_id: str | None = None,
 ) -> BuildCasePlanResult:
-    """Build the first real core result for shadow-mode comparison."""
+    """Build a procedure-first core CasePrep dossier."""
     topic = request.resolved_case_input()
     case_spec = parse_case_input(topic)
     procedure_family = select_procedure_family(case_spec)

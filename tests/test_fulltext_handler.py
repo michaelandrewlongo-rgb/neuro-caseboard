@@ -23,12 +23,12 @@ def fake_summary(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(mcp_server, "_pubmed_summaries", fake_pubmed_summaries)
 
-    async def fail_legacy_helper(pmids: list[str]) -> dict:
+    async def fail_helper(pmids: list[str]) -> dict:
         raise AssertionError("_handle_get_fulltext should use FullTextRetriever")
 
-    monkeypatch.setattr(mcp_server, "_pubmed_fulltext", fail_legacy_helper)
-    monkeypatch.setattr(mcp_server, "_pubmed_structured_abstracts", fail_legacy_helper)
-    monkeypatch.setattr(mcp_server, "_pubmed_abstracts", fail_legacy_helper)
+    monkeypatch.setattr(mcp_server, "_pubmed_fulltext", fail_helper)
+    monkeypatch.setattr(mcp_server, "_pubmed_structured_abstracts", fail_helper)
+    monkeypatch.setattr(mcp_server, "_pubmed_abstracts", fail_helper)
 
 
 def _install_fake_retriever(

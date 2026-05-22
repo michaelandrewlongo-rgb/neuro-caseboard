@@ -6,7 +6,6 @@ import json
 
 from caseprep.schema import (
     CANONICAL_MARKDOWN_FILES,
-    LEGACY_MARKDOWN_ALIASES,
     build_caseprep_schema,
     build_caseprep_schema_from_axis_data,
     render_caseprep_files,
@@ -46,7 +45,7 @@ def test_build_caseprep_schema_has_core_sections():
     assert schema["provenance"][0]["value_status"] == "generated"
 
 
-def test_render_caseprep_files_contains_canonical_and_legacy_files():
+def test_render_caseprep_files_contains_only_canonical_files():
     schema = build_caseprep_schema(
         "retrosigmoid vestibular schwannoma",
         profile="skull_base",
@@ -56,8 +55,8 @@ def test_render_caseprep_files_contains_canonical_and_legacy_files():
     for filename in CANONICAL_MARKDOWN_FILES:
         assert filename in files, f"missing canonical file {filename}"
 
-    for filename in LEGACY_MARKDOWN_ALIASES:
-        assert filename in files, f"missing legacy file {filename}"
+    retired_aliases = {"anatomy.md", "approach.md", "complications.md", "literature.md"}
+    assert retired_aliases.isdisjoint(files)
 
     assert "caseprep.yaml" in files
     assert "provenance.json" in files

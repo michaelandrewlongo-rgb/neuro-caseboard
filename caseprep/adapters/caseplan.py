@@ -34,6 +34,17 @@ def slugify_caseplan_topic(topic: str) -> str:
     return topic.strip().lower().replace(" ", "-")
 
 
+def _default_output_dir(arguments: Mapping[str, Any]) -> str | None:
+    explicit_output_dir = arguments.get("output_dir")
+    if explicit_output_dir:
+        return str(explicit_output_dir)
+
+    raw_case = arguments.get("case_input") or arguments.get("topic")
+    if not isinstance(raw_case, str) or not raw_case.strip():
+        return None
+    return f"{slugify_caseplan_topic(raw_case)}-caseprep"
+
+
 def build_caseplan_request(
     arguments: Mapping[str, Any],
 ) -> BuildCasePlanRequest:
@@ -48,7 +59,7 @@ def build_caseplan_request(
     return BuildCasePlanRequest(
         topic=arguments.get("topic"),
         case_input=arguments.get("case_input"),
-        output_dir=arguments.get("output_dir") or None,
+        output_dir=_default_output_dir(arguments),
         max_per_category=arguments.get("max_per_category", 3),
         profile_hint=arguments.get("profile_hint"),
         structured_output=arguments.get("structured_output", False),
@@ -78,7 +89,7 @@ async def build_caseplan_markdown(
     *,
     builder_factory: BuilderFactory = CasePlanBuilder,
 ) -> str:
-    """Build a case plan and return the legacy markdown/text transport output."""
+    """Build a case plan and return markdown/text transport output."""
     result = await build_caseplan_result(
         arguments,
         builder_factory=builder_factory,

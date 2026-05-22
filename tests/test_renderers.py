@@ -4,16 +4,13 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
-from caseprep.core import CasePrepConfigurationError, ProvenanceRecord
+from caseprep.core import ProvenanceRecord
 from caseprep.case_parser import parse_case_input, select_procedure_family
 from caseprep.links import build_search_links
 from caseprep.schema import build_caseprep_schema
 
 
-def test_markdown_renderer_matches_legacy_schema_output():
-    from caseprep.schema import _legacy_render_caseprep_files
+def test_markdown_renderer_emits_canonical_dossier_files_only():
     from caseprep.renderers.markdown import render_caseprep_files
 
     schema = build_caseprep_schema(
@@ -21,7 +18,13 @@ def test_markdown_renderer_matches_legacy_schema_output():
         profile="skull_base",
     )
 
-    assert render_caseprep_files(schema) == _legacy_render_caseprep_files(schema)
+    rendered = render_caseprep_files(schema)
+
+    assert "03-anatomy-at-risk.md" in rendered
+    assert "04-operative-plan.md" in rendered
+    assert "05-risk-and-rescue.md" in rendered
+    assert "07-evidence.md" in rendered
+    assert {"anatomy.md", "approach.md", "complications.md", "literature.md"}.isdisjoint(rendered)
 
 
 def test_markdown_renderer_accepts_provenance_without_mutating_schema():
@@ -205,7 +208,7 @@ def test_markdown_renderer_parasagittal_meningioma_removes_generic_placeholders_
     case_summary = rendered["01-case-summary.md"]
     operative = rendered["04-operative-plan.md"]
     non_evidence_combined = "\n".join(
-        body for name, body in rendered.items() if name not in {"07-evidence.md", "literature.md"}
+        body for name, body in rendered.items() if name != "07-evidence.md"
     )
     non_evidence_lower = non_evidence_combined.casefold()
 
@@ -543,48 +546,15 @@ def test_html_renderer_matches_resource_links_template():
     )
 
 
-def test_renderer_boolean_flags(monkeypatch):
-    from caseprep.renderers import (
-        resolve_compare_outputs_enabled,
-        resolve_dual_write_enabled,
+def test_compare_rendered_outputs_reports_file_differences():
+    from caseprep.renderers import compare_rendered_outputs
+
+    diffs = compare_rendered_outputs(
+        {"README.md": "old", "07-evidence.md": "same"},
+        {"README.md": "new", "07-evidence.md": "same", "extra.md": "extra"},
     )
 
-    monkeypatch.delenv("CASEPREP_DUAL_WRITE", raising=False)
-    monkeypatch.delenv("CASEPREP_COMPARE_OUTPUTS", raising=False)
-    assert resolve_dual_write_enabled() is False
-    assert resolve_compare_outputs_enabled() is False
-
-    monkeypatch.setenv("CASEPREP_DUAL_WRITE", "1")
-    monkeypatch.setenv("CASEPREP_COMPARE_OUTPUTS", "1")
-    assert resolve_dual_write_enabled() is True
-    assert resolve_compare_outputs_enabled() is True
-
-    monkeypatch.setenv("CASEPREP_DUAL_WRITE", "yes")
-    with pytest.raises(CasePrepConfigurationError) as exc:
-        resolve_dual_write_enabled()
-    assert exc.value.details["field"] == "CASEPREP_DUAL_WRITE"
-
-
-def test_schema_dual_write_compare_raises_on_mismatch(monkeypatch):
-    import caseprep.schema as schema_module
-    from caseprep.core import CasePrepValidationError
-
-    schema = build_caseprep_schema("aneurysm", profile="vascular")
-
-    def fake_renderer(case_object, **kwargs):
-        kwargs.pop("provenance", None)
-        rendered = schema_module._legacy_render_caseprep_files(case_object, **kwargs)
-        rendered["README.md"] += "\nchanged\n"
-        return rendered
-
-    monkeypatch.setenv("CASEPREP_DUAL_WRITE", "1")
-    monkeypatch.setenv("CASEPREP_COMPARE_OUTPUTS", "1")
-    monkeypatch.setattr(
-        "caseprep.renderers.markdown.render_caseprep_files",
-        fake_renderer,
-    )
-
-    with pytest.raises(CasePrepValidationError) as exc:
-        schema_module.render_caseprep_files(schema)
-
-    assert exc.value.details["diffs"] == ["Changed rendered file README.md"]
+    assert diffs == [
+        "Unexpected rendered file extra.md",
+        "Changed rendered file README.md",
+    ]

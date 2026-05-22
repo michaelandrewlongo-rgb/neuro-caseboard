@@ -158,7 +158,7 @@ async def api_search_pubmed(
     max_results: int = Query(10, ge=1, le=20),
     filter_type: str | None = Query(None, description="Clinical filter: therapy, prognosis, etiology, diagnosis, systematic_review"),
     include_abstracts: bool = Query(False),
-    retrieval_strategy: str = Query("legacy"),
+    retrieval_strategy: str = Query("deterministic_enrichment"),
     return_query_plan: bool = Query(False),
 ):
     """Search PubMed with optional clinical query filters."""

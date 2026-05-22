@@ -103,13 +103,11 @@ def test_classifier_is_pure_and_does_not_open_files_or_network(monkeypatch):
     assert "aneurysm" in keywords["anatomy"]
 
 
-def test_mcp_profile_detection_compatibility_wrapper_accepts_hint():
-    from caseprep.mcp_server import _detect_profile
-
-    profile, confidence = _detect_profile(
+def test_profile_classifier_accepts_hint_without_mcp_wrapper():
+    result = classify_profile(
         "vestibular schwannoma",
         profile_hint="vascular",
     )
 
-    assert profile == "vascular"
-    assert confidence == 1.0
+    assert result.profile == "vascular"
+    assert result.confidence == 1.0

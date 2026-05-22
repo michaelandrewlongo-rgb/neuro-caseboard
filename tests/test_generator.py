@@ -27,10 +27,16 @@ class TestSlugify:
 class TestGenerateCaseprep:
     EXPECTED_FILES = [
         "README.md",
-        "anatomy.md",
-        "approach.md",
-        "literature.md",
-        "complications.md",
+        "00-morning-of-case.md",
+        "01-case-summary.md",
+        "02-imaging-review.md",
+        "03-anatomy-at-risk.md",
+        "04-operative-plan.md",
+        "05-risk-and-rescue.md",
+        "06-postop-plan.md",
+        "07-evidence.md",
+        "08-checklists.md",
+        "09-open-questions.md",
         "resource-links.html",
     ]
 
@@ -54,19 +60,19 @@ class TestGenerateCaseprep:
     def test_topic_appears_in_anatomy(self, tmp_dir):
         out = tmp_dir / "test-case"
         generate_caseprep("acoustic neuroma", out)
-        anatomy = (out / "anatomy.md").read_text()
+        anatomy = (out / "03-anatomy-at-risk.md").read_text()
         assert "acoustic neuroma" in anatomy
 
     def test_literature_contains_pubmed_link(self, tmp_dir):
         out = tmp_dir / "test-case"
         generate_caseprep("meningioma", out)
-        lit = (out / "literature.md").read_text()
+        lit = (out / "07-evidence.md").read_text()
         assert "[PubMed](https://pubmed.ncbi.nlm.nih.gov/?term=meningioma)" in lit
 
     def test_literature_contains_sni_link(self, tmp_dir):
         out = tmp_dir / "test-case"
         generate_caseprep("glioma", out)
-        lit = (out / "literature.md").read_text()
+        lit = (out / "07-evidence.md").read_text()
         assert "[Surgical Neurology International]" in lit
         assert "surgicalneurologyint.com" in lit
 
@@ -145,10 +151,8 @@ class TestGenerateCaseprep:
         assert "`needs clinician verification`" in readme
         assert "01-case-summary.md" in readme
 
-    def test_legacy_files_are_schema_aliases(self, tmp_dir):
+    def test_retired_alias_files_are_not_written(self, tmp_dir):
         out = tmp_dir / "test-case"
         generate_caseprep("vestibular schwannoma", out)
-        assert (out / "anatomy.md").read_text() == (out / "03-anatomy-at-risk.md").read_text()
-        assert (out / "approach.md").read_text() == (out / "04-operative-plan.md").read_text()
-        assert (out / "complications.md").read_text() == (out / "05-risk-and-rescue.md").read_text()
-        assert (out / "literature.md").read_text() == (out / "07-evidence.md").read_text()
+        for filename in ("anatomy.md", "approach.md", "complications.md", "literature.md"):
+            assert not (out / filename).exists()

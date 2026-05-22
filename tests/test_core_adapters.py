@@ -21,7 +21,7 @@ async def test_mcp_build_caseplan_routes_through_core_facade(monkeypatch):
                 topic=request.topic,
                 markdown="# Case Plan\n\nfacade output",
                 output_dir=request.resolved_output_dir(),
-                mode="legacy",
+                mode="core",
             )
 
     monkeypatch.setattr(mcp_server, "CasePlanBuilder", FakeBuilder)
@@ -33,6 +33,7 @@ async def test_mcp_build_caseplan_routes_through_core_facade(monkeypatch):
 
     assert output == "# Case Plan\n\nfacade output"
     assert seen_requests[0].topic == "vestibular schwannoma"
+    assert seen_requests[0].output_dir.name == "vestibular-schwannoma-caseprep"
     assert seen_requests[0].max_per_category == 2
 
 
@@ -49,7 +50,7 @@ async def test_build_caseplan_adapter_invokes_injected_builder():
                 topic=request.topic,
                 markdown="adapter output",
                 output_dir=request.resolved_output_dir(),
-                mode="legacy",
+                mode="core",
                 structured={"profile": {"name": "vascular"}},
             )
 
@@ -65,8 +66,18 @@ async def test_build_caseplan_adapter_invokes_injected_builder():
     assert result.markdown == "adapter output"
     assert result.structured == {"profile": {"name": "vascular"}}
     assert seen_requests[0].topic == "aneurysm clipping"
+    assert seen_requests[0].output_dir.name == "aneurysm-clipping-caseprep"
     assert seen_requests[0].max_per_category == 2
     assert seen_requests[0].structured_output is True
+
+
+def test_build_caseplan_request_preserves_explicit_output_dir(tmp_path):
+    from caseprep.adapters.caseplan import build_caseplan_request
+
+    explicit = tmp_path / "explicit-case"
+    request = build_caseplan_request({"topic": "aneurysm", "output_dir": explicit})
+
+    assert request.output_dir == explicit
 
 
 def test_caseprep_error_status_maps_domain_errors():

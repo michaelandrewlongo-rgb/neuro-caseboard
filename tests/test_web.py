@@ -168,7 +168,7 @@ def test_search_pubmed_mocked(client):
 def test_search_pubmed_query_plan_fields_are_additive_when_requested(client):
     with (
         patch("caseprep.web._handle_pubmed_structured", new_callable=AsyncMock) as mock_structured,
-        patch("caseprep.web._handle_pubmed", new_callable=AsyncMock) as mock_legacy,
+        patch("caseprep.web._handle_pubmed", new_callable=AsyncMock) as mock_plain,
     ):
         mock_structured.return_value = {
             "markdown": "Hybrid search results",
@@ -196,7 +196,7 @@ def test_search_pubmed_query_plan_fields_are_additive_when_requested(client):
             "retrieval_strategy": "hybrid",
             "return_query_plan": True,
         })
-        mock_legacy.assert_not_called()
+        mock_plain.assert_not_called()
 
 
 def test_search_pubmed_handler_exception_uses_safe_call(client):
@@ -246,7 +246,7 @@ def test_build_caseplan_mocked(client):
                     "Canonical files: caseprep.yaml, 01-case-summary.md"
                 ),
                 output_dir=request.resolved_output_dir(),
-                mode="legacy",
+                mode="core",
             )
 
     with patch("caseprep.web.CasePlanBuilder", FakeBuilder):
@@ -274,7 +274,7 @@ def test_build_caseplan_uses_dependency_injected_engine(client):
                 topic=request.topic,
                 markdown="dependency output",
                 output_dir=request.resolved_output_dir(),
-                mode="legacy",
+                mode="core",
             )
 
     web_mod.app.dependency_overrides[web_mod.get_caseplan_builder] = FakeBuilder

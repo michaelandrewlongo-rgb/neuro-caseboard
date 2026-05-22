@@ -8,7 +8,6 @@ from typing import Any, Sequence
 
 from caseprep.core import ProvenanceRecord
 from caseprep.schema import (
-    LEGACY_MARKDOWN_ALIASES,
     _render_anatomy,
     _render_case_summary,
     _render_checklists,
@@ -109,6 +108,4 @@ def render_caseprep_files(
         "08-checklists.md": _render_checklists(schema),
         "09-open-questions.md": _render_open_questions(schema),
     }
-    for legacy, canonical in LEGACY_MARKDOWN_ALIASES.items():
-        files[legacy] = files[canonical]
     return files

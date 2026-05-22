@@ -85,7 +85,7 @@ def test_build_case_queries_uses_family_templates_for_canonical_cases(
     assert "systematic review" in axes[-1].query
 
 
-def test_build_case_queries_falls_back_to_legacy_topic_axes_without_family():
+def test_build_case_queries_falls_back_to_topic_axes_without_family():
     case = parse_case_input("generic operative planning topic")
 
     axes = build_case_queries(case, None)

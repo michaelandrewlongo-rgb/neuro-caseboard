@@ -168,7 +168,7 @@ def build_enriched_retrieval_plan(
     neurosurgery_adapter=None,
     seed_provider=None,
 ) -> dict:
-    """Build an auditable enriched retrieval plan without changing legacy axes."""
+    """Build an auditable enriched retrieval plan without changing axis contracts."""
     from caseprep.query_enrichment import enrich_case_query
 
     return enrich_case_query(

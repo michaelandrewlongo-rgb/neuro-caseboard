@@ -202,7 +202,7 @@ LLM parser/enricher, when added, must return confidence/provenance and must not 
 
 ## 8. Build Request / Core Builder Integration
 
-Modify the core path, not the legacy MCP handler, for new procedure-first work.
+Modify the core path for new procedure-first work.
 
 Relevant files:
 
@@ -212,7 +212,7 @@ Relevant files:
 - Modify: `caseprep/renderers/markdown.py` if needed
 - Modify: `caseprep/adapters/caseplan.py` if MCP/web adapter conversion is needed
 
-`BuildCasePlanRequest` should remain backward compatible but gain a case-input seam:
+`BuildCasePlanRequest` should keep a topic fallback but gain a case-input seam:
 
 ```python
 @dataclass(frozen=True)
@@ -229,7 +229,7 @@ Builder behavior:
 
 1. Resolve raw case input:
    - `case_input` if present.
-   - else `topic` for compatibility.
+   - else `topic` as a fallback.
 2. Parse into `CaseSpec`.
 3. Select procedure family.
 4. Derive broad profile from procedure family, not from topic-only profile classifier when possible.
@@ -479,7 +479,7 @@ For major pipeline changes, run blind neurosurgeon-style subagent review with no
 
 ### Task 3: Extend core contracts for case input
 
-**Objective:** Allow `BuildCasePlanRequest` to carry `case_input` while preserving compatibility.
+**Objective:** Allow `BuildCasePlanRequest` to carry `case_input` while retaining a topic fallback.
 
 **Files:**
 - Modify: `caseprep/core/contracts.py`
@@ -564,7 +564,7 @@ For major pipeline changes, run blind neurosurgeon-style subagent review with no
 1. Write CLI tests for `build` argument parsing.
 2. Mock core builder and assert it receives `case_input` and `output_dir`.
 3. Implement `_cmd_build` and parser subcommand.
-4. Keep `generate` and bare topic compatibility unchanged.
+4. Keep `generate` and bare topic behavior explicit.
 5. Run `python3 -m pytest tests/test_cli.py -v`.
 
 ### Task 9: Add canonical eval harness

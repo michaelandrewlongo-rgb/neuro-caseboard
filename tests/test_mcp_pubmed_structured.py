@@ -53,7 +53,7 @@ async def test_structured_pubmed_helper_returns_required_keys_and_markdown(monke
     assert result["query"] == "aneurysm clipping"
     assert result["rendered_query"] == "aneurysm clipping"
     assert result["query_plan"] is None
-    assert result["retrieval_strategy"] == "legacy"
+    assert result["retrieval_strategy"] == "deterministic_enrichment"
     assert result["total"] == 12
     assert len(result["articles"]) == 1
     assert result["articles"][0]["_relevance_score"] >= 0.0
@@ -151,14 +151,14 @@ async def test_structured_pubmed_helper_preserves_query_plan_and_strategy(monkey
 
 
 @pytest.mark.asyncio
-async def test_structured_pubmed_legacy_with_query_plan_searches_original_query(monkeypatch):
+async def test_structured_pubmed_default_strategy_uses_pubmed_plan_query(monkeypatch):
     query_plan = {
         "queries": [
             {
                 "id": "plan-primary",
                 "retriever": "pubmed",
                 "axis": "therapy",
-                "query": "plan query should not be used",
+                "query": "planned pubmed query",
             }
         ]
     }
@@ -172,14 +172,13 @@ async def test_structured_pubmed_legacy_with_query_plan_searches_original_query(
 
     result = await mcp_server._handle_pubmed_structured(
         {
-            "query": "original legacy query",
+            "query": "original query",
             "query_plan": query_plan,
-            "retrieval_strategy": "legacy",
         }
     )
 
-    assert seen["query"] == "original legacy query"
-    assert result["rendered_query"] == "original legacy query"
+    assert seen["query"] == "planned pubmed query"
+    assert result["rendered_query"] == "planned pubmed query"
     assert result["query_plan"] is query_plan
 
 
@@ -403,7 +402,7 @@ async def test_structured_pubmed_skips_non_pubmed_plan_queries(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_structured_pubmed_nonlegacy_without_pubmed_plan_query_degrades_to_original(monkeypatch):
+async def test_structured_pubmed_without_pubmed_plan_query_degrades_to_original(monkeypatch):
     query_plan = {
         "queries": [
             {
@@ -447,7 +446,7 @@ async def test_handle_pubmed_routes_through_structured_helper(monkeypatch):
             "query": args["query"],
             "rendered_query": args["query"],
             "query_plan": None,
-            "retrieval_strategy": "legacy",
+            "retrieval_strategy": "deterministic_enrichment",
             "total": 1,
             "articles": [],
             "markdown": "## PubMed — bypass\n(1 shown of 1 total)\n",
@@ -464,7 +463,7 @@ async def test_handle_pubmed_routes_through_structured_helper(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_handle_pubmed_default_markdown_has_no_query_plan(monkeypatch):
-    query_plan = {"strategy": "legacy", "queries": ["aneurysm"]}
+    query_plan = {"strategy": "deterministic_enrichment", "queries": ["aneurysm"]}
 
     async def fake_search(query, max_results, filter_type):
         return ["333"], 1
@@ -497,7 +496,7 @@ async def test_handle_pubmed_default_markdown_has_no_query_plan(monkeypatch):
 @pytest.mark.asyncio
 async def test_handle_pubmed_return_query_plan_appends_compact_section(monkeypatch):
     query_plan = {
-        "strategy": "legacy",
+        "strategy": "deterministic_enrichment",
         "rendered_query": "aneurysm",
         "queries": ["aneurysm", "aneurysm outcomes"],
     }
@@ -532,13 +531,13 @@ async def test_handle_pubmed_return_query_plan_appends_compact_section(monkeypat
 
     assert "## PubMed — aneurysm" in markdown
     assert "## Query plan" in markdown
-    assert "retrieval_strategy: legacy" in markdown
+    assert "retrieval_strategy: deterministic_enrichment" in markdown
     assert "rendered_query: aneurysm" in markdown
     assert "queries: aneurysm; aneurysm outcomes" in markdown
 
 
 @pytest.mark.asyncio
-async def test_structured_pubmed_invalid_strategy_degrades_to_legacy_with_warning(monkeypatch):
+async def test_structured_pubmed_invalid_strategy_degrades_to_default_with_warning(monkeypatch):
     async def fake_search(query, max_results, filter_type):
         return [], 0
 
@@ -548,6 +547,6 @@ async def test_structured_pubmed_invalid_strategy_degrades_to_legacy_with_warnin
         {"query": "aneurysm", "retrieval_strategy": "expanded"}
     )
 
-    assert result["retrieval_strategy"] == "legacy"
+    assert result["retrieval_strategy"] == "deterministic_enrichment"
     assert result["warnings"]
     assert "Invalid retrieval_strategy" in result["warnings"][0]

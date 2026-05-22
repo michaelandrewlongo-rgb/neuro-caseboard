@@ -98,16 +98,6 @@ def _profile_from_result(result: BuildCasePlanResult) -> str:
         if isinstance(name, str) and name.strip():
             return name.strip()
 
-    shadow = result.shadow
-    if isinstance(shadow, dict):
-        structured = shadow.get("structured")
-        if isinstance(structured, dict):
-            shadow_profile = structured.get("profile")
-            if isinstance(shadow_profile, dict):
-                name = shadow_profile.get("name")
-                if isinstance(name, str) and name.strip():
-                    return name.strip()
-
     return "unknown"
 
 
@@ -209,7 +199,6 @@ class FileSystemCasePrepStore:
             "provenance": [record.to_dict() for record in result.provenance],
             "warnings": list(result.warnings),
             "structured": _to_jsonable(result.structured),
-            "shadow": _to_jsonable(result.shadow),
         }
 
     def _save_sqlite_metadata(

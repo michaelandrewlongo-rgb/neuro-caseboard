@@ -1,130 +1,13 @@
 """Tests for template population — content extraction, domain profiles, guardrail verification."""
 
 import sqlite3
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
-import pytest
 from caseprep.mcp_server import (
-    _detect_profile,
-    _build_keywords,
-    _BASE_ANATOMY,
-    _BASE_APPROACH,
-    _BASE_COMPLICATIONS,
+    _corpus_search,
     _fmt_corpus_paper,
     _handle_search_corpus,
-    _corpus_search,
 )
-
-
-class TestDomainProfiles:
-    def test_detects_skull_base_vestibular_schwannoma(self):
-        profile, conf = _detect_profile("vestibular schwannoma")
-        assert profile == "skull_base"
-        assert conf > 0.5
-
-    def test_detects_vascular_aneurysm(self):
-        profile, conf = _detect_profile("anterior communicating artery aneurysm clipping")
-        assert profile == "vascular"
-        assert conf > 0
-
-    def test_detects_supratentorial_gbm(self):
-        profile, conf = _detect_profile("glioblastoma resection")
-        assert profile == "supratentorial_tumor"
-        assert conf > 0.3
-
-    def test_detects_spine_fusion(self):
-        profile, conf = _detect_profile("lumbar fusion l4-l5")
-        assert profile == "spine"
-
-    def test_detects_functional_dbs(self):
-        profile, conf = _detect_profile("deep brain stimulation parkinson")
-        assert profile == "functional"
-
-    def test_detects_pediatric_hydrocephalus(self):
-        profile, conf = _detect_profile("pediatric hydrocephalus")
-        assert profile == "pediatric"
-
-    def test_falls_back_to_skull_base_on_unknown(self):
-        profile, conf = _detect_profile("some unknown neurosurgical procedure")
-        assert profile == "skull_base"
-        assert conf == 0.0
-
-    def test_longest_match_wins(self):
-        # "aneurysm" matches vascular, but "lumbar" also matches spine.
-        # "lumbar aneurysm" — vascular wins because "aneurysm" is longer than "lumbar"
-        profile, conf = _detect_profile("lumbar aneurysm")
-        # Actually "lumbar" = 6 chars, "aneurysm" = 8 chars → aneurysm wins
-        assert profile in ("spine", "vascular")
-
-    def test_build_keywords_merges_base_and_profile(self):
-        kw = _build_keywords("skull_base")
-        assert "anatomy" in kw
-        assert "cranial nerve" in kw["anatomy"]  # profile-specific
-        assert "nerve" in kw["anatomy"]  # base
-        assert len(kw["anatomy"]) > len(_BASE_ANATOMY)  # profile adds
-
-    def test_build_keywords_unknown_profile_uses_base_only(self):
-        kw = _build_keywords("nonexistent")
-        assert kw["anatomy"] == _BASE_ANATOMY
-        assert kw["approach"] == _BASE_APPROACH
-        assert kw["complications"] == _BASE_COMPLICATIONS
-
-
-class TestStructuredCaseDossierOutput:
-    @pytest.mark.asyncio
-    async def test_write_filled_templates_writes_canonical_schema_files(self, tmp_path):
-        from caseprep.mcp_server import _write_filled_templates
-
-        axis_data = {
-            "Anatomy / Relevant Structures": [
-                {
-                    "pmid": "12345",
-                    "title": "CPA Anatomy",
-                    "authors": "Doe J",
-                    "source": "J Neurosurg",
-                    "pubdate": "2024",
-                    "doi": "",
-                    "url": "https://pubmed.ncbi.nlm.nih.gov/12345/",
-                    "_abstract": "The cerebellopontine angle contains cranial nerves and vascular structures.",
-                    "_structured": {},
-                }
-            ],
-            "Surgical Technique": [],
-            "Reviews / Landmarks": [],
-            "Outcomes / Evidence": [],
-            "Complications": [],
-        }
-
-        await _write_filled_templates(
-            tmp_path,
-            "retrosigmoid vestibular schwannoma",
-            "# Case Plan\n\nPaper summary",
-            axis_data,
-        )
-
-        for filename in [
-            "caseprep.yaml",
-            "provenance.json",
-            "README.md",
-            "01-case-summary.md",
-            "02-imaging-review.md",
-            "03-anatomy-at-risk.md",
-            "04-operative-plan.md",
-            "05-risk-and-rescue.md",
-            "06-postop-plan.md",
-            "07-evidence.md",
-            "08-checklists.md",
-            "09-open-questions.md",
-        ]:
-            assert (tmp_path / filename).is_file(), f"missing {filename}"
-
-        assert "Preparation Status" in (tmp_path / "README.md").read_text()
-        assert "pmid-12345" in (tmp_path / "07-evidence.md").read_text()
-        assert (tmp_path / "anatomy.md").read_text() == (tmp_path / "03-anatomy-at-risk.md").read_text()
-        assert (tmp_path / "approach.md").read_text() == (tmp_path / "04-operative-plan.md").read_text()
-        assert (tmp_path / "complications.md").read_text() == (tmp_path / "05-risk-and-rescue.md").read_text()
-        assert (tmp_path / "literature.md").read_text() == (tmp_path / "07-evidence.md").read_text()
-
 
 # ── Guardrail tests ────────────────────────────────────────────────────────
 

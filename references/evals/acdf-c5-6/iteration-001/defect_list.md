@@ -126,7 +126,7 @@ Acceptance criteria:
 
 - Remove generic cranial-neurosurgery rescue language such as `declining mental status → CT head` when not relevant to ACDF.
 - Remove irrelevant postop/open-question items such as antiepileptic management for routine ACDF.
-- Avoid duplicate old-style files (`anatomy.md`, `approach.md`, `complications.md`, `literature.md`) or clearly label them as legacy if primary numbered dossier is the source of truth.
+- Avoid duplicate old-style files (`anatomy.md`, `approach.md`, `complications.md`, `literature.md`); the primary numbered dossier is the source of truth.
 
 ## Recommended next narrow implementation slice
 

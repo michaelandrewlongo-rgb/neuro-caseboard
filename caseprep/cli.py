@@ -234,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     # Backwards compatibility: bare `caseprep <topic>` → `caseprep generate <topic>`.
-    # Also support option-first legacy invocations like `caseprep -o out glioma`.
+    # Also support option-first invocations like `caseprep -o out glioma`.
     _subcommands = {"build", "generate", "serve"}
     _top_level_flags = {"-h", "--help", "--version"}
     _options_with_values = {"-o", "--output", "--local-pdfs", "--host", "--port", "--log-level"}

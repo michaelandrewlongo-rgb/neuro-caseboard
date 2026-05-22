@@ -30,21 +30,10 @@ from mcp.types import TextContent, Tool
 from caseprep.adapters.caseplan import build_caseplan_markdown
 from caseprep.core import CasePlanBuilder
 from caseprep.generator import generate_caseprep as _generate_caseprep
-from caseprep.knowledge_graph import build_enriched_query
-from caseprep.links import build_search_links
 from caseprep.pdfs import format_pdf_results, search_local_pdfs as _search_local_pdfs
-from caseprep.profile_classifier import classify_profile as _classify_profile
 from caseprep.retrievers.fulltext import FullTextRecord, FullTextRetriever
-from caseprep.renderers.html import render_resource_links_html
-from caseprep.schema import (
-    build_caseprep_schema,
-    build_caseprep_schema_from_axis_data,
-    render_caseprep_files,
-)
 from caseprep.scoring import (
     EvidenceGrade,
-    classify_study_type,
-    extract_n_value,
     grade_evidence,
     neurosurg_relevance_score,
 )
@@ -1244,24 +1233,22 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 # ── Tool handlers ───────────────────────────────────────────────────────────
 
 _PUBMED_RETRIEVAL_STRATEGIES = {
-    "legacy",
     "deterministic_enrichment",
     "landmark_seeded",
     "local_prior",
     "hybrid",
-    "shadow",
 }
 
 
 def _normalize_pubmed_retrieval_strategy(args: dict) -> tuple[str, list[str]]:
-    strategy = args.get("retrieval_strategy", "legacy") or "legacy"
+    strategy = args.get("retrieval_strategy", "deterministic_enrichment") or "deterministic_enrichment"
     if strategy in _PUBMED_RETRIEVAL_STRATEGIES:
         return strategy, []
     return (
-        "legacy",
+        "deterministic_enrichment",
         [
             "Invalid retrieval_strategy "
-            f"{strategy!r}; falling back to 'legacy'."
+            f"{strategy!r}; falling back to 'deterministic_enrichment'."
         ],
     )
 
@@ -1402,7 +1389,7 @@ def _append_query_plan_section(markdown: str, result: dict) -> str:
     lines = [
         "",
         "## Query plan",
-        f"retrieval_strategy: {result.get('retrieval_strategy', 'legacy')}",
+        f"retrieval_strategy: {result.get('retrieval_strategy', 'deterministic_enrichment')}",
         f"rendered_query: {result.get('rendered_query', result.get('query', ''))}",
     ]
     if isinstance(query_plan, dict):
@@ -1421,7 +1408,7 @@ async def _handle_pubmed(args: dict) -> str:
 
 
 async def _handle_pubmed_structured(args: dict) -> dict:
-    """Return structured PubMed search data plus legacy-style markdown.
+    """Return structured PubMed search data plus markdown.
 
     Private helper for planned retriever orchestration. It intentionally uses
     the same PubMed helpers and markdown formatting as ``_handle_pubmed`` while
@@ -1435,7 +1422,7 @@ async def _handle_pubmed_structured(args: dict) -> dict:
     retrieval_strategy, warnings = _normalize_pubmed_retrieval_strategy(args)
     search_queries = [query]
     query_plan_metadata = None
-    if query_plan is not None and retrieval_strategy != "legacy":
+    if query_plan is not None:
         (
             search_queries,
             query_plan_metadata,
@@ -1556,550 +1543,6 @@ async def _handle_build_caseplan(args: dict) -> str:
     return await build_caseplan_markdown(args, builder_factory=CasePlanBuilder)
 
 
-async def _legacy_handle_build_caseplan(args: dict) -> str:
-    topic = args["topic"]
-    max_per = min(args.get("max_per_category", 5), 10)
-    slug = topic.strip().lower().replace(" ", "-")
-    out_dir = Path(args.get("output_dir", "") or f"{slug}-caseprep")
-    if not out_dir.is_absolute():
-        out_dir = Path.cwd() / out_dir
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    # Detect profile early to inform search queries
-    profile_name, profile_confidence = _detect_profile(
-        topic,
-        profile_hint=args.get("profile_hint"),
-    )
-    profile_kw = _build_keywords(profile_name)
-
-    # Build anatomy search query with profile-specific terms
-    # Generic "anatomy relevant structures" returns treatment papers;
-    # injecting top profile anatomy keywords focuses PubMed on actual anatomy.
-    top_anatomy_terms = profile_kw["anatomy"][:5]  # top 5 domain-specific terms
-    anatomy_query = build_enriched_query(topic, top_anatomy_terms)
-    # Keep query under PubMed's practical length (~256 chars works well)
-    if len(anatomy_query) > 200:
-        anatomy_query = anatomy_query[:200].rsplit(" ", 1)[0]
-
-    # ── Define the 5 search axes ────────────────────────────────────────
-    # Anatomy axis uses profile-specific anatomical terms to find actual
-    # anatomy papers rather than generic treatment/outcome studies.
-    searches: list[tuple[str, str, str | None]] = [
-        # (label, query suffix, filter_type)
-        ("Anatomy / Relevant Structures", anatomy_query, None),
-        ("Outcomes / Evidence", f"{topic} outcomes", "therapy"),
-        ("Surgical Technique", f"{topic} surgical technique approach", None),
-        ("Complications", f"{topic} complications adverse", "etiology"),
-        ("Reviews / Landmarks", topic, "systematic_review"),
-    ]
-
-    lines = [f"# Case Plan — {topic}\n"]
-    all_articles: list[dict] = []
-    axis_data: dict[str, list[dict]] = {}
-
-    for label, query, filt in searches:
-        lines.append(f"## {label}\n")
-
-        pmids, total = await _pubmed_search(query, max_per, filt)
-        if not pmids:
-            lines.append(f"  No results ({total} total in PubMed).\n")
-            axis_data[label] = []
-            continue
-
-        articles = await _pubmed_summaries(pmids[:max_per])
-        abstracts = await _pubmed_abstracts([a["pmid"] for a in articles])
-        structured = await _pubmed_structured_abstracts([a["pmid"] for a in articles])
-        all_articles.extend(articles)
-
-        # Store enriched articles for template population
-        enriched = []
-        for a in articles:
-            abstract = abstracts.get(a["pmid"], "")
-            a["_relevance_score"] = neurosurg_relevance_score(
-                a.get("title", ""),
-                abstract,
-            )
-            a["_evidence_grade"] = grade_evidence(a.get("pub_types", []))
-            a["_study_type"] = classify_study_type(a.get("pub_types", []))
-            a["_n_value"] = extract_n_value(abstract)
-            entry = dict(a)
-            entry["_abstract"] = abstract
-            entry["_structured"] = structured.get(a["pmid"], {})
-            enriched.append(entry)
-        axis_data[label] = enriched
-
-        lines.append(f"  ({len(articles)} shown of {total} total)\n")
-        for i, a in enumerate(articles, 1):
-            lines.extend(_fmt_paper(
-                a, i,
-                abstract=abstracts.get(a["pmid"]),
-                structured=structured.get(a["pmid"]),
-                evidence_grade=a.get("_evidence_grade"),
-            ))
-
-    # Fetch PMC full text for all papers
-    if all_articles:
-        fulltexts = await _pubmed_fulltext([a["pmid"] for a in all_articles])
-        if fulltexts:
-            lines.append("\n## PMC Full Text Available\n")
-            for pmid, ft in fulltexts.items():
-                lines.append(f"  PMID {pmid}: {len(ft)} chars\n")
-                lines.append(f"  {ft[:800]}…\n")
-
-    summary = "\n".join(lines)
-
-    # ── Write filled-in templates to disk ───────────────────────────────
-    await _write_filled_templates(
-        out_dir,
-        topic,
-        summary,
-        axis_data,
-        profile_hint=args.get("profile_hint"),
-    )
-
-    links = build_search_links(topic)
-    resource_path = out_dir / "resource-links.html"
-    resource_path.write_text(_resource_html(topic, links), encoding="utf-8")
-
-    return f"{summary}\n\n---\nCase plan written to {out_dir.resolve()}/"
-
-
-# ── Template population: domain-aware keyword extraction ──────────────────
-#
-# Each domain profile has keyword lists tailored to specific neurosurgical
-# subspecialties. The pipeline auto-detects the best profile from the topic
-# string. Profiles are additive — base keywords apply to all, profile-specific
-# keywords are merged on top.
-
-# Base keywords — always included regardless of profile
-_BASE_ANATOMY = [
-    "anatomy", "anatomic", "structure", "nerve", "artery", "vein",
-    "nucleus", "tract", "cortex", "lobe", "foramen", "fissure",
-    "sulcus", "gyrus", "ventricle", "cistern",
-]
-_BASE_APPROACH = [
-    "approach", "technique", "positioning", "craniotomy", "incision",
-    "resection", "dissection", "exposure", "retraction",
-    "microsurgical", "endoscopic", "minimally invasive",
-    "monitoring", "neuromonitoring", "intraoperative",
-    "neuronavigation", "bone flap", "dura", "closure", "hemostasis",
-]
-_BASE_COMPLICATIONS = [
-    "complication", "risk", "mortality", "morbidity", "deficit",
-    "infection", "meningitis", "hematoma", "hemorrhage", "ischemia",
-    "infarction", "edema", "seizure", "hydrocephalus",
-    "thromboembolism", "rate", "%", "percent", "incidence", "n=",
-]
-
-# Domain profiles — merged with base keywords
-_DOMAIN_PROFILES: dict[str, dict[str, list[str]]] = {
-    "skull_base": {
-        "anatomy": [
-            "cranial nerve", "cn vii", "cn viii", "cn v", "cn ix", "cn x",
-            "brainstem", "cerebell", "temporal bone", "sigmoid", "petrous",
-            "cavernous", "sella", "clivus", "jugular", "meckel", "cpa",
-            "cerebellopontine", "internal acoustic", "geniculate",
-            "sphenoid", "petroclival", "tentorium",
-        ],
-        "approach": [
-            "retrosigmoid", "translabyrinthine", "middle fossa",
-            "transpetrosal", "presigmoid", "drilling",
-            "ssep", "mep", "emg", "baer", "facial nerve monitor",
-            "keyhole", "endonasal", "transsphenoidal",
-        ],
-        "complications": [
-            "cerebrospinal fluid leak", "csf leak", "facial nerve",
-            "hearing loss", "anosmia", "diplopia", "dysphagia",
-            "aspiration", "hoarseness", "dvt", "pe",
-        ],
-    },
-    "supratentorial_tumor": {
-        "anatomy": [
-            "eloquent", "frontal", "temporal", "parietal", "occipital",
-            "broca", "wernicke", "supplementary motor", "sma", "insula",
-            "corpus callosum", "basal ganglia", "thalamus",
-            "white matter", "corticospinal", "arcuate", "precentral",
-            "postcentral", "language", "motor cortex", "sensory",
-            "visual cortex", "optic radiation", "internal capsule",
-        ],
-        "approach": [
-            "awake craniotomy", "asleep", "frameless", "stereotactic",
-            "neuronavigation", "intraoperative mri", "fluorescence",
-            "5-ala", "aminolevulinic", "mapping", "cortical mapping",
-            "subcortical", "des", "direct electrical stimulation",
-            "keyhole", "tubular", "ssep", "mep", "emg",
-        ],
-        "complications": [
-            "aphasia", "dysphasia", "hemiparesis", "visual field",
-            "neglect", "cognitive", "personality", "mood",
-            "wound", "dehiscence", "pseudomeningocele",
-        ],
-    },
-    "vascular": {
-        # Derived from Neurointerventional Evidence Taxonomy (7-axis faceted system).
-        # Axis 2 (Vascular Territory) + Axis 3 (Pathology) → anatomy keywords.
-        # Axis 4 (Procedure/Technique) → approach keywords.
-        # Axis 7 (Outcome Domain, complication subtree) → complications keywords.
-        "anatomy": [
-            # ── Vascular territories (Axis 2) ──
-            "aca", "a1", "a2", "pericallosal", "distal aca",
-            "mca", "m1", "m2", "m3", "m4",
-            "ica", "cavernous", "petrous", "paraophthalmic", "terminus", "bifurcation",
-            "pcom", "anterior choroidal",
-            "anterior circulation", "anterior perforators",
-            "vertebral", "v1", "v2", "v3", "v4",
-            "basilar", "mid basilar", "distal basilar",
-            "pca", "p1", "p2",
-            "pica", "aica", "sca", "cerebellar",
-            "posterior circulation",
-            "acom", "lenticulostriate", "perforators",
-            # ── Venous (Axis 2) ──
-            "superior sagittal sinus", "transverse sinus", "sigmoid sinus",
-            "straight sinus", "torcula", "cavernous sinus", "jugular bulb",
-            "internal cerebral veins", "vein of galen", "basal veins of rosenthal",
-            "cortical veins", "dural sinuses",
-            # ── Extracranial / spinal (Axis 2) ──
-            "common carotid", "brachiocephalic", "subclavian",
-            "extracranial carotid", "vertebral origin",
-            "radicular arteries", "segmental arteries",
-            # ── Pathology (Axis 3) ──
-            "aneurysm", "saccular", "sidewall", "fusiform", "dolichoectatic",
-            "blister", "dissecting", "mycotic", "traumatic pseudoaneurysm",
-            "avm", "arteriovenous malformation", "compact", "diffuse",
-            "spetzler-martin grade", "lawton-young supplementary grade",
-            "davf", "borden i", "borden ii", "borden iii",
-            "cognard i-iia", "cognard iib", "cognard iii-iv",
-            "ccf", "barrow a", "barrow b", "barrow c", "barrow d",
-            "atherosclerotic stenosis", "intracranial stenosis", "icad",
-            "acute occlusion", "cardioembolic", "cryptogenic", "esus",
-            "arterial dissection", "tandem occlusion",
-            "vasospasm", "post-asah", "rcvs",
-            "sinus thrombosis", "sinus stenosis", "venous sinus atresia",
-            "cavernous malformation", "developmental venous anomaly",
-            "capillary telangiectasia", "sinus pericranii",
-            "hemorrhage", "sah", "ich", "ivh", "csdh", "subarachnoid",
-            "tumor", "meningioma", "glomus tumor", "paraganglioma",
-            "hemangioblastoma", "hemangiopericytoma", "metastasis",
-            "juvenile nasopharyngeal angiofibroma",
-            "flow-related", "with intranidal aneurysm", "ruptured vs unruptured",
-            # ── Access / traversal terms (surgical context) ──
-            "sylvian", "interhemispheric", "pterional", "transsylvian",
-        ],
-        "approach": [
-            # ── Aneurysm treatment (Axis 4) ──
-            "primary coiling", "coiling", "balloon-assisted coiling",
-            "stent-assisted coiling", "jailing", "coil-through-stent",
-            "y-stenting", "flow diversion", "telescoping",
-            "intrasaccular flow disruption", "parent vessel sacrifice",
-            "with adjunctive coiling",
-            # ── Thrombectomy (Axis 4) ──
-            "mechanical thrombectomy", "aspiration alone",
-            "stent retriever alone", "contact aspiration",
-            # ── AVM/dAVF/embolization (Axis 4) ──
-            "avm embolization", "davf embolization", "tumor embolization",
-            "mma embolization", "epistaxis embolization",
-            "transarterial", "transvenous", "combined transarterial + transvenous",
-            "direct puncture", "liquid embolic", "coils",
-            "preoperative devascularization", "preradiosurgical",
-            "staged", "multi-session",
-            # ── Carotid / stenting (Axis 4) ──
-            "carotid revascularization", "transfemoral cas", "transcarotid",
-            "intracranial stenting", "angioplasty", "angioplasty + stenting",
-            "balloon angioplasty alone", "drug-coated balloon angioplasty",
-            "self-expanding", "balloon-expandable",
-            "with distal embolic protection", "with proximal protection",
-            "flow reversal",
-            # ── Access / closure (Axis 4) ──
-            "transfemoral", "transradial", "transulnar", "direct carotid",
-            "closure device", "closure",
-            # ── Venous / spinal / diagnostic (Axis 4) ──
-            "venous sinus stenting", "venous thrombectomy", "venous manometry",
-            "venous interventions", "thrombolysis",
-            "spinal angiography", "spinal avm embolization", "spinal davf embolization",
-            "diagnostic angiography", "4-vessel cerebral angiogram",
-            "selective catheterization", "provocative testing",
-            "balloon test occlusion",
-            # ── Surgical open-vascular (surgeon's terms, not taxonomy) ──
-            "clipping", "bypass", "ec-ic", "temporary clip",
-            "burst suppression", "adenosine", "indocyanine", "icg",
-            "doppler", "microdoppler", "orbitozygomatic", "far lateral",
-            "subtemporal", "supraorbital",
-        ],
-        "complications": [
-            # ── Hemorrhagic (Axis 7) ──
-            "sich", "parenchymal hematoma", "sah",
-            "access site hematoma", "retroperitoneal hematoma",
-            "hemorrhage", "rebleed", "rebleed rate", "delayed rupture",
-            # ── Ischemic (Axis 7) ──
-            "territorial infarct", "perforator infarct", "distal emboli",
-            "vasospasm", "delayed cerebral ischemia", "dci",
-            # ── Device-related (Axis 7) ──
-            "thrombosis", "in-stent stenosis", "in-stent restenosis",
-            "migration", "fracture", "malapposition",
-            "braid deformation", "foreshortening", "fish-mouthing",
-            "wall apposition",
-            # ── Access site (Axis 7) ──
-            "pseudoaneurysm", "dissection", "radial artery occlusion",
-            "access site",
-            # ── Contrast / systemic (Axis 7) ──
-            "contrast-induced nephropathy", "allergic reaction",
-            "infection", "cranial neuropathy", "seizure",
-            # ── Outcomes / grading (Axis 7) ──
-            "mrs 0-2", "mrs 0-1", "mrs at 90 days", "mrs at discharge",
-            "mrs shift", "mtici 2b", "mtici 2c", "mtici 3",
-            "first-pass effect", "reperfusion",
-            "nihss change", "barthel index", "cognitive outcomes",
-            "mortality", "30-day", "90-day", "in-hospital",
-            "aneurysm occlusion", "class i", "class ii", "class iiia",
-            "aneurysm recanalization", "retreatment rate", "regrowth",
-            "obliteration rate",
-            "complication rate", "complications",
-            # ── Disease-specific (Axis 7) ──
-            "hydrocephalus", "shunt", "csf",
-            "seizure freedom", "papilledema grade",
-            "visual acuity", "visual field",
-            "pulsatile tinnitus resolution",
-            "myelopathy improvement",
-            "radiation dose", "fluoroscopy time",
-            # ── Surgical (surgeon's terms) ──
-            "clip slippage", "parent vessel", "stroke", "infarct",
-            "nimodipine",
-        ],
-    },
-    "spine": {
-        "anatomy": [
-            "cervical", "thoracic", "lumbar", "sacral", "vertebra",
-            "disc", "pedicle", "lamina", "facet", "foramen",
-            "spinal cord", "nerve root", "cauda equina", "conus",
-            "thecal sac", "ligamentum", "odontoid", "atlantoaxial",
-            "spinous", "transverse process", "pars",
-        ],
-        "approach": [
-            "laminectomy", "laminoplasty", "discectomy", "microdiscectomy",
-            "fusion", "instrumentation", "pedicle screw", "cage",
-            "corpectomy", "foraminotomy", "tlif", "plif", "alif",
-            "xlif", "oblique", "lateral", "minimally invasive spine",
-            "tubular", "endoscopic spine", "neuronavigation spine",
-            "o-arm", "navigation", "robotic",
-        ],
-        "complications": [
-            "dural tear", "nerve root injury", "pseudarthrosis",
-            "adjacent segment", "instrumentation failure", "screw",
-            "misplacement", "dysphagia", "hoarseness", "c5 palsy",
-            "kyphosis", "sagittal", "flat back", "proximal junctional",
-        ],
-    },
-    "functional": {
-        "anatomy": [
-            "basal ganglia", "thalamus", "subthalamic", "stn", "gpi",
-            "vop", "vim", "striatum", "globus pallidus", "substantia nigra",
-            "motor cortex", "premotor", "sma", "cingulate", "insula",
-            "hippocampus", "amygdala", "anterior nucleus", "centromedian",
-        ],
-        "approach": [
-            "deep brain stimulation", "dbs", "stereotactic", "frame",
-            "frameless", "microelectrode", "mer", "macroelectrode",
-            "impedance", "electrode", "lead", "pulse generator",
-            "programming", "theta", "beta", "gamma",
-            "radiofrequency", "rft", "rhizotomy", "thermocoagulation",
-            "laser ablation", "litt", "focused ultrasound", "mrgfus",
-        ],
-        "complications": [
-            "hemorrhage dbs", "infection dbs", "lead migration",
-            "lead fracture", "erosion", "ipg", "stimulation side effects",
-            "dysarthria", "gait", "cognitive dbs", "mood dbs",
-            "suicide", "impulse control", "status dystonicus",
-        ],
-    },
-    "pediatric": {
-        "anatomy": [
-            "fontanelle", "suture", "craniosynostosis", "hydrocephalus",
-            "ventricle", "choroid plexus", "myelination", "germinal matrix",
-            "posterior fossa", "fourth ventricle", "brainstem",
-            "cerebell", "vermis", "tectal", "pineal",
-        ],
-        "approach": [
-            "endoscopic third ventriculostomy", "etv", "shunt",
-            "vps", "vetriculoperitoneal", "programmable",
-            "posterior fossa craniotomy", "telovelar",
-            "endoscopic biopsy", "navigated biopsy",
-            "intraoperative ultrasound", "vagal nerve stimulator", "vns",
-            "corpus callosotomy", "hemispherectomy", "lobar",
-            "grid", "depth electrode", "seeg", "ecog",
-        ],
-        "complications": [
-            "shunt infection", "shunt malfunction", "overdrainage",
-            "slit ventricle", "cranial defect", "infection pediatric",
-            "mutism", "cerebellar mutism", "posterior fossa syndrome",
-            "endocrine", "growth", "developmental", "cognitive pediatric",
-            "seizure pediatric", "hydrocephalus acquired",
-        ],
-    },
-}
-
-# Alias map: common topic terms → profile name
-_TOPIC_TO_PROFILE: dict[str, str] = {
-    # Skull base
-    "vestibular schwannoma": "skull_base",
-    "acoustic neuroma": "skull_base",
-    "meningioma": "skull_base",
-    "chordoma": "skull_base",
-    "chondrosarcoma": "skull_base",
-    "craniopharyngioma": "skull_base",
-    "pituitary": "skull_base",
-    "epidermoid": "skull_base",
-    "petroclival": "skull_base",
-    "cerebellopontine": "skull_base",
-    "cpa": "skull_base",
-    "jugular": "skull_base",
-    "glomus": "skull_base",
-    # Supratentorial tumor
-    "glioblastoma": "supratentorial_tumor",
-    "gbm": "supratentorial_tumor",
-    "glioma": "supratentorial_tumor",
-    "astrocytoma": "supratentorial_tumor",
-    "oligodendroglioma": "supratentorial_tumor",
-    "oligoastrocytoma": "supratentorial_tumor",
-    "metastasis": "supratentorial_tumor",
-    "brain metastasis": "supratentorial_tumor",
-    "lymphoma": "supratentorial_tumor",
-    # Vascular
-    "aneurysm": "vascular",
-    "clipping": "vascular",
-    "coiling": "vascular",
-    "anterior communicating": "vascular",
-    "posterior communicating": "vascular",
-    "anterior choroidal": "vascular",
-    "basilar": "vascular",
-    "avm": "vascular",
-    "arteriovenous malformation": "vascular",
-    "cavernous malformation": "vascular",
-    "cavernoma": "vascular",
-    "moyamoya": "vascular",
-    "bypass": "vascular",
-    "ec-ic": "vascular",
-    "subarachnoid": "vascular",
-    "sah": "vascular",
-    "intracerebral hemorrhage": "vascular",
-    "ich": "vascular",
-    "hemorrhagic stroke": "vascular",
-    "embolization": "vascular",
-    "flow diversion": "vascular",
-    "stent retriever": "vascular",
-    "thrombectomy": "vascular",
-    "davf": "vascular",
-    "dural arteriovenous fistula": "vascular",
-    "ccf": "vascular",
-    "carotid cavernous fistula": "vascular",
-    "carotid stenosis": "vascular",
-    "carotid stenting": "vascular",
-    "carotid endarterectomy": "vascular",
-    "vasospasm": "vascular",
-    "mechanical thrombectomy": "vascular",
-    "acute ischemic stroke": "vascular",
-    # Spine
-    "spine": "spine",
-    "spinal": "spine",
-    "discectomy": "spine",
-    "laminectomy": "spine",
-    "fusion": "spine",
-    "cervical": "spine",
-    "lumbar": "spine",
-    "thoracic": "spine",
-    "scoliosis": "spine",
-    "spondylolisthesis": "spine",
-    "stenosis": "spine",
-    "myelopathy": "spine",
-    "radiculopathy": "spine",
-    "cord": "spine",
-    # Functional
-    "deep brain": "functional",
-    "dbs": "functional",
-    "parkinson": "functional",
-    "tremor": "functional",
-    "dystonia": "functional",
-    "epilepsy surgery": "functional",
-    "seizure focus": "functional",
-    "temporal lobectomy": "functional",
-    "laser ablation": "functional",
-    "litt": "functional",
-    "focused ultrasound": "functional",
-    "mrgfus": "functional",
-    # Pediatric
-    "pediatric": "pediatric",
-    "paediatric": "pediatric",
-    "child": "pediatric",
-    "hydrocephalus": "pediatric",
-    "shunt": "pediatric",
-    "craniosynostosis": "pediatric",
-    "myelomeningocele": "pediatric",
-    "tethered cord": "pediatric",
-    "medulloblastoma": "pediatric",
-    "ependymoma": "pediatric",
-}
-
-# Build merged keyword lists from base + profile
-def _build_keywords(profile: str) -> dict[str, list[str]]:
-    """Merge base keywords with profile-specific keywords. Returns {anatomy, approach, complications}."""
-    pd = _DOMAIN_PROFILES.get(profile, {})
-    return {
-        "anatomy": _BASE_ANATOMY + pd.get("anatomy", []),
-        "approach": _BASE_APPROACH + pd.get("approach", []),
-        "complications": _BASE_COMPLICATIONS + pd.get("complications", []),
-    }
-
-
-# ── Profile detection ──────────────────────────────────────────────────
-
-def _detect_profile(
-    topic: str,
-    profile_hint: str | None = None,
-) -> tuple[str, float]:
-    """Detect the best domain profile for a topic string.
-
-    Returns (profile_name, confidence) where confidence is 0.0–1.0.
-    Falls back to 'skull_base' with low confidence if no match.
-    """
-    result = _classify_profile(topic, profile_hint=profile_hint)
-    return (result.profile, result.confidence)
-
-
-# ── Open-i radiology image search ────────────────────────────────────────────
-
-
-async def _write_filled_templates(
-    out_dir: Path, topic: str, summary: str,
-    axis_data: dict[str, list[dict]] | None = None,
-    profile_hint: str | None = None,
-) -> None:
-    """Write filled-in markdown templates using keyword-extracted content from search results."""
-    profile_name, profile_confidence = _detect_profile(
-        topic,
-        profile_hint=profile_hint,
-    )
-    if axis_data:
-        schema = build_caseprep_schema_from_axis_data(
-            topic,
-            axis_data,
-            profile=profile_name,
-        )
-    else:
-        schema = build_caseprep_schema(topic, profile=profile_name)
-
-    rendered_files = render_caseprep_files(schema, literature_summary=summary)
-    for filename, content in rendered_files.items():
-        (out_dir / filename).write_text(content, encoding="utf-8")
-
-    # Schema + evidence-level metadata are already written above.
-    # LLM-based extract→synthesize→guardrail template population is removed
-    # because it produced unreliable content. The citation table with
-    # evidence_level fields is the canonical output.
-
-
-def _resource_html(topic: str, links: dict[str, str]) -> str:
-    return render_resource_links_html(topic, links)
-
-
 def _handle_generate(args: dict) -> str:
     topic = args["topic"]
     output_dir = args.get("output_dir", "")
@@ -2121,7 +1564,7 @@ def _handle_pdfs(args: dict) -> str:
 
 
 def _format_fulltext_record(record: FullTextRecord) -> str:
-    """Format a FullTextRecord using legacy get_fulltext markdown semantics."""
+    """Format a FullTextRecord using get_fulltext markdown semantics."""
     pmid = record.pmid
     if record.tier == "missing":
         message = f"No full text or abstract available for PMID {pmid}."

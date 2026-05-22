@@ -363,7 +363,7 @@ def neurosurg_relevance_score(title: str, abstract: str | None) -> float:
     # Some terms are useful neurosurgical signals only when paired with true
     # neuroanatomic/procedure context.  Do not let generic procedural oncology
     # or endovascular language (e.g. breast tumor resection, uterine fibroid
-    # embolization) suppress the non-neuro penalty or inflate legacy ranking.
+    # embolization) suppress the non-neuro penalty or inflate relevance ranking.
     procedure_terms = PROCEDURE_TERMS
     neuroanatomy_terms = NEUROANATOMY_TERMS
     if non_neuro_matches and not has_true_neuro_context:

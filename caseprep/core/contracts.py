@@ -9,7 +9,7 @@ from typing import Any, Literal
 from .errors import CasePrepValidationError
 
 
-CoreMode = Literal["legacy", "shadow", "core"]
+CoreMode = Literal["core"]
 
 
 def _slugify_topic(topic: str) -> str:
@@ -71,7 +71,7 @@ class BuildCasePlanRequest:
         )
 
     def resolved_case_input(self) -> str:
-        """Return the normalized case input, falling back to legacy topic."""
+        """Return the normalized case input, falling back to topic."""
         return self.case_input or self.topic or ""
 
     def default_output_dir(self) -> Path:
@@ -84,18 +84,6 @@ class BuildCasePlanRequest:
         if not out.is_absolute():
             return Path.cwd() / out
         return out
-
-    def to_legacy_args(self) -> dict[str, Any]:
-        args: dict[str, Any] = {
-            "topic": self.resolved_case_input(),
-            "max_per_category": self.max_per_category,
-        }
-        if self.output_dir is not None:
-            args["output_dir"] = str(self.output_dir)
-        if self.profile_hint is not None:
-            args["profile_hint"] = self.profile_hint
-        return args
-
 
 @dataclass(frozen=True)
 class EvidenceRecord:
@@ -166,13 +154,13 @@ class BuildCasePlanResult:
     topic: str
     markdown: str
     output_dir: Path | None = None
-    mode: CoreMode = "legacy"
+    mode: CoreMode = "core"
     artifacts: list[ArtifactRef] = field(default_factory=list)
     evidence: list[EvidenceRecord] = field(default_factory=list)
     provenance: list[ProvenanceRecord] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     structured: dict[str, Any] = field(default_factory=dict)
-    shadow: dict[str, Any] | None = None
+
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -185,5 +173,4 @@ class BuildCasePlanResult:
             "provenance": [record.to_dict() for record in self.provenance],
             "warnings": self.warnings,
             "structured": self.structured,
-            "shadow": self.shadow,
         }

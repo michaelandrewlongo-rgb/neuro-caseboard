@@ -26,12 +26,10 @@ ConceptType = Literal[
 RetrieverName = Literal["pubmed", "pmc_open", "local_corpus", "radiology"]
 
 RetrievalStrategy = Literal[
-    "legacy",
     "deterministic_enrichment",
     "landmark_seeded",
     "local_prior",
     "hybrid",
-    "shadow",
 ]
 
 LateralityPolicy = Literal[
@@ -624,7 +622,7 @@ def enrich_case_query(
     if (
         procedure_family == "endovascular_thrombectomy"
         and not case.degraded
-        and retrieval_strategy in _LOCAL_PRIOR_STRATEGIES | {"deterministic_enrichment", "landmark_seeded", "legacy"}
+        and retrieval_strategy in _LOCAL_PRIOR_STRATEGIES | {"deterministic_enrichment", "landmark_seeded"}
     ):
         terms.extend(_THROMBECTOMY_TERMS)
 

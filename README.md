@@ -32,10 +32,6 @@ vestibular-schwannoma-caseprep/
 ├── 07-evidence.md
 ├── 08-checklists.md
 ├── 09-open-questions.md
-├── anatomy.md          # compatibility alias for 03-anatomy-at-risk.md
-├── approach.md         # compatibility alias for 04-operative-plan.md
-├── literature.md       # compatibility alias for 07-evidence.md
-├── complications.md    # compatibility alias for 05-risk-and-rescue.md
 └── resource-links.html
 ```
 

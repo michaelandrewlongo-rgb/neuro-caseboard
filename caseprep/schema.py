@@ -29,14 +29,6 @@ CANONICAL_MARKDOWN_FILES = [
     "09-open-questions.md",
 ]
 
-LEGACY_MARKDOWN_ALIASES = {
-    "anatomy.md": "03-anatomy-at-risk.md",
-    "approach.md": "04-operative-plan.md",
-    "complications.md": "05-risk-and-rescue.md",
-    "literature.md": "07-evidence.md",
-}
-
-
 def _generated_at() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -517,7 +509,7 @@ def _fact_status_line(
     label: str | None = None,
     missing_text: str = "incomplete/needs input",
 ) -> str:
-    """Render a status-aware fact line while preserving legacy missing wording."""
+    """Render a status-aware fact line while preserving existing missing wording."""
     line = missing_or_confirm_line(facts, key, label=label)
     missing_suffix = "missing/needs input"
     if line.endswith(missing_suffix):
@@ -2932,35 +2924,6 @@ def _render_thrombectomy_open_questions(schema: dict[str, Any]) -> str:
 """
 
 
-def _legacy_render_caseprep_files(
-    schema: dict[str, Any],
-    *,
-    literature_summary: str | None = None,
-    anatomy_body: str | None = None,
-    operative_body: str | None = None,
-    risk_body: str | None = None,
-) -> dict[str, str]:
-    """Render the dossier schema into canonical and compatibility files."""
-    files = {
-        "caseprep.yaml": dump_yaml(schema) + "\n",
-        "provenance.json": json.dumps(schema.get("provenance", []), indent=2) + "\n",
-        "README.md": _render_readme(schema),
-        "00-morning-of-case.md": _render_morning_of_case(schema),
-        "01-case-summary.md": _render_case_summary(schema),
-        "02-imaging-review.md": _render_imaging(schema),
-        "03-anatomy-at-risk.md": _render_anatomy(schema, anatomy_body),
-        "04-operative-plan.md": _render_operative_plan(schema, operative_body),
-        "05-risk-and-rescue.md": _render_risk(schema, risk_body),
-        "06-postop-plan.md": _render_postop(schema),
-        "07-evidence.md": _render_evidence(schema, literature_summary),
-        "08-checklists.md": _render_checklists(schema),
-        "09-open-questions.md": _render_open_questions(schema),
-    }
-    for legacy, canonical in LEGACY_MARKDOWN_ALIASES.items():
-        files[legacy] = files[canonical]
-    return files
-
-
 def render_caseprep_files(
     schema: dict[str, Any],
     *,
@@ -2971,12 +2934,6 @@ def render_caseprep_files(
     risk_body: str | None = None,
 ) -> dict[str, str]:
     """Render dossier files through the pure markdown renderer."""
-    from caseprep.core import CasePrepValidationError
-    from caseprep.renderers import (
-        compare_rendered_outputs,
-        resolve_compare_outputs_enabled,
-        resolve_dual_write_enabled,
-    )
     from caseprep.renderers.markdown import render_caseprep_files as render_markdown
 
     render_kwargs = {
@@ -2986,31 +2943,7 @@ def render_caseprep_files(
         "operative_body": operative_body,
         "risk_body": risk_body,
     }
-    rendered_files = render_markdown(schema, **render_kwargs)
-
-    if resolve_dual_write_enabled():
-        legacy_schema = dict(schema)
-        if provenance is not None:
-            legacy_schema["provenance"] = [
-                record.to_dict() if hasattr(record, "to_dict") else dict(record)
-                for record in provenance
-            ]
-        legacy_files = _legacy_render_caseprep_files(
-            legacy_schema,
-            literature_summary=literature_summary,
-            anatomy_body=anatomy_body,
-            operative_body=operative_body,
-            risk_body=risk_body,
-        )
-        if resolve_compare_outputs_enabled():
-            diffs = compare_rendered_outputs(legacy_files, rendered_files)
-            if diffs:
-                raise CasePrepValidationError(
-                    "Rendered output comparison failed",
-                    details={"diffs": diffs},
-                )
-
-    return rendered_files
+    return render_markdown(schema, **render_kwargs)
 
 
 AXIS_RELEVANCE = {

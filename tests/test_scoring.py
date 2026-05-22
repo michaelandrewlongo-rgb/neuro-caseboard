@@ -277,7 +277,7 @@ def test_breast_tumor_resection_review_is_penalized_for_convexity_meningioma():
     assert any("off-domain" in reason for reason in reasons)
 
 
-def test_legacy_neurosurg_relevance_penalizes_off_domain_procedural_papers():
+def test_neurosurg_relevance_penalizes_off_domain_procedural_papers():
     breast_score = neurosurg_relevance_score(
         "Breast tumor resection complications review",
         "Review of breast oncology resection outcomes and morbidity.",
