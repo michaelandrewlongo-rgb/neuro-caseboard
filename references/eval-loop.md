@@ -78,3 +78,9 @@ Iteration 004 improved to 69/100 after adding landmark EVT categories and action
 Iteration 005 improved to 72/100 but did not meet the strict 75 threshold. Remaining bottleneck: landmark EVT evidence/guidelines were named but not reliably retrieved/cited, while lower-applicability sources cluttered the clinical files.
 
 Iteration 006 passed at 77/100 after evidence-pack forced retrieval, landmark/guideline coverage rendering, and quarantine/lower-applicability separation. Deterministic eval passed with score 100; full suite passed with 284 tests after adding the M2 applicability regression test. Remaining non-blocking bottlenecks: numeric EVT eligibility algorithm, deeper right-M1 technical/rescue checklists, and stronger citation-to-recommendation mapping.
+
+## Fact-state rendering validation — left M1
+
+Case: left M1 MCA occlusion acute ischemic stroke mechanical thrombectomy; NIHSS 18; ASPECTS 7; last known well 10 hours ago; CT perfusion mismatch; planned transfemoral balloon guide catheter aspiration plus stent retriever technique.
+
+Iteration 001 passed at 77/100 after the fact-state rendering work propagated supplied NIHSS, ASPECTS, LKW, CTP mismatch, laterality/target, access route, BGC, aspiration, and stent-retriever facts into the live dossier. Pre-review live-artifact checks caught and fixed two regressions: README no longer says supplied LKW/NIHSS/ASPECTS are pending, and `last known well 10 hours ago` now renders as `10h` rather than `10hours`. Remaining non-blocking bottlenecks: separate safety-critical unknowns from core extracted facts, add a late-window EVT eligibility module, convert supplied technique into a concrete first-pass sequence, deepen rescue playbooks, and improve evidence-to-action linkage. Artifacts: `references/evals/left-m1-fact-state/iteration-001/`.
