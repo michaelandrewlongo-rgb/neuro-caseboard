@@ -7,7 +7,11 @@ import pytest
 from caseprep.case_parser import parse_case_input, select_procedure_family
 from caseprep.core import BuildCasePlanRequest, EvidenceRecord
 from caseprep.core.builder import CoreRetrieverSet, build_core_case_plan
-from caseprep.retrieval_planning import build_case_queries, resolve_case_evidence_pack
+from caseprep.retrieval_planning import (
+    build_case_queries,
+    build_corpus_query,
+    resolve_case_evidence_pack,
+)
 
 
 CANONICAL_CASES = {
@@ -125,9 +129,70 @@ def test_retrieval_planning_does_not_force_pack_for_bare_stroke_thrombectomy():
     assert resolve_case_evidence_pack(case, family) is None
 
 
+def test_build_enriched_retrieval_plan_wraps_query_enrichment_for_m1():
+    from caseprep.retrieval_planning import build_enriched_retrieval_plan
+
+    case = parse_case_input(
+        "mechanical thrombectomy for acute ischemic stroke due to right M1 MCA occlusion"
+    )
+    family = select_procedure_family(case)
+
+    plan = build_enriched_retrieval_plan(case, family, profile="vascular")
+
+    assert plan["procedure_family"] == "endovascular_thrombectomy"
+    assert any(query["id"] == "pubmed_outcomes" for query in plan["queries"])
+    assert any(query["retriever"] == "local_corpus" for query in plan["queries"])
+
+
+@pytest.mark.parametrize(
+    ("family_id", "expected_terms", "unexpected_fragments"),
+    [
+        (
+            "spine_acdf",
+            ["ACDF", '"anterior cervical"', "discectomy", "fusion", '"C5-6"', "radiculopathy"],
+            ["right C6", "from foraminal disc osteophyte complex"],
+        ),
+        (
+            "tumor_convexity_meningioma",
+            ["meningioma", '"superior sagittal sinus"', "parasagittal", "convexity", '"bridging veins"'],
+            ["right frontal", "near the superior sagittal sinus"],
+        ),
+        (
+            "posterior_fossa_chiari",
+            ["Chiari", "syringomyelia", "duraplasty", "decompression", "C1"],
+            ["suboccipital craniectomy and C1 laminectomy for Chiari I malformation with syringomyelia"],
+        ),
+        (
+            "endovascular_thrombectomy",
+            ['"mechanical thrombectomy"', "M1", "MCA", '"large vessel occlusion"', '"stent retriever"', "aspiration"],
+            ["right", "using balloon guide aspiration and stent retriever"],
+        ),
+    ],
+)
+def test_build_corpus_query_renders_fts5_safe_family_concepts(
+    family_id: str,
+    expected_terms: list[str],
+    unexpected_fragments: list[str],
+):
+    case = parse_case_input(CANONICAL_CASES[family_id])
+    family = select_procedure_family(case)
+
+    query = build_corpus_query(case, family)
+
+    assert family is not None
+    assert query != case.raw_input
+    assert " OR " in query
+    assert " AND " not in query
+    for term in expected_terms:
+        assert term.casefold() in query.casefold()
+    for fragment in unexpected_fragments:
+        assert fragment.casefold() not in query.casefold()
+
+
 @pytest.mark.asyncio
 async def test_core_builder_retrieves_with_family_template_queries_for_acdf():
     pubmed_calls = []
+    corpus_calls = []
 
     class FakePubMedRetriever:
         async def retrieve(
@@ -153,7 +218,12 @@ async def test_core_builder_retrieves_with_family_template_queries_for_acdf():
 
     class EmptyCorpusRetriever:
         def retrieve(self, fts_query, *, subdomain=None, top_n=8):
+            corpus_calls.append((fts_query, subdomain, top_n))
             return []
+
+    case = parse_case_input(CANONICAL_CASES["spine_acdf"])
+    family = select_procedure_family(case)
+    expected_corpus_query = build_corpus_query(case, family)
 
     result = await build_core_case_plan(
         BuildCasePlanRequest(
@@ -177,7 +247,12 @@ async def test_core_builder_retrieves_with_family_template_queries_for_acdf():
     assert pubmed_calls[1][1] == "therapy"
     assert pubmed_calls[3][1] == "etiology"
     assert pubmed_calls[4][1] == "systematic_review"
+    assert corpus_calls
+    assert corpus_calls[0][0] == expected_corpus_query
+    assert corpus_calls[0][0] != CANONICAL_CASES["spine_acdf"]
+    assert '"C5-6"' in corpus_calls[0][0]
     assert result.structured["retrieval"]["pubmed_queries"][0]["query"] == queries[0]
+    assert result.structured["retrieval"]["corpus_query"] == expected_corpus_query
     assert all(
         record.metadata["procedure_family"] == "spine_acdf"
         for record in result.evidence

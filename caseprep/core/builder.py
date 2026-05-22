@@ -21,7 +21,11 @@ from caseprep.evidence_packs.thrombectomy import (
 from caseprep.profile_classifier import classify_profile
 from caseprep.persistence import CasePrepRunStore, resolve_caseprep_store
 from caseprep.provenance import build_core_provenance, enforce_provenance
-from caseprep.retrieval_planning import build_case_queries, resolve_case_evidence_pack
+from caseprep.retrieval_planning import (
+    build_case_queries,
+    build_corpus_query,
+    resolve_case_evidence_pack,
+)
 from caseprep.schema import AXIS_RELEVANCE, build_caseprep_schema, render_caseprep_files
 from caseprep.scoring import (
     classify_clinical_applicability,
@@ -811,10 +815,11 @@ async def build_core_case_plan(
         topic,
         classification.profile,
     )
+    corpus_query = build_corpus_query(query_case_spec, retrieval_family)
     try:
         corpus_records = await _maybe_await(
             provider_set.corpus.retrieve(
-                topic,
+                corpus_query,
                 subdomain=corpus_subdomain,
                 top_n=max_per,
             )
@@ -826,7 +831,7 @@ async def build_core_case_plan(
             _tag_evidence(
                 corpus_records,
                 axis="Corpus",
-                query=topic,
+                query=corpus_query,
                 case_spec=query_case_spec,
                 family=retrieval_family,
                 procedure_family=retrieval_family.id if retrieval_family else None,
@@ -862,6 +867,7 @@ async def build_core_case_plan(
                 for axis in pubmed_axes
             ],
             "corpus_subdomain": corpus_subdomain,
+            "corpus_query": corpus_query,
             "evidence_count": len(evidence),
             "sources": _source_counts(evidence),
             "evidence_pack": evidence_pack_coverage,

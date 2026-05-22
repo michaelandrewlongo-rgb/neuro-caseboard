@@ -165,6 +165,50 @@ def test_search_pubmed_mocked(client):
         mock.assert_called_once()
 
 
+def test_search_pubmed_query_plan_fields_are_additive_when_requested(client):
+    with (
+        patch("caseprep.web._handle_pubmed_structured", new_callable=AsyncMock) as mock_structured,
+        patch("caseprep.web._handle_pubmed", new_callable=AsyncMock) as mock_legacy,
+    ):
+        mock_structured.return_value = {
+            "markdown": "Hybrid search results",
+            "retrieval_strategy": "hybrid",
+            "query_plan": {"steps": ["local", "pubmed"]},
+        }
+
+        resp = client.post(
+            "/api/search?query=vestibular+schwannoma"
+            "&return_query_plan=true&retrieval_strategy=hybrid"
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["query"] == "vestibular schwannoma"
+        assert data["filter"] is None
+        assert data["result"] == "Hybrid search results"
+        assert data["retrieval_strategy"] == "hybrid"
+        assert data["query_plan"] == {"steps": ["local", "pubmed"]}
+        mock_structured.assert_called_once_with({
+            "query": "vestibular schwannoma",
+            "max_results": 10,
+            "filter_type": None,
+            "include_abstracts": False,
+            "retrieval_strategy": "hybrid",
+            "return_query_plan": True,
+        })
+        mock_legacy.assert_not_called()
+
+
+def test_search_pubmed_handler_exception_uses_safe_call(client):
+    with patch("caseprep.web._handle_pubmed", new_callable=AsyncMock) as mock:
+        mock.side_effect = RuntimeError("boom")
+
+        resp = client.post("/api/search?query=meningioma")
+
+        assert resp.status_code == 500
+        assert resp.json()["detail"] == "RuntimeError: boom"
+
+
 def test_search_radiology_mocked(client):
     with patch("caseprep.web._handle_radiology", new_callable=AsyncMock) as mock:
         mock.return_value = "Found 5 radiology images"

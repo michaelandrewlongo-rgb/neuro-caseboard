@@ -26,6 +26,7 @@ from caseprep.db import CasePrepDB, DEFAULT_DB_PATH
 from caseprep.mcp_server import (
     _handle_get_fulltext,
     _handle_pubmed,
+    _handle_pubmed_structured,
     _handle_radiology,
     _handle_generate,
     _handle_pdfs,
@@ -35,8 +36,8 @@ from caseprep.mcp_server import (
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-async def _safe_call(handler, params: dict) -> str:
-    """Call a handler and return its text result, or raise HTTPException."""
+async def _safe_call(handler, params: dict) -> Any:
+    """Call a handler and return its result, or raise HTTPException."""
     try:
         return await handler(params) if asyncio.iscoroutinefunction(handler) else handler(params)
     except Exception as exc:
@@ -157,17 +158,31 @@ async def api_search_pubmed(
     max_results: int = Query(10, ge=1, le=20),
     filter_type: str | None = Query(None, description="Clinical filter: therapy, prognosis, etiology, diagnosis, systematic_review"),
     include_abstracts: bool = Query(False),
+    retrieval_strategy: str = Query("legacy"),
+    return_query_plan: bool = Query(False),
 ):
     """Search PubMed with optional clinical query filters."""
     db = get_db()
-    result = await _safe_call(_handle_pubmed, {
+    handler = _handle_pubmed_structured if return_query_plan else _handle_pubmed
+    result = await _safe_call(handler, {
         "query": query,
         "max_results": max_results,
         "filter_type": filter_type,
         "include_abstracts": include_abstracts,
+        "retrieval_strategy": retrieval_strategy,
+        "return_query_plan": return_query_plan,
     })
     db.log_search(query, "search_pubmed")
-    return {"query": query, "filter": filter_type, "result": result}
+
+    response = {"query": query, "filter": filter_type, "result": result}
+    if isinstance(result, dict):
+        response["result"] = result.get("markdown", result.get("result", result))
+        if return_query_plan:
+            if "query_plan" in result:
+                response["query_plan"] = result["query_plan"]
+            if "retrieval_strategy" in result:
+                response["retrieval_strategy"] = result["retrieval_strategy"]
+    return response
 
 
 @app.post("/api/fulltext")

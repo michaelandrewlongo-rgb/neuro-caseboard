@@ -19,6 +19,7 @@ import sqlite3
 import sys
 import time
 import xml.etree.ElementTree as ET
+from dataclasses import replace
 from pathlib import Path
 
 import httpx
@@ -33,6 +34,7 @@ from caseprep.knowledge_graph import build_enriched_query
 from caseprep.links import build_search_links
 from caseprep.pdfs import format_pdf_results, search_local_pdfs as _search_local_pdfs
 from caseprep.profile_classifier import classify_profile as _classify_profile
+from caseprep.retrievers.fulltext import FullTextRecord, FullTextRetriever
 from caseprep.renderers.html import render_resource_links_html
 from caseprep.schema import (
     build_caseprep_schema,
@@ -247,8 +249,8 @@ async def _pubmed_search(
     query: str,
     max_results: int = 10,
     filter_type: str | None = None,
-) -> list[str]:
-    """Return PMIDs matching *query*, optionally filtered by clinical type."""
+) -> tuple[list[str], int]:
+    """Return PMIDs and total count matching *query*, optionally filtered by clinical type."""
     term = _apply_filter(query, filter_type)
     params = {
         "db": "pubmed",
@@ -1241,18 +1243,269 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
 # ── Tool handlers ───────────────────────────────────────────────────────────
 
+_PUBMED_RETRIEVAL_STRATEGIES = {
+    "legacy",
+    "deterministic_enrichment",
+    "landmark_seeded",
+    "local_prior",
+    "hybrid",
+    "shadow",
+}
+
+
+def _normalize_pubmed_retrieval_strategy(args: dict) -> tuple[str, list[str]]:
+    strategy = args.get("retrieval_strategy", "legacy") or "legacy"
+    if strategy in _PUBMED_RETRIEVAL_STRATEGIES:
+        return strategy, []
+    return (
+        "legacy",
+        [
+            "Invalid retrieval_strategy "
+            f"{strategy!r}; falling back to 'legacy'."
+        ],
+    )
+
+
+def _compact_query_plan_value(value) -> str:
+    if isinstance(value, list):
+        return "; ".join(_compact_query_plan_value(item) for item in value)
+    if isinstance(value, dict):
+        return "; ".join(
+            f"{key}={_compact_query_plan_value(item)}"
+            for key, item in value.items()
+        )
+    return str(value)
+
+
+def _pubmed_plan_queries(query_plan: dict) -> list[dict]:
+    queries = query_plan.get("queries", [])
+    if not isinstance(queries, list):
+        return []
+    return [
+        query
+        for query in queries
+        if isinstance(query, dict)
+        and str(query.get("retriever", "")).lower() == "pubmed"
+    ]
+
+
+def _coerce_positive_int(value, default: int) -> int:
+    try:
+        coerced = int(value)
+    except (TypeError, ValueError):
+        return default
+    return coerced if coerced > 0 else default
+
+
+def _select_pubmed_queries_from_plan(
+    original_query: str,
+    query_plan,
+    args: dict,
+) -> tuple[list[str], dict | None, list[str]]:
+    if not isinstance(query_plan, dict):
+        return [original_query], None, [
+            "Malformed query_plan; falling back to original query."
+        ]
+
+    pubmed_queries = _pubmed_plan_queries(query_plan)
+    max_axes = (
+        _coerce_positive_int(args.get("max_axes"), 1)
+        if "max_axes" in args
+        else 1
+    )
+    selection_scope = "max_axes" if "max_axes" in args else "first_pubmed_query"
+    metadata = {
+        "available_pubmed_queries": len(pubmed_queries),
+        "searched_pubmed_queries": 0,
+        "selection_scope": selection_scope,
+    }
+    if "max_axes" in args:
+        metadata["max_axes"] = max_axes
+
+    warnings: list[str] = []
+    if not pubmed_queries:
+        warnings.append(
+            "No PubMed query found in query_plan; falling back to original query."
+        )
+        return [original_query], metadata, warnings
+
+    selected = pubmed_queries[:max_axes]
+    if not selected:
+        warnings.append(
+            "PubMed query_plan entries did not include rendered query strings; "
+            "falling back to original query."
+        )
+        return [original_query], metadata, warnings
+
+    selected_queries = []
+    for selected_query in selected:
+        query_string = selected_query.get("query")
+        if not isinstance(query_string, str) or not query_string.strip():
+            warnings.append(
+                "Selected PubMed query_plan entry did not include a rendered "
+                "query string; falling back to original query."
+            )
+            return [original_query], metadata, warnings
+        selected_queries.append(query_string.strip())
+    metadata.update(
+        {
+            "selected_pubmed_queries": len(selected_queries),
+            "selected_query_id": selected[0].get("id"),
+            "selected_query_axis": selected[0].get("axis"),
+            "selected_query_ids": [query.get("id") for query in selected],
+            "selected_query_axes": [query.get("axis") for query in selected],
+            "searched_query_ids": [],
+            "searched_query_axes": [],
+        }
+    )
+    return selected_queries, metadata, warnings
+
+
+def _record_actual_pubmed_plan_searches(
+    query_plan_metadata: dict | None,
+    actual_search_count: int,
+) -> None:
+    """Update query-plan metadata with PubMed plan queries actually sent.
+
+    ``searched_pubmed_queries`` is intentionally about rendered PubMed entries
+    selected from the query plan, not fallback searches of the original query.
+    """
+    if query_plan_metadata is None or "selected_query_ids" not in query_plan_metadata:
+        return
+
+    selected_ids = query_plan_metadata.get("selected_query_ids", [])
+    selected_axes = query_plan_metadata.get("selected_query_axes", [])
+    searched_ids = selected_ids[:actual_search_count]
+    searched_axes = selected_axes[:actual_search_count]
+    query_plan_metadata.update(
+        {
+            "searched_pubmed_queries": actual_search_count,
+            "searched_query_ids": searched_ids,
+            "searched_query_axes": searched_axes,
+        }
+    )
+    if searched_ids:
+        query_plan_metadata["searched_query_id"] = searched_ids[0]
+    else:
+        query_plan_metadata.pop("searched_query_id", None)
+    if searched_axes:
+        query_plan_metadata["searched_query_axis"] = searched_axes[0]
+    else:
+        query_plan_metadata.pop("searched_query_axis", None)
+
+
+def _append_query_plan_section(markdown: str, result: dict) -> str:
+    query_plan = result.get("query_plan")
+    if not query_plan:
+        return markdown
+
+    lines = [
+        "",
+        "## Query plan",
+        f"retrieval_strategy: {result.get('retrieval_strategy', 'legacy')}",
+        f"rendered_query: {result.get('rendered_query', result.get('query', ''))}",
+    ]
+    if isinstance(query_plan, dict):
+        for key, value in query_plan.items():
+            if key in {"retrieval_strategy", "rendered_query"}:
+                continue
+            lines.append(f"{key}: {_compact_query_plan_value(value)}")
+    else:
+        lines.append(_compact_query_plan_value(query_plan))
+    return f"{markdown}\n" + "\n".join(lines)
+
+
 async def _handle_pubmed(args: dict) -> str:
+    result = await _handle_pubmed_structured(args)
+    return result["markdown"]
+
+
+async def _handle_pubmed_structured(args: dict) -> dict:
+    """Return structured PubMed search data plus legacy-style markdown.
+
+    Private helper for planned retriever orchestration. It intentionally uses
+    the same PubMed helpers and markdown formatting as ``_handle_pubmed`` while
+    leaving the public MCP handler contract unchanged.
+    """
     query = args["query"]
     max_results = min(args.get("max_results", 10), 20)
     filter_type = args.get("filter_type")
     include_abstracts = args.get("include_abstracts", False)
+    query_plan = args.get("query_plan")
+    retrieval_strategy, warnings = _normalize_pubmed_retrieval_strategy(args)
+    search_queries = [query]
+    query_plan_metadata = None
+    if query_plan is not None and retrieval_strategy != "legacy":
+        (
+            search_queries,
+            query_plan_metadata,
+            plan_warnings,
+        ) = _select_pubmed_queries_from_plan(
+            query,
+            query_plan,
+            args,
+        )
+        warnings.extend(plan_warnings)
+    search_query = search_queries[0]
 
-    pmids, total = await _pubmed_search(query, max_results, filter_type)
+    pmids: list[str] = []
+    total = 0
+    seen_pmids: set[str] = set()
+    actual_search_queries: list[str] = []
+    for current_query in search_queries:
+        if len(pmids) >= max_results:
+            break
+        actual_search_queries.append(current_query)
+        current_pmids, current_total = await _pubmed_search(
+            current_query,
+            max_results,
+            filter_type,
+        )
+        total += current_total
+        for pmid in current_pmids:
+            if pmid in seen_pmids:
+                continue
+            seen_pmids.add(pmid)
+            pmids.append(pmid)
+            if len(pmids) >= max_results:
+                break
+    if actual_search_queries:
+        search_query = actual_search_queries[0]
+    rendered_query = " | ".join(
+        _apply_filter(item, filter_type) for item in actual_search_queries
+    )
+    _record_actual_pubmed_plan_searches(
+        query_plan_metadata,
+        len(actual_search_queries),
+    )
     if not pmids:
         filter_note = f" (filter: {filter_type})" if filter_type else ""
-        return f"No PubMed results for: {query}{filter_note}"
+        result = {
+            "query": query,
+            "rendered_query": rendered_query,
+            "query_plan": query_plan,
+            "retrieval_strategy": retrieval_strategy,
+            "total": total,
+            "articles": [],
+            "markdown": f"No PubMed results for: {search_query}{filter_note}",
+        }
+        if query_plan_metadata is not None:
+            result["query_plan_metadata"] = query_plan_metadata
+        if warnings:
+            result["warnings"] = warnings
+        if args.get("return_query_plan"):
+            result["markdown"] = _append_query_plan_section(result["markdown"], result)
+        return result
 
     articles = await _pubmed_summaries(pmids[:max_results])
+    for article in articles:
+        article.setdefault("title", "")
+        article.setdefault("authors", "")
+        article.setdefault("source", "")
+        article.setdefault("pubdate", "")
+        article.setdefault("pub_types", [])
+        article.setdefault("doi", "")
+        article.setdefault("url", "")
 
     abstracts = {}
     if include_abstracts:
@@ -1269,7 +1522,7 @@ async def _handle_pubmed(args: dict) -> str:
 
     filter_note = f" — filter: {filter_type}" if filter_type else ""
     lines = [
-        f"## PubMed{filter_note} — {query}",
+        f"## PubMed{filter_note} — {search_query}",
         f"({len(articles)} shown of {total} total)\n",
     ]
     for i, a in enumerate(articles, 1):
@@ -1280,7 +1533,23 @@ async def _handle_pubmed(args: dict) -> str:
             evidence_grade=a.get("_evidence_grade"),
         ))
 
-    return "\n".join(lines)
+    markdown = "\n".join(lines)
+    result = {
+        "query": query,
+        "rendered_query": rendered_query,
+        "query_plan": query_plan,
+        "retrieval_strategy": retrieval_strategy,
+        "total": total,
+        "articles": articles,
+        "markdown": markdown,
+    }
+    if query_plan_metadata is not None:
+        result["query_plan_metadata"] = query_plan_metadata
+    if warnings:
+        result["warnings"] = warnings
+    if args.get("return_query_plan"):
+        result["markdown"] = _append_query_plan_section(result["markdown"], result)
+    return result
 
 
 async def _handle_build_caseplan(args: dict) -> str:
@@ -1851,28 +2120,29 @@ def _handle_pdfs(args: dict) -> str:
     return format_pdf_results(results)
 
 
-async def _handle_get_fulltext(args: dict) -> str:
-    """Fetch best available content for a single PMID: PMC > structured > plain."""
-    pmid = args["pmid"]
-    summaries = await _pubmed_summaries([pmid])
-    if not summaries:
-        return f"PMID {pmid} not found."
-    paper = summaries[0]
-    lines = [f"## {paper['title']}", f"{paper['authors']} — *{paper['source']}* ({paper['pubdate']})", ""]
+def _format_fulltext_record(record: FullTextRecord) -> str:
+    """Format a FullTextRecord using legacy get_fulltext markdown semantics."""
+    pmid = record.pmid
+    if record.tier == "missing":
+        message = f"No full text or abstract available for PMID {pmid}."
+        if record.warnings:
+            warnings = "\n".join(f"- {warning}" for warning in record.warnings)
+            return f"{message}\n\nWarnings:\n{warnings}"
+        return message
 
-    # Tier 1: PMC full text
-    fulltexts = await _pubmed_fulltext([pmid])
-    if pmid in fulltexts:
+    lines = _format_fulltext_header(record)
+
+    if record.tier == "pmc_fulltext":
+        text = record.sections.get("FULL_TEXT") or record.text
         lines.append("### PMC Full Text\n")
-        lines.append(fulltexts[pmid][:5000])
+        lines.append(text[:5000])
         return "\n".join(lines)
 
-    # Tier 2: Structured abstract (only accept if it has recognized sections)
-    structured = await _pubmed_structured_abstracts([pmid])
-    if pmid in structured:
-        sections = structured[pmid]
+    if record.tier == "structured_abstract":
+        sections = record.sections
         has_content = any(
-            sections.get(k) for k in ("BACKGROUND", "METHODS", "RESULTS", "CONCLUSIONS", "TEXT")
+            sections.get(k)
+            for k in ("BACKGROUND", "METHODS", "RESULTS", "CONCLUSIONS", "TEXT")
         )
         if has_content:
             lines.append("### Structured Abstract\n")
@@ -1882,15 +2152,61 @@ async def _handle_get_fulltext(args: dict) -> str:
             if "TEXT" in sections:
                 lines.append(f"{sections['TEXT']}\n")
             return "\n".join(lines)
+        if record.text:
+            lines.append("### Structured Abstract\n")
+            lines.append(record.text)
+            return "\n".join(lines)
 
-    # Tier 3: Plain abstract
-    abstracts = await _pubmed_abstracts([pmid])
-    if pmid in abstracts:
+    if record.tier == "plain_abstract":
         lines.append("### Abstract\n")
-        lines.append(abstracts[pmid])
+        lines.append(record.text)
         return "\n".join(lines)
 
+    if record.tier == "local_fulltext":
+        text = record.sections.get("FULL_TEXT") or record.text
+        lines.append("### Local Full Text\n")
+        lines.append(text[:5000])
+        return "\n".join(lines)
+
+    if record.text:
+        lines.append(record.text)
+        return "\n".join(lines)
     return f"No full text or abstract available for PMID {pmid}."
+
+
+def _format_fulltext_header(record: FullTextRecord) -> list[str]:
+    metadata = record.metadata
+    title = str(metadata.get("title") or "").strip()
+    if not title:
+        return []
+
+    authors = str(metadata.get("authors") or "").strip()
+    source = str(metadata.get("source") or "").strip()
+    pubdate = str(metadata.get("pubdate") or "").strip()
+    if authors or source or pubdate:
+        return [f"## {title}", f"{authors} — *{source}* ({pubdate})", ""]
+    return [f"## {title}", ""]
+
+
+async def _handle_get_fulltext(args: dict) -> str:
+    """Fetch best available content for a single PMID: PMC > structured > plain."""
+    pmid = args["pmid"]
+    summaries = await _pubmed_summaries([pmid])
+    if not summaries:
+        return f"PMID {pmid} not found."
+    paper = summaries[0]
+    record = await FullTextRetriever().retrieve(pmid)
+    record = replace(
+        record,
+        metadata={
+            **record.metadata,
+            "title": paper.get("title", ""),
+            "authors": paper.get("authors", ""),
+            "source": paper.get("source", ""),
+            "pubdate": paper.get("pubdate", ""),
+        },
+    )
+    return _format_fulltext_record(record)
 
 
 async def _handle_radiology(args: dict) -> str:
