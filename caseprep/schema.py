@@ -972,6 +972,15 @@ def _thrombectomy_cta_boundary_text(schema: dict[str, Any]) -> str:
     return f"{target}, distal branch extension, tandem cervical lesion, dissection/ICAD, or alternate LVO"
 
 
+def _thrombectomy_combined_strategy_fit(schema: dict[str, Any]) -> str:
+    ctx = _thrombectomy_target_context(schema)
+    if bool(ctx["is_mca"]):
+        return "Large clot burden, ICA terminus/M1 anatomy, need proximal flow control or operator preference."
+    if bool(ctx["is_basilar"]):
+        return "Large clot burden, vertebral-basilar trunk anatomy, need stable proximal support or operator preference."
+    return "Large clot burden, confirmed proximal LVO anatomy, need proximal flow control or operator preference."
+
+
 def _thrombectomy_defaults(schema: dict[str, Any]) -> dict[str, dict[str, Any]]:
     ctx = _thrombectomy_target_context(schema)
     vessel = str(ctx["vessel"])
@@ -1671,7 +1680,7 @@ Use the case summary, imaging review, operative plan, rescue plan, postop plan, 
 - Access: default fastest stable femoral or radial route; switch early if hostile arch, iliofemoral disease, radial/subclavian limitation, or unstable support delays reperfusion.
 - Guide support: guide catheter or BGC when feasible for anterior circulation; confirm cervical/proximal support before intracranial work.
 - Intracranial tools: DAC/intermediate or aspiration catheter to clot face, microcatheter/microwire, aspiration pump/syringes, stent retriever sized to target vessel.
-- First-pass options: aspiration-first for favorable clot-face access; stent retriever when aspiration access/clot mechanics are unfavorable; combined/Solumbra/BGC strategy for clot burden, ICA terminus/M1 anatomy, or operator preference.
+- First-pass options: aspiration-first for favorable clot-face access; stent retriever when aspiration access/clot mechanics are unfavorable; combined/Solumbra/BGC strategy for {_thrombectomy_combined_strategy_fit(schema).rstrip('.').casefold()}.
 
 ## First-Pass Plan And Switch / Stop Criteria
 
@@ -2047,7 +2056,7 @@ def _render_thrombectomy_decision_tables(schema: dict[str, Any]) -> str:
 |---|---|---|
 | Aspiration-first / ADAPT | Straight access to clot face, favorable catheter purchase, soft/accessible clot. | Cannot reach clot face, poor ingestion, embolization, no reperfusion. |
 | Stent retriever | Firm/embedded clot, branch incorporation, poor aspiration purchase, need scaffold. | Unsafe distal landing zone, excessive traction, no reperfusion after pass. |
-| Combined / Solumbra / BGC-assisted | Large clot burden, ICA terminus/M1 anatomy, need proximal flow control or operator preference. | Support instability, vasospasm/dissection, repeated futile passes, hemorrhage concern. |
+| Combined / Solumbra / BGC-assisted | {_thrombectomy_combined_strategy_fit(schema)} | Support instability, vasospasm/dissection, repeated futile passes, hemorrhage concern. |
 
 ### Stop / Switch / Rescue
 

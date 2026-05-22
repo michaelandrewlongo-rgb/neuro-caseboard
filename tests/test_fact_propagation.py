@@ -145,3 +145,43 @@ def test_sparse_thrombectomy_rendering_uses_neutral_fact_headings():
     assert "### Imaging Fact Status" in combined
     assert "Last known well: missing/needs input" in combined
     assert "ASPECTS numeric score and involved regions: incomplete/needs input" in combined
+
+
+def test_acdf_parser_propagates_level_laterality_and_construct_facts():
+    case = deterministic_parse_case(
+        "C5-6 anterior cervical discectomy and fusion (ACDF) with interbody cage "
+        "and anterior plate for right C6 radiculopathy"
+    )
+    missing = " ".join(case.missing_critical_facts).casefold()
+
+    assert case.procedure_family.value == "spine_acdf"
+    assert case.broad_profile.value == "spine"
+    assert case.laterality.value == "right"
+    assert case.level_or_segment.value == "C5-6"
+    assert case.procedure.value is not None
+    assert "anterior cervical discectomy and fusion" in case.procedure.value
+    assert "ACDF" in case.raw_input
+    assert "cage" in case.raw_input.casefold()
+    assert "plate" in case.raw_input.casefold()
+    assert "cervical level" not in case.missing_critical_facts
+    assert "symptomatic laterality" not in case.missing_critical_facts
+    assert "fusion construct" not in case.missing_critical_facts
+    assert "cervical level" not in missing
+    assert "symptomatic laterality" not in missing
+
+
+def test_parasagittal_meningioma_propagates_location_size_laterality_and_sinus_facts():
+    case = deterministic_parse_case(
+        "left 3.2 cm parasagittal meningioma abutting superior sagittal sinus/SSS"
+    )
+    location = case.anatomic_location.value or ""
+
+    assert case.procedure_family.value == "tumor_convexity_meningioma"
+    assert case.broad_profile.value == "supratentorial_tumor"
+    assert case.laterality.value == "left"
+    assert case.size.value == "3.2 cm"
+    assert "parasagittal" in location
+    assert "superior sagittal sinus" in location
+    assert "SSS" in case.raw_input
+    assert "tumor location" not in case.missing_critical_facts
+    assert "venous/sinus relationship" not in case.missing_critical_facts

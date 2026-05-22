@@ -18,6 +18,7 @@ from caseprep.evidence_packs.thrombectomy import (
     EvidencePackItem,
     get_thrombectomy_pack,
 )
+from caseprep.fact_validation import validate_rendered_fact_consistency
 from caseprep.profile_classifier import classify_profile
 from caseprep.persistence import CasePrepRunStore, resolve_caseprep_store
 from caseprep.provenance import build_core_provenance, enforce_provenance
@@ -628,6 +629,7 @@ def _write_core_artifacts(
     procedure_family: dict[str, Any] | None = None,
     evidence_pack: dict[str, Any] | None = None,
     quarantined_sources: list[dict[str, Any]] | None = None,
+    warnings: list[str] | None = None,
 ) -> list[ArtifactRef]:
     schema = build_caseprep_schema(
         topic,
@@ -665,6 +667,11 @@ def _write_core_artifacts(
             {"complications"} | corpus_ids,
         ),
     )
+    if warnings is not None:
+        rendered_markdown = "\n".join(
+            content for filename, content in rendered_files.items() if filename.endswith(".md")
+        )
+        warnings.extend(validate_rendered_fact_consistency(schema, rendered_markdown))
 
     output_dir = request.resolved_output_dir()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -926,6 +933,7 @@ async def build_core_case_plan(
                 procedure_family=structured["procedure_family"],
                 evidence_pack=evidence_pack_coverage,
                 quarantined_sources=quarantined_sources,
+                warnings=warnings,
             )
         except CasePrepError as exc:
             warnings.append(f"Artifact rendering: {exc}")
