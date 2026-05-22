@@ -9,6 +9,8 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any
 
+from caseprep.fact_projection import fact_line, has_known_fact, missing_or_confirm_line
+
 
 SCHEMA_VERSION = "0.2"
 DEFAULT_STATUS = "draft"
@@ -430,6 +432,12 @@ def _list_block(items: list[Any], empty: str = "- `needs input`") -> str:
     return "\n".join(f"- {item}" for item in items)
 
 
+def _markdown_sections(*sections: str) -> str:
+    """Join optional markdown sections with clean blank lines."""
+    rendered = "\n\n".join(section.strip() for section in sections if section.strip())
+    return f"{rendered}\n\n" if rendered else ""
+
+
 def _procedure_family_id(schema: dict[str, Any]) -> str:
     """Return the canonical procedure-family ID when present."""
     procedure_family = schema.get("procedure_family")
@@ -445,6 +453,162 @@ def _procedure_family_id(schema: dict[str, Any]) -> str:
 
 def _is_thrombectomy(schema: dict[str, Any]) -> bool:
     return _procedure_family_id(schema) == "endovascular_thrombectomy"
+
+
+def _known_fact_value(facts: dict[str, Any], key: str) -> str:
+    """Return a fact value only when fact_projection considers it known."""
+    if not has_known_fact(facts, key):
+        return ""
+    fact = facts.get(key)
+    if isinstance(fact, dict) and fact.get("value"):
+        return str(fact["value"])
+    return ""
+
+
+def _fact_status_line(
+    facts: dict[str, Any],
+    key: str,
+    *,
+    label: str | None = None,
+    missing_text: str = "incomplete/needs input",
+) -> str:
+    """Render a status-aware fact line while preserving legacy missing wording."""
+    line = missing_or_confirm_line(facts, key, label=label)
+    missing_suffix = "missing/needs input"
+    if line.endswith(missing_suffix):
+        return f"{line[: -len(missing_suffix)]}{missing_text}"
+    return line
+
+
+def _render_thrombectomy_known_facts(schema: dict[str, Any]) -> str:
+    facts = _case_facts(schema)
+    lines = [
+        missing_or_confirm_line(facts, "nihss"),
+        missing_or_confirm_line(facts, "aspects"),
+        missing_or_confirm_line(facts, "last_known_well"),
+        missing_or_confirm_line(facts, "perfusion_selection"),
+        missing_or_confirm_line(facts, "access_route"),
+    ]
+    for key in ("balloon_guide", "aspiration", "stent_retriever"):
+        if has_known_fact(facts, key):
+            lines.append(fact_line(facts, key))
+    return f"""## Patient-Specific Fact Status
+
+{_list_block(lines)}
+
+"""
+
+
+def _render_thrombectomy_supplied_technique(schema: dict[str, Any]) -> str:
+    facts = _case_facts(schema)
+    lines: list[str] = []
+    if has_known_fact(facts, "access_route"):
+        lines.append(fact_line(facts, "access_route"))
+    for key in ("balloon_guide", "aspiration", "stent_retriever"):
+        if has_known_fact(facts, key):
+            lines.append(fact_line(facts, key))
+    if not lines:
+        return ""
+    return f"""## Supplied Technique Facts
+
+{_list_block(lines)}
+
+"""
+
+
+def _thrombectomy_imaging_selection_status(facts: dict[str, Any], target: str) -> str:
+    supplied: list[str] = []
+    aspects = _known_fact_value(facts, "aspects")
+    perfusion = _known_fact_value(facts, "perfusion_selection")
+    if aspects:
+        supplied.append(f"ASPECTS {aspects} supplied")
+    if perfusion:
+        supplied.append(f"{perfusion} supplied")
+    if supplied:
+        return (
+            f"Imaging selection: {'; '.join(supplied)}; still confirm NCCT hemorrhage exclusion, "
+            f"CTA-confirmed {target}, collaterals, involved ASPECTS regions, and quantitative core-penumbra values when relevant."
+        )
+    return (
+        f"Imaging selection: incomplete/needs input; NCCT hemorrhage exclusion, ASPECTS, "
+        f"CTA-confirmed {target}, collaterals, and CTP/core-penumbra profile when late/unknown window."
+    )
+
+
+def _render_thrombectomy_imaging_fact_status(schema: dict[str, Any]) -> str:
+    facts = _case_facts(schema)
+    has_supplied_imaging = any(
+        has_known_fact(facts, key) for key in ("aspects", "perfusion_selection")
+    )
+    title = "Supplied Imaging Facts" if has_supplied_imaging else "Imaging Fact Status"
+    lines = [
+        missing_or_confirm_line(facts, "aspects"),
+        missing_or_confirm_line(facts, "perfusion_selection"),
+    ]
+    return f"""### {title}
+
+{_list_block(lines)}
+"""
+
+
+def _thrombectomy_required_studies(schema: dict[str, Any]) -> list[str]:
+    facts = _case_facts(schema)
+    aspects = _known_fact_value(facts, "aspects")
+    perfusion = _known_fact_value(facts, "perfusion_selection")
+    items: list[str] = []
+    for item in _section_list(schema, "imaging_review", "required_studies"):
+        text = str(item)
+        if aspects and text.startswith("NCCT head:"):
+            items.append(
+                f"NCCT head: ASPECTS {aspects} supplied; still confirm hemorrhage exclusion, involved ASPECTS regions, early ischemic change, mass effect, and large established infarct."
+            )
+        elif perfusion and text.startswith("CTP or MR diffusion/perfusion"):
+            items.append(
+                f"CTP/MR perfusion selection: {perfusion} supplied; document source images/maps, core volume, penumbra/hypoperfusion volume, mismatch ratio, and whether selection is trial-aligned."
+            )
+        else:
+            items.append(text)
+    return items
+
+
+def _thrombectomy_imaging_key_findings(schema: dict[str, Any]) -> list[str]:
+    facts = _case_facts(schema)
+    aspects = _known_fact_value(facts, "aspects")
+    perfusion = _known_fact_value(facts, "perfusion_selection")
+    items: list[str] = []
+    for item in _section_list(schema, "imaging_review", "key_findings"):
+        text = str(item)
+        if aspects and text.startswith("ASPECTS:"):
+            items.append(
+                f"ASPECTS: {aspects} supplied; confirm affected-territory regions, mass effect, edema, and whether large-core considerations apply."
+            )
+        elif perfusion and text.startswith("CTP/core-penumbra"):
+            items.append(
+                f"CTP/core-penumbra selection: {perfusion} supplied; document ischemic core volume, penumbra/hypoperfusion volume, mismatch ratio, and trial-aligned selection details."
+            )
+        else:
+            items.append(text)
+    return items
+
+
+def _thrombectomy_imaging_measurements(schema: dict[str, Any]) -> list[str]:
+    facts = _case_facts(schema)
+    aspects = _known_fact_value(facts, "aspects")
+    perfusion = _known_fact_value(facts, "perfusion_selection")
+    items: list[str] = []
+    for item in _section_list(schema, "imaging_review", "measurements"):
+        text = str(item)
+        if aspects and text.startswith("ASPECTS numeric score"):
+            items.append(
+                f"ASPECTS numeric score: {aspects} supplied; confirm involved ASPECTS regions."
+            )
+        elif perfusion and text.startswith("Core volume"):
+            items.append(
+                f"Perfusion/core/penumbra selection: {perfusion} supplied; document core volume (mL), hypoperfusion/penumbra volume (mL), mismatch ratio, and Tmax/CBF thresholds if CTP used."
+            )
+        else:
+            items.append(text)
+    return items
 
 
 def _is_acdf(schema: dict[str, Any]) -> bool:
@@ -1470,6 +1634,7 @@ def _render_morning_of_case(schema: dict[str, Any]) -> str:
 Use the case summary, imaging review, operative plan, rescue plan, postop plan, and open questions before the case.
 """
     ctx = _thrombectomy_target_context(schema)
+    facts = _case_facts(schema)
     snapshot = schema["case"]["case_snapshot"]
     procedure = snapshot.get("planned_procedure") or "mechanical thrombectomy"
     diagnosis = snapshot.get("diagnosis") or "acute ischemic stroke"
@@ -1482,13 +1647,13 @@ Use the case summary, imaging review, operative plan, rescue plan, postop plan, 
 - Planned procedure: {procedure}
 - Objective: {snapshot.get('operative_objective') or 'safe reperfusion with mTICI 2b/2c/3 goal'}
 
-## Go / No-Go Missing Facts
+{_render_thrombectomy_known_facts(schema)}## Go / No-Go Missing Facts
 
 | Fact | Status before puncture | Why it matters |
 |---|---|---|
-| LKW/time window | incomplete/needs input | Determines early vs late/unknown-window selection and urgency. |
-| NIHSS/disabling deficit | incomplete/needs input | EVT benefit depends on disabling deficit; low-NIHSS LVO needs explicit judgment. |
-| ASPECTS/core | incomplete/needs input | Screens completed infarct/large core and hemorrhage/edema risk. |
+| LKW/time window | {missing_or_confirm_line(facts, "last_known_well")} | Determines early vs late/unknown-window selection and urgency. |
+| NIHSS/disabling deficit | {missing_or_confirm_line(facts, "nihss")} | EVT benefit depends on disabling deficit; low-NIHSS LVO needs explicit judgment. |
+| ASPECTS/core | {missing_or_confirm_line(facts, "aspects")} | Screens completed infarct/large core and hemorrhage/edema risk. |
 | Hemorrhage exclusion | incomplete/needs input | Any ICH/SAH/stroke mimic changes or stops EVT/thrombolytic plan. |
 | Thrombolytic status | incomplete/needs input | Drives BP ceiling, antithrombotic hold, hemorrhage risk, and rescue stent tradeoffs. |
 | Baseline mRS/goals of care | incomplete/needs input | Poor premorbid function or limits of care may make EVT nonbeneficial. |
@@ -1549,15 +1714,16 @@ def _render_thrombectomy_evt_eligibility_frame(schema: dict[str, Any]) -> str:
     if not _is_thrombectomy(schema):
         return ""
     ctx = _thrombectomy_target_context(schema)
+    facts = _case_facts(schema)
     return f"""## EVT Eligibility / Decision-Boundary Frame
 
-All patient-specific eligibility facts below are **incomplete/need input** unless documented by the stroke team; do not invent values.
+Documented patient-specific facts are rendered with values; items marked **incomplete/need input** still require stroke-team confirmation. Do not invent values.
 
-- Last-known-well/time window: incomplete/needs input; record LKW, onset witnessed vs unwitnessed/wake-up, arrival-to-puncture targets, and whether this is early vs late/unknown window.
-- NIHSS/disabling deficit: incomplete/needs input; document NIHSS, cortical signs, dominant/nondominant syndrome, and whether a low-NIHSS LVO is nonetheless disabling.
+- {_fact_status_line(facts, "last_known_well", label="Last-known-well/time window")}; record LKW, onset witnessed vs unwitnessed/wake-up, arrival-to-puncture targets, and whether this is early vs late/unknown window.
+- {_fact_status_line(facts, "nihss", label="NIHSS/disabling deficit")}; document NIHSS, cortical signs, dominant/nondominant syndrome, and whether a low-NIHSS LVO is nonetheless disabling.
 - Baseline mRS/pre-stroke function: incomplete/needs input; high baseline disability, frailty, goals of care, or poor pre-stroke quality of life may shift toward medical management/no-EVT.
 - IV tPA/TNK eligibility/status: incomplete/needs input; document eligibility, contraindications, bolus/dose time if given, and post-thrombolytic BP/antithrombotic restrictions.
-- Imaging selection: incomplete/needs input; NCCT hemorrhage exclusion, ASPECTS, CTA-confirmed {ctx["target"]}, collaterals, and CTP/core-penumbra profile when late/unknown window.
+- {_thrombectomy_imaging_selection_status(facts, str(ctx["target"]))}
 - Early vs late window: early-window LVO decisions usually rely on disabling deficit plus favorable NCCT/CTA; late/unknown-window EVT requires explicit core-penumbra or tissue-window selection.
 - Large core considerations: incomplete/needs input; selected large-core patients may benefit from EVT, but hemorrhage/edema risk, ASPECTS/core volume, age/frailty, and goals of care must be weighed.
 - Low-NIHSS LVO controversy: incomplete/needs input; non-disabling low NIHSS may favor medical management/close monitoring, while disabling aphasia/neglect/hemiparesis or high-risk {ctx["target"]} may justify EVT discussion.
@@ -1654,6 +1820,7 @@ def _render_imaging(schema: dict[str, Any]) -> str:
 
 def _render_thrombectomy_imaging(schema: dict[str, Any]) -> str:
     ctx = _thrombectomy_target_context(schema)
+    facts = _case_facts(schema)
     cta_boundary = _thrombectomy_cta_boundary_text(schema)
     return f"""# Imaging Review - {schema["topic"]}
 
@@ -1661,14 +1828,16 @@ def _render_thrombectomy_imaging(schema: dict[str, Any]) -> str:
 
 Patient-specific imaging values are **incomplete/need input** unless supplied below; do not infer ASPECTS, core volume, collaterals, thrombolytic status, or access anatomy from the procedure name alone.
 
+{_render_thrombectomy_imaging_fact_status(schema)}
+
 ### Required Studies
 
-{_list_block(_section_list(schema, "imaging_review", "required_studies"))}
+{_list_block(_thrombectomy_required_studies(schema))}
 
 ### NCCT Hemorrhage Exclusion And ASPECTS
 
 - Hemorrhage exclusion: incomplete/needs input; confirm no intracranial hemorrhage/SAH or stroke mimic before EVT and IV tPA/TNK decisions.
-- ASPECTS: incomplete/needs input; document numeric score, involved regions, mass effect, and whether large-core considerations apply.
+- {_fact_status_line(facts, "aspects", label="ASPECTS")}; document numeric score, involved regions, mass effect, and whether large-core considerations apply.
 - Early ischemic change: incomplete/needs input; reconcile NCCT with CTP/MRI if the window is late/unknown or exam-imaging mismatch exists.
 
 ### CTA Occlusion Site And Collaterals
@@ -1680,16 +1849,16 @@ Patient-specific imaging values are **incomplete/need input** unless supplied be
 ### CTP / Core-Penumbra Selection
 
 - Early window: CTP may not be required when NCCT/CTA and clinical deficit are sufficient, but core estimate and ASPECTS still need documentation.
-- Late/unknown window: CTP/MRI core-penumbra data are incomplete/need input; record core volume, hypoperfusion/penumbra volume, mismatch ratio, and whether selection is trial-aligned.
+- {_fact_status_line(facts, "perfusion_selection", label="Perfusion selection")}; record core volume, hypoperfusion/penumbra volume, mismatch ratio, and whether selection is trial-aligned if late/unknown-window or mismatch-based.
 - Large core: incomplete/needs input; selected large-core patients may still be EVT candidates, but benefit-risk, hemorrhage/edema risk, and goals-of-care require explicit attending/stroke-team decision.
 
 ### Access Anatomy / Etiology Clues
 
-{_list_block(_section_list(schema, "imaging_review", "key_findings"))}
+{_list_block(_thrombectomy_imaging_key_findings(schema))}
 
 ### Measurements
 
-{_list_block(_section_list(schema, "imaging_review", "measurements"))}
+{_list_block(_thrombectomy_imaging_measurements(schema))}
 
 ### Anatomic Relationships
 
@@ -1913,7 +2082,7 @@ def _render_thrombectomy_operative_plan(
 - Reperfusion goal: successful reperfusion, ideally mTICI 2b/2c/3, with final angiographic runs documenting target territory, distal/new-territory emboli, and no extravasation.
 - Verification: `needs clinician verification` for patient-specific times, imaging selection, anesthesia/BP plan, and device sequence.
 
-{_render_thrombectomy_decision_tables(schema)}## Access And Setup
+{_markdown_sections(_render_thrombectomy_decision_tables(schema), _render_thrombectomy_supplied_technique(schema))}## Access And Setup
 
 - Access choice: femoral vs radial access based on pulse exam, arch anatomy, cervical carotid tortuosity/stenosis, anticoagulation/thrombolytic status, and fastest stable support.
 - Positioning / suite setup: {_section_scalar(schema, "operative_plan", "positioning")}
@@ -2614,25 +2783,88 @@ def _thrombectomy_target_question(schema: dict[str, Any]) -> str:
         return "target LVO; access/occlusion anatomy needs input"
     return f"{target}; confirm target vessel, laterality if applicable, tandem/cervical lesion, clot extent, distal branch involvement, and access route"
 
+
+def _thrombectomy_open_questions(schema: dict[str, Any]) -> list[str]:
+    facts = _case_facts(schema)
+    questions: list[str] = []
+
+    if has_known_fact(facts, "last_known_well"):
+        questions.append(
+            f"Confirm last-known-well {_known_fact_value(facts, 'last_known_well')}: witnessed vs unwitnessed/wake-up onset and treatment time window."
+        )
+    else:
+        questions.append("LKW / last-known-well time, witnessed vs unwitnessed onset, and treatment time window?")
+
+    if has_known_fact(facts, "nihss"):
+        questions.append(
+            f"Confirm current NIHSS/exam: NIHSS {_known_fact_value(facts, 'nihss')}, disabling deficit, cortical signs, and any interval change before puncture."
+        )
+    else:
+        questions.append("What is the NIHSS and whether current deficit is disabling?")
+
+    if has_known_fact(facts, "aspects"):
+        questions.append(
+            f"Confirm ASPECTS {_known_fact_value(facts, 'aspects')}: involved regions, mass effect, and whether large-core considerations apply."
+        )
+    else:
+        questions.append(
+            "What is the ASPECTS/core status on noncontrast CT, and if used, CTP/MRI core volume and mismatch profile?"
+        )
+
+    questions.extend(
+        [
+            "Collateral/perfusion quantitative unknowns: collateral grade, core volume, hypoperfusion/penumbra volume, mismatch ratio, and infarct-growth risk.",
+            f"CTA/angiography target: {_thrombectomy_target_question(schema)}?",
+            "IV tPA/TNK status, thrombolytic dose/time, contraindications, and required post-thrombolytic restrictions?",
+            "Anticoagulation, antiplatelet use, platelet count/INR/DOAC timing, or other coagulopathy/lab constraints?",
+            "Baseline mRS / pre-stroke functional status and goals-of-care constraints?",
+        ]
+    )
+
+    if has_known_fact(facts, "access_route"):
+        questions.append(
+            f"Confirm access route {_known_fact_value(facts, 'access_route')}: pulses, arch/cervical anatomy, closure plan, bleeding risk, and crossover threshold."
+        )
+    else:
+        questions.append(
+            "Access concerns: route choice, femoral/radial pulses, aortic arch, cervical carotid tortuosity/stenosis, prior vascular surgery, obesity, or bleeding risk?"
+        )
+
+    questions.append(
+        "Anesthesia plan and BP plan before reperfusion, after mTICI 2b/3 reperfusion, and if hemorrhage/extravasation occurs?"
+    )
+    return questions
+
+
+def _thrombectomy_supplied_device_summary(schema: dict[str, Any]) -> str:
+    facts = _case_facts(schema)
+    parts = []
+    if has_known_fact(facts, "balloon_guide"):
+        parts.append("balloon guide/BGC")
+    if has_known_fact(facts, "aspiration"):
+        parts.append("aspiration")
+    if has_known_fact(facts, "stent_retriever"):
+        parts.append("stent retriever")
+    return ", ".join(parts)
+
+
 def _render_thrombectomy_open_questions(schema: dict[str, Any]) -> str:
+    supplied_devices = _thrombectomy_supplied_device_summary(schema)
+    technique_question = (
+        f"Confirm supplied first-pass/device plan ({supplied_devices}) and fallback/switch strategy with attending."
+        if supplied_devices
+        else "Preferred first-pass technique: aspiration, stent retriever, or combined approach?"
+    )
     return f"""# Open Questions - {schema["topic"]}
 
 ## Patient-Specific Missing Stroke Facts
 
-- LKW / last-known-well time, witnessed vs unwitnessed onset, and treatment time window?
-- NIHSS and whether current deficit is disabling?
-- Noncontrast CT ASPECTS and, if used, CTP/MRI core volume and mismatch profile?
-- CTA/angiography target: {_thrombectomy_target_question(schema)}?
-- IV tPA/TNK status, dose/time, contraindications, and required post-thrombolytic restrictions?
-- Anticoagulation, antiplatelet use, platelet count/INR/DOAC timing, or other coagulopathy?
-- Baseline mRS / pre-stroke functional status and goals-of-care constraints?
-- Access concerns: femoral/radial pulses, aortic arch, cervical carotid tortuosity/stenosis, prior vascular surgery, obesity, or bleeding risk?
-- Anesthesia plan and BP plan before reperfusion, after mTICI 2b/3 reperfusion, and if hemorrhage/extravasation occurs?
+{_list_block(_thrombectomy_open_questions(schema))}
 
 ## Attending / Team Questions
 
-- Preferred first-pass technique: aspiration, stent retriever, or combined approach?
-- Balloon-guide vs standard guide strategy and planned distal access/aspiration catheter?
+- {technique_question}
+- Balloon-guide vs standard guide strategy and planned distal access/aspiration catheter if not already specified?
 - Maximum number of passes before switching strategy or stopping?
 - Rescue plan for tandem lesion, intracranial stenosis, failed recanalization, or early re-occlusion?
 - Postprocedure antithrombotic timing if no stent, if carotid/intracranial stent, or if tPA/TNK was given?
