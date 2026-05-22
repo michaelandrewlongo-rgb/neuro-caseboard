@@ -236,6 +236,41 @@ def test_thrombectomy_prompt_extracts_structured_facts():
     assert "procedure" not in missing
 
 
+def test_last_known_well_duration_words_normalize_to_compact_units():
+    case = deterministic_parse_case(
+        "left M1 MCA occlusion acute ischemic stroke mechanical thrombectomy; "
+        "NIHSS 18; ASPECTS 7; last known well 10 hours ago"
+    )
+    facts = case.to_dict()["facts"]
+    assert isinstance(facts, dict)
+
+    assert facts["last_known_well"]["value"] == "10h"
+    assert facts["last_known_well"]["value"] != "10hours"
+
+    minute_case = deterministic_parse_case(
+        "left M1 MCA occlusion mechanical thrombectomy NIHSS 18 ASPECTS 7 LKW 45 minutes"
+    )
+    minute_facts = minute_case.to_dict()["facts"]
+    assert isinstance(minute_facts, dict)
+    assert minute_facts["last_known_well"]["value"] == "45min"
+
+
+def test_last_known_well_clock_times_preserve_human_readable_spacing():
+    evening_case = deterministic_parse_case(
+        "left M1 MCA occlusion mechanical thrombectomy NIHSS 18 ASPECTS 7 LKW 8 pm"
+    )
+    evening_facts = evening_case.to_dict()["facts"]
+    assert isinstance(evening_facts, dict)
+    assert evening_facts["last_known_well"]["value"] == "8 pm"
+
+    timestamp_case = deterministic_parse_case(
+        "left M1 MCA occlusion mechanical thrombectomy NIHSS 18 ASPECTS 7 LKW 10:30 pm"
+    )
+    timestamp_facts = timestamp_case.to_dict()["facts"]
+    assert isinstance(timestamp_facts, dict)
+    assert timestamp_facts["last_known_well"]["value"] == "10:30 pm"
+
+
 def test_thrombectomy_prompt_rejects_invalid_values_and_negated_presence_facts():
     prompt = (
         "left M1 MCA occlusion NIHSS 99 ASPECTS 99 LKW 123 "

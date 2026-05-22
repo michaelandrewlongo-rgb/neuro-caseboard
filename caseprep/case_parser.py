@@ -524,7 +524,19 @@ def _missing_fact(key: str, label: str) -> CaseFact:
 
 
 def _compact_time_value(value: str) -> str:
-    return re.sub(r"\s+", "", value.strip())
+    stripped = re.sub(r"\s+", " ", value.strip())
+    duration = re.fullmatch(
+        r"(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|m|min|mins|minute|minutes)",
+        stripped,
+        re.IGNORECASE,
+    )
+    if duration:
+        amount = duration.group(1)
+        unit = duration.group(2).casefold()
+        if unit in {"h", "hr", "hrs", "hour", "hours"}:
+            return f"{amount}h"
+        return f"{amount}min"
+    return stripped
 
 
 def _family_field(

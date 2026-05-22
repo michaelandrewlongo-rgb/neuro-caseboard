@@ -66,6 +66,22 @@ def test_thrombectomy_morning_page_renders_supplied_facts_as_known():
     assert "ASPECTS/core | incomplete/needs input" not in morning
 
 
+def test_readme_one_line_does_not_mark_supplied_thrombectomy_facts_pending():
+    rendered = _render_thrombectomy_case(
+        "left M1 MCA occlusion acute ischemic stroke mechanical thrombectomy; NIHSS 18; "
+        "ASPECTS 7; last known well 10 hours ago; CT perfusion mismatch; "
+        "planned transfemoral balloon guide catheter aspiration plus stent retriever technique"
+    )
+    readme = rendered["README.md"]
+
+    assert "NIHSS 18" in readme
+    assert "ASPECTS 7" in readme
+    assert "LKW 10h" in readme
+    assert "CT perfusion mismatch" in readme
+    assert "pending LKW/NIHSS" not in readme
+    assert "ASPECTS/core" not in readme
+
+
 def test_fact_rich_thrombectomy_rendering_has_no_stale_incomplete_contradictions():
     rendered = _render_fact_rich_thrombectomy_case()
     combined = "\n".join(

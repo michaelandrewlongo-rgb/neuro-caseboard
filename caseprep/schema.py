@@ -343,10 +343,7 @@ def _propagate_structured_case_snapshot(schema: dict[str, Any]) -> None:
         snapshot["operative_objective"] = f"Reperfuse {target} with safe mTICI 2b/2c/3 goal."
         snapshot["urgency"] = "Emergent stroke thrombectomy workflow."
         snapshot["anticipated_disposition"] = "Neuro-ICU/stroke unit after EVT."
-        snapshot["one_line_thesis"] = (
-            f"Acute ischemic stroke from {target}; planned {planned} pending LKW/NIHSS, "
-            "hemorrhage exclusion, ASPECTS/core, thrombolytic status, and goals-of-care verification."
-        )
+        snapshot["one_line_thesis"] = _thrombectomy_one_line_thesis(schema, target, planned)
     elif _procedure_family_id(schema) == "spine_acdf":
         ctx = _acdf_context(schema)
         planned = procedure or ctx["procedure"]
@@ -463,6 +460,54 @@ def _known_fact_value(facts: dict[str, Any], key: str) -> str:
     if isinstance(fact, dict) and fact.get("value"):
         return str(fact["value"])
     return ""
+
+
+def _thrombectomy_one_line_thesis(schema: dict[str, Any], target: str, planned: str) -> str:
+    """Render the thrombectomy thesis without marking known facts as pending."""
+    facts = _case_facts(schema)
+    nihss = _known_fact_value(facts, "nihss")
+    aspects = _known_fact_value(facts, "aspects")
+    lkw = _known_fact_value(facts, "last_known_well")
+    perfusion = _known_fact_value(facts, "perfusion_selection")
+
+    supplied: list[str] = []
+    if nihss:
+        supplied.append(f"NIHSS {nihss}")
+    if aspects:
+        supplied.append(f"ASPECTS {aspects}")
+    if lkw:
+        supplied.append(f"LKW {lkw}")
+    if perfusion:
+        supplied.append(perfusion)
+    supplied_clause = f" with supplied {', '.join(supplied)}" if supplied else ""
+
+    pending: list[str] = []
+    if not lkw and not nihss:
+        pending.append("LKW/NIHSS")
+    else:
+        if not lkw:
+            pending.append("LKW")
+        if not nihss:
+            pending.append("NIHSS")
+    pending.append("hemorrhage exclusion")
+    if not aspects and not perfusion:
+        pending.append("ASPECTS/core")
+    else:
+        if not aspects:
+            pending.append("ASPECTS")
+        if not perfusion:
+            pending.append("core/perfusion profile")
+    pending.extend(["thrombolytic status", "goals-of-care verification"])
+
+    return f"Acute ischemic stroke from {target}{supplied_clause}; planned {planned} pending {_join_sentence_items(pending)}."
+
+
+def _join_sentence_items(items: list[str]) -> str:
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    return f"{', '.join(items[:-1])}, and {items[-1]}"
 
 
 def _fact_status_line(
