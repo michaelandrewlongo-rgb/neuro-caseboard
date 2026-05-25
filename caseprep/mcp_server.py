@@ -38,6 +38,19 @@ from caseprep.scoring import (
     neurosurg_relevance_score,
 )
 
+# ── corpus_topology integration (embedding-based semantic search) ──────────
+_CORPUS_CLUSTERING = Path("~/corpus_clustering").expanduser()
+if str(_CORPUS_CLUSTERING) not in sys.path:
+    sys.path.insert(0, str(_CORPUS_CLUSTERING))
+
+_corpus_topology_available = False
+try:
+    import corpus_topology  # noqa: F401
+
+    _corpus_topology_available = True
+except ImportError:
+    pass
+
 # ── Load .env file ───────────────────────────────────────────────────────────
 
 import os
@@ -1196,6 +1209,76 @@ async def list_tools() -> list[Tool]:
                 "required": ["work_id"],
             },
         ),
+        Tool(
+            name="search_corpus_semantic",
+            description=(
+                "Semantic search over the neurosurgery corpus using BioBERT embeddings. "
+                "Unlike search_corpus (keyword FTS5), this finds papers by meaning — "
+                "throw in a free-text case description and it locates the most relevant "
+                "topic clusters. Returns top-K matching clusters with names, terms, "
+                "domain labels, and confidence scores. Optionally returns papers from "
+                "each matched cluster. Useful when you don't know the exact keywords "
+                "or when keyword search returns poor results."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "Free-text clinical query (e.g. 'right M1 occlusion NIHSS 18 "
+                            "ASPECTS 7 transferred for thrombectomy')"
+                        ),
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Number of top clusters to return (default: 5, max: 15)",
+                        "default": 5,
+                    },
+                    "papers_per_cluster": {
+                        "type": "integer",
+                        "description": (
+                            "If > 0, also return this many top papers from each matched "
+                            "cluster (default: 0 — clusters only)"
+                        ),
+                        "default": 0,
+                    },
+                    "min_confidence": {
+                        "type": "string",
+                        "description": (
+                            "Minimum confidence to include a cluster: 'low', 'medium', "
+                            "or 'high'. Default: 'low' (include all)."
+                        ),
+                        "default": "low",
+                    },
+                },
+                "required": ["query"],
+            },
+        ),
+        Tool(
+            name="neighbors_paper",
+            description=(
+                "Find semantically similar papers to a given paper using pgvector "
+                "cosine distance over BioBERT embeddings. Use this to expand from a "
+                "known paper to its intellectual neighborhood — works like 'cited by' "
+                "but based on semantic content, not citation graphs."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "paper_id": {
+                        "type": "string",
+                        "description": "Paper ID (work_id from search_corpus or get_paper)",
+                    },
+                    "k": {
+                        "type": "integer",
+                        "description": "Number of neighbors to return (default: 10, max: 50)",
+                        "default": 10,
+                    },
+                },
+                "required": ["paper_id"],
+            },
+        ),
     ]
 
 
@@ -1223,6 +1306,10 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 result = _handle_search_corpus(arguments)
             case "get_paper":
                 result = _handle_get_paper(arguments)
+            case "search_corpus_semantic":
+                result = _handle_search_corpus_semantic(arguments)
+            case "neighbors_paper":
+                result = _handle_neighbors_paper(arguments)
             case _:
                 result = f"Unknown tool: {name}"
         return [TextContent(type="text", text=result)]
@@ -1915,6 +2002,144 @@ async def _handle_send_email(args: dict) -> str:
             detail = {"message": resp.text}
         msg = detail.get("message", resp.text)
         return f"Email failed (HTTP {resp.status_code}): {msg}"
+
+
+# ── corpus_topology handlers ─────────────────────────────────────────────────
+
+
+def _handle_search_corpus_semantic(args: dict) -> str:
+    """Search for semantically relevant clusters and optionally their papers."""
+    if not _corpus_topology_available:
+        return (
+            "Semantic search unavailable: corpus_topology module not found. "
+            "Ensure ~/corpus_clustering/ exists and corpus_topology.py is importable."
+        )
+
+    query = args["query"]
+    top_k = min(args.get("top_k", 5), 15)
+    papers_per_cluster = min(args.get("papers_per_cluster", 0), 20)
+    min_confidence = args.get("min_confidence", "low")
+
+    try:
+        result = corpus_topology.locate_clusters(
+            query, k=top_k, min_confidence=min_confidence
+        )
+    except corpus_topology.TopologyUnavailable as exc:
+        return f"Semantic search unavailable: {exc}"
+    except Exception as exc:
+        return f"Semantic search error: {exc}"
+
+    top = result["top"]
+    if not top:
+        return (
+            f"## Semantic Search — `{query}`\n\n"
+            f"No clusters found at or above **{min_confidence}** confidence.\n"
+            f"Best cosine: {result.get('best_cosine', 'N/A')}\n\n"
+            f"Try broadening the query or lowering min_confidence."
+        )
+
+    lines = [
+        f"## Semantic Search — `{query}`",
+        f"Confidence: **{result['confidence']}** (best cosine: {result['best_cosine']:.4f})",
+        f"Model: {result['model']}",
+        "",
+    ]
+
+    for item in top:
+        cid = item["cluster_id"]
+        name = item["name"] or f"cluster-{cid}"
+        domain = item.get("primary_domain", "—")
+        size = item.get("size", 0)
+        pct = item.get("pct_of_corpus", 0)
+        terms = item.get("terms", [])[:8]
+
+        lines.append(
+            f"### #{item['rank']} — {name} (cluster {cid})"
+        )
+        lines.append(
+            f"cosine={item['cosine']:.4f} | domain={domain} | "
+            f"papers={size:,} ({pct:.1f}%)"
+        )
+        if item.get("is_subcluster"):
+            parent = item.get("parent_name")
+            if parent:
+                lines.append(f"  ↳ subcluster of: {parent}")
+        if terms:
+            lines.append(f"  terms: {', '.join(terms)}")
+
+        # Optionally fetch papers from this cluster
+        if papers_per_cluster > 0:
+            lines.append(f"\n  *Top papers from this cluster:*")
+            try:
+                papers = corpus_topology.papers_in_cluster(cid, k=papers_per_cluster)
+                for pi, p in enumerate(papers, 1):
+                    title = (p.get("title") or "Untitled")[:120]
+                    cites = p.get("citation_count", 0) or 0
+                    year = p.get("year", "—")
+                    lines.append(
+                        f"  {pi}. {title}  "
+                        f"*({year}, cited {cites}×)*"
+                    )
+            except Exception as exc:
+                lines.append(f"  *(papers unavailable: {exc})*")
+        lines.append("")
+
+    lines.append(f"---\n*Semantic search over {len(corpus_topology.list_clusters())} "
+                  f"BioBERT-derived topic clusters. Use search_corpus for keyword "
+                  f"(FTS5) search, or get_paper for full paper detail.*")
+
+    return "\n".join(lines)
+
+
+def _handle_neighbors_paper(args: dict) -> str:
+    """Find semantically similar papers via pgvector."""
+    if not _corpus_topology_available:
+        return (
+            "Neighbors search unavailable: corpus_topology module not found. "
+            "Ensure ~/corpus_clustering/ exists and corpus_topology.py is importable."
+        )
+
+    paper_id = args["paper_id"]
+    k = min(args.get("k", 10), 50)
+
+    try:
+        result = corpus_topology.paper_neighbors(paper_id, k=k)
+    except corpus_topology.TopologyUnavailable as exc:
+        return f"Neighbors search unavailable: {exc}"
+    except Exception as exc:
+        return f"Neighbors search error: {exc}"
+
+    if "error" in result:
+        error = result["error"]
+        pid = result.get("id", paper_id)
+        if error == "unknown_paper":
+            return f"Paper '{pid}' not found in corpus."
+        if error == "no_embedding":
+            return f"Paper '{pid}' has no embedding — neighbors unavailable."
+        return f"Unknown error for '{pid}': {error}"
+
+    neighbors = result["neighbors"]
+    if not neighbors:
+        return f"No neighbors found for '{paper_id}'."
+
+    lines = [
+        f"## Semantic Neighbors — `{paper_id}`",
+        f"",
+    ]
+    for i, n in enumerate(neighbors, 1):
+        title = (n.get("title") or "Untitled")[:120]
+        domain = n.get("primary_domain", "—")
+        cosine = n.get("cosine", 0)
+        lines.append(
+            f"{i}. [{n['id']}] **{title}**  "
+            f"(cosine={cosine:.4f}, domain={domain})"
+        )
+
+    lines.append(
+        f"\n---\n*pgvector halfvec HNSW search. "
+        f"Use get_paper with any returned paper_id for full details.*"
+    )
+    return "\n".join(lines)
 
 
 # ── Entry point ─────────────────────────────────────────────────────────────
