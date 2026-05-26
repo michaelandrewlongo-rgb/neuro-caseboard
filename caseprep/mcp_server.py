@@ -16,7 +16,6 @@ import asyncio
 import os
 import re
 import sqlite3
-import sys
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import replace
@@ -30,6 +29,7 @@ from mcp.types import TextContent, Tool
 from caseprep.adapters.caseplan import build_caseplan_markdown
 from caseprep.core import CasePlanBuilder
 from caseprep.generator import generate_caseprep as _generate_caseprep
+from caseprep.integrations import corpus_topology
 from caseprep.pdfs import format_pdf_results, search_local_pdfs as _search_local_pdfs
 from caseprep.retrievers.fulltext import FullTextRecord, FullTextRetriever
 from caseprep.scoring import (
@@ -37,19 +37,6 @@ from caseprep.scoring import (
     grade_evidence,
     neurosurg_relevance_score,
 )
-
-# ── corpus_topology integration (embedding-based semantic search) ──────────
-_CORPUS_CLUSTERING = Path("~/corpus_clustering").expanduser()
-if str(_CORPUS_CLUSTERING) not in sys.path:
-    sys.path.insert(0, str(_CORPUS_CLUSTERING))
-
-_corpus_topology_available = False
-try:
-    import corpus_topology  # noqa: F401
-
-    _corpus_topology_available = True
-except ImportError:
-    pass
 
 # ── Load .env file ───────────────────────────────────────────────────────────
 
@@ -2009,10 +1996,11 @@ async def _handle_send_email(args: dict) -> str:
 
 def _handle_search_corpus_semantic(args: dict) -> str:
     """Search for semantically relevant clusters and optionally their papers."""
-    if not _corpus_topology_available:
+    if not corpus_topology.is_available():
         return (
             "Semantic search unavailable: corpus_topology module not found. "
-            "Ensure ~/corpus_clustering/ exists and corpus_topology.py is importable."
+            "Ensure ~/corpus_clustering/ exists (or set CORPUS_CLUSTERING_PATH) "
+            "and corpus_topology.py is importable."
         )
 
     query = args["query"]
@@ -2072,6 +2060,15 @@ def _handle_search_corpus_semantic(args: dict) -> str:
             lines.append(f"\n  *Top papers from this cluster:*")
             try:
                 papers = corpus_topology.papers_in_cluster(cid, k=papers_per_cluster)
+            except corpus_topology.TopologyUnavailable as exc:
+                lines.append(f"  *(papers unavailable: {exc})*")
+                lines.append("")
+                continue
+            except Exception as exc:
+                lines.append(f"  *(papers unavailable: {exc})*")
+                lines.append("")
+                continue
+            try:
                 for pi, p in enumerate(papers, 1):
                     title = (p.get("title") or "Untitled")[:120]
                     cites = p.get("citation_count", 0) or 0
@@ -2093,10 +2090,11 @@ def _handle_search_corpus_semantic(args: dict) -> str:
 
 def _handle_neighbors_paper(args: dict) -> str:
     """Find semantically similar papers via pgvector."""
-    if not _corpus_topology_available:
+    if not corpus_topology.is_available():
         return (
             "Neighbors search unavailable: corpus_topology module not found. "
-            "Ensure ~/corpus_clustering/ exists and corpus_topology.py is importable."
+            "Ensure ~/corpus_clustering/ exists (or set CORPUS_CLUSTERING_PATH) "
+            "and corpus_topology.py is importable."
         )
 
     paper_id = args["paper_id"]

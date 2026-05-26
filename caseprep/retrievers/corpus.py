@@ -84,6 +84,7 @@ class CorpusRetriever:
                 if key not in {"abstract", "conclusion", "title"}
             }
             metadata["total_matches"] = total_matches
+            metadata.setdefault("retrieval_source", "corpus_fts5")
             records.append(
                 EvidenceRecord(
                     id=f"corpus-{work_id}",

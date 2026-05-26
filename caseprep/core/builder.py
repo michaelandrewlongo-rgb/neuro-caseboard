@@ -34,6 +34,7 @@ from caseprep.scoring import (
     surgical_usefulness_score,
 )
 from caseprep.retrievers.corpus import CorpusRetriever
+from caseprep.retrievers.corpus_semantic import SemanticCorpusRetriever
 from caseprep.retrievers.pubmed import PubMedRetriever
 from caseprep.retrievers.radiology import RadiologyRetriever
 from caseprep.synthesis.section_synthesis import SectionDraft, synthesize_sections
@@ -88,6 +89,7 @@ class CoreRetrieverSet:
     pubmed: PubMedRetrieverProtocol
     radiology: RadiologyRetrieverProtocol
     corpus: CorpusRetrieverProtocol
+    corpus_semantic: CorpusRetrieverProtocol | None = None
 
 
 CORPUS_SUBDOMAIN_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -196,6 +198,7 @@ def default_core_retrievers() -> CoreRetrieverSet:
         pubmed=PubMedRetriever(),
         radiology=RadiologyRetriever(),
         corpus=CorpusRetriever(),
+        corpus_semantic=SemanticCorpusRetriever(),
     )
 
 
@@ -215,6 +218,7 @@ def _tag_evidence(
     procedure_family: str | None = None,
     broad_profile: str | None = None,
     sort_by_score: bool = False,
+    retrieval_source: str | None = None,
 ) -> list[EvidenceRecord]:
     tagged: list[EvidenceRecord] = []
     for record in records:
@@ -225,6 +229,8 @@ def _tag_evidence(
             metadata["procedure_family"] = procedure_family
         if broad_profile is not None:
             metadata["broad_profile"] = broad_profile
+        if retrieval_source is not None:
+            metadata.setdefault("retrieval_source", retrieval_source)
         provisional = replace(record, metadata=metadata)
         if case_spec is not None:
             include, applicability_reason = classify_clinical_applicability(
@@ -263,6 +269,17 @@ def _source_counts(records: list[EvidenceRecord]) -> dict[str, int]:
     return counts
 
 
+def _retrieval_source_counts(records: list[EvidenceRecord]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for record in records:
+        tag = str(record.metadata.get("retrieval_source") or "unknown")
+        counts[tag] = counts.get(tag, 0) + 1
+        for extra in record.metadata.get("also_retrieved_by") or []:
+            key = f"{extra}_also"
+            counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
 def _normalized_identifier(value: Any) -> str:
     return re.sub(r"\s+", "", str(value or "").strip().casefold())
 
@@ -295,6 +312,14 @@ def _prefer_record(new: EvidenceRecord, old: EvidenceRecord) -> bool:
     old_pack = bool(old.metadata.get("evidence_pack_id"))
     if new_pack != old_pack:
         return new_pack
+    new_fts5 = new.metadata.get("retrieval_source") == "corpus_fts5"
+    old_fts5 = old.metadata.get("retrieval_source") == "corpus_fts5"
+    new_sem = new.metadata.get("retrieval_source") == "corpus_semantic"
+    old_sem = old.metadata.get("retrieval_source") == "corpus_semantic"
+    if new_fts5 and old_sem:
+        return True
+    if old_fts5 and new_sem:
+        return False
     new_score = int(new.metadata.get("surgical_usefulness_score", 0) or 0)
     old_score = int(old.metadata.get("surgical_usefulness_score", 0) or 0)
     if new_score != old_score:
@@ -304,6 +329,25 @@ def _prefer_record(new: EvidenceRecord, old: EvidenceRecord) -> bool:
     if new_has_text != old_has_text:
         return new_has_text
     return False
+
+
+def _merge_also_retrieved(kept: EvidenceRecord, dropped: EvidenceRecord) -> EvidenceRecord:
+    kept_source = kept.metadata.get("retrieval_source")
+    dropped_source = dropped.metadata.get("retrieval_source")
+    if not dropped_source or dropped_source == kept_source:
+        return kept
+    metadata = dict(kept.metadata)
+    also = list(metadata.get("also_retrieved_by") or [])
+    if dropped_source not in also:
+        also.append(dropped_source)
+    metadata["also_retrieved_by"] = also
+    # Surface the semantic confidence even when FTS5 wins the dedup, so the
+    # clinician-facing audit trail can see the cross-retrieval signal.
+    if dropped_source == "corpus_semantic":
+        for key in ("semantic_cluster_cosine", "semantic_confidence", "semantic_cluster_name"):
+            if key in dropped.metadata and key not in metadata:
+                metadata[key] = dropped.metadata[key]
+    return replace(kept, metadata=metadata)
 
 
 def dedupe_evidence(records: list[EvidenceRecord]) -> list[EvidenceRecord]:
@@ -317,8 +361,11 @@ def dedupe_evidence(records: list[EvidenceRecord]) -> list[EvidenceRecord]:
             key_to_index.update({key: len(deduped) for key in keys})
             deduped.append(record)
             continue
-        if _prefer_record(record, deduped[existing_index]):
-            deduped[existing_index] = record
+        existing = deduped[existing_index]
+        if _prefer_record(record, existing):
+            deduped[existing_index] = _merge_also_retrieved(record, existing)
+        else:
+            deduped[existing_index] = _merge_also_retrieved(existing, record)
         for key in keys:
             key_to_index[key] = existing_index
     return deduped
@@ -592,6 +639,11 @@ def _key_source(record: EvidenceRecord) -> dict[str, Any]:
         "clinical_include",
         "quarantine_reason",
         "applicability_classification",
+        "retrieval_source",
+        "also_retrieved_by",
+        "semantic_cluster_cosine",
+        "semantic_confidence",
+        "semantic_cluster_name",
     ):
         if key in metadata:
             source[key] = metadata[key]
@@ -789,6 +841,7 @@ async def build_core_case_plan(
                     else query_case_spec.broad_profile.value
                 ),
                 sort_by_score=True,
+                retrieval_source="pubmed",
             )
         )
 
@@ -815,6 +868,7 @@ async def build_core_case_plan(
                     if retrieval_family
                     else query_case_spec.broad_profile.value
                 ),
+                retrieval_source="radiology",
             )
         )
 
@@ -847,8 +901,41 @@ async def build_core_case_plan(
                     if retrieval_family
                     else query_case_spec.broad_profile.value
                 ),
+                retrieval_source="corpus_fts5",
             )
         )
+
+    semantic_query = topic
+    semantic_used = False
+    if provider_set.corpus_semantic is not None:
+        semantic_used = True
+        try:
+            semantic_records = await _maybe_await(
+                provider_set.corpus_semantic.retrieve(
+                    semantic_query,
+                    subdomain=corpus_subdomain,
+                    top_n=max_per,
+                )
+            )
+        except CasePrepError as exc:
+            warnings.append(f"Corpus (semantic): {exc}")
+        else:
+            evidence.extend(
+                _tag_evidence(
+                    semantic_records,
+                    axis="Corpus (semantic)",
+                    query=semantic_query,
+                    case_spec=query_case_spec,
+                    family=retrieval_family,
+                    procedure_family=retrieval_family.id if retrieval_family else None,
+                    broad_profile=(
+                        retrieval_family.broad_profile
+                        if retrieval_family
+                        else query_case_spec.broad_profile.value
+                    ),
+                    retrieval_source="corpus_semantic",
+                )
+            )
 
     evidence = dedupe_evidence(evidence)
     quarantined_sources = _quarantined_sources(evidence)
@@ -875,8 +962,11 @@ async def build_core_case_plan(
             ],
             "corpus_subdomain": corpus_subdomain,
             "corpus_query": corpus_query,
+            "semantic_query": semantic_query if semantic_used else None,
+            "semantic_enabled": semantic_used,
             "evidence_count": len(evidence),
             "sources": _source_counts(evidence),
+            "retrieval_sources": _retrieval_source_counts(evidence),
             "evidence_pack": evidence_pack_coverage,
             "quarantined_sources": quarantined_sources,
         },
@@ -909,6 +999,11 @@ async def build_core_case_plan(
     ]
     for source, count in sorted(structured["retrieval"]["sources"].items()):
         lines.append(f"- {source}: {count}")
+    retrieval_sources = structured["retrieval"].get("retrieval_sources") or {}
+    if retrieval_sources:
+        lines.extend(["", "## Retrieval Path"])
+        for tag, count in sorted(retrieval_sources.items()):
+            lines.append(f"- {tag}: {count}")
     if sections:
         lines.extend(["", "## Draft Sections"])
         for section in sections:
