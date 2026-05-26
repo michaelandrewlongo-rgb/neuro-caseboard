@@ -2269,13 +2269,43 @@ def _md_cell(value: Any) -> str:
     return str(value or "").replace("|", "\\|").strip()
 
 
+_RETRIEVAL_SOURCE_LABELS = {
+    "pubmed": "PubMed",
+    "corpus_fts5": "corpus (FTS5)",
+    "corpus_semantic": "corpus (semantic)",
+    "radiology": "Open-i",
+}
+
+
+def _retrieval_source_label(tag: Any) -> str:
+    if not tag:
+        return ""
+    return _RETRIEVAL_SOURCE_LABELS.get(str(tag), str(tag))
+
+
 def _source_ref(source: dict[str, Any]) -> str:
     refs: list[str] = []
     if source.get("pmid"):
         refs.append(f"PMID {source.get('pmid')}")
     if source.get("doi"):
         refs.append(f"DOI {source.get('doi')}")
-    return "; ".join(refs) or str(source.get("id", ""))
+    base = "; ".join(refs) or str(source.get("id", ""))
+    retrieval_tag = _retrieval_source_label(source.get("retrieval_source"))
+    also = source.get("also_retrieved_by") or []
+    if isinstance(also, list) and also:
+        retrieval_tag = (
+            f"{retrieval_tag} + " + " + ".join(
+                _retrieval_source_label(tag) for tag in also if tag
+            )
+            if retrieval_tag
+            else " + ".join(_retrieval_source_label(tag) for tag in also if tag)
+        )
+    if retrieval_tag:
+        cosine = source.get("semantic_cluster_cosine")
+        if cosine is not None and "semantic" in retrieval_tag:
+            retrieval_tag = f"{retrieval_tag} cos={cosine}"
+        return f"{base} — via {retrieval_tag}" if base else f"via {retrieval_tag}"
+    return base
 
 
 def _evidence_source_row(source: dict[str, Any]) -> str:
