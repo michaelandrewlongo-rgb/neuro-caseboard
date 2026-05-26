@@ -988,6 +988,11 @@ async def list_tools() -> list[Tool]:
                         "description": "Max papers per search category (default: 3, max: 5)",
                         "default": 3,
                     },
+                    "semantic_top_n": {
+                        "type": "integer",
+                        "description": "Semantic corpus rescue records (default: 5, hard cap: 10)",
+                        "default": 5,
+                    },
                 },
                 "required": ["topic"],
             },

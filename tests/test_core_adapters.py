@@ -80,6 +80,14 @@ def test_build_caseplan_request_preserves_explicit_output_dir(tmp_path):
     assert request.output_dir == explicit
 
 
+def test_build_caseplan_request_maps_semantic_top_n_into_options():
+    from caseprep.adapters.caseplan import build_caseplan_request
+
+    request = build_caseplan_request({"topic": "aneurysm", "semantic_top_n": 7})
+
+    assert request.options["semantic_top_n"] == 7
+
+
 def test_caseprep_error_status_maps_domain_errors():
     from caseprep.adapters.caseplan import caseprep_error_status
 

@@ -49,12 +49,16 @@ def build_caseplan_request(
     arguments: Mapping[str, Any],
 ) -> BuildCasePlanRequest:
     """Create a core request from transport arguments."""
-    options = arguments.get("options") or {}
-    if not isinstance(options, dict):
+    raw_options = arguments.get("options") or {}
+    if not isinstance(raw_options, dict):
         raise CasePrepValidationError(
             "options must be an object",
             details={"field": "options"},
         )
+    options = dict(raw_options)
+    for key in ("semantic_top_n",):
+        if key in arguments and key not in options:
+            options[key] = arguments[key]
 
     return BuildCasePlanRequest(
         topic=arguments.get("topic"),

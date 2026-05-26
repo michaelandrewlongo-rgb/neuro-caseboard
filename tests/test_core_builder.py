@@ -115,6 +115,116 @@ async def test_core_builder_classifies_profile_and_normalizes_retriever_evidence
 
 
 @pytest.mark.asyncio
+async def test_core_builder_uses_semantic_rescue_cap_without_flooding_other_retrievers():
+    calls = []
+
+    class EmptyPubMedRetriever:
+        async def retrieve(
+            self,
+            query,
+            *,
+            max_results=10,
+            filter_type=None,
+            include_abstracts=True,
+        ):
+            calls.append(("pubmed", max_results, filter_type))
+            return []
+
+    class EmptyRadiologyRetriever:
+        async def retrieve(self, query, *, max_results=5, modality=None):
+            calls.append(("radiology", max_results, modality))
+            return []
+
+    class EmptyCorpusRetriever:
+        def retrieve(self, fts_query, *, subdomain=None, top_n=8):
+            calls.append(("corpus", subdomain, top_n))
+            return []
+
+    class FakeSemanticCorpusRetriever:
+        def retrieve(self, fts_query, *, subdomain=None, top_n=8):
+            calls.append(("semantic", subdomain, top_n))
+            return [
+                EvidenceRecord(
+                    id=f"corpus-sem-W{i}",
+                    source="corpus",
+                    title=f"Semantic rescue paper {i}",
+                    metadata={"retrieval_source": "corpus_semantic"},
+                )
+                for i in range(top_n + 2)
+            ]
+
+    result = await build_core_case_plan(
+        BuildCasePlanRequest(
+            topic=(
+                "right vestibular schwannoma 2.5 cm with brainstem compression, "
+                "mild hearing loss, planned retrosigmoid resection"
+            ),
+        ),
+        retrievers=CoreRetrieverSet(
+            pubmed=EmptyPubMedRetriever(),
+            radiology=EmptyRadiologyRetriever(),
+            corpus=EmptyCorpusRetriever(),
+            corpus_semantic=FakeSemanticCorpusRetriever(),
+        ),
+    )
+
+    assert [call[1] for call in calls if call[0] == "pubmed"] == [3, 3, 3, 3, 3]
+    assert ("radiology", 3, None) in calls
+    assert any(call == ("corpus", "tumor_skull_base", 3) for call in calls)
+    assert any(call == ("semantic", "tumor_skull_base", 5) for call in calls)
+    assert result.structured["retrieval"]["evidence_count"] == 5
+    assert result.structured["retrieval"]["retrieval_sources"] == {
+        "corpus_semantic": 5,
+    }
+
+
+@pytest.mark.asyncio
+async def test_core_builder_allows_semantic_cap_override_via_options():
+    calls = []
+
+    class EmptyPubMedRetriever:
+        async def retrieve(self, *args, **kwargs):
+            return []
+
+    class EmptyRadiologyRetriever:
+        async def retrieve(self, *args, **kwargs):
+            return []
+
+    class EmptyCorpusRetriever:
+        def retrieve(self, *args, **kwargs):
+            return []
+
+    class FakeSemanticCorpusRetriever:
+        def retrieve(self, fts_query, *, subdomain=None, top_n=8):
+            calls.append((fts_query, subdomain, top_n))
+            return [
+                EvidenceRecord(
+                    id=f"corpus-sem-W{i}",
+                    source="corpus",
+                    title=f"Semantic override paper {i}",
+                    metadata={"retrieval_source": "corpus_semantic"},
+                )
+                for i in range(top_n)
+            ]
+
+    result = await build_core_case_plan(
+        BuildCasePlanRequest(
+            topic="M1 large vessel occlusion thrombectomy",
+            options={"semantic_top_n": 8},
+        ),
+        retrievers=CoreRetrieverSet(
+            pubmed=EmptyPubMedRetriever(),
+            radiology=EmptyRadiologyRetriever(),
+            corpus=EmptyCorpusRetriever(),
+            corpus_semantic=FakeSemanticCorpusRetriever(),
+        ),
+    )
+
+    assert calls == [("M1 large vessel occlusion thrombectomy", "stroke_thrombectomy", 8)]
+    assert result.structured["retrieval"]["evidence_count"] == 8
+
+
+@pytest.mark.asyncio
 async def test_core_builder_accepts_case_input_only_request():
     calls = []
 

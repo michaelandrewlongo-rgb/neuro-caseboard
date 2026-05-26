@@ -111,6 +111,7 @@ async def api_get_caseplan(slug: str):
 async def api_build_caseplan(
     topic: str = Query(..., description="Case or procedure topic"),
     max_per_category: int = Query(3, ge=1, le=5),
+    semantic_top_n: int = Query(5, ge=1, le=10),
     builder: Any = Depends(get_caseplan_builder),
 ):
     """Build a full case plan: 4-axis PubMed search + radiology images."""
@@ -124,6 +125,7 @@ async def api_build_caseplan(
                 "topic": topic,
                 "output_dir": output_dir,
                 "max_per_category": max_per_category,
+                "semantic_top_n": semantic_top_n,
             },
             builder_factory=lambda: builder,
         )

@@ -45,7 +45,7 @@ from .contracts import (
     BuildCasePlanResult,
     EvidenceRecord,
 )
-from .errors import CasePrepError
+from .errors import CasePrepError, CasePrepValidationError
 
 
 class PubMedRetrieverProtocol(Protocol):
@@ -90,6 +90,38 @@ class CoreRetrieverSet:
     radiology: RadiologyRetrieverProtocol
     corpus: CorpusRetrieverProtocol
     corpus_semantic: CorpusRetrieverProtocol | None = None
+
+
+MAX_RETRIEVAL_CAP = 10
+DEFAULT_SEMANTIC_TOP_N = 5
+
+
+def _coerce_retrieval_cap(value: Any, *, field_name: str) -> int:
+    """Validate a user-tunable retrieval count and apply the hard safety cap."""
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise CasePrepValidationError(
+            f"{field_name} must be an integer",
+            details={"field": field_name},
+        )
+    if value < 1:
+        raise CasePrepValidationError(
+            f"{field_name} must be at least 1",
+            details={"field": field_name},
+        )
+    return min(value, MAX_RETRIEVAL_CAP)
+
+
+def _semantic_top_n(request: BuildCasePlanRequest, *, max_per: int) -> int:
+    """Return the semantic corpus cap.
+
+    PubMed stays bounded at the legacy per-axis default of 3 so the dossier
+    does not become a literature dump. Semantic corpus gets a small rescue
+    floor because it is the fallback when exact FTS5/raw PubMed queries miss.
+    """
+    requested = request.options.get("semantic_top_n")
+    if requested is not None:
+        return _coerce_retrieval_cap(requested, field_name="options.semantic_top_n")
+    return min(max(max_per, DEFAULT_SEMANTIC_TOP_N), MAX_RETRIEVAL_CAP)
 
 
 CORPUS_SUBDOMAIN_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -774,7 +806,10 @@ async def build_core_case_plan(
             matched_term=case_spec.procedure_family.value,
             source="case_parser",
         )
-    max_per = min(request.max_per_category, 10)
+    max_per = min(request.max_per_category, MAX_RETRIEVAL_CAP)
+    semantic_top_n = _semantic_top_n(request, max_per=max_per)
+    radiology_max_results = min(max_per, 5)
+    corpus_top_n = max_per
 
     query_case_spec = case_spec
     if procedure_family is None and not case_spec.broad_profile.value:
@@ -827,6 +862,7 @@ async def build_core_case_plan(
         except CasePrepError as exc:
             warnings.append(f"{axis.label}: {exc}")
             continue
+        records = list(records)[:max_per]
         evidence.extend(
             _tag_evidence(
                 records,
@@ -849,12 +885,13 @@ async def build_core_case_plan(
     try:
         radiology_records = await provider_set.radiology.retrieve(
             radiology_query,
-            max_results=min(max_per, 5),
+            max_results=radiology_max_results,
             modality=None,
         )
     except CasePrepError as exc:
         warnings.append(f"Radiology: {exc}")
     else:
+        radiology_records = list(radiology_records)[:radiology_max_results]
         evidence.extend(
             _tag_evidence(
                 radiology_records,
@@ -882,12 +919,13 @@ async def build_core_case_plan(
             provider_set.corpus.retrieve(
                 corpus_query,
                 subdomain=corpus_subdomain,
-                top_n=max_per,
+                top_n=corpus_top_n,
             )
         )
     except CasePrepError as exc:
         warnings.append(f"Corpus: {exc}")
     else:
+        corpus_records = list(corpus_records)[:corpus_top_n]
         evidence.extend(
             _tag_evidence(
                 corpus_records,
@@ -914,12 +952,13 @@ async def build_core_case_plan(
                 provider_set.corpus_semantic.retrieve(
                     semantic_query,
                     subdomain=corpus_subdomain,
-                    top_n=max_per,
+                    top_n=semantic_top_n,
                 )
             )
         except CasePrepError as exc:
             warnings.append(f"Corpus (semantic): {exc}")
         else:
+            semantic_records = list(semantic_records)[:semantic_top_n]
             evidence.extend(
                 _tag_evidence(
                     semantic_records,
@@ -964,6 +1003,12 @@ async def build_core_case_plan(
             "corpus_query": corpus_query,
             "semantic_query": semantic_query if semantic_used else None,
             "semantic_enabled": semantic_used,
+            "caps": {
+                "pubmed_per_axis": max_per,
+                "radiology": radiology_max_results,
+                "corpus_fts5": corpus_top_n,
+                "corpus_semantic": semantic_top_n if semantic_used else None,
+            },
             "evidence_count": len(evidence),
             "sources": _source_counts(evidence),
             "retrieval_sources": _retrieval_source_counts(evidence),
@@ -1004,6 +1049,12 @@ async def build_core_case_plan(
         lines.extend(["", "## Retrieval Path"])
         for tag, count in sorted(retrieval_sources.items()):
             lines.append(f"- {tag}: {count}")
+    caps = structured["retrieval"].get("caps") or {}
+    if caps:
+        lines.extend(["", "## Retrieval Caps"])
+        for tag, count in sorted(caps.items()):
+            if count is not None:
+                lines.append(f"- {tag}: {count}")
     if sections:
         lines.extend(["", "## Draft Sections"])
         for section in sections:
