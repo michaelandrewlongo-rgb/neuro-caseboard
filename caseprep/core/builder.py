@@ -45,6 +45,14 @@ from .contracts import (
     BuildCasePlanResult,
     EvidenceRecord,
 )
+from caseprep.audit.card_auditor import audit_manifest
+from caseprep.compile.case_compiler import compile_board
+from caseprep.enrichment.corpus_enricher import enrich_manifest
+from caseprep.explorer.question_manifest import (
+    build_question_manifest,
+    inject_manifest_into_schema,
+)
+
 from .errors import CasePrepError, CasePrepValidationError
 
 
@@ -714,6 +722,7 @@ def _write_core_artifacts(
     evidence_pack: dict[str, Any] | None = None,
     quarantined_sources: list[dict[str, Any]] | None = None,
     warnings: list[str] | None = None,
+    provider_set: CoreRetrieverSet | None = None,
 ) -> list[ArtifactRef]:
     schema = build_caseprep_schema(
         topic,
@@ -721,6 +730,79 @@ def _write_core_artifacts(
         structured_case=structured_case,
         procedure_family=procedure_family,
     )
+
+    # ── Explorer question-manifest injection ────────────────────────────
+    family_id = (
+        procedure_family.get("id", "")
+        if isinstance(procedure_family, dict)
+        else ""
+    )
+    manifest = build_question_manifest(
+        family_id,
+        topic,
+        profile=profile,
+    )
+    manifest_json: str | None = None
+    enriched_json: str | None = None
+    if manifest is not None:
+        # Only inject Explorer cards into schema sections that do NOT
+        # already have family-default content.  Families like thrombectomy
+        # and ACDF have comprehensive context-aware defaults that should
+        # not be replaced.
+        family_has_defaults = family_id in (
+            "endovascular_thrombectomy",
+            "spine_acdf",
+        )
+        if not family_has_defaults:
+            inject_manifest_into_schema(schema, manifest)
+        import json
+        manifest_json = json.dumps(manifest.to_dict(), indent=2) + "\n"
+
+        # ── Enrichment: attach corpus evidence to each question card ───
+        if provider_set is not None and not family_has_defaults:
+            semantic = provider_set.corpus_semantic
+            if semantic is not None:
+                try:
+                    enriched = enrich_manifest(
+                        manifest,
+                        topic=topic,
+                        retriever=semantic,
+                        top_n=3,
+                    )
+                    enriched_json = json.dumps(enriched.to_dict(), indent=2) + "\n"
+                except Exception as exc:
+                    if warnings is not None:
+                        warnings.append(f"Enrichment: {exc}")
+                    enriched = None
+            else:
+                enriched = None
+        else:
+            enriched = None
+
+        # ── Auditor: validate enriched claims against evidence ───────
+        audited = None
+        if enriched is not None:
+            try:
+                audited = audit_manifest(enriched, topic=topic)
+                import json as _json2
+                _json2  # already imported above
+            except Exception as exc:
+                if warnings is not None:
+                    warnings.append(f"Auditor: {exc}")
+
+        # ── Compiler: assemble audited claims into case board ────────
+        if audited is not None:
+            try:
+                board = compile_board(audited, topic=topic)
+                board_json = json.dumps(board.to_dict(), indent=2) + "\n"
+            except Exception as exc:
+                if warnings is not None:
+                    warnings.append(f"Compiler: {exc}")
+                board = None
+        else:
+            board = None
+        # ───────────────────────────────────────────────────────────────
+
     schema["case"]["evidence"]["key_sources"] = [
         _key_source(record) for record in evidence if record.id
     ]
@@ -779,6 +861,53 @@ def _write_core_artifacts(
                 label=filename,
             )
         )
+
+    if manifest_json is not None:
+        manifest_path = output_dir / "case_question_manifest.json"
+        manifest_path.write_text(manifest_json, encoding="utf-8")
+        artifacts.append(
+            ArtifactRef(
+                path=manifest_path,
+                kind="data",
+                media_type="application/json",
+                label="case_question_manifest.json",
+            )
+        )
+
+    if enriched_json is not None:
+        enriched_path = output_dir / "case_enriched_manifest.json"
+        enriched_path.write_text(enriched_json, encoding="utf-8")
+        artifacts.append(
+            ArtifactRef(
+                path=enriched_path,
+                kind="data",
+                media_type="application/json",
+                label="case_enriched_manifest.json",
+            )
+        )
+
+    if board is not None and board_json is not None:
+        board_md_path = output_dir / "case_board.md"
+        board_md_path.write_text(board.render(), encoding="utf-8")
+        artifacts.append(
+            ArtifactRef(
+                path=board_md_path,
+                kind="markdown",
+                media_type="text/markdown",
+                label="case_board.md",
+            )
+        )
+        board_json_path = output_dir / "case_board.json"
+        board_json_path.write_text(board_json, encoding="utf-8")
+        artifacts.append(
+            ArtifactRef(
+                path=board_json_path,
+                kind="data",
+                media_type="application/json",
+                label="case_board.json",
+            )
+        )
+
     return artifacts
 
 
@@ -1080,6 +1209,7 @@ async def build_core_case_plan(
                 evidence_pack=evidence_pack_coverage,
                 quarantined_sources=quarantined_sources,
                 warnings=warnings,
+                provider_set=provider_set,
             )
         except CasePrepError as exc:
             warnings.append(f"Artifact rendering: {exc}")
