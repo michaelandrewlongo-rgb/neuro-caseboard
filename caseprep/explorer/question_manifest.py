@@ -1402,20 +1402,34 @@ def build_question_manifest(
     """Build a deterministic question manifest for a procedure family.
 
     Resolution order (MERGE, not replace):
-    1. Hand-written templates → authoritative for technique/approach sections
-    2. PAPERS Knowledge Graph → fills gaps with evidence-backed facts
+    1. Hand-written templates → authoritative for technique/approach
+    2. KG facts → evidence-backed claims for all sections
     3. Generic rule-based → covers remaining empty sections
 
     Returns ``None`` only when no profile can be determined at all.
     """
 
-    # Import KG adapter (best-effort)
+    # Import adapters (best-effort)
     try:
         from caseprep.explorer.kg_adapter import build_kg_manifest
     except ImportError:
         build_kg_manifest = None  # type: ignore[assignment]
+    try:
+        from caseprep.explorer.llm_template import build_llm_manifest
+    except ImportError:
+        build_llm_manifest = None  # type: ignore[assignment]
 
-    # ── 1. Collect hand-written template cards (primary) ──────────
+    # ── 1. Collect LLM template cards (primary, most detailed) ────
+    llm_cards: list[QuestionCard] = []
+    if build_llm_manifest is not None:
+        llm_manifest = build_llm_manifest(
+            topic,
+            procedure_family_id=procedure_family_id,
+        )
+        if llm_manifest is not None:
+            llm_cards = list(llm_manifest.cards)
+
+    # ── 2. Collect hand-written template cards (technique fallback) ─
     manifest_key = _detect_manifest_key(procedure_family_id, topic)
     template_cards: list[QuestionCard] = []
     if manifest_key is not None:
@@ -1424,7 +1438,7 @@ def build_question_manifest(
             for cards in section_cards.values():
                 template_cards.extend(cards)
 
-    # ── 2. Collect KG cards (secondary) ────────────────────────────
+    # ── 3. Collect KG fact cards (tertiary fill) ─────────────────
     kg_cards: list[QuestionCard] = []
     if build_kg_manifest is not None:
         kg_manifest = build_kg_manifest(
@@ -1434,7 +1448,7 @@ def build_question_manifest(
         if kg_manifest is not None:
             kg_cards = list(kg_manifest.cards)
 
-    # ── 3. Collect generic cards (tertiary) ────────────────────────
+    # ── 4. Collect generic cards (final fallback) ─────────────────
     generic_cards: list[QuestionCard] = []
     if profile:
         generic_manifest = build_generic_manifest(
@@ -1445,8 +1459,9 @@ def build_question_manifest(
         if generic_manifest is not None:
             generic_cards = list(generic_manifest.cards)
 
-    # ── 4. Merge: template > KG > generic ──────────────────────────
-    all_cards = _merge_cards(template_cards, kg_cards)
+    # ── 5. Merge: LLM > hand-written > KG > generic ───────────────
+    all_cards = _merge_cards(llm_cards, template_cards)
+    all_cards = _merge_cards(all_cards, kg_cards)
     all_cards = _merge_cards(all_cards, generic_cards)
 
     if not all_cards:

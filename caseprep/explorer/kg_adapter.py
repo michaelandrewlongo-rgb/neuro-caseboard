@@ -416,3 +416,86 @@ def build_kg_manifest(
         return None
 
     return QuestionManifest(procedure_family=family_name, cards=all_cards)
+
+
+# ── KG template generator: auto-generate complete procedure-family templates ─
+
+
+def build_kg_template(
+    topic: str,
+    *,
+    min_confidence: float = 0.85,
+) -> dict[str, list[QuestionCard]] | None:
+    """Auto-generate a complete procedure-family template from the KG.
+
+    Walks edges from matched procedure concepts to populate anatomy,
+    operative, and risk sections.  Fills coverage gaps with generic
+    cards so every section key is addressed.
+
+    Returns a dict with the same shape as ``_FAMILY_MANIFESTS`` entries:
+    ``{"anatomy_at_risk": [...], "operative_plan": [...], "risk_and_rescue": [...]}``
+    or ``None`` when the KG is unavailable or no concepts match.
+    """
+    if not _kg_available():
+        return None
+
+    concepts = _match_concepts(topic, limit=5)
+    if not concepts:
+        return None
+
+    # Collect cards organised by target_file → section_key
+    anatomy_cards: list[QuestionCard] = []
+    operative_cards: list[QuestionCard] = []
+    risk_cards: list[QuestionCard] = []
+
+    for concept in concepts:
+        concept_id = concept["id"]
+
+        # Pull facts for this concept
+        facts = _fetch_facts_for_concept(concept_id, min_confidence=min_confidence, limit=8)
+        for fact in facts:
+            card = _fact_to_card(fact)
+            if card.target_file == "03-anatomy-at-risk.md":
+                anatomy_cards.append(card)
+            elif card.target_file == "04-operative-plan.md":
+                operative_cards.append(card)
+            elif card.target_file == "05-risk-and-rescue.md":
+                risk_cards.append(card)
+
+        # Note: edge-generated cards are excluded from the template.
+        # Edge data in the KG can be semantically inconsistent
+        # (e.g. COMPLICATES edges that produce nonsense cards like
+        # "Is Vestibular schwannoma a likely complication?").  Facts
+        # are higher quality and more directly useful.
+
+    # Deduplicate cards by question text similarity
+    def _dedupe(cards: list[QuestionCard]) -> list[QuestionCard]:
+        result: list[QuestionCard] = []
+        seen_words: list[set[str]] = []
+        for card in cards:
+            words = set(card.question.lower().split())
+            is_dup = False
+            for sw in seen_words:
+                if not words or not sw:
+                    continue
+                overlap = len(words & sw) / min(len(words), len(sw))
+                if overlap > 0.7:
+                    is_dup = True
+                    break
+            if not is_dup:
+                result.append(card)
+                seen_words.append(words)
+        return result
+
+    anatomy_cards = _dedupe(anatomy_cards)
+    operative_cards = _dedupe(operative_cards)
+    risk_cards = _dedupe(risk_cards)
+
+    if not (anatomy_cards or operative_cards or risk_cards):
+        return None
+
+    return {
+        "anatomy_at_risk": anatomy_cards,
+        "operative_plan": operative_cards,
+        "risk_and_rescue": risk_cards,
+    }
