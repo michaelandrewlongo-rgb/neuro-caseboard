@@ -7,14 +7,40 @@ import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
-from fastapi.testclient import TestClient
 
 from caseprep.db import CasePrepDB
 from caseprep.web import app, get_db
 
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
+
+class ASGISyncClient:
+    """Small sync wrapper around httpx.ASGITransport for FastAPI tests."""
+
+    def __init__(self, app):
+        self.app = app
+
+    def get(self, url: str, **kwargs) -> httpx.Response:
+        return self._request("GET", url, **kwargs)
+
+    def post(self, url: str, **kwargs) -> httpx.Response:
+        return self._request("POST", url, **kwargs)
+
+    def _request(self, method: str, url: str, **kwargs) -> httpx.Response:
+        import asyncio
+
+        async def send_request() -> httpx.Response:
+            transport = httpx.ASGITransport(app=self.app)
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="http://testserver",
+            ) as async_client:
+                return await async_client.request(method, url, **kwargs)
+
+        return asyncio.run(send_request())
+
 
 @pytest.fixture
 def tmp_db(tmp_path):
@@ -58,11 +84,11 @@ def tmp_db(tmp_path):
 
 @pytest.fixture
 def client(tmp_db):
-    """Sync TestClient wired to the FastAPI app with our test DB."""
+    """Sync ASGI client wired to the FastAPI app with our test DB."""
     import caseprep.web as web_mod
     web_mod._db = tmp_db  # set the module-level singleton
 
-    tc = TestClient(app)
+    tc = ASGISyncClient(app)
     yield tc
 
     web_mod._db = None
@@ -139,6 +165,50 @@ def test_search_pubmed_mocked(client):
         mock.assert_called_once()
 
 
+def test_search_pubmed_query_plan_fields_are_additive_when_requested(client):
+    with (
+        patch("caseprep.web._handle_pubmed_structured", new_callable=AsyncMock) as mock_structured,
+        patch("caseprep.web._handle_pubmed", new_callable=AsyncMock) as mock_plain,
+    ):
+        mock_structured.return_value = {
+            "markdown": "Hybrid search results",
+            "retrieval_strategy": "hybrid",
+            "query_plan": {"steps": ["local", "pubmed"]},
+        }
+
+        resp = client.post(
+            "/api/search?query=vestibular+schwannoma"
+            "&return_query_plan=true&retrieval_strategy=hybrid"
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["query"] == "vestibular schwannoma"
+        assert data["filter"] is None
+        assert data["result"] == "Hybrid search results"
+        assert data["retrieval_strategy"] == "hybrid"
+        assert data["query_plan"] == {"steps": ["local", "pubmed"]}
+        mock_structured.assert_called_once_with({
+            "query": "vestibular schwannoma",
+            "max_results": 10,
+            "filter_type": None,
+            "include_abstracts": False,
+            "retrieval_strategy": "hybrid",
+            "return_query_plan": True,
+        })
+        mock_plain.assert_not_called()
+
+
+def test_search_pubmed_handler_exception_uses_safe_call(client):
+    with patch("caseprep.web._handle_pubmed", new_callable=AsyncMock) as mock:
+        mock.side_effect = RuntimeError("boom")
+
+        resp = client.post("/api/search?query=meningioma")
+
+        assert resp.status_code == 500
+        assert resp.json()["detail"] == "RuntimeError: boom"
+
+
 def test_search_radiology_mocked(client):
     with patch("caseprep.web._handle_radiology", new_callable=AsyncMock) as mock:
         mock.return_value = "Found 5 radiology images"
@@ -158,22 +228,104 @@ def test_get_fulltext_mocked(client):
         assert data["result"] == "Full text content for PMID 12345"
 
 
-def test_build_caseplan_mocked(client):
-    with patch("caseprep.web._handle_build_caseplan", new_callable=AsyncMock) as mock:
-        mock.return_value = (
-            "## Case Plan\n\n"
-            "Outcomes: 3 papers found\n\n"
-            "---\n"
-            "Case plan written to /tmp/vestibular-schwannoma-caseprep/\n"
-            "Canonical files: caseprep.yaml, 01-case-summary.md"
-        )
+def test_build_caseplan_mocked(client, tmp_path):
+    from caseprep.core import ArtifactRef, BuildCasePlanResult, OutputIntentPlan
+
+    seen_requests = []
+    primary_path = tmp_path / "literature_review.md"
+    primary_path.write_text("# Literature Review\n\nBrowser-visible primary artifact", encoding="utf-8")
+
+    class FakeBuilder:
+        async def build_case_plan(self, request):
+            seen_requests.append(request)
+            return BuildCasePlanResult(
+                topic=request.topic,
+                markdown=(
+                    "## Case Plan\n\n"
+                    "Outcomes: 3 papers found\n\n"
+                    "---\n"
+                    "Case plan written to /tmp/vestibular-schwannoma-caseprep/\n"
+                    "Canonical files: caseprep.yaml, 01-case-summary.md"
+                ),
+                output_dir=request.resolved_output_dir(),
+                mode="core",
+                artifacts=[ArtifactRef(
+                    path=primary_path,
+                    kind="markdown",
+                    media_type="text/markdown",
+                    label="literature_review.md",
+                )],
+                intent_plan=OutputIntentPlan(
+                    intent_type="literature_review",
+                    subtype="general_evidence_summary",
+                ),
+            )
+
+    with patch("caseprep.web.CasePlanBuilder", FakeBuilder):
         resp = client.post("/api/build?topic=vestibular+schwannoma")
         assert resp.status_code == 200
         data = resp.json()
         assert data["slug"] == "vestibular-schwannoma"
-        assert "Case Plan" in data["summary"]
+        assert data["summary"] == "# Literature Review\n\nBrowser-visible primary artifact"
+        assert data["primary_artifact"]["label"] == "literature_review.md"
+        assert data["intent"]["intent_type"] == "literature_review"
         assert data["output_dir"].endswith("vestibular-schwannoma-caseprep")
-        assert "caseprep.yaml" in data["summary"]
+        assert seen_requests[0].topic == "vestibular schwannoma"
+        assert seen_requests[0].max_per_category == 3
+
+
+def test_build_caseplan_uses_dependency_injected_engine(client):
+    import caseprep.web as web_mod
+    from caseprep.core import BuildCasePlanResult
+
+    seen_requests = []
+
+    class FakeBuilder:
+        async def build_case_plan(self, request):
+            seen_requests.append(request)
+            return BuildCasePlanResult(
+                topic=request.topic,
+                markdown="dependency output",
+                output_dir=request.resolved_output_dir(),
+                mode="core",
+            )
+
+    web_mod.app.dependency_overrides[web_mod.get_caseplan_builder] = FakeBuilder
+    try:
+        resp = client.post("/api/build?topic=aneurysm+clipping&max_per_category=2")
+    finally:
+        web_mod.app.dependency_overrides.pop(web_mod.get_caseplan_builder, None)
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["summary"] == "dependency output"
+    assert seen_requests[0].topic == "aneurysm clipping"
+    assert seen_requests[0].max_per_category == 2
+
+
+def test_build_caseplan_maps_domain_errors_to_http(client):
+    import caseprep.web as web_mod
+    from caseprep.core import CasePrepValidationError
+
+    class FailingBuilder:
+        async def build_case_plan(self, request):
+            raise CasePrepValidationError(
+                "topic is required",
+                details={"field": "topic"},
+            )
+
+    web_mod.app.dependency_overrides[web_mod.get_caseplan_builder] = FailingBuilder
+    try:
+        resp = client.post("/api/build?topic=aneurysm")
+    finally:
+        web_mod.app.dependency_overrides.pop(web_mod.get_caseplan_builder, None)
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == {
+        "error": "validation_error",
+        "message": "topic is required",
+        "details": {"field": "topic"},
+    }
 
 
 # ── DB persistence after API calls ──────────────────────────────────────────

@@ -1,0 +1,214 @@
+"""Compiler: transform audited claims into a surgeon-facing case board.
+
+Takes an AuditedManifest and produces a clean, actionable markdown dossier.
+The primary surface is a case board — not an audit ledger.  Evidence and
+off-target claims are surfaced in an expandable appendix, not inline.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+
+# ── data contracts ───────────────────────────────────────────────────────────
+
+
+@dataclass
+class CompiledSection:
+    """One section of the case board."""
+
+    heading: str
+    body: str
+    source_cards: list[str] = field(default_factory=list)  # question text refs
+    is_primary: bool = True  # primary surface vs appendix
+
+
+@dataclass
+class CompiledBoard:
+    """Complete surgeon-facing case board."""
+
+    title: str
+    sections: list[CompiledSection] = field(default_factory=list)
+
+    def render(self) -> str:
+        lines = [f"# {self.title}", ""]
+        for sec in self.sections:
+            if sec.is_primary:
+                lines.append(f"## {sec.heading}")
+                lines.append("")
+                lines.append(sec.body.strip())
+                lines.append("")
+        # Appendix
+        appendix_sections = [s for s in self.sections if not s.is_primary]
+        if appendix_sections:
+            lines.append("---")
+            lines.append("")
+            lines.append("## Evidence Appendix *(expand for provenance)*")
+            lines.append("")
+            for sec in appendix_sections:
+                lines.append(f"### {sec.heading}")
+                lines.append("")
+                lines.append(sec.body.strip())
+                lines.append("")
+        return "\n".join(lines)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "title": self.title,
+            "sections": [
+                {
+                    "heading": s.heading,
+                    "body": s.body,
+                    "source_cards": s.source_cards,
+                    "is_primary": s.is_primary,
+                }
+                for s in self.sections
+            ],
+        }
+
+
+# ── rendering helpers ────────────────────────────────────────────────────────
+
+
+def _status_label(status: str) -> str:
+    return {
+        "supported": "✓",
+        "needs_review": "VERIFY",
+        "off_target": "✗ (off-target evidence)",
+        "no_evidence": "— (no evidence)",
+    }.get(status, "?")
+
+
+def _render_card_line(card) -> str:
+    """Render one audited card as a markdown line."""
+    label = _status_label(card.audit_status)
+    return f"- {label} {card.question} — *{card.why_it_matters}*"
+
+
+def _brief_card_line(card) -> str:
+    """Shorter rendering for appendix."""
+    label = _status_label(card.audit_status)
+    q = card.question[:120]
+    w = card.why_it_matters[:80]
+    return f"- {label} {q} — {w}"
+
+
+def _section_intro(heading: str) -> str:
+    intros = {
+        "Anatomy at Risk": (
+            "Structures that must be identified, preserved, or monitored during this approach."
+        ),
+        "Operative Plan": (
+            "Critical steps, decision points, and stop criteria for this procedure."
+        ),
+        "Risk and Rescue": (
+            "Expected and catastrophic complications with specific rescue sequences."
+        ),
+    }
+    return intros.get(heading, "")
+
+
+# ── public API ───────────────────────────────────────────────────────────────
+
+
+def compile_board(
+    audited_manifest,  # AuditedManifest
+    *,
+    topic: str = "",
+) -> CompiledBoard:
+    """Compile audited claims into a surgeon-facing case board.
+
+    Supported claims become primary guidance.  Needs-review claims become
+    VERIFY prompts.  Off-target / no-evidence claims are quarantined to
+    the appendix.
+    """
+    # Group cards by target_file
+    groups: dict[str, list] = {
+        "03-anatomy-at-risk.md": [],
+        "04-operative-plan.md": [],
+        "05-risk-and-rescue.md": [],
+    }
+    for card in audited_manifest.cards:
+        groups.setdefault(card.target_file, []).append(card)
+
+    section_map = {
+        "03-anatomy-at-risk.md": ("Anatomy at Risk", "anatomy"),
+        "04-operative-plan.md": ("Operative Plan", "operative"),
+        "05-risk-and-rescue.md": ("Risk and Rescue", "risk"),
+    }
+
+    sections: list[CompiledSection] = []
+
+    for target_file, cards in groups.items():
+        if not cards:
+            continue
+        heading, _ = section_map.get(target_file, (target_file, ""))
+
+        primary_cards = [c for c in cards if c.audit_status in ("supported", "needs_review")]
+        appendix_cards = [c for c in cards if c.audit_status in ("off_target", "no_evidence")]
+
+        # ── primary section ──────────────────────────────────────────
+        primary_lines = []
+        intro = _section_intro(heading)
+        if intro:
+            primary_lines.append(f"{intro}\n")
+
+        if not primary_cards:
+            primary_lines.append("`needs input` — no validated claims available.")
+        else:
+            for card in primary_cards:
+                primary_lines.append(_render_card_line(card))
+
+        primary_lines.append("")
+        primary_lines.append("*See appendix for evidence sources and off-target claims.*")
+
+        sections.append(CompiledSection(
+            heading=heading,
+            body="\n".join(primary_lines),
+            source_cards=[c.question for c in primary_cards],
+            is_primary=True,
+        ))
+
+        # ── appendix section ─────────────────────────────────────────
+        if appendix_cards:
+            appendix_lines = [f"*{len(appendix_cards)} cards flagged as off-target or lacking evidence:*\n"]
+            for card in appendix_cards:
+                appendix_lines.append(_brief_card_line(card))
+                if card.audit_reason:
+                    appendix_lines.append(f"  - Reason: {card.audit_reason}")
+                if card.papers:
+                    for p in card.papers[:2]:
+                        appendix_lines.append(f"  - Source: {p.get('title', '')[:120]}")
+            sections.append(CompiledSection(
+                heading=f"{heading} — Quarantined",
+                body="\n".join(appendix_lines),
+                source_cards=[],
+                is_primary=False,
+            ))
+
+    # ── summary section ──────────────────────────────────────────────
+    supported_count = sum(1 for c in audited_manifest.cards if c.audit_status == "supported")
+    verify_count = sum(1 for c in audited_manifest.cards if c.audit_status == "needs_review")
+    off_count = sum(1 for c in audited_manifest.cards if c.audit_status == "off_target")
+    noev_count = sum(1 for c in audited_manifest.cards if c.audit_status == "no_evidence")
+
+    summary = (
+        f"**{supported_count}** claims supported by corpus evidence.  "
+        f"**{verify_count}** need clinician verification.  "
+        f"**{off_count}** off-target papers quarantined.  "
+        f"**{noev_count}** had no retrievable evidence.\n\n"
+        f"*Case: {topic}*"
+    )
+
+    sections.insert(0, CompiledSection(
+        heading="Summary",
+        body=summary,
+        source_cards=[],
+        is_primary=True,
+    ))
+
+    return CompiledBoard(
+        title=f"Case Board — {topic}" if topic else "Case Board",
+        sections=sections,
+    )

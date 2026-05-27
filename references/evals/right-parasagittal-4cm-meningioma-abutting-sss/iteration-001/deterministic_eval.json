@@ -1,0 +1,54 @@
+{
+  "as_supplied_degraded_check": {
+    "case_id": "right_parasagittal_4cm_meningioma_abutting_sss_as_supplied",
+    "passed": true,
+    "score": 100,
+    "missing_required_concepts": [],
+    "deterministic_failures": [],
+    "degradation_status": "degraded",
+    "output_dir": "/tmp/caseprep-live-right-parasagittal-4cm-meningioma-sss-v1"
+  },
+  "tumor_operative_quality_check": {
+    "case_id": "right_parasagittal_4cm_meningioma_abutting_sss_tumor_quality",
+    "passed": false,
+    "score": 0,
+    "missing_required_concepts": [
+      "edema",
+      "sinus invasion/abutment",
+      "arterial supply",
+      "cortical/bridging veins",
+      "craniotomy planning",
+      "dural opening",
+      "circumferential devascularization",
+      "debulking vs extracapsular dissection",
+      "venous preservation",
+      "Simpson grade",
+      "venous infarct",
+      "seizures",
+      "hemorrhage",
+      "neurologic deficit",
+      "observation/SRS"
+    ],
+    "deterministic_failures": [
+      "parsed family mismatch: expected 'tumor_convexity_meningioma', got None",
+      "evidence table is empty or placeholder-only",
+      "required concept missing: edema",
+      "required concept missing: sinus invasion/abutment",
+      "required concept missing: arterial supply",
+      "required concept missing: cortical/bridging veins",
+      "required concept missing: craniotomy planning",
+      "required concept missing: dural opening",
+      "required concept missing: circumferential devascularization",
+      "required concept missing: debulking vs extracapsular dissection",
+      "required concept missing: venous preservation",
+      "required concept missing: Simpson grade",
+      "required concept missing: venous infarct",
+      "required concept missing: seizures",
+      "required concept missing: hemorrhage",
+      "required concept missing: neurologic deficit",
+      "required concept missing: observation/SRS"
+    ],
+    "degradation_status": "degraded",
+    "output_dir": "/tmp/caseprep-live-right-parasagittal-4cm-meningioma-sss-v1"
+  }
+}

@@ -16,9 +16,9 @@ import asyncio
 import os
 import re
 import sqlite3
-import sys
 import time
 import xml.etree.ElementTree as ET
+from dataclasses import replace
 from pathlib import Path
 
 import httpx
@@ -26,13 +26,16 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
+from caseprep.adapters.caseplan import build_caseplan_markdown
+from caseprep.core import CasePlanBuilder
 from caseprep.generator import generate_caseprep as _generate_caseprep
-from caseprep.links import build_search_links
+from caseprep.integrations import corpus_topology
 from caseprep.pdfs import format_pdf_results, search_local_pdfs as _search_local_pdfs
-from caseprep.schema import (
-    build_caseprep_schema,
-    build_caseprep_schema_from_axis_data,
-    render_caseprep_files,
+from caseprep.retrievers.fulltext import FullTextRecord, FullTextRetriever
+from caseprep.scoring import (
+    EvidenceGrade,
+    grade_evidence,
+    neurosurg_relevance_score,
 )
 
 # ── Load .env file ───────────────────────────────────────────────────────────
@@ -235,8 +238,8 @@ async def _pubmed_search(
     query: str,
     max_results: int = 10,
     filter_type: str | None = None,
-) -> list[str]:
-    """Return PMIDs matching *query*, optionally filtered by clinical type."""
+) -> tuple[list[str], int]:
+    """Return PMIDs and total count matching *query*, optionally filtered by clinical type."""
     term = _apply_filter(query, filter_type)
     params = {
         "db": "pubmed",
@@ -265,12 +268,16 @@ async def _pubmed_summaries(pmids: list[str]) -> list[dict]:
         a = data.get("result", {}).get(pmid, {})
         if not a or "uid" not in a:
             continue
+        pub_types = a.get("pubtype", [])
+        if isinstance(pub_types, str):
+            pub_types = [pub_types]
         results.append({
             "pmid": a.get("uid", ""),
             "title": a.get("title", ""),
             "authors": _fmt_authors(a.get("authors", [])),
             "source": a.get("source", ""),
             "pubdate": a.get("pubdate", ""),
+            "pub_types": pub_types,
             "doi": a.get("elocationid", "").replace("doi: ", "")
                    if a.get("elocationid", "") else "",
             "url": f"https://pubmed.ncbi.nlm.nih.gov/{a.get('uid', '')}/",
@@ -788,6 +795,7 @@ def _fmt_paper(
     structured: dict[str, str] | None = None,
     fulltext: str | None = None,
     evidence_tier: str | None = None,
+    evidence_grade: EvidenceGrade | None = None,
     study_design: str | None = None,
     citation_count: int | None = None,
 ) -> list[str]:
@@ -807,6 +815,8 @@ def _fmt_paper(
 
     # Evidence tier + study design (when available from local corpus or PubMed)
     meta_parts = []
+    if evidence_grade:
+        meta_parts.append(f"{evidence_grade.label} ({evidence_grade.quality_label})")
     if evidence_tier:
         label = EVIDENCE_TIER_LABELS.get(evidence_tier, evidence_tier)
         meta_parts.append(label)
@@ -977,6 +987,11 @@ async def list_tools() -> list[Tool]:
                         "type": "integer",
                         "description": "Max papers per search category (default: 3, max: 5)",
                         "default": 3,
+                    },
+                    "semantic_top_n": {
+                        "type": "integer",
+                        "description": "Semantic corpus rescue records (default: 5, hard cap: 10)",
+                        "default": 5,
                     },
                 },
                 "required": ["topic"],
@@ -1186,6 +1201,76 @@ async def list_tools() -> list[Tool]:
                 "required": ["work_id"],
             },
         ),
+        Tool(
+            name="search_corpus_semantic",
+            description=(
+                "Semantic search over the neurosurgery corpus using BioBERT embeddings. "
+                "Unlike search_corpus (keyword FTS5), this finds papers by meaning — "
+                "throw in a free-text case description and it locates the most relevant "
+                "topic clusters. Returns top-K matching clusters with names, terms, "
+                "domain labels, and confidence scores. Optionally returns papers from "
+                "each matched cluster. Useful when you don't know the exact keywords "
+                "or when keyword search returns poor results."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "Free-text clinical query (e.g. 'right M1 occlusion NIHSS 18 "
+                            "ASPECTS 7 transferred for thrombectomy')"
+                        ),
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Number of top clusters to return (default: 5, max: 15)",
+                        "default": 5,
+                    },
+                    "papers_per_cluster": {
+                        "type": "integer",
+                        "description": (
+                            "If > 0, also return this many top papers from each matched "
+                            "cluster (default: 0 — clusters only)"
+                        ),
+                        "default": 0,
+                    },
+                    "min_confidence": {
+                        "type": "string",
+                        "description": (
+                            "Minimum confidence to include a cluster: 'low', 'medium', "
+                            "or 'high'. Default: 'low' (include all)."
+                        ),
+                        "default": "low",
+                    },
+                },
+                "required": ["query"],
+            },
+        ),
+        Tool(
+            name="neighbors_paper",
+            description=(
+                "Find semantically similar papers to a given paper using pgvector "
+                "cosine distance over BioBERT embeddings. Use this to expand from a "
+                "known paper to its intellectual neighborhood — works like 'cited by' "
+                "but based on semantic content, not citation graphs."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "paper_id": {
+                        "type": "string",
+                        "description": "Paper ID (work_id from search_corpus or get_paper)",
+                    },
+                    "k": {
+                        "type": "integer",
+                        "description": "Number of neighbors to return (default: 10, max: 50)",
+                        "default": 10,
+                    },
+                },
+                "required": ["paper_id"],
+            },
+        ),
     ]
 
 
@@ -1213,6 +1298,10 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 result = _handle_search_corpus(arguments)
             case "get_paper":
                 result = _handle_get_paper(arguments)
+            case "search_corpus_semantic":
+                result = _handle_search_corpus_semantic(arguments)
+            case "neighbors_paper":
+                result = _handle_neighbors_paper(arguments)
             case _:
                 result = f"Unknown tool: {name}"
         return [TextContent(type="text", text=result)]
@@ -1222,977 +1311,315 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
 # ── Tool handlers ───────────────────────────────────────────────────────────
 
+_PUBMED_RETRIEVAL_STRATEGIES = {
+    "deterministic_enrichment",
+    "landmark_seeded",
+    "local_prior",
+    "hybrid",
+}
+
+
+def _normalize_pubmed_retrieval_strategy(args: dict) -> tuple[str, list[str]]:
+    strategy = args.get("retrieval_strategy", "deterministic_enrichment") or "deterministic_enrichment"
+    if strategy in _PUBMED_RETRIEVAL_STRATEGIES:
+        return strategy, []
+    return (
+        "deterministic_enrichment",
+        [
+            "Invalid retrieval_strategy "
+            f"{strategy!r}; falling back to 'deterministic_enrichment'."
+        ],
+    )
+
+
+def _compact_query_plan_value(value) -> str:
+    if isinstance(value, list):
+        return "; ".join(_compact_query_plan_value(item) for item in value)
+    if isinstance(value, dict):
+        return "; ".join(
+            f"{key}={_compact_query_plan_value(item)}"
+            for key, item in value.items()
+        )
+    return str(value)
+
+
+def _pubmed_plan_queries(query_plan: dict) -> list[dict]:
+    queries = query_plan.get("queries", [])
+    if not isinstance(queries, list):
+        return []
+    return [
+        query
+        for query in queries
+        if isinstance(query, dict)
+        and str(query.get("retriever", "")).lower() == "pubmed"
+    ]
+
+
+def _coerce_positive_int(value, default: int) -> int:
+    try:
+        coerced = int(value)
+    except (TypeError, ValueError):
+        return default
+    return coerced if coerced > 0 else default
+
+
+def _select_pubmed_queries_from_plan(
+    original_query: str,
+    query_plan,
+    args: dict,
+) -> tuple[list[str], dict | None, list[str]]:
+    if not isinstance(query_plan, dict):
+        return [original_query], None, [
+            "Malformed query_plan; falling back to original query."
+        ]
+
+    pubmed_queries = _pubmed_plan_queries(query_plan)
+    max_axes = (
+        _coerce_positive_int(args.get("max_axes"), 1)
+        if "max_axes" in args
+        else 1
+    )
+    selection_scope = "max_axes" if "max_axes" in args else "first_pubmed_query"
+    metadata = {
+        "available_pubmed_queries": len(pubmed_queries),
+        "searched_pubmed_queries": 0,
+        "selection_scope": selection_scope,
+    }
+    if "max_axes" in args:
+        metadata["max_axes"] = max_axes
+
+    warnings: list[str] = []
+    if not pubmed_queries:
+        warnings.append(
+            "No PubMed query found in query_plan; falling back to original query."
+        )
+        return [original_query], metadata, warnings
+
+    selected = pubmed_queries[:max_axes]
+    if not selected:
+        warnings.append(
+            "PubMed query_plan entries did not include rendered query strings; "
+            "falling back to original query."
+        )
+        return [original_query], metadata, warnings
+
+    selected_queries = []
+    for selected_query in selected:
+        query_string = selected_query.get("query")
+        if not isinstance(query_string, str) or not query_string.strip():
+            warnings.append(
+                "Selected PubMed query_plan entry did not include a rendered "
+                "query string; falling back to original query."
+            )
+            return [original_query], metadata, warnings
+        selected_queries.append(query_string.strip())
+    metadata.update(
+        {
+            "selected_pubmed_queries": len(selected_queries),
+            "selected_query_id": selected[0].get("id"),
+            "selected_query_axis": selected[0].get("axis"),
+            "selected_query_ids": [query.get("id") for query in selected],
+            "selected_query_axes": [query.get("axis") for query in selected],
+            "searched_query_ids": [],
+            "searched_query_axes": [],
+        }
+    )
+    return selected_queries, metadata, warnings
+
+
+def _record_actual_pubmed_plan_searches(
+    query_plan_metadata: dict | None,
+    actual_search_count: int,
+) -> None:
+    """Update query-plan metadata with PubMed plan queries actually sent.
+
+    ``searched_pubmed_queries`` is intentionally about rendered PubMed entries
+    selected from the query plan, not fallback searches of the original query.
+    """
+    if query_plan_metadata is None or "selected_query_ids" not in query_plan_metadata:
+        return
+
+    selected_ids = query_plan_metadata.get("selected_query_ids", [])
+    selected_axes = query_plan_metadata.get("selected_query_axes", [])
+    searched_ids = selected_ids[:actual_search_count]
+    searched_axes = selected_axes[:actual_search_count]
+    query_plan_metadata.update(
+        {
+            "searched_pubmed_queries": actual_search_count,
+            "searched_query_ids": searched_ids,
+            "searched_query_axes": searched_axes,
+        }
+    )
+    if searched_ids:
+        query_plan_metadata["searched_query_id"] = searched_ids[0]
+    else:
+        query_plan_metadata.pop("searched_query_id", None)
+    if searched_axes:
+        query_plan_metadata["searched_query_axis"] = searched_axes[0]
+    else:
+        query_plan_metadata.pop("searched_query_axis", None)
+
+
+def _append_query_plan_section(markdown: str, result: dict) -> str:
+    query_plan = result.get("query_plan")
+    if not query_plan:
+        return markdown
+
+    lines = [
+        "",
+        "## Query plan",
+        f"retrieval_strategy: {result.get('retrieval_strategy', 'deterministic_enrichment')}",
+        f"rendered_query: {result.get('rendered_query', result.get('query', ''))}",
+    ]
+    if isinstance(query_plan, dict):
+        for key, value in query_plan.items():
+            if key in {"retrieval_strategy", "rendered_query"}:
+                continue
+            lines.append(f"{key}: {_compact_query_plan_value(value)}")
+    else:
+        lines.append(_compact_query_plan_value(query_plan))
+    return f"{markdown}\n" + "\n".join(lines)
+
+
 async def _handle_pubmed(args: dict) -> str:
+    result = await _handle_pubmed_structured(args)
+    return result["markdown"]
+
+
+async def _handle_pubmed_structured(args: dict) -> dict:
+    """Return structured PubMed search data plus markdown.
+
+    Private helper for planned retriever orchestration. It intentionally uses
+    the same PubMed helpers and markdown formatting as ``_handle_pubmed`` while
+    leaving the public MCP handler contract unchanged.
+    """
     query = args["query"]
     max_results = min(args.get("max_results", 10), 20)
     filter_type = args.get("filter_type")
     include_abstracts = args.get("include_abstracts", False)
+    query_plan = args.get("query_plan")
+    retrieval_strategy, warnings = _normalize_pubmed_retrieval_strategy(args)
+    search_queries = [query]
+    query_plan_metadata = None
+    if query_plan is not None:
+        (
+            search_queries,
+            query_plan_metadata,
+            plan_warnings,
+        ) = _select_pubmed_queries_from_plan(
+            query,
+            query_plan,
+            args,
+        )
+        warnings.extend(plan_warnings)
+    search_query = search_queries[0]
 
-    pmids, total = await _pubmed_search(query, max_results, filter_type)
+    pmids: list[str] = []
+    total = 0
+    seen_pmids: set[str] = set()
+    actual_search_queries: list[str] = []
+    for current_query in search_queries:
+        if len(pmids) >= max_results:
+            break
+        actual_search_queries.append(current_query)
+        current_pmids, current_total = await _pubmed_search(
+            current_query,
+            max_results,
+            filter_type,
+        )
+        total += current_total
+        for pmid in current_pmids:
+            if pmid in seen_pmids:
+                continue
+            seen_pmids.add(pmid)
+            pmids.append(pmid)
+            if len(pmids) >= max_results:
+                break
+    if actual_search_queries:
+        search_query = actual_search_queries[0]
+    rendered_query = " | ".join(
+        _apply_filter(item, filter_type) for item in actual_search_queries
+    )
+    _record_actual_pubmed_plan_searches(
+        query_plan_metadata,
+        len(actual_search_queries),
+    )
     if not pmids:
         filter_note = f" (filter: {filter_type})" if filter_type else ""
-        return f"No PubMed results for: {query}{filter_note}"
+        result = {
+            "query": query,
+            "rendered_query": rendered_query,
+            "query_plan": query_plan,
+            "retrieval_strategy": retrieval_strategy,
+            "total": total,
+            "articles": [],
+            "markdown": f"No PubMed results for: {search_query}{filter_note}",
+        }
+        if query_plan_metadata is not None:
+            result["query_plan_metadata"] = query_plan_metadata
+        if warnings:
+            result["warnings"] = warnings
+        if args.get("return_query_plan"):
+            result["markdown"] = _append_query_plan_section(result["markdown"], result)
+        return result
 
     articles = await _pubmed_summaries(pmids[:max_results])
+    for article in articles:
+        article.setdefault("title", "")
+        article.setdefault("authors", "")
+        article.setdefault("source", "")
+        article.setdefault("pubdate", "")
+        article.setdefault("pub_types", [])
+        article.setdefault("doi", "")
+        article.setdefault("url", "")
 
     abstracts = {}
     if include_abstracts:
         abstracts = await _pubmed_abstracts([a["pmid"] for a in articles])
 
+    for article in articles:
+        abstract = abstracts.get(article["pmid"])
+        article["_relevance_score"] = neurosurg_relevance_score(
+            article.get("title", ""),
+            abstract,
+        )
+        article["_evidence_grade"] = grade_evidence(article.get("pub_types", []))
+    articles.sort(key=lambda a: a.get("_relevance_score", 0.0), reverse=True)
+
     filter_note = f" — filter: {filter_type}" if filter_type else ""
     lines = [
-        f"## PubMed{filter_note} — {query}",
+        f"## PubMed{filter_note} — {search_query}",
         f"({len(articles)} shown of {total} total)\n",
     ]
     for i, a in enumerate(articles, 1):
-        lines.extend(_fmt_paper(a, i, abstract=abstracts.get(a["pmid"])))
+        lines.extend(_fmt_paper(
+            a,
+            i,
+            abstract=abstracts.get(a["pmid"]),
+            evidence_grade=a.get("_evidence_grade"),
+        ))
 
-    return "\n".join(lines)
-
-
-async def _handle_build_caseplan(args: dict) -> str:
-    topic = args["topic"]
-    max_per = min(args.get("max_per_category", 5), 10)
-    slug = topic.strip().lower().replace(" ", "-")
-    out_dir = Path(args.get("output_dir", "") or f"{slug}-caseprep")
-    if not out_dir.is_absolute():
-        out_dir = Path.cwd() / out_dir
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    # Detect profile early to inform search queries
-    profile_name, profile_confidence = _detect_profile(topic)
-    profile_kw = _build_keywords(profile_name)
-
-    # Build anatomy search query with profile-specific terms
-    # Generic "anatomy relevant structures" returns treatment papers;
-    # injecting top profile anatomy keywords focuses PubMed on actual anatomy.
-    top_anatomy_terms = profile_kw["anatomy"][:5]  # top 5 domain-specific terms
-    anatomy_query = f"{topic} {' '.join(top_anatomy_terms)}"
-    # Keep query under PubMed's practical length (~256 chars works well)
-    if len(anatomy_query) > 200:
-        anatomy_query = anatomy_query[:200].rsplit(" ", 1)[0]
-
-    # ── Define the 5 search axes ────────────────────────────────────────
-    # Anatomy axis uses profile-specific anatomical terms to find actual
-    # anatomy papers rather than generic treatment/outcome studies.
-    searches: list[tuple[str, str, str | None]] = [
-        # (label, query suffix, filter_type)
-        ("Anatomy / Relevant Structures", anatomy_query, None),
-        ("Outcomes / Evidence", f"{topic} outcomes", "therapy"),
-        ("Surgical Technique", f"{topic} surgical technique approach", None),
-        ("Complications", f"{topic} complications adverse", "etiology"),
-        ("Reviews / Landmarks", topic, "systematic_review"),
-    ]
-
-    lines = [f"# Case Plan — {topic}\n"]
-    all_articles: list[dict] = []
-    axis_data: dict[str, list[dict]] = {}
-
-    for label, query, filt in searches:
-        lines.append(f"## {label}\n")
-
-        pmids, total = await _pubmed_search(query, max_per, filt)
-        if not pmids:
-            lines.append(f"  No results ({total} total in PubMed).\n")
-            axis_data[label] = []
-            continue
-
-        articles = await _pubmed_summaries(pmids[:max_per])
-        abstracts = await _pubmed_abstracts([a["pmid"] for a in articles])
-        structured = await _pubmed_structured_abstracts([a["pmid"] for a in articles])
-        all_articles.extend(articles)
-
-        # Store enriched articles for template population
-        enriched = []
-        for a in articles:
-            entry = dict(a)
-            entry["_abstract"] = abstracts.get(a["pmid"], "")
-            entry["_structured"] = structured.get(a["pmid"], {})
-            enriched.append(entry)
-        axis_data[label] = enriched
-
-        lines.append(f"  ({len(articles)} shown of {total} total)\n")
-        for i, a in enumerate(articles, 1):
-            lines.extend(_fmt_paper(
-                a, i,
-                abstract=abstracts.get(a["pmid"]),
-                structured=structured.get(a["pmid"]),
-            ))
-
-    # Fetch PMC full text for all papers
-    if all_articles:
-        fulltexts = await _pubmed_fulltext([a["pmid"] for a in all_articles])
-        if fulltexts:
-            lines.append("\n## PMC Full Text Available\n")
-            for pmid, ft in fulltexts.items():
-                lines.append(f"  PMID {pmid}: {len(ft)} chars\n")
-                lines.append(f"  {ft[:800]}…\n")
-
-    summary = "\n".join(lines)
-
-    # ── Write filled-in templates to disk ───────────────────────────────
-    await _write_filled_templates(out_dir, topic, summary, axis_data)
-
-    links = build_search_links(topic)
-    resource_path = out_dir / "resource-links.html"
-    resource_path.write_text(_resource_html(topic, links), encoding="utf-8")
-
-    return f"{summary}\n\n---\nCase plan written to {out_dir.resolve()}/"
-
-
-# ── Template population: domain-aware keyword extraction ──────────────────
-#
-# Each domain profile has keyword lists tailored to specific neurosurgical
-# subspecialties. The pipeline auto-detects the best profile from the topic
-# string. Profiles are additive — base keywords apply to all, profile-specific
-# keywords are merged on top.
-
-# Base keywords — always included regardless of profile
-_BASE_ANATOMY = [
-    "anatomy", "anatomic", "structure", "nerve", "artery", "vein",
-    "nucleus", "tract", "cortex", "lobe", "foramen", "fissure",
-    "sulcus", "gyrus", "ventricle", "cistern",
-]
-_BASE_APPROACH = [
-    "approach", "technique", "positioning", "craniotomy", "incision",
-    "resection", "dissection", "exposure", "retraction",
-    "microsurgical", "endoscopic", "minimally invasive",
-    "monitoring", "neuromonitoring", "intraoperative",
-    "neuronavigation", "bone flap", "dura", "closure", "hemostasis",
-]
-_BASE_COMPLICATIONS = [
-    "complication", "risk", "mortality", "morbidity", "deficit",
-    "infection", "meningitis", "hematoma", "hemorrhage", "ischemia",
-    "infarction", "edema", "seizure", "hydrocephalus",
-    "thromboembolism", "rate", "%", "percent", "incidence", "n=",
-]
-
-# Domain profiles — merged with base keywords
-_DOMAIN_PROFILES: dict[str, dict[str, list[str]]] = {
-    "skull_base": {
-        "anatomy": [
-            "cranial nerve", "cn vii", "cn viii", "cn v", "cn ix", "cn x",
-            "brainstem", "cerebell", "temporal bone", "sigmoid", "petrous",
-            "cavernous", "sella", "clivus", "jugular", "meckel", "cpa",
-            "cerebellopontine", "internal acoustic", "geniculate",
-            "sphenoid", "petroclival", "tentorium",
-        ],
-        "approach": [
-            "retrosigmoid", "translabyrinthine", "middle fossa",
-            "transpetrosal", "presigmoid", "drilling",
-            "ssep", "mep", "emg", "baer", "facial nerve monitor",
-            "keyhole", "endonasal", "transsphenoidal",
-        ],
-        "complications": [
-            "cerebrospinal fluid leak", "csf leak", "facial nerve",
-            "hearing loss", "anosmia", "diplopia", "dysphagia",
-            "aspiration", "hoarseness", "dvt", "pe",
-        ],
-    },
-    "supratentorial_tumor": {
-        "anatomy": [
-            "eloquent", "frontal", "temporal", "parietal", "occipital",
-            "broca", "wernicke", "supplementary motor", "sma", "insula",
-            "corpus callosum", "basal ganglia", "thalamus",
-            "white matter", "corticospinal", "arcuate", "precentral",
-            "postcentral", "language", "motor cortex", "sensory",
-            "visual cortex", "optic radiation", "internal capsule",
-        ],
-        "approach": [
-            "awake craniotomy", "asleep", "frameless", "stereotactic",
-            "neuronavigation", "intraoperative mri", "fluorescence",
-            "5-ala", "aminolevulinic", "mapping", "cortical mapping",
-            "subcortical", "des", "direct electrical stimulation",
-            "keyhole", "tubular", "ssep", "mep", "emg",
-        ],
-        "complications": [
-            "aphasia", "dysphasia", "hemiparesis", "visual field",
-            "neglect", "cognitive", "personality", "mood",
-            "wound", "dehiscence", "pseudomeningocele",
-        ],
-    },
-    "vascular": {
-        # Derived from Neurointerventional Evidence Taxonomy (7-axis faceted system).
-        # Axis 2 (Vascular Territory) + Axis 3 (Pathology) → anatomy keywords.
-        # Axis 4 (Procedure/Technique) → approach keywords.
-        # Axis 7 (Outcome Domain, complication subtree) → complications keywords.
-        "anatomy": [
-            # ── Vascular territories (Axis 2) ──
-            "aca", "a1", "a2", "pericallosal", "distal aca",
-            "mca", "m1", "m2", "m3", "m4",
-            "ica", "cavernous", "petrous", "paraophthalmic", "terminus", "bifurcation",
-            "pcom", "anterior choroidal",
-            "anterior circulation", "anterior perforators",
-            "vertebral", "v1", "v2", "v3", "v4",
-            "basilar", "mid basilar", "distal basilar",
-            "pca", "p1", "p2",
-            "pica", "aica", "sca", "cerebellar",
-            "posterior circulation",
-            "acom", "lenticulostriate", "perforators",
-            # ── Venous (Axis 2) ──
-            "superior sagittal sinus", "transverse sinus", "sigmoid sinus",
-            "straight sinus", "torcula", "cavernous sinus", "jugular bulb",
-            "internal cerebral veins", "vein of galen", "basal veins of rosenthal",
-            "cortical veins", "dural sinuses",
-            # ── Extracranial / spinal (Axis 2) ──
-            "common carotid", "brachiocephalic", "subclavian",
-            "extracranial carotid", "vertebral origin",
-            "radicular arteries", "segmental arteries",
-            # ── Pathology (Axis 3) ──
-            "aneurysm", "saccular", "sidewall", "fusiform", "dolichoectatic",
-            "blister", "dissecting", "mycotic", "traumatic pseudoaneurysm",
-            "avm", "arteriovenous malformation", "compact", "diffuse",
-            "spetzler-martin grade", "lawton-young supplementary grade",
-            "davf", "borden i", "borden ii", "borden iii",
-            "cognard i-iia", "cognard iib", "cognard iii-iv",
-            "ccf", "barrow a", "barrow b", "barrow c", "barrow d",
-            "atherosclerotic stenosis", "intracranial stenosis", "icad",
-            "acute occlusion", "cardioembolic", "cryptogenic", "esus",
-            "arterial dissection", "tandem occlusion",
-            "vasospasm", "post-asah", "rcvs",
-            "sinus thrombosis", "sinus stenosis", "venous sinus atresia",
-            "cavernous malformation", "developmental venous anomaly",
-            "capillary telangiectasia", "sinus pericranii",
-            "hemorrhage", "sah", "ich", "ivh", "csdh", "subarachnoid",
-            "tumor", "meningioma", "glomus tumor", "paraganglioma",
-            "hemangioblastoma", "hemangiopericytoma", "metastasis",
-            "juvenile nasopharyngeal angiofibroma",
-            "flow-related", "with intranidal aneurysm", "ruptured vs unruptured",
-            # ── Access / traversal terms (surgical context) ──
-            "sylvian", "interhemispheric", "pterional", "transsylvian",
-        ],
-        "approach": [
-            # ── Aneurysm treatment (Axis 4) ──
-            "primary coiling", "coiling", "balloon-assisted coiling",
-            "stent-assisted coiling", "jailing", "coil-through-stent",
-            "y-stenting", "flow diversion", "telescoping",
-            "intrasaccular flow disruption", "parent vessel sacrifice",
-            "with adjunctive coiling",
-            # ── Thrombectomy (Axis 4) ──
-            "mechanical thrombectomy", "aspiration alone",
-            "stent retriever alone", "contact aspiration",
-            # ── AVM/dAVF/embolization (Axis 4) ──
-            "avm embolization", "davf embolization", "tumor embolization",
-            "mma embolization", "epistaxis embolization",
-            "transarterial", "transvenous", "combined transarterial + transvenous",
-            "direct puncture", "liquid embolic", "coils",
-            "preoperative devascularization", "preradiosurgical",
-            "staged", "multi-session",
-            # ── Carotid / stenting (Axis 4) ──
-            "carotid revascularization", "transfemoral cas", "transcarotid",
-            "intracranial stenting", "angioplasty", "angioplasty + stenting",
-            "balloon angioplasty alone", "drug-coated balloon angioplasty",
-            "self-expanding", "balloon-expandable",
-            "with distal embolic protection", "with proximal protection",
-            "flow reversal",
-            # ── Access / closure (Axis 4) ──
-            "transfemoral", "transradial", "transulnar", "direct carotid",
-            "closure device", "closure",
-            # ── Venous / spinal / diagnostic (Axis 4) ──
-            "venous sinus stenting", "venous thrombectomy", "venous manometry",
-            "venous interventions", "thrombolysis",
-            "spinal angiography", "spinal avm embolization", "spinal davf embolization",
-            "diagnostic angiography", "4-vessel cerebral angiogram",
-            "selective catheterization", "provocative testing",
-            "balloon test occlusion",
-            # ── Surgical open-vascular (surgeon's terms, not taxonomy) ──
-            "clipping", "bypass", "ec-ic", "temporary clip",
-            "burst suppression", "adenosine", "indocyanine", "icg",
-            "doppler", "microdoppler", "orbitozygomatic", "far lateral",
-            "subtemporal", "supraorbital",
-        ],
-        "complications": [
-            # ── Hemorrhagic (Axis 7) ──
-            "sich", "parenchymal hematoma", "sah",
-            "access site hematoma", "retroperitoneal hematoma",
-            "hemorrhage", "rebleed", "rebleed rate", "delayed rupture",
-            # ── Ischemic (Axis 7) ──
-            "territorial infarct", "perforator infarct", "distal emboli",
-            "vasospasm", "delayed cerebral ischemia", "dci",
-            # ── Device-related (Axis 7) ──
-            "thrombosis", "in-stent stenosis", "in-stent restenosis",
-            "migration", "fracture", "malapposition",
-            "braid deformation", "foreshortening", "fish-mouthing",
-            "wall apposition",
-            # ── Access site (Axis 7) ──
-            "pseudoaneurysm", "dissection", "radial artery occlusion",
-            "access site",
-            # ── Contrast / systemic (Axis 7) ──
-            "contrast-induced nephropathy", "allergic reaction",
-            "infection", "cranial neuropathy", "seizure",
-            # ── Outcomes / grading (Axis 7) ──
-            "mrs 0-2", "mrs 0-1", "mrs at 90 days", "mrs at discharge",
-            "mrs shift", "mtici 2b", "mtici 2c", "mtici 3",
-            "first-pass effect", "reperfusion",
-            "nihss change", "barthel index", "cognitive outcomes",
-            "mortality", "30-day", "90-day", "in-hospital",
-            "aneurysm occlusion", "class i", "class ii", "class iiia",
-            "aneurysm recanalization", "retreatment rate", "regrowth",
-            "obliteration rate",
-            "complication rate", "complications",
-            # ── Disease-specific (Axis 7) ──
-            "hydrocephalus", "shunt", "csf",
-            "seizure freedom", "papilledema grade",
-            "visual acuity", "visual field",
-            "pulsatile tinnitus resolution",
-            "myelopathy improvement",
-            "radiation dose", "fluoroscopy time",
-            # ── Surgical (surgeon's terms) ──
-            "clip slippage", "parent vessel", "stroke", "infarct",
-            "nimodipine",
-        ],
-    },
-    "spine": {
-        "anatomy": [
-            "cervical", "thoracic", "lumbar", "sacral", "vertebra",
-            "disc", "pedicle", "lamina", "facet", "foramen",
-            "spinal cord", "nerve root", "cauda equina", "conus",
-            "thecal sac", "ligamentum", "odontoid", "atlantoaxial",
-            "spinous", "transverse process", "pars",
-        ],
-        "approach": [
-            "laminectomy", "laminoplasty", "discectomy", "microdiscectomy",
-            "fusion", "instrumentation", "pedicle screw", "cage",
-            "corpectomy", "foraminotomy", "tlif", "plif", "alif",
-            "xlif", "oblique", "lateral", "minimally invasive spine",
-            "tubular", "endoscopic spine", "neuronavigation spine",
-            "o-arm", "navigation", "robotic",
-        ],
-        "complications": [
-            "dural tear", "nerve root injury", "pseudarthrosis",
-            "adjacent segment", "instrumentation failure", "screw",
-            "misplacement", "dysphagia", "hoarseness", "c5 palsy",
-            "kyphosis", "sagittal", "flat back", "proximal junctional",
-        ],
-    },
-    "functional": {
-        "anatomy": [
-            "basal ganglia", "thalamus", "subthalamic", "stn", "gpi",
-            "vop", "vim", "striatum", "globus pallidus", "substantia nigra",
-            "motor cortex", "premotor", "sma", "cingulate", "insula",
-            "hippocampus", "amygdala", "anterior nucleus", "centromedian",
-        ],
-        "approach": [
-            "deep brain stimulation", "dbs", "stereotactic", "frame",
-            "frameless", "microelectrode", "mer", "macroelectrode",
-            "impedance", "electrode", "lead", "pulse generator",
-            "programming", "theta", "beta", "gamma",
-            "radiofrequency", "rft", "rhizotomy", "thermocoagulation",
-            "laser ablation", "litt", "focused ultrasound", "mrgfus",
-        ],
-        "complications": [
-            "hemorrhage dbs", "infection dbs", "lead migration",
-            "lead fracture", "erosion", "ipg", "stimulation side effects",
-            "dysarthria", "gait", "cognitive dbs", "mood dbs",
-            "suicide", "impulse control", "status dystonicus",
-        ],
-    },
-    "pediatric": {
-        "anatomy": [
-            "fontanelle", "suture", "craniosynostosis", "hydrocephalus",
-            "ventricle", "choroid plexus", "myelination", "germinal matrix",
-            "posterior fossa", "fourth ventricle", "brainstem",
-            "cerebell", "vermis", "tectal", "pineal",
-        ],
-        "approach": [
-            "endoscopic third ventriculostomy", "etv", "shunt",
-            "vps", "vetriculoperitoneal", "programmable",
-            "posterior fossa craniotomy", "telovelar",
-            "endoscopic biopsy", "navigated biopsy",
-            "intraoperative ultrasound", "vagal nerve stimulator", "vns",
-            "corpus callosotomy", "hemispherectomy", "lobar",
-            "grid", "depth electrode", "seeg", "ecog",
-        ],
-        "complications": [
-            "shunt infection", "shunt malfunction", "overdrainage",
-            "slit ventricle", "cranial defect", "infection pediatric",
-            "mutism", "cerebellar mutism", "posterior fossa syndrome",
-            "endocrine", "growth", "developmental", "cognitive pediatric",
-            "seizure pediatric", "hydrocephalus acquired",
-        ],
-    },
-}
-
-# Alias map: common topic terms → profile name
-_TOPIC_TO_PROFILE: dict[str, str] = {
-    # Skull base
-    "vestibular schwannoma": "skull_base",
-    "acoustic neuroma": "skull_base",
-    "meningioma": "skull_base",
-    "chordoma": "skull_base",
-    "chondrosarcoma": "skull_base",
-    "craniopharyngioma": "skull_base",
-    "pituitary": "skull_base",
-    "epidermoid": "skull_base",
-    "petroclival": "skull_base",
-    "cerebellopontine": "skull_base",
-    "cpa": "skull_base",
-    "jugular": "skull_base",
-    "glomus": "skull_base",
-    # Supratentorial tumor
-    "glioblastoma": "supratentorial_tumor",
-    "gbm": "supratentorial_tumor",
-    "glioma": "supratentorial_tumor",
-    "astrocytoma": "supratentorial_tumor",
-    "oligodendroglioma": "supratentorial_tumor",
-    "oligoastrocytoma": "supratentorial_tumor",
-    "metastasis": "supratentorial_tumor",
-    "brain metastasis": "supratentorial_tumor",
-    "lymphoma": "supratentorial_tumor",
-    # Vascular
-    "aneurysm": "vascular",
-    "clipping": "vascular",
-    "coiling": "vascular",
-    "anterior communicating": "vascular",
-    "posterior communicating": "vascular",
-    "anterior choroidal": "vascular",
-    "basilar": "vascular",
-    "avm": "vascular",
-    "arteriovenous malformation": "vascular",
-    "cavernous malformation": "vascular",
-    "cavernoma": "vascular",
-    "moyamoya": "vascular",
-    "bypass": "vascular",
-    "ec-ic": "vascular",
-    "subarachnoid": "vascular",
-    "sah": "vascular",
-    "intracerebral hemorrhage": "vascular",
-    "ich": "vascular",
-    "hemorrhagic stroke": "vascular",
-    "embolization": "vascular",
-    "flow diversion": "vascular",
-    "stent retriever": "vascular",
-    "thrombectomy": "vascular",
-    "davf": "vascular",
-    "dural arteriovenous fistula": "vascular",
-    "ccf": "vascular",
-    "carotid cavernous fistula": "vascular",
-    "carotid stenosis": "vascular",
-    "carotid stenting": "vascular",
-    "carotid endarterectomy": "vascular",
-    "vasospasm": "vascular",
-    "mechanical thrombectomy": "vascular",
-    "acute ischemic stroke": "vascular",
-    # Spine
-    "spine": "spine",
-    "spinal": "spine",
-    "discectomy": "spine",
-    "laminectomy": "spine",
-    "fusion": "spine",
-    "cervical": "spine",
-    "lumbar": "spine",
-    "thoracic": "spine",
-    "scoliosis": "spine",
-    "spondylolisthesis": "spine",
-    "stenosis": "spine",
-    "myelopathy": "spine",
-    "radiculopathy": "spine",
-    "cord": "spine",
-    # Functional
-    "deep brain": "functional",
-    "dbs": "functional",
-    "parkinson": "functional",
-    "tremor": "functional",
-    "dystonia": "functional",
-    "epilepsy surgery": "functional",
-    "seizure focus": "functional",
-    "temporal lobectomy": "functional",
-    "laser ablation": "functional",
-    "litt": "functional",
-    "focused ultrasound": "functional",
-    "mrgfus": "functional",
-    # Pediatric
-    "pediatric": "pediatric",
-    "paediatric": "pediatric",
-    "child": "pediatric",
-    "hydrocephalus": "pediatric",
-    "shunt": "pediatric",
-    "craniosynostosis": "pediatric",
-    "myelomeningocele": "pediatric",
-    "tethered cord": "pediatric",
-    "medulloblastoma": "pediatric",
-    "ependymoma": "pediatric",
-}
-
-# Build merged keyword lists from base + profile
-def _build_keywords(profile: str) -> dict[str, list[str]]:
-    """Merge base keywords with profile-specific keywords. Returns {anatomy, approach, complications}."""
-    pd = _DOMAIN_PROFILES.get(profile, {})
-    return {
-        "anatomy": _BASE_ANATOMY + pd.get("anatomy", []),
-        "approach": _BASE_APPROACH + pd.get("approach", []),
-        "complications": _BASE_COMPLICATIONS + pd.get("complications", []),
+    markdown = "\n".join(lines)
+    result = {
+        "query": query,
+        "rendered_query": rendered_query,
+        "query_plan": query_plan,
+        "retrieval_strategy": retrieval_strategy,
+        "total": total,
+        "articles": articles,
+        "markdown": markdown,
     }
-
-
-# ── Profile-specific template sections ───────────────────────────────────
-# Each profile defines the headings + placeholder prompts sent to the LLM.
-# Templates mirror the taxonomy axes: anatomy ← Axis 2+3, approach ← Axis 4,
-# complications ← Axis 7.  Default template is used for profiles without
-# custom sections.
-
-_DEFAULT_TEMPLATES = {
-    "anatomy": [
-        ("Key Structures", "(list relevant structures)"),
-        ("Vascular Supply", "(arteries, veins)"),
-        ("Adjacent / At-Risk Structures", "(nerves, tracts, cisterns)"),
-        ("Anatomic Variants", "(common variants to be aware of)"),
-    ],
-    "approach": [
-        ("Approach Selection", "- **Approach:** (fill in)\n- **Rationale:** (fill in)"),
-        ("Positioning", "(supine, prone, lateral, sitting, etc.)"),
-        ("Key Steps", "1.\n2.\n3."),
-        ("Intraoperative Monitoring", "(SSEP, MEP, EMG, BAER)"),
-        ("Pitfalls", "(common errors and how to avoid them)"),
-    ],
-    "complications": [
-        ("Intraoperative", "(vascular injury, neurological deficit, etc.)"),
-        ("Postoperative", "(CSF leak, infection, hematoma, etc.)"),
-        ("Long-Term", "(recurrence, radiation effects, etc.)"),
-        ("Risk Mitigation", "(prevention strategies for each category)"),
-    ],
-}
-
-# Vascular profile templates — derived from neurointerventional evidence taxonomy
-# Axis 2 (Vascular Territory) + Axis 3 (Pathology) → anatomy headings
-# Axis 4 (Procedure / Technique) → approach headings
-# Axis 7 (Outcome Domain) → complications headings
-_VASCULAR_TEMPLATES = {
-    "anatomy": [
-        ("Lesion Location & Morphology",
-         "- **Location:** (segment, sidewall vs bifurcation, dome/neck dimensions)\n"
-         "- **Size:** (maximum diameter, neck width)\n"
-         "- **Morphology:** (saccular, fusiform, blister, dissecting)"),
-        ("Parent Vessel & Branch Anatomy",
-         "(parent artery, perforators, adjacent branches, dominance)"),
-        ("Vascular Territory",
-         "(anterior/posterior circulation, eloquent supply, watershed zones)"),
-        ("Classification / Grading",
-         "(Hunt-Hess, WFNS, modified Fisher for SAH; Spetzler-Martin, Lawton-Young for AVM; "
-         "Borden/Cognard for dAVF)"),
-        ("Associated Variants",
-         "(multiple aneurysms, fenestrations, anatomic variants, vasospasm)"),
-    ],
-    "approach": [
-        ("Treatment Strategy",
-         "- **Indication:** (why treat)\n"
-         "- **Options:** (clipping vs coiling vs flow diversion vs observation vs embolization)\n"
-         "- **Decision drivers:** (rupture status, morphology, patient factors)"),
-        ("Endovascular Technique",
-         "(primary coiling, balloon-assisted, stent-assisted, flow diversion, "
-         "intrasaccular disruption, liquid embolic, staged/multi-session)"),
-        ("Open Surgical Approach",
-         "(pterional, orbitozygomatic, interhemispheric, far-lateral, "
-         "subtemporal, supraorbital; temporary clipping, burst suppression, adenosine)"),
-        ("Access & Closure",
-         "(transfemoral, transradial, direct carotid; closure device, manual compression)"),
-        ("Adjunctive / Monitoring",
-         "(ICG angiography, microdoppler, balloon test occlusion, "
-         "provocative testing, intraoperative DSA)"),
-        ("Technical Pearls / Pitfalls",
-         "(clip selection, perforator preservation, brain relaxation, "
-         "premature rupture management)"),
-    ],
-    "complications": [
-        ("Hemorrhagic",
-         "(SAH, ICH, access site hematoma, retroperitoneal hematoma, rebleed, delayed rupture)"),
-        ("Ischemic",
-         "(territorial infarct, perforator infarct, distal emboli, vasospasm / DCI)"),
-        ("Device / Procedural",
-         "(thrombosis, migration, malapposition, coil herniation, "
-         "parent vessel compromise, dissection)"),
-        ("Access Site",
-         "(pseudoaneurysm, radial artery occlusion, groin hematoma, retroperitoneal)"),
-        ("Functional Outcomes",
-         "(mRS at discharge / 90 days, NIHSS, cognitive outcomes, "
-         "aneurysm occlusion class, recanalization / retreatment rate)"),
-        ("Durability",
-         "(rebleed rate, long-term occlusion, in-stent stenosis, "
-         "recurrence-free survival, retreatment-free survival)"),
-    ],
-}
-
-_PROFILE_TEMPLATES: dict[str, dict[str, list[tuple[str, str]]]] = {
-    "vascular": _VASCULAR_TEMPLATES,
-    # Other profiles use the default until they get custom templates
-}
-
-
-def _get_template_sections(profile: str) -> dict[str, list[tuple[str, str]]]:
-    """Return {anatomy, approach, complications} template sections for a profile."""
-    return _PROFILE_TEMPLATES.get(profile, _DEFAULT_TEMPLATES)
-
-def _detect_profile(topic: str) -> tuple[str, float]:
-    """Detect the best domain profile for a topic string.
-
-    Returns (profile_name, confidence) where confidence is 0.0–1.0.
-    Falls back to 'skull_base' with low confidence if no match.
-    """
-    topic_lower = topic.lower()
-
-    # First pass: exact substring matches (higher confidence)
-    best_match = None
-    best_len = 0
-    for key, profile in _TOPIC_TO_PROFILE.items():
-        if key in topic_lower:
-            if len(key) > best_len:  # longest match wins
-                best_match = profile
-                best_len = len(key)
-
-    if best_match:
-        # Confidence = how much of the token space the matched key covers
-        confidence = min(1.0, best_len / max(len(topic_lower), 10))
-        return (best_match, confidence)
-
-    # Second pass: word-level matching (lower confidence)
-    topic_words = set(topic_lower.replace("-", " ").replace("/", " ").split())
-    word_hits: dict[str, int] = {}
-    for key, profile in _TOPIC_TO_PROFILE.items():
-        key_words = set(key.split())
-        overlap = topic_words & key_words
-        if overlap:
-            word_hits[profile] = word_hits.get(profile, 0) + len(overlap)
-
-    if word_hits:
-        best_profile = max(word_hits, key=lambda p: word_hits[p])  # type: ignore[arg-type]
-        confidence = min(0.5, word_hits[best_profile] / max(len(topic_words), 5))
-        return (best_profile, confidence)
-
-    # Fallback: skull_base (most general neurosurgical profile)
-    return ("skull_base", 0.0)
-
-
-def _extract_relevant_sentences(
-    articles: list[dict],
-    keywords: list[str],
-    max_per_article: int = 8,
-    char_budget: int = 32000,
-) -> list[str]:
-    """Scan article abstracts for sentences matching keywords.
-
-    Returns all sentences with ≥1 keyword hit, sorted by match density
-    (descending), accumulated until char_budget is exceeded. Each article
-    contributes at most max_per_article sentences.
-
-    This is a relevance-ordering pass, NOT a filter. The LLM prompt
-    already constrains to source facts — we just prioritize which
-    sentences it sees first. At abstract scale, everything fits.
-    """
-    import re
-
-    hits: list[tuple[int, str]] = []  # (score, sentence)
-    seen: set[str] = set()
-
-    for article in articles:
-        article_hits = 0
-        text = article.get("_abstract", "")
-        structured = article.get("_structured", {})
-        if structured:
-            text += " " + " ".join(structured.values())
-
-        sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
-
-        for sent in sentences:
-            if article_hits >= max_per_article:
-                break
-            sent_clean = sent.strip()
-            if len(sent_clean) < 30:
-                continue
-            norm = sent_clean.lower()[:60]
-            if norm in seen:
-                continue
-
-            score = 0
-            sent_lower = sent_clean.lower()
-            for kw in keywords:
-                if kw in sent_lower:
-                    score += 1
-
-            if score >= 1:
-                hits.append((score, sent_clean))
-                seen.add(norm)
-                article_hits += 1
-
-    # Sort by score descending (most keyword-dense first), then accumulate
-    hits.sort(key=lambda x: x[0], reverse=True)
-
-    result: list[str] = []
-    total_chars = 0
-    for score, sent in hits:
-        if total_chars + len(sent) > char_budget:
-            break
-        result.append(sent)
-        total_chars += len(sent)
-
+    if query_plan_metadata is not None:
+        result["query_plan_metadata"] = query_plan_metadata
+    if warnings:
+        result["warnings"] = warnings
+    if args.get("return_query_plan"):
+        result["markdown"] = _append_query_plan_section(result["markdown"], result)
     return result
 
 
-async def _populate_section(
-    articles: list[dict],
-    keywords: list[str],
-    template_sections: list[tuple[str, str]],
-    topic: str,
-    section_title: str,
-    char_budget: int = 32000,
-    profile_name: str = "unknown",
-    keyword_count: int = 0,
-    split_complications: bool = False,
-) -> str:
-    """Run extract → synthesize → guardrail pipeline for one template section.
-
-    Args:
-        articles: Enriched article dicts with _abstract and _structured
-        keywords: Domain-profile keywords for relevance ordering
-        template_sections: [(section_name, placeholder_text), ...]
-        topic: Case topic string
-        section_title: Display title for the section
-        char_budget: Max characters of source text to send to LLM (default 32K ≈ 8K tokens)
-        profile_name: Name of the domain profile used (for diagnostics)
-        keyword_count: Number of active keywords (for diagnostics)
-        split_complications: If True, use synthesize_complications_split instead of
-                            single synthesize_section call
-
-    Returns:
-        Final markdown content to write to the file.
-    """
-    from caseprep.llm import synthesize_section, synthesize_complications_split, verify_synthesis
-
-    article_count = len(articles)
-
-    # Stage 1: Extract (relevance-ordered, not filtered — all sentences with ≥1 keyword hit)
-    extracted = _extract_relevant_sentences(articles, keywords, char_budget=char_budget)
-
-    if not extracted:
-        # Diagnostic: show what was attempted
-        profile_line = f"  Profile: **{profile_name}** ({keyword_count} keywords)"
-        count_line = f"  Articles searched: {article_count}"
-        lines = [f"# {section_title} — {topic}\n"]
-        lines.append(f"> *No sentences matching {section_title.lower()} keywords were found.*\n")
-        lines.append(f"> {profile_line}\n")
-        lines.append(f"> {count_line}\n")
-        lines.append(f"> *Consider broadening search terms or adding domain-specific source material.*\n")
-        lines.append("")
-        for name, placeholder in template_sections:
-            lines.append(f"## {name}\n")
-            lines.append(f"(Insufficient data in search results)\n")
-        return "\n".join(lines)
-
-    # Stage 2: Synthesize via LLM
-    try:
-        if split_complications:
-            synthesized = await synthesize_complications_split(
-                source_sentences=extracted,
-                topic=topic,
-                template_sections=template_sections,
-            )
-        else:
-            synthesized = await synthesize_section(
-                template_sections=template_sections,
-                source_sentences=extracted,
-                topic=topic,
-            )
-        if not synthesized:
-            raise ValueError("empty response from LLM")
-    except Exception:
-        # LLM failed — fall back to raw extracted sentences
-        lines = [f"# {section_title} — {topic}\n"]
-        lines.append("> *LLM synthesis unavailable — showing raw extracted findings.*\n")
-        lines.append(f"> *{len(extracted)} sentences extracted from {article_count} articles using {profile_name} profile ({keyword_count} keywords).*\n")
-        for name, placeholder in template_sections:
-            lines.append(f"## {name}\n")
-            lines.append(f"- (see source sentences below)\n")
-        lines.append("\n## Source Sentences from Literature\n")
-        for i, s in enumerate(extracted, 1):
-            lines.append(f"{i}. {s}\n")
-        return "\n".join(lines)
-
-    # Stage 3: Guardrail
-    result = verify_synthesis(synthesized, extracted)
-
-    # If guardrail rejects due to fabricated numbers, retry once with explicit warning
-    if not result.passed and result.total_count > 0:
-        fabricated = [c for c in result.claims if not c.get("numeric_fidelity", True)]
-        if fabricated:
-            print(f"  [guardrail] {len(fabricated)}/{result.total_count} claims had "
-                  f"fabricated numbers — retrying with stronger instruction",
-                  file=sys.stderr)
-            # Keep source numbering stable; pass retry guidance outside the source list.
-            reminder = (
-                "IMPORTANT REMINDER: Only use numbers that appear VERBATIM "
-                "in these source sentences. Do NOT compute, estimate, or "
-                "infer any statistics. If a number is not here, write "
-                "\"Insufficient data\" instead."
-            )
-            try:
-                if split_complications:
-                    synthesized = await synthesize_complications_split(
-                        source_sentences=extracted,
-                        topic=f"{topic}\n\n{reminder}",
-                        template_sections=template_sections,
-                    )
-                else:
-                    synthesized = await synthesize_section(
-                        template_sections=template_sections,
-                        source_sentences=extracted,
-                        topic=f"{topic}\n\n{reminder}",
-                    )
-                if synthesized:
-                    result = verify_synthesis(synthesized, extracted)
-            except Exception:
-                pass  # Retry failed; use first synthesis for diagnostics
-
-    # Handle 0/0 edge case explicitly
-    if result.total_count == 0:
-        lines = [f"# {section_title} — {topic}\n"]
-        lines.append("> *LLM synthesis produced no verifiable claims. Showing raw source sentences instead.*\n")
-        for name, placeholder in template_sections:
-            lines.append(f"## {name}\n")
-            lines.append(f"- (see source sentences below)\n")
-        lines.append("\n## Source Sentences from Literature\n")
-        for i, s in enumerate(extracted, 1):
-            lines.append(f"{i}. {s}\n")
-        return "\n".join(lines)
-
-    if result.passed:
-        lines = [f"# {section_title} — {topic}\n"]
-        # Add diagnostic header with guardrail info
-        diag_lines = []
-        if result.flagged_count == 0:
-            diag_lines.append(f"All {result.total_count} claims verified against cited sources")
-        else:
-            diag_lines.append(f"{result.flagged_count}/{result.total_count} claims flagged during verification")
-        diag_lines.append(f"{len(extracted)} source sentences from {article_count} articles ({profile_name} profile)")
-        lines.append(f"> *{' | '.join(diag_lines)}.*\n")
-        lines.append("")
-        lines.append(synthesized)
-        return "\n".join(lines)
-    else:
-        # Too many unsupported claims — fall back to raw sentences
-        lines = [f"# {section_title} — {topic}\n"]
-        lines.append(f"> *LLM synthesis rejected: {result.flagged_count}/{result.total_count} claims could not be verified against their cited sources.*\n")
-        # Show which claims failed and why
-        lines.append("> \n")
-        for i, claim_info in enumerate(result.claims):
-            if not claim_info["passed"] and claim_info.get("failure"):
-                lines.append(f"> - Claim {i+1}: {claim_info['failure']}\n")
-        lines.append("> \n")
-        lines.append(f"> *({len(extracted)} sentences extracted from {article_count} articles using {profile_name} profile). Showing raw source sentences below.*\n")
-        for name, placeholder in template_sections:
-            lines.append(f"## {name}\n")
-            lines.append(f"- (see source sentences below)\n")
-        lines.append("\n## Source Sentences from Literature\n")
-        for i, s in enumerate(extracted, 1):
-            lines.append(f"{i}. {s}\n")
-        return "\n".join(lines)
-
-
-async def _write_filled_templates(
-    out_dir: Path, topic: str, summary: str,
-    axis_data: dict[str, list[dict]] | None = None,
-) -> None:
-    """Write filled-in markdown templates using keyword-extracted content from search results."""
-    profile_name, profile_confidence = _detect_profile(topic)
-    if axis_data:
-        schema = build_caseprep_schema_from_axis_data(
-            topic,
-            axis_data,
-            profile=profile_name,
-        )
-    else:
-        schema = build_caseprep_schema(topic, profile=profile_name)
-
-    rendered_files = render_caseprep_files(schema, literature_summary=summary)
-    for filename, content in rendered_files.items():
-        (out_dir / filename).write_text(content, encoding="utf-8")
-
-    # If no axis_data (backwards compat), the schema renderer already wrote
-    # blank canonical and legacy templates.
-    if not axis_data:
-        return
-
-    kw = _build_keywords(profile_name)
-
-    # Extract and populate each section via extract→synthesize→guardrail pipeline
-    # Use profile-specific keywords with per-section sources
-    anatomy_articles = axis_data.get("Anatomy / Relevant Structures", [])
-    technique_articles = axis_data.get("Surgical Technique", [])
-    reviews_articles = axis_data.get("Reviews / Landmarks", [])
-    outcomes_articles = axis_data.get("Outcomes / Evidence", [])
-    complications_articles = axis_data.get("Complications", [])
-
-    # Log profile detection
-    conf_str = f"{profile_confidence:.0%}" if profile_confidence > 0 else "fallback"
-    print(f"  [profile] Detected: {profile_name} (confidence: {conf_str})")
-
-    # Get profile-specific template sections (from taxonomy for vascular, default for others)
-    templates = _get_template_sections(profile_name)
-
-    # ── anatomy.md ─────────────────────────────────────────────────────
-    # Use anatomy-dedicated articles first, then reviews and technique as fallback.
-    # Anatomy papers discuss structures directly; technique/reviews rarely do.
-    anatomy_text = await _populate_section(
-        articles=anatomy_articles + reviews_articles + technique_articles,
-        keywords=kw["anatomy"],
-        template_sections=templates["anatomy"],
-        topic=topic,
-        section_title="Relevant Anatomy",
-        profile_name=profile_name,
-        keyword_count=len(kw["anatomy"]),
-    )
-
-    # ── approach.md ────────────────────────────────────────────────────
-    approach_text = await _populate_section(
-        articles=technique_articles,
-        keywords=kw["approach"],
-        template_sections=templates["approach"],
-        topic=topic,
-        section_title="Surgical Approach",
-        profile_name=profile_name,
-        keyword_count=len(kw["approach"]),
-    )
-
-    # ── complications.md ───────────────────────────────────────────────
-    complications_text = await _populate_section(
-        articles=complications_articles + outcomes_articles,
-        keywords=kw["complications"],
-        template_sections=templates["complications"],
-        topic=topic,
-        section_title="Potential Complications",
-        profile_name=profile_name,
-        keyword_count=len(kw["complications"]),
-        split_complications=True,  # use 2-call split to avoid token truncation
-    )
-
-    rendered_files = render_caseprep_files(
-        schema,
-        literature_summary=summary,
-        anatomy_body=anatomy_text,
-        operative_body=approach_text,
-        risk_body=complications_text,
-    )
-    for filename, content in rendered_files.items():
-        (out_dir / filename).write_text(content, encoding="utf-8")
-
-
-def _resource_html(topic: str, links: dict[str, str]) -> str:
-    items = "\n".join(
-        f'  <li><a href="{url}" target="_blank" rel="noopener">{name}</a></li>'
-        for name, url in links.items()
-    )
-    return (
-        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n"
-        "<meta charset=\"utf-8\">\n"
-        f"<title>Resource Links — {topic}</title>\n"
-        "<style>\n"
-        "  body { font-family: system-ui, sans-serif; max-width: 700px; margin: 2em auto; padding: 0 1em; }\n"
-        "  h1 { font-size: 1.4em; }\n"
-        "  ul { list-style: none; padding: 0; }\n"
-        "  li { margin: 0.5em 0; }\n"
-        "  a { color: #1a56db; }\n"
-        "</style>\n</head>\n<body>\n"
-        f"<h1>Resource Links — {topic}</h1>\n<ul>\n{items}\n</ul>\n"
-        "</body>\n</html>\n"
-    )
+async def _handle_build_caseplan(args: dict) -> str:
+    return await build_caseplan_markdown(args, builder_factory=CasePlanBuilder)
 
 
 def _handle_generate(args: dict) -> str:
@@ -2215,28 +1642,29 @@ def _handle_pdfs(args: dict) -> str:
     return format_pdf_results(results)
 
 
-async def _handle_get_fulltext(args: dict) -> str:
-    """Fetch best available content for a single PMID: PMC > structured > plain."""
-    pmid = args["pmid"]
-    summaries = await _pubmed_summaries([pmid])
-    if not summaries:
-        return f"PMID {pmid} not found."
-    paper = summaries[0]
-    lines = [f"## {paper['title']}", f"{paper['authors']} — *{paper['source']}* ({paper['pubdate']})", ""]
+def _format_fulltext_record(record: FullTextRecord) -> str:
+    """Format a FullTextRecord using get_fulltext markdown semantics."""
+    pmid = record.pmid
+    if record.tier == "missing":
+        message = f"No full text or abstract available for PMID {pmid}."
+        if record.warnings:
+            warnings = "\n".join(f"- {warning}" for warning in record.warnings)
+            return f"{message}\n\nWarnings:\n{warnings}"
+        return message
 
-    # Tier 1: PMC full text
-    fulltexts = await _pubmed_fulltext([pmid])
-    if pmid in fulltexts:
+    lines = _format_fulltext_header(record)
+
+    if record.tier == "pmc_fulltext":
+        text = record.sections.get("FULL_TEXT") or record.text
         lines.append("### PMC Full Text\n")
-        lines.append(fulltexts[pmid][:5000])
+        lines.append(text[:5000])
         return "\n".join(lines)
 
-    # Tier 2: Structured abstract (only accept if it has recognized sections)
-    structured = await _pubmed_structured_abstracts([pmid])
-    if pmid in structured:
-        sections = structured[pmid]
+    if record.tier == "structured_abstract":
+        sections = record.sections
         has_content = any(
-            sections.get(k) for k in ("BACKGROUND", "METHODS", "RESULTS", "CONCLUSIONS", "TEXT")
+            sections.get(k)
+            for k in ("BACKGROUND", "METHODS", "RESULTS", "CONCLUSIONS", "TEXT")
         )
         if has_content:
             lines.append("### Structured Abstract\n")
@@ -2246,15 +1674,61 @@ async def _handle_get_fulltext(args: dict) -> str:
             if "TEXT" in sections:
                 lines.append(f"{sections['TEXT']}\n")
             return "\n".join(lines)
+        if record.text:
+            lines.append("### Structured Abstract\n")
+            lines.append(record.text)
+            return "\n".join(lines)
 
-    # Tier 3: Plain abstract
-    abstracts = await _pubmed_abstracts([pmid])
-    if pmid in abstracts:
+    if record.tier == "plain_abstract":
         lines.append("### Abstract\n")
-        lines.append(abstracts[pmid])
+        lines.append(record.text)
         return "\n".join(lines)
 
+    if record.tier == "local_fulltext":
+        text = record.sections.get("FULL_TEXT") or record.text
+        lines.append("### Local Full Text\n")
+        lines.append(text[:5000])
+        return "\n".join(lines)
+
+    if record.text:
+        lines.append(record.text)
+        return "\n".join(lines)
     return f"No full text or abstract available for PMID {pmid}."
+
+
+def _format_fulltext_header(record: FullTextRecord) -> list[str]:
+    metadata = record.metadata
+    title = str(metadata.get("title") or "").strip()
+    if not title:
+        return []
+
+    authors = str(metadata.get("authors") or "").strip()
+    source = str(metadata.get("source") or "").strip()
+    pubdate = str(metadata.get("pubdate") or "").strip()
+    if authors or source or pubdate:
+        return [f"## {title}", f"{authors} — *{source}* ({pubdate})", ""]
+    return [f"## {title}", ""]
+
+
+async def _handle_get_fulltext(args: dict) -> str:
+    """Fetch best available content for a single PMID: PMC > structured > plain."""
+    pmid = args["pmid"]
+    summaries = await _pubmed_summaries([pmid])
+    if not summaries:
+        return f"PMID {pmid} not found."
+    paper = summaries[0]
+    record = await FullTextRetriever().retrieve(pmid)
+    record = replace(
+        record,
+        metadata={
+            **record.metadata,
+            "title": paper.get("title", ""),
+            "authors": paper.get("authors", ""),
+            "source": paper.get("source", ""),
+            "pubdate": paper.get("pubdate", ""),
+        },
+    )
+    return _format_fulltext_record(record)
 
 
 async def _handle_radiology(args: dict) -> str:
@@ -2520,6 +1994,155 @@ async def _handle_send_email(args: dict) -> str:
             detail = {"message": resp.text}
         msg = detail.get("message", resp.text)
         return f"Email failed (HTTP {resp.status_code}): {msg}"
+
+
+# ── corpus_topology handlers ─────────────────────────────────────────────────
+
+
+def _handle_search_corpus_semantic(args: dict) -> str:
+    """Search for semantically relevant clusters and optionally their papers."""
+    if not corpus_topology.is_available():
+        return (
+            "Semantic search unavailable: corpus_topology module not found. "
+            "Ensure ~/corpus_clustering/ exists (or set CORPUS_CLUSTERING_PATH) "
+            "and corpus_topology.py is importable."
+        )
+
+    query = args["query"]
+    top_k = min(args.get("top_k", 5), 15)
+    papers_per_cluster = min(args.get("papers_per_cluster", 0), 20)
+    min_confidence = args.get("min_confidence", "low")
+
+    try:
+        result = corpus_topology.locate_clusters(
+            query, k=top_k, min_confidence=min_confidence
+        )
+    except corpus_topology.TopologyUnavailable as exc:
+        return f"Semantic search unavailable: {exc}"
+    except Exception as exc:
+        return f"Semantic search error: {exc}"
+
+    top = result["top"]
+    if not top:
+        return (
+            f"## Semantic Search — `{query}`\n\n"
+            f"No clusters found at or above **{min_confidence}** confidence.\n"
+            f"Best cosine: {result.get('best_cosine', 'N/A')}\n\n"
+            f"Try broadening the query or lowering min_confidence."
+        )
+
+    lines = [
+        f"## Semantic Search — `{query}`",
+        f"Confidence: **{result['confidence']}** (best cosine: {result['best_cosine']:.4f})",
+        f"Model: {result['model']}",
+        "",
+    ]
+
+    for item in top:
+        cid = item["cluster_id"]
+        name = item["name"] or f"cluster-{cid}"
+        domain = item.get("primary_domain", "—")
+        size = item.get("size", 0)
+        pct = item.get("pct_of_corpus", 0)
+        terms = item.get("terms", [])[:8]
+
+        lines.append(
+            f"### #{item['rank']} — {name} (cluster {cid})"
+        )
+        lines.append(
+            f"cosine={item['cosine']:.4f} | domain={domain} | "
+            f"papers={size:,} ({pct:.1f}%)"
+        )
+        if item.get("is_subcluster"):
+            parent = item.get("parent_name")
+            if parent:
+                lines.append(f"  ↳ subcluster of: {parent}")
+        if terms:
+            lines.append(f"  terms: {', '.join(terms)}")
+
+        # Optionally fetch papers from this cluster
+        if papers_per_cluster > 0:
+            lines.append(f"\n  *Top papers from this cluster:*")
+            try:
+                papers = corpus_topology.papers_in_cluster(cid, k=papers_per_cluster)
+            except corpus_topology.TopologyUnavailable as exc:
+                lines.append(f"  *(papers unavailable: {exc})*")
+                lines.append("")
+                continue
+            except Exception as exc:
+                lines.append(f"  *(papers unavailable: {exc})*")
+                lines.append("")
+                continue
+            try:
+                for pi, p in enumerate(papers, 1):
+                    title = (p.get("title") or "Untitled")[:120]
+                    cites = p.get("citation_count", 0) or 0
+                    year = p.get("year", "—")
+                    lines.append(
+                        f"  {pi}. {title}  "
+                        f"*({year}, cited {cites}×)*"
+                    )
+            except Exception as exc:
+                lines.append(f"  *(papers unavailable: {exc})*")
+        lines.append("")
+
+    lines.append(f"---\n*Semantic search over {len(corpus_topology.list_clusters())} "
+                  f"BioBERT-derived topic clusters. Use search_corpus for keyword "
+                  f"(FTS5) search, or get_paper for full paper detail.*")
+
+    return "\n".join(lines)
+
+
+def _handle_neighbors_paper(args: dict) -> str:
+    """Find semantically similar papers via pgvector."""
+    if not corpus_topology.is_available():
+        return (
+            "Neighbors search unavailable: corpus_topology module not found. "
+            "Ensure ~/corpus_clustering/ exists (or set CORPUS_CLUSTERING_PATH) "
+            "and corpus_topology.py is importable."
+        )
+
+    paper_id = args["paper_id"]
+    k = min(args.get("k", 10), 50)
+
+    try:
+        result = corpus_topology.paper_neighbors(paper_id, k=k)
+    except corpus_topology.TopologyUnavailable as exc:
+        return f"Neighbors search unavailable: {exc}"
+    except Exception as exc:
+        return f"Neighbors search error: {exc}"
+
+    if "error" in result:
+        error = result["error"]
+        pid = result.get("id", paper_id)
+        if error == "unknown_paper":
+            return f"Paper '{pid}' not found in corpus."
+        if error == "no_embedding":
+            return f"Paper '{pid}' has no embedding — neighbors unavailable."
+        return f"Unknown error for '{pid}': {error}"
+
+    neighbors = result["neighbors"]
+    if not neighbors:
+        return f"No neighbors found for '{paper_id}'."
+
+    lines = [
+        f"## Semantic Neighbors — `{paper_id}`",
+        f"",
+    ]
+    for i, n in enumerate(neighbors, 1):
+        title = (n.get("title") or "Untitled")[:120]
+        domain = n.get("primary_domain", "—")
+        cosine = n.get("cosine", 0)
+        lines.append(
+            f"{i}. [{n['id']}] **{title}**  "
+            f"(cosine={cosine:.4f}, domain={domain})"
+        )
+
+    lines.append(
+        f"\n---\n*pgvector halfvec HNSW search. "
+        f"Use get_paper with any returned paper_id for full details.*"
+    )
+    return "\n".join(lines)
 
 
 # ── Entry point ─────────────────────────────────────────────────────────────

@@ -11,15 +11,22 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from caseprep.adapters.caseplan import (
+    build_caseplan_result,
+    caseplan_api_payload,
+    caseprep_error_status,
+    slugify_caseplan_topic,
+)
+from caseprep.core import CasePlanBuilder, CasePrepError
 from caseprep.db import CasePrepDB, DEFAULT_DB_PATH
 from caseprep.mcp_server import (
-    _handle_build_caseplan,
     _handle_get_fulltext,
     _handle_pubmed,
+    _handle_pubmed_structured,
     _handle_radiology,
     _handle_generate,
     _handle_pdfs,
@@ -29,8 +36,8 @@ from caseprep.mcp_server import (
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-async def _safe_call(handler, params: dict) -> str:
-    """Call a handler and return its text result, or raise HTTPException."""
+async def _safe_call(handler, params: dict) -> Any:
+    """Call a handler and return its result, or raise HTTPException."""
     try:
         return await handler(params) if asyncio.iscoroutinefunction(handler) else handler(params)
     except Exception as exc:
@@ -62,6 +69,10 @@ def get_db() -> CasePrepDB:
     if _db is None:
         _db = CasePrepDB(DEFAULT_DB_PATH)
     return _db
+
+
+def get_caseplan_builder() -> CasePlanBuilder:
+    return CasePlanBuilder()
 
 
 # ── HTML pages ──────────────────────────────────────────────────────────────
@@ -100,31 +111,47 @@ async def api_get_caseplan(slug: str):
 async def api_build_caseplan(
     topic: str = Query(..., description="Case or procedure topic"),
     max_per_category: int = Query(3, ge=1, le=5),
+    semantic_top_n: int = Query(5, ge=1, le=10),
+    builder: Any = Depends(get_caseplan_builder),
 ):
     """Build a full case plan: 4-axis PubMed search + radiology images."""
     db = get_db()
-    slug = topic.strip().lower().replace(" ", "-")
+    slug = slugify_caseplan_topic(topic)
     output_dir = str(Path.cwd() / f"{slug}-caseprep")
 
-    # Run the existing handler (returns markdown text)
-    result = await _safe_call(_handle_build_caseplan, {
-        "topic": topic,
-        "max_per_category": max_per_category,
-    })
+    try:
+        result_obj = await build_caseplan_result(
+            {
+                "topic": topic,
+                "output_dir": output_dir,
+                "max_per_category": max_per_category,
+                "semantic_top_n": semantic_top_n,
+            },
+            builder_factory=lambda: builder,
+        )
+    except CasePrepError as exc:
+        raise HTTPException(
+            status_code=caseprep_error_status(exc),
+            detail=exc.to_dict(),
+        ) from exc
 
     # Persist the case plan
-    cp_id = db.save_caseplan(topic, slug, output_dir, summary=result[:2000])
+    cp_id = db.save_caseplan(
+        result_obj.topic,
+        slug,
+        output_dir,
+        summary=result_obj.markdown[:2000],
+    )
 
     # Log the search
-    db.log_search(topic, "build_caseplan")
+    db.log_search(result_obj.topic, "build_caseplan")
 
-    return {
-        "slug": slug,
-        "topic": topic,
-        "output_dir": output_dir,
-        "summary": result,
-        "caseplan_id": cp_id,
-    }
+    return caseplan_api_payload(
+        result_obj,
+        slug=slug,
+        output_dir=output_dir,
+        caseplan_id=cp_id,
+    )
 
 
 @app.post("/api/search")
@@ -133,17 +160,31 @@ async def api_search_pubmed(
     max_results: int = Query(10, ge=1, le=20),
     filter_type: str | None = Query(None, description="Clinical filter: therapy, prognosis, etiology, diagnosis, systematic_review"),
     include_abstracts: bool = Query(False),
+    retrieval_strategy: str = Query("deterministic_enrichment"),
+    return_query_plan: bool = Query(False),
 ):
     """Search PubMed with optional clinical query filters."""
     db = get_db()
-    result = await _safe_call(_handle_pubmed, {
+    handler = _handle_pubmed_structured if return_query_plan else _handle_pubmed
+    result = await _safe_call(handler, {
         "query": query,
         "max_results": max_results,
         "filter_type": filter_type,
         "include_abstracts": include_abstracts,
+        "retrieval_strategy": retrieval_strategy,
+        "return_query_plan": return_query_plan,
     })
     db.log_search(query, "search_pubmed")
-    return {"query": query, "filter": filter_type, "result": result}
+
+    response = {"query": query, "filter": filter_type, "result": result}
+    if isinstance(result, dict):
+        response["result"] = result.get("markdown", result.get("result", result))
+        if return_query_plan:
+            if "query_plan" in result:
+                response["query_plan"] = result["query_plan"]
+            if "retrieval_strategy" in result:
+                response["retrieval_strategy"] = result["retrieval_strategy"]
+    return response
 
 
 @app.post("/api/fulltext")

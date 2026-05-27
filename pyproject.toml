@@ -27,6 +27,15 @@ caseprep-mcp = "caseprep.mcp_server:run"
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
+# Runtime deps for the corpus_topology semantic retriever. The module itself
+# lives at ~/corpus_clustering (or $CORPUS_CLUSTERING_PATH); see
+# caseprep/integrations/corpus_topology.py for how it is discovered.
+semantic = [
+    "sentence-transformers>=2.2",
+    "numpy>=1.24",
+    "psycopg[binary]>=3.1",
+    "pgvector>=0.2",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
