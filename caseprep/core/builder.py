@@ -44,9 +44,11 @@ from .contracts import (
     BuildCasePlanRequest,
     BuildCasePlanResult,
     EvidenceRecord,
+    OutputIntentPlan,
 )
 from caseprep.audit.card_auditor import audit_manifest
 from caseprep.compile.case_compiler import compile_board
+from caseprep.compile.literature_review_compiler import compile_literature_review
 from caseprep.enrichment.corpus_enricher import enrich_manifest
 from caseprep.explorer.question_manifest import (
     build_question_manifest,
@@ -723,6 +725,7 @@ def _write_core_artifacts(
     quarantined_sources: list[dict[str, Any]] | None = None,
     warnings: list[str] | None = None,
     provider_set: CoreRetrieverSet | None = None,
+    intent_plan: OutputIntentPlan | None = None,
 ) -> list[ArtifactRef]:
     schema = build_caseprep_schema(
         topic,
@@ -862,6 +865,25 @@ def _write_core_artifacts(
             )
         )
 
+    if intent_plan is not None and intent_plan.intent_type == "literature_review":
+        literature_markdown = compile_literature_review(
+            topic=topic,
+            intent_plan=intent_plan,
+            evidence=evidence,
+            sections=sections,
+        )
+        literature_path = output_dir / "literature_review.md"
+        literature_path.write_text(literature_markdown, encoding="utf-8")
+        artifacts.append(
+            ArtifactRef(
+                path=literature_path,
+                kind="markdown",
+                media_type="text/markdown",
+                label="literature_review.md",
+                metadata={"primary": True, "intent_type": "literature_review"},
+            )
+        )
+
     if manifest_json is not None:
         manifest_path = output_dir / "case_question_manifest.json"
         manifest_path.write_text(manifest_json, encoding="utf-8")
@@ -895,6 +917,7 @@ def _write_core_artifacts(
                 kind="markdown",
                 media_type="text/markdown",
                 label="case_board.md",
+                metadata={"primary": True, "intent_type": "operative_briefing"},
             )
         )
         board_json_path = output_dir / "case_board.json"
@@ -956,10 +979,14 @@ async def build_core_case_plan(
         if _should_apply_procedure_family_retrieval(case_spec, classification)
         else None
     )
-    pubmed_axes = build_case_queries(query_case_spec, retrieval_family)
+    pubmed_axes = build_case_queries(
+        query_case_spec,
+        retrieval_family,
+        intent_plan=request.intent_plan,
+    )
 
     evidence: list[EvidenceRecord] = []
-    warnings: list[str] = []
+    warnings: list[str] = list(request.intent_plan.warnings if request.intent_plan else [])
     evidence_pack_coverage: dict[str, Any] | None = None
     evidence_pack_id = resolve_case_evidence_pack(query_case_spec, retrieval_family)
     if evidence_pack_id:
@@ -1110,6 +1137,7 @@ async def build_core_case_plan(
 
     structured: dict[str, Any] = {
         "case": case_spec.to_dict(),
+        "intent_plan": request.intent_plan.to_dict() if request.intent_plan else None,
         "procedure_family": _procedure_family_dict(case_spec),
         "profile": {
             "name": classification.profile,
@@ -1210,6 +1238,7 @@ async def build_core_case_plan(
                 quarantined_sources=quarantined_sources,
                 warnings=warnings,
                 provider_set=provider_set,
+                intent_plan=request.intent_plan,
             )
         except CasePrepError as exc:
             warnings.append(f"Artifact rendering: {exc}")
@@ -1226,6 +1255,7 @@ async def build_core_case_plan(
         provenance=provenance,
         structured=structured,
         warnings=warnings,
+        intent_plan=request.intent_plan,
     )
 
     selected_store = store or resolve_caseprep_store(request)

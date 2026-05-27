@@ -228,10 +228,12 @@ def test_get_fulltext_mocked(client):
         assert data["result"] == "Full text content for PMID 12345"
 
 
-def test_build_caseplan_mocked(client):
-    from caseprep.core import BuildCasePlanResult
+def test_build_caseplan_mocked(client, tmp_path):
+    from caseprep.core import ArtifactRef, BuildCasePlanResult, OutputIntentPlan
 
     seen_requests = []
+    primary_path = tmp_path / "literature_review.md"
+    primary_path.write_text("# Literature Review\n\nBrowser-visible primary artifact", encoding="utf-8")
 
     class FakeBuilder:
         async def build_case_plan(self, request):
@@ -247,6 +249,16 @@ def test_build_caseplan_mocked(client):
                 ),
                 output_dir=request.resolved_output_dir(),
                 mode="core",
+                artifacts=[ArtifactRef(
+                    path=primary_path,
+                    kind="markdown",
+                    media_type="text/markdown",
+                    label="literature_review.md",
+                )],
+                intent_plan=OutputIntentPlan(
+                    intent_type="literature_review",
+                    subtype="general_evidence_summary",
+                ),
             )
 
     with patch("caseprep.web.CasePlanBuilder", FakeBuilder):
@@ -254,9 +266,10 @@ def test_build_caseplan_mocked(client):
         assert resp.status_code == 200
         data = resp.json()
         assert data["slug"] == "vestibular-schwannoma"
-        assert "Case Plan" in data["summary"]
+        assert data["summary"] == "# Literature Review\n\nBrowser-visible primary artifact"
+        assert data["primary_artifact"]["label"] == "literature_review.md"
+        assert data["intent"]["intent_type"] == "literature_review"
         assert data["output_dir"].endswith("vestibular-schwannoma-caseprep")
-        assert "caseprep.yaml" in data["summary"]
         assert seen_requests[0].topic == "vestibular schwannoma"
         assert seen_requests[0].max_per_category == 3
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+from dataclasses import replace
 from collections.abc import Callable, Mapping
 from typing import Any, Protocol
 
@@ -59,22 +60,28 @@ def build_caseplan_request(
     for key in ("semantic_top_n",):
         if key in arguments and key not in options:
             options[key] = arguments[key]
-
-    return BuildCasePlanRequest(
-        topic=arguments.get("topic"),
-        case_input=arguments.get("case_input"),
-        output_dir=_default_output_dir(arguments),
-        max_per_category=arguments.get("max_per_category", 3),
-        profile_hint=arguments.get("profile_hint"),
-        structured_output=arguments.get("structured_output", False),
-        options=dict(options),
+    arguments = dict(arguments)
+    output_dir = _default_output_dir(arguments)
+    return BuildCasePlanRequest.from_mapping(
+        arguments | {"output_dir": output_dir, "options": options},
     )
-
 
 async def _maybe_await(value):
     if inspect.isawaitable(value):
         return await value
     return value
+
+
+async def structure_request_intent(request: BuildCasePlanRequest) -> BuildCasePlanRequest:
+    """Preserve explicit plan or add an LLM/heuristic intent plan."""
+    if request.intent_plan:
+        return request
+    from caseprep.intent import structure_intent
+
+    return replace(
+        request,
+        intent_plan=await structure_intent(request.resolved_case_input()),
+    )
 
 
 async def build_caseplan_result(
@@ -84,6 +91,7 @@ async def build_caseplan_result(
 ) -> BuildCasePlanResult:
     """Build a case plan and keep the structured result available to adapters."""
     request = build_caseplan_request(arguments)
+    request = await structure_request_intent(request)
     builder = builder_factory()
     return await _maybe_await(builder.build_case_plan(request))
 
@@ -114,6 +122,32 @@ def caseprep_error_status(exc: CasePrepError) -> int:
     return 500
 
 
+def _primary_artifact_label(result: BuildCasePlanResult) -> str | None:
+    intent_type = result.intent_plan.intent_type if result.intent_plan else None
+    if intent_type == "literature_review":
+        return "literature_review.md"
+    if intent_type == "operative_briefing":
+        return "case_board.md"
+    return None
+
+
+def _read_primary_artifact(result: BuildCasePlanResult) -> tuple[str, dict[str, Any] | None]:
+    label = _primary_artifact_label(result)
+    if label is None:
+        return result.markdown, None
+    for artifact in result.artifacts:
+        if artifact.label != label:
+            continue
+        try:
+            summary = artifact.path.read_text(encoding="utf-8")
+        except OSError:
+            return result.markdown, None
+        primary = artifact.to_dict()
+        primary["primary"] = True
+        return summary, primary
+    return result.markdown, None
+
+
 def caseplan_api_payload(
     result: BuildCasePlanResult,
     *,
@@ -122,10 +156,15 @@ def caseplan_api_payload(
     caseplan_id: int,
 ) -> dict[str, Any]:
     """Return the stable FastAPI /api/build response payload."""
+    summary, primary_artifact = _read_primary_artifact(result)
     return {
         "slug": slug,
         "topic": result.topic,
         "output_dir": output_dir,
-        "summary": result.markdown,
+        "summary": summary,
         "caseplan_id": caseplan_id,
+        "intent": result.intent_plan.to_dict() if result.intent_plan else None,
+        "primary_artifact": primary_artifact,
+        "artifacts": [artifact.to_dict() for artifact in result.artifacts],
+        "warnings": result.warnings,
     }

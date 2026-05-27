@@ -1,5 +1,3 @@
-"""Transport-agnostic CasePrep core data contracts."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -8,12 +6,42 @@ from typing import Any, Literal
 
 from .errors import CasePrepValidationError
 
-
 CoreMode = Literal["core"]
-
 
 def _slugify_topic(topic: str) -> str:
     return topic.strip().lower().replace(" ", "-")
+
+IntentType = Literal["operative_briefing", "literature_review"]
+
+
+@dataclass(frozen=True)
+class OutputIntentPlan:
+    intent_type: IntentType
+    subtype: str = "general"
+    confidence: float = 1.0
+    normalized_query: str = ""
+    entities: dict[str, Any] = field(default_factory=dict)
+    template_sections: list[str] = field(default_factory=list)
+    retrieval_priorities: list[str] = field(default_factory=list)
+    clarification_needed: bool = False
+    clarification_question: str | None = None
+    warnings: list[str] = field(default_factory=list)
+    source: Literal["llm", "heuristic_fallback", "explicit"] = "heuristic_fallback"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "intent_type": self.intent_type,
+            "subtype": self.subtype,
+            "confidence": self.confidence,
+            "normalized_query": self.normalized_query,
+            "entities": self.entities,
+            "template_sections": self.template_sections,
+            "retrieval_priorities": self.retrieval_priorities,
+            "clarification_needed": self.clarification_needed,
+            "clarification_question": self.clarification_question,
+            "warnings": self.warnings,
+            "source": self.source,
+        }
 
 
 @dataclass(frozen=True)
@@ -27,6 +55,7 @@ class BuildCasePlanRequest:
     profile_hint: str | None = None
     structured_output: bool = False
     options: dict[str, Any] = field(default_factory=dict)
+    intent_plan: OutputIntentPlan | None = None
 
     def __post_init__(self) -> None:
         topic = self.topic.strip() if self.topic is not None else None
@@ -51,6 +80,11 @@ class BuildCasePlanRequest:
                 "max_per_category must be at least 1",
                 details={"field": "max_per_category"},
             )
+        if self.intent_plan is not None and not isinstance(self.intent_plan, OutputIntentPlan):
+            raise CasePrepValidationError(
+                "intent_plan must be an OutputIntentPlan",
+                details={"field": "intent_plan"},
+            )
         object.__setattr__(self, "topic", topic)
         object.__setattr__(self, "case_input", case_input)
         if self.output_dir is not None and not isinstance(self.output_dir, Path):
@@ -60,6 +94,17 @@ class BuildCasePlanRequest:
 
     @classmethod
     def from_mapping(cls, values: dict[str, Any]) -> "BuildCasePlanRequest":
+        intent_plan = values.get("intent_plan")
+        if isinstance(intent_plan, dict):
+            raise CasePrepValidationError(
+                "intent_plan cannot be a dict, it must be an OutputIntentPlan object",
+                details={"field": "intent_plan"},
+            )
+        if intent_plan is not None and not isinstance(intent_plan, OutputIntentPlan):
+            raise CasePrepValidationError(
+                "intent_plan must be an OutputIntentPlan object or None",
+                details={"field": "intent_plan"},
+            )
         return cls(
             topic=values.get("topic"),
             case_input=values.get("case_input"),
@@ -67,6 +112,7 @@ class BuildCasePlanRequest:
             max_per_category=values.get("max_per_category", 3),
             profile_hint=values.get("profile_hint"),
             structured_output=values.get("structured_output", False),
+            intent_plan=intent_plan,
             options=dict(values.get("options") or {}),
         )
 
@@ -84,6 +130,7 @@ class BuildCasePlanRequest:
         if not out.is_absolute():
             return Path.cwd() / out
         return out
+
 
 @dataclass(frozen=True)
 class EvidenceRecord:
@@ -160,6 +207,7 @@ class BuildCasePlanResult:
     provenance: list[ProvenanceRecord] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     structured: dict[str, Any] = field(default_factory=dict)
+    intent_plan: OutputIntentPlan | None = None
 
 
     def to_dict(self) -> dict[str, Any]:
@@ -173,4 +221,5 @@ class BuildCasePlanResult:
             "provenance": [record.to_dict() for record in self.provenance],
             "warnings": self.warnings,
             "structured": self.structured,
+            "intent_plan": self.intent_plan.to_dict() if self.intent_plan else None,
         }

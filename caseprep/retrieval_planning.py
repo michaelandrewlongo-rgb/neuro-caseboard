@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import re
 
 from caseprep.case_parser import CaseSpec
+from caseprep.core.contracts import OutputIntentPlan
 from caseprep.evidence_packs.thrombectomy import resolve_thrombectomy_pack
 from caseprep.procedure_taxonomy import ProcedureFamily
 from caseprep.profile_classifier import ProfileName, build_keywords, classify_profile
@@ -79,9 +80,13 @@ def resolve_case_evidence_pack(
 def build_case_queries(
     case: CaseSpec,
     family: ProcedureFamily | None,
+    *,
+    intent_plan: OutputIntentPlan | None = None,
 ) -> list[RetrievalAxis]:
     """Build PubMed/corpus query axes from structured case fields."""
     topic = case.raw_input.strip()
+    if intent_plan is not None and intent_plan.intent_type == "literature_review":
+        return _build_literature_review_queries(case, family, intent_plan)
     if family is not None:
         templates = family.retrieval_templates
         review_subject = _review_subject(case, family)
@@ -154,6 +159,59 @@ def build_case_queries(
             id="reviews",
             label="Reviews / Landmarks",
             query=topic,
+            filter_type="systematic_review",
+        ),
+    ]
+
+
+def _build_literature_review_queries(
+    case: CaseSpec,
+    family: ProcedureFamily | None,
+    intent_plan: OutputIntentPlan,
+) -> list[RetrievalAxis]:
+    """Build evidence-question axes for literature review outputs."""
+    topic = case.raw_input.strip()
+    review_subject = _review_subject(case, family) if family is not None else topic
+    subtype = intent_plan.subtype
+
+    rates_terms = "incidence rates complication rates"
+    if subtype == "incidence":
+        rates_terms = "incidence prevalence rates"
+    elif subtype == "complication_rates":
+        rates_terms = "complication rates adverse events"
+
+    outcomes_terms = "outcomes comparative effectiveness"
+    if subtype == "prognosis":
+        outcomes_terms = "prognosis outcomes predictors"
+
+    return [
+        RetrievalAxis(
+            id="clinical_question",
+            label="Clinical Question Framing",
+            query=f"{topic} clinical question population intervention comparator outcome",
+        ),
+        RetrievalAxis(
+            id="outcomes",
+            label="Outcomes / Comparative Evidence",
+            query=f"{topic} {outcomes_terms}",
+            filter_type="therapy",
+        ),
+        RetrievalAxis(
+            id="rates",
+            label="Incidence / Rates",
+            query=f"{topic} {rates_terms}",
+            filter_type="prognosis",
+        ),
+        RetrievalAxis(
+            id="risk_factors",
+            label="Risk Factors / Complications",
+            query=f"{topic} risk factors complications predictors",
+            filter_type="etiology",
+        ),
+        RetrievalAxis(
+            id="reviews",
+            label="Systematic Reviews / Meta-analyses",
+            query=f"{review_subject} systematic review meta-analysis",
             filter_type="systematic_review",
         ),
     ]

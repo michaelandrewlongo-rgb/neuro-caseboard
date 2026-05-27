@@ -5,6 +5,8 @@ from .contracts import (
     BuildCasePlanRequest,
     BuildCasePlanResult,
     EvidenceRecord,
+    IntentType,
+    OutputIntentPlan,
     ProvenanceRecord,
 )
 from .engine import CasePlanBuilder, resolve_core_mode
@@ -29,6 +31,8 @@ __all__ = [
     "CasePrepProvenanceError",
     "CasePrepValidationError",
     "EvidenceRecord",
+    "IntentType",
+    "OutputIntentPlan",
     "ProvenanceRecord",
     "resolve_core_mode",
 ]

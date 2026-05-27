@@ -371,8 +371,13 @@ async function doBuild() {
   setStatus(`Building case plan for "${topic}" — this may take 30-60 seconds...`);
   try {
     const data = await api('POST', '/api/build', { topic });
-    setStatus(`Case plan built: ${data.slug}`, 'success');
-    renderMarkdown(data.summary);
+    const intentLabel = data.intent ? ` — ${data.intent.intent_type}` : '';
+    const artifactLabel = data.primary_artifact ? ` (${data.primary_artifact.label})` : '';
+    setStatus(`Case plan built: ${data.slug}${intentLabel}${artifactLabel}`, 'success');
+    const artifactHeader = data.primary_artifact
+      ? `> Browser-visible artifact: ${data.primary_artifact.label}\n\n`
+      : '';
+    renderMarkdown(`${artifactHeader}${data.summary}`);
     loadHistory();
   } catch (e) {
     setStatus(`Build failed: ${e.message}`, 'error');
