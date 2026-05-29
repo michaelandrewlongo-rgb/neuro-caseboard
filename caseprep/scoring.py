@@ -583,6 +583,63 @@ def classify_clinical_applicability(
     ):
         return False, "case report/rare anomaly or historical vignette source"
 
+    # --- Spine / ACDF-specific quarantine rules ---
+    is_acdf = (
+        family_id == "spine_acdf"
+        or "acdf" in case_text
+        or "anterior cervical discectomy" in case_text
+        or "anterior cervical fusion" in case_text
+    )
+    if is_acdf:
+        # Quarantine vertebral artery loop / anomalous VA case reports — rare
+        # anatomical variants, not representative of standard ACDF technique or
+        # complications.  These surface because the same surgical corridor
+        # (anterior cervical) is involved, but the pathology, treatment, and
+        # outcomes are entirely different from disc/osteophyte radiculopathy.
+        if re.search(r"\b(vertebral artery loop|anomalous vertebral|aberrant vertebral|vertebral artery sling)", text_cf):
+            return False, "vertebral artery loop/anomalous VA source — rare anatomical variant, not standard ACDF"
+
+        # Quarantine hemodialysis-associated destructive spondyloarthropathy
+        # papers unless they explicitly discuss ACDF technique.  Dialysis
+        # spondyloarthropathy is a distinct pathology with different surgical
+        # considerations (circumferential reconstruction, bone fragility).
+        if ("hemodialysis" in text_cf or "hemodialysis-associated" in text_cf) and not any(
+            term in text_cf for term in ("acdf", "anterior cervical discectomy", "arthrodesis in dialysis", "fusion for")
+        ):
+            return False, "hemodialysis-associated spondyloarthropathy source — distinct pathology from standard ACDF"
+
+        # Quarantine bow-hunter / rotational VA occlusion adjacent-level case
+        # reports — these are rare dynamic vascular compression syndromes, not
+        # standard ACDF indications or outcomes.
+        if any(
+            term in text_cf
+            for term in ("bow hunter", "rotational vertebral", "rotational occlusion", "dynamic vertebral")
+        ):
+            return False, "vertebral artery rotational occlusion source — not standard ACDF indication"
+
+        # Quarantine non-spine basic science papers that lack ACDF-specific
+        # clinical context (molecular biology, cell culture, animal model studies).
+        # Require ACDF procedure-specific terms, not just spine anatomy — "cervical
+        # disc degeneration" in a title can describe a basic science, not a clinical paper.
+        if any(term in text_cf for term in BASIC_SCIENCE_TERMS) and not any(
+            term in text_cf
+            for term in (
+                "acdf",
+                "anterior cervical discectomy",
+                "anterior cervical fusion",
+                "cervical radiculopathy",
+                "cervical spondylosis",
+                "clinical outcome",
+                "surgical technique",
+                "operative",
+            )
+        ):
+            return False, "basic-science source without ACDF-specific clinical context"
+
+    # --- Generic non-neuro filter with ACDF/spine bypass ---
+    # "orthopedic" in NON_NEURO_TERMS falsely quarantines legitimate spine
+    # surgery papers.  Bypass the non-neuro check when the text carries
+    # ACDF/spine-specific context.
     stroke_neuro_terms = (
         "stroke",
         "cerebral",
@@ -595,8 +652,29 @@ def classify_clinical_applicability(
         "ischemic",
         "ischaemic",
     )
-    if _count_matches(text, NON_NEURO_TERMS) > 0 and not any(term in text_cf for term in stroke_neuro_terms):
-        return False, "non-stroke/non-neuro source"
+    spine_context_terms = (
+        "acdf",
+        "anterior cervical",
+        "cervical radiculopathy",
+        "cervical disc",
+        "cervical spondylosis",
+        "cervical fusion",
+        "cervical spine",
+        "cervical myelopathy",
+        "discectomy",
+        "foraminotomy",
+        "laminectomy",
+        "laminoplasty",
+        "pedicle screw",
+        "spinal fusion",
+        "spine surgery",
+    )
+    if _count_matches(text, NON_NEURO_TERMS) > 0 and not any(
+        term in text_cf for term in stroke_neuro_terms
+    ):
+        # Allow spine papers through even if they mention "orthopedic"
+        if not any(term in text_cf for term in spine_context_terms):
+            return False, "non-stroke/non-neuro source"
 
     return True, "clinically applicable"
 

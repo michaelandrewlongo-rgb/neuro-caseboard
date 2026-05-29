@@ -13,6 +13,7 @@ Tools:
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 import re
 import sqlite3
@@ -416,6 +417,57 @@ async def _pubmed_fulltext(pmids: list[str]) -> dict[str, str]:
 # ── Local corpus search (FTS5) ─────────────────────────────────────────────
 
 
+def _compute_quality_boost(
+    journal_tier: int | None,
+    citation_count: int | None,
+    pub_year: int | None,
+    current_year: int = 2026,
+) -> float:
+    '''Compute quality boost from journal tier + citation half-life.
+
+    Journal boost: tier 2 -> 0.16, tier 1 -> 0.08, else 0.00.
+    Citation boost: log10(cites/year + 1) / 2 x 0.15, capped at 0.15.
+    Combined range: 0.00-0.31.
+    '''
+    journal_boost = {2: 0.16, 1: 0.08}.get(journal_tier if journal_tier else 0, 0.0)
+
+    citation_boost = 0.0
+    if citation_count and pub_year and citation_count > 0:
+        years_since_pub = max(current_year - pub_year, 1)
+        cites_per_year = citation_count / years_since_pub
+        citation_boost = min(math.log10(cites_per_year + 1) / 2 * 0.15, 0.15)
+
+    return journal_boost + citation_boost
+
+
+def _rerank_corpus_results(papers: list[dict]) -> list[dict]:
+    '''Re-rank corpus results by blending BM25 similarity with quality boost.
+
+    Formula: final_score = 0.6 x BM25_normalized + 0.4 x quality_boost
+    BM25 rank is inverted (more negative = better match) and normalized to 0-1.
+    Quality boost (0-0.31) from journal tier + citation half-life.
+    '''
+    if not papers:
+        return papers
+
+    ranks = [p["rank"] for p in papers]
+    min_rank = min(ranks)  # most negative = best BM25 match
+    max_rank = max(ranks)  # least negative
+    rank_range = max_rank - min_rank if max_rank - min_rank > 0.001 else 1.0
+
+    for paper in papers:
+        bm25_sim = (paper["rank"] - min_rank) / rank_range  # 0=worst, 1=best
+        quality = _compute_quality_boost(
+            paper.get("journal_tier"),
+            paper.get("citation_count"),
+            paper.get("year"),
+        )
+        paper["quality_score"] = 0.6 * bm25_sim + 0.4 * quality
+
+    papers.sort(key=lambda p: p["quality_score"], reverse=True)
+    return papers
+
+
 def _corpus_conn() -> sqlite3.Connection:
     """Open corpus DB with fulltext attached (read-only)."""
     conn = sqlite3.connect(f"file:{_CORPUS_DB}?mode=ro", uri=True)
@@ -460,6 +512,9 @@ def _corpus_search(
         return {"error": "Local corpus not available", "papers": [], "total_matches": 0}
 
     top_n = min(max(top_n, 1), 25)
+    # Fetch 3x candidates for re-ranking so high-quality papers that are not
+    # the absolute top BM25 match still get surfaced by journal/citation boost.
+    fetch_n = min(top_n * 3, 75)
     conn = _corpus_conn()
     try:
         cur = conn.cursor()
@@ -473,7 +528,7 @@ def _corpus_search(
                 JOIN subdomain_assignments sa ON sa.work_id = w.id
                 WHERE works_fts MATCH ? AND sa.subdomain_id = ?
                 ORDER BY rank LIMIT ?
-            """, (fts_query, subdomain, top_n))
+            """, (fts_query, subdomain, fetch_n))
         else:
             cur.execute("""
                 SELECT w.id, bm25(works_fts) AS rank
@@ -481,7 +536,7 @@ def _corpus_search(
                 JOIN works w ON w.rowid = works_fts.rowid
                 WHERE works_fts MATCH ?
                 ORDER BY rank LIMIT ?
-            """, (fts_query, top_n))
+            """, (fts_query, fetch_n))
         top_ids = [(r["id"], r["rank"]) for r in cur.fetchall()]
 
         # Total match count + subdomain distribution
@@ -511,7 +566,7 @@ def _corpus_search(
         for wid, rank in top_ids:
             cur.execute("""
                 SELECT w.title, w.pub_year, w.study_design, w.evidence_tier,
-                       w.citation_count, w.article_type, j.title AS journal,
+                       w.citation_count, w.article_type, j.title AS journal, j.tier AS journal_tier,
                        (SELECT value FROM identifiers WHERE work_id=w.id AND scheme='pmid' LIMIT 1) AS pmid,
                        (SELECT value FROM identifiers WHERE work_id=w.id AND scheme='doi' LIMIT 1) AS doi
                 FROM works w
@@ -549,6 +604,7 @@ def _corpus_search(
                 "title": meta["title"],
                 "year": meta["pub_year"],
                 "journal": meta["journal"],
+                "journal_tier": meta["journal_tier"],
                 "study_design": meta["study_design"],
                 "evidence_tier": meta["evidence_tier"],
                 "article_type": meta["article_type"],
@@ -561,6 +617,10 @@ def _corpus_search(
                 "abstract": abstract,
                 "conclusion": conclusion,
             })
+
+        # Quality-weighted re-ranking: blend BM25 similarity with journal tier + citation half-life
+        papers = _rerank_corpus_results(papers)
+        papers = papers[:top_n]  # truncate back to requested count after re-ranking
 
         return {
             "fts_query": fts_query,
