@@ -8,7 +8,8 @@ off-target claims are surfaced in an expandable appendix, not inline.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
+from caseprep.core.contracts import SlotConfidence
 
 
 # ── data contracts ───────────────────────────────────────────────────────────
@@ -21,6 +22,8 @@ class CompiledSection:
     heading: str
     body: str
     source_cards: list[str] = field(default_factory=list)  # question text refs
+    confidence: Optional[SlotConfidence] = None
+    confidence_band: str = "" # NEW
     is_primary: bool = True  # primary surface vs appendix
 
 
@@ -83,7 +86,14 @@ def _status_label(status: str) -> str:
 def _render_card_line(card) -> str:
     """Render one audited card as a markdown line."""
     label = _status_label(card.audit_status)
-    return f"- {label} {card.question} — *{card.why_it_matters}*"
+    
+    confidence_marker = ""
+    if hasattr(card, 'confidence') and card.confidence is not None:
+        band = _confidence_band(card.confidence)
+        markers = {"high": " 🟢", "medium": " 🟡", "low": " 🔴"}
+        confidence_marker = markers.get(band, "")
+    
+    return f"- {label} {card.question}{confidence_marker} — *{card.why_it_matters}*"
 
 
 def _brief_card_line(card) -> str:
@@ -94,7 +104,26 @@ def _brief_card_line(card) -> str:
     return f"- {label} {q} — {w}"
 
 
-def _section_intro(heading: str) -> str:
+
+def _section_intro(section) -> str:
+    """Render section intro line."""
+    return f"**{section.heading}**: *{section.description}*\n\n"
+
+def _confidence_band(confidence) -> str:
+    """Map normalized confidence to band label."""
+    if confidence is None:
+        return ""
+    try:
+        nc = confidence.normalized_confidence
+    except AttributeError:
+        return ""
+    if nc >= 0.85:
+        return "high"
+    elif nc >= 0.50:
+        return "medium"
+    else:
+        return "low"
+
     intros = {
         "Anatomy at Risk": (
             "Structures that must be identified, preserved, or monitored during this approach."
@@ -168,6 +197,10 @@ def compile_board(
             body="\n".join(primary_lines),
             source_cards=[c.question for c in primary_cards],
             is_primary=True,
+            confidence=primary_cards[0].confidence if len(primary_cards) == 1 else None,
+            confidence_band=_confidence_band(
+                primary_cards[0].confidence if primary_cards and hasattr(primary_cards[0], 'confidence') else None
+            ),
         ))
 
         # ── appendix section ─────────────────────────────────────────
@@ -185,6 +218,9 @@ def compile_board(
                 body="\n".join(appendix_lines),
                 source_cards=[],
                 is_primary=False,
+                confidence_band=_confidence_band(
+                    primary_cards[0].confidence if primary_cards and hasattr(primary_cards[0], 'confidence') else None
+                ),
             ))
 
     # ── summary section ──────────────────────────────────────────────
@@ -207,6 +243,24 @@ def compile_board(
         source_cards=[],
         is_primary=True,
     ))
+
+    # ── confidence summary ────────────────────────────────────────────
+    high = sum(1 for c in audited_manifest.cards 
+               if hasattr(c, 'confidence') and c.confidence is not None
+               and _confidence_band(c.confidence) == "high")
+    medium = sum(1 for c in audited_manifest.cards 
+                 if hasattr(c, 'confidence') and c.confidence is not None
+                 and _confidence_band(c.confidence) == "medium")
+    low = sum(1 for c in audited_manifest.cards 
+              if hasattr(c, 'confidence') and c.confidence is not None
+              and _confidence_band(c.confidence) == "low")
+    
+    if high + medium + low > 0:
+        confidence_summary = (
+            f"Confidence: **{high}** high 🟢, **{medium}** medium 🟡, **{low}** low 🔴\n\n"
+        )
+        # Append to the existing summary section's body
+        sections[0].body = confidence_summary + sections[0].body
 
     return CompiledBoard(
         title=f"Case Board — {topic}" if topic else "Case Board",

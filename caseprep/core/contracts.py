@@ -1,8 +1,32 @@
 from __future__ import annotations
-
 from dataclasses import dataclass, field
+
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Optional
+
+
+
+@dataclass(frozen=True)
+class SlotConfidence:
+    logprob: float
+    entropy: float
+    token_count: int = 0
+
+    @property
+    def normalized_confidence(self) -> float:
+        if self.entropy == 0:
+            return 1.0
+        return 1 / (1 + math.exp(-self.logprob))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "logprob": self.logprob,
+            "entropy": self.entropy,
+            "token_count": self.token_count,
+        }
+
+import math # noqa: F401
+
 
 from .errors import CasePrepValidationError
 
@@ -204,9 +228,11 @@ class BuildCasePlanResult:
     mode: CoreMode = "core"
     artifacts: list[ArtifactRef] = field(default_factory=list)
     evidence: list[EvidenceRecord] = field(default_factory=list)
+    confidence: Optional[SlotConfidence] = None
     provenance: list[ProvenanceRecord] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     structured: dict[str, Any] = field(default_factory=dict)
+    confidence_summary: dict[str, Any] = field(default_factory=dict)
     intent_plan: OutputIntentPlan | None = None
 
 
@@ -218,6 +244,7 @@ class BuildCasePlanResult:
             "mode": self.mode,
             "artifacts": [artifact.to_dict() for artifact in self.artifacts],
             "evidence": [record.to_dict() for record in self.evidence],
+            "confidence": self.confidence.to_dict() if self.confidence else None,
             "provenance": [record.to_dict() for record in self.provenance],
             "warnings": self.warnings,
             "structured": self.structured,

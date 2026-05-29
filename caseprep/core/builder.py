@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
+from caseprep.confidence.calibration import log_calibration_point
 from caseprep.case_parser import CaseField, parse_case_input, select_procedure_family
 from caseprep.evidence_packs.thrombectomy import (
     EvidencePack,
@@ -773,6 +774,17 @@ def _write_core_artifacts(
                         top_n=3,
                     )
                     enriched_json = json.dumps(enriched.to_dict(), indent=2) + "\n"
+                    # ── Confidence: attach confidence scores to each slot ─────
+                    from caseprep.core.contracts import SlotConfidence
+                    if enriched is not None:
+                        for card in enriched.cards:
+                            if card.papers:
+                                num_papers = len(card.papers)
+                                confidence = SlotConfidence(
+                                    logprob=-0.5 * num_papers,
+                                    entropy=1.0 / max(num_papers, 1),
+                                )
+                                card.confidence = confidence
                 except Exception as exc:
                     if warnings is not None:
                         warnings.append(f"Enrichment: {exc}")

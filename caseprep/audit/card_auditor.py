@@ -16,7 +16,8 @@ clinical domain clearly contradicts the case.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
+from caseprep.core.contracts import SlotConfidence
 
 
 # ── data contracts ───────────────────────────────────────────────────────────
@@ -36,6 +37,7 @@ class AuditedCard:
     audit_status: str = "no_evidence"
     audit_reason: str = ""
     supporting_paper_ids: list[str] = field(default_factory=list)
+    confidence: Optional[SlotConfidence] = None
     contradicting_paper_ids: list[str] = field(default_factory=list)
     papers: list[dict[str, Any]] = field(default_factory=list)
 
@@ -192,7 +194,9 @@ def _audit_card(card, *, topic: str) -> AuditedCard:
         compiler_slot=card.compiler_slot,
         answerability=card.answerability,
         papers=card.papers,
+        confidence=card.confidence,
     )
+
 
     if card.enrichment_status != "success" or not card.papers:
         ac.audit_status = "no_evidence"

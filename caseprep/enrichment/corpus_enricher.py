@@ -10,10 +10,8 @@ an audit ledger.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol
-
-from caseprep.core.contracts import EvidenceRecord
-
+from typing import Any, Protocol, Optional
+from caseprep.core.contracts import EvidenceRecord, SlotConfidence
 
 # ── retriever protocol ───────────────────────────────────────────────────────
 
@@ -49,6 +47,7 @@ class EnrichedCard:
     search_query: str = ""
     enrichment_status: str = "skipped"  # success | no_results | skipped | error
     papers: list[dict[str, Any]] = field(default_factory=list)
+    confidence: Optional[SlotConfidence] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {

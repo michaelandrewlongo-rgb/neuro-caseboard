@@ -1,9 +1,3 @@
-"""LLM-backed CasePrep intent structurer with deterministic fallback.
-
-The LLM is allowed to classify and plan output shape only. It must not answer
-clinical questions; schema validation rejects obvious answer-language leakage.
-"""
-
 from __future__ import annotations
 
 import json
@@ -15,6 +9,7 @@ from typing import Any
 import httpx
 
 from caseprep.core import OutputIntentPlan
+from caseprep.confidence.logprobs import extract_logprobs, compute_entropy
 from caseprep.intent.heuristics import heuristic_intent_plan
 from caseprep.intent.schema import validate_intent_payload
 
@@ -102,6 +97,8 @@ async def _call_intent_llm(query: str, config: IntentLLMConfig) -> Mapping[str, 
         "temperature": config.temperature,
         "max_tokens": config.max_tokens,
         "response_format": {"type": "json_object"},
+        "logprobs": True,
+        "top_logprobs": 5,
     }
     async with httpx.AsyncClient(timeout=config.timeout) as client:
         response = await client.post(
@@ -110,9 +107,14 @@ async def _call_intent_llm(query: str, config: IntentLLMConfig) -> Mapping[str, 
             json=payload,
         )
         response.raise_for_status()
-        data = response.json()
+    data = response.json()
     content = data["choices"][0]["message"]["content"]
-    return _extract_json_object(content)
+    raw_json = _extract_json_object(content)
+    logprob_result = extract_logprobs(data)
+    classification_entropy = compute_entropy(logprob_result["top_logprobs"])
+    token_confidence = 1.0 - min(1.0, classification_entropy / 2.0)
+    raw_json["confidence"] = token_confidence
+    return raw_json
 
 
 async def structure_intent(

@@ -9,7 +9,7 @@ Graceful fallback: returns None when the API key is unavailable, allowing
 hand-written templates or generic rules to take over.
 """
 
-from __future__ import annotations
+from caseprep.confidence.logprobs import extract_logprobs, compute_entropy
 
 import json
 import logging
@@ -93,6 +93,8 @@ def _call_llm(prompt: str) -> dict[str, Any] | None:
         "temperature": 0.3,
         "max_tokens": 4000,
         "response_format": {"type": "json_object"},
+        "logprobs": True,
+        "top_logprobs": 5,
     }).encode("utf-8")
 
     req = urllib.request.Request(
@@ -110,7 +112,9 @@ def _call_llm(prompt: str) -> dict[str, Any] | None:
         with urllib.request.urlopen(req, timeout=_LLM_TIMEOUT) as resp:
             body = json.loads(resp.read().decode("utf-8"))
             content = body["choices"][0]["message"]["content"]
-            return json.loads(content)
+            json_content = json.loads(content)
+            logprobs_data = body["choices"][0]["logprobs"]
+            return {"json_content": json_content, "logprobs_data": logprobs_data}
     except Exception as exc:
         logger.debug("LLM template generation failed: %s", exc)
         return None
@@ -122,17 +126,38 @@ def _call_llm(prompt: str) -> dict[str, Any] | None:
 def _parse_cards(raw: dict[str, Any]) -> list[QuestionCard]:
     """Convert LLM JSON response into QuestionCard objects."""
     cards: list[QuestionCard] = []
-    for item in raw.get("cards", []):
+    raw_cards = raw.get("json_content", {}).get("cards", [])
+    logprobs_data = raw.get("logprobs_data", {})
+
+    for item in raw_cards:
         try:
+            question = str(item.get("question", ""))[:300]
+            why_it_matters = str(item.get("why_it_matters", ""))[:200]
+
+            # Extract logprobs and compute confidence
+            try:
+                logprobs_data = raw.get("logprobs_data", {})
+                logprob_result = extract_logprobs(logprobs_data)
+                entropy = compute_entropy(logprob_result.get("top_logprobs", []))
+                confidence = 1.0 - min(1.0, entropy / 2.0)
+            except Exception as e:
+                logger.exception(f"Error processing logprobs: {e}")
+                confidence = 0.0
+                entropy = 0.0
+
+            item["confidence"] = confidence
+            item["entropy"] = entropy
+
             cards.append(QuestionCard(
                 target_file=str(item.get("target_file", "")),
                 section_key=str(item.get("section_key", "")),
-                question=str(item.get("question", ""))[:300],
-                why_it_matters=str(item.get("why_it_matters", ""))[:200],
+                question=question,
+                why_it_matters=why_it_matters,
                 compiler_slot=str(item.get("compiler_slot", "")),
                 answerability="needs_patient_fact",
             ))
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Error processing card: {e}")
             continue
     return cards
 
@@ -150,6 +175,7 @@ def build_llm_manifest(
     Returns None if the LLM is unavailable (no API key) or the call fails.
     """
     if not _llm_available():
+        logger.debug("LLM not available (no API key)")
         return None
 
     prompt = _TEMPLATE_PROMPT.format(topic=topic)
