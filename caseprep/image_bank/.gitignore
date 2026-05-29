@@ -1,0 +1,9 @@
+images/
+*.log
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+__pycache__/
+*.pyc
+*.json

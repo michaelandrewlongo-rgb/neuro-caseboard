@@ -258,6 +258,133 @@ def test_classify_clinical_applicability_quarantines_anterior_m1_sources_for_bas
     assert reason == "clinically applicable"
 
 
+def test_classify_clinical_applicability_acdf_quarantines_off_target_evidence():
+    """ACDF cases should quarantine rare-variant and off-target evidence."""
+    case = parse_case_input("C6-7 ACDF surgical technique")
+    family = select_procedure_family(case)
+
+    off_target_examples = [
+        (
+            EvidenceRecord(
+                id="va-loop",
+                source="corpus",
+                title="Vertebral artery loop causing cervical radiculopathy",
+                text="Case report of a rare vertebral artery loop causing radiculopathy treated with microvascular decompression.",
+            ),
+            "vertebral artery loop",
+        ),
+        (
+            EvidenceRecord(
+                id="va-sling",
+                source="corpus",
+                title="A New Sling Technique in Cervical Radiculopathy Caused by Vertebral Artery Loop Compression",
+                text="Case report: sling technique for vertebral artery loop compression at C6-7.",
+            ),
+            "vertebral artery loop",
+        ),
+        (
+            EvidenceRecord(
+                id="dsa-hemodialysis",
+                source="corpus",
+                title="Surgical treatment of cervical destructive spondyloarthropathy (DSA)",
+                text="Sixteen patients with hemodialysis-associated cervical spine disorders underwent surgical treatment.",
+            ),
+            "hemodialysis-associated",
+        ),
+        (
+            EvidenceRecord(
+                id="bow-hunter",
+                source="pubmed",
+                title="Bow hunter syndrome case report: rotational vertebral artery occlusion after ACDF",
+                text="Single case report of bow hunter syndrome after adjacent level ACDF.",
+            ),
+            "rotational",
+        ),
+        (
+            EvidenceRecord(
+                id="basic-science",
+                source="pubmed",
+                title="Molecular pathways in cervical disc degeneration",
+                text="Cell culture study of protein expression in murine disc tissue.",
+            ),
+            "basic-science",
+        ),
+    ]
+
+    for record, expected_reason in off_target_examples:
+        include, reason = classify_clinical_applicability(record, case, family)
+        assert include is False, (
+            f"expected {record.id} to be quarantined, got include={include}, reason={reason}"
+        )
+        assert expected_reason in reason, (
+            f"expected '{expected_reason}' in quarantine reason for {record.id}, got: {reason}"
+        )
+
+
+def test_classify_clinical_applicability_acdf_allows_on_target_evidence():
+    """ACDF cases should allow technique/outcome/comparison evidence."""
+    case = parse_case_input("C6-7 ACDF surgical technique")
+    family = select_procedure_family(case)
+
+    on_target_examples = [
+        EvidenceRecord(
+            id="acdf-technique",
+            source="pubmed",
+            title="Anterior cervical discectomy and fusion: surgical technique and outcomes",
+            text="Operative technique for ACDF including exposure, decompression, graft placement, and plating.",
+        ),
+        EvidenceRecord(
+            id="acdf-dysphagia",
+            source="pubmed",
+            title="Dysphagia after ACDF: incidence and risk factors",
+            text="Retrospective cohort of 500 patients reporting postoperative dysphagia after anterior cervical fusion.",
+        ),
+        EvidenceRecord(
+            id="acdf-vs-cda",
+            source="pubmed",
+            title="ACDF versus cervical disc arthroplasty for single-level radiculopathy: a randomized trial",
+            text="Patients with cervical radiculopathy were randomized to ACDF or CDA and followed for 5 years.",
+        ),
+        EvidenceRecord(
+            id="acdf-pseudarthrosis",
+            source="pubmed",
+            title="Pseudarthrosis after ACDF: risk factors and revision strategies",
+            text="Multicenter study of pseudarthrosis rates after one- and two-level ACDF.",
+        ),
+        EvidenceRecord(
+            id="acdf-systematic-review",
+            source="pubmed",
+            title="ACDF for cervical radiculopathy: a systematic review and meta-analysis",
+            text="Systematic review of outcomes after anterior cervical discectomy and fusion for cervical radiculopathy.",
+        ),
+    ]
+
+    for record in on_target_examples:
+        include, reason = classify_clinical_applicability(record, case, family)
+        assert include is True, (
+            f"expected {record.id} to be clinically applicable, got include={include}, reason={reason}"
+        )
+        assert reason == "clinically applicable"
+
+
+def test_classify_clinical_applicability_acdf_orthopedic_bypass():
+    """ACDF papers mentioning 'orthopedic' should not be falsely quarantined."""
+    case = parse_case_input("C5-6 anterior cervical discectomy and fusion for right C6 radiculopathy from foraminal disc osteophyte complex")
+    family = select_procedure_family(case)
+
+    record = EvidenceRecord(
+        id="acdf-orthopedic",
+        source="pubmed",
+        title="Orthopedic outcomes after ACDF: a prospective study",
+        text="Anterior cervical discectomy and fusion outcomes in a prospective orthopedic cohort.",
+    )
+
+    include, reason = classify_clinical_applicability(record, case, family)
+    assert include is True, (
+        f"ACDF paper with 'orthopedic' should not be quarantined, got include={include}, reason={reason}"
+    )
+
+
 def test_breast_tumor_resection_review_is_penalized_for_convexity_meningioma():
     case = parse_case_input(
         "right frontal convexity meningioma resection near the superior sagittal sinus"
