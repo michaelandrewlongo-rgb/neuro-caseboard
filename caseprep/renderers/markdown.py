@@ -79,6 +79,28 @@ def _add_curated_pack_provenance(rendered_object: dict[str, Any]) -> None:
     )
 
 
+def maybe_briefing_html(files: dict[str, str]) -> None:
+    """Best-effort: emit briefing.html when a local figure store exists.
+    Uses the real embedder only if sentence-transformers is installed; otherwise
+    falls back to the offline tag-overlap ranker (embed_fn=None)."""
+    try:
+        import importlib.util
+        from caseprep.image_bank.figure_store import FigureStore
+        from caseprep.image_bank.figure_build import DEFAULT_STORE
+        from caseprep.renderers.briefing_html import render_briefing_html
+        records = FigureStore(DEFAULT_STORE).load()
+        if not records:
+            return
+        md = "\n\n".join(v for k, v in sorted(files.items()) if k.endswith(".md"))
+        if importlib.util.find_spec("sentence_transformers") is not None:
+            from caseprep.image_bank.figure_embed import embed_texts as ef
+        else:
+            ef = None
+        files["briefing.html"] = render_briefing_html(md, records, embed_fn=ef)
+    except Exception:
+        return  # never block the briefing on the HTML export
+
+
 def render_caseprep_files(
     case_object: dict[str, Any],
     *,
@@ -108,4 +130,5 @@ def render_caseprep_files(
         "08-checklists.md": _render_checklists(schema),
         "09-open-questions.md": _render_open_questions(schema),
     }
+    maybe_briefing_html(files)
     return files
