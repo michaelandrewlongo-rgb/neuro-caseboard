@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from caseprep.prognostic_signs import (
     prognostic_signs_for_family,
     valid_thrombectomy_pack_ids,

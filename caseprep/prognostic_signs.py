@@ -7,6 +7,7 @@ a landmark trial/guideline. Built family-agnostic: later cycles add families to
 """
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any
 
 from caseprep.evidence_packs.thrombectomy import THROMBECTOMY_PACKS
@@ -68,6 +69,7 @@ def prognostic_signs_for_family(family_id: str) -> dict[str, list[dict[str, Any]
     }
 
 
+@lru_cache(maxsize=None)
 def _thrombectomy_item_index() -> dict[str, Any]:
     index: dict[str, Any] = {}
     for pack in THROMBECTOMY_PACKS.values():
