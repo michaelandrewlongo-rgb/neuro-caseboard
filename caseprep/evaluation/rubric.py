@@ -49,6 +49,54 @@ PLACEHOLDER_PATTERNS = (
     re.compile(r"_{3,}"),
 )
 
+# Family-keyed registry so later cycles register entries without changing logic.
+# Values are markdown section headings whose data table rows must be cited.
+SOURCEABLE_SECTIONS: dict[str, tuple[str, ...]] = {
+    "endovascular_thrombectomy": ("## Prognostic Signs",),
+}
+
+# needs-synthesis is never legitimate in a sourceable area.
+_NEEDS_SYNTHESIS = re.compile(r"needs\s+synthesis", re.IGNORECASE)
+# A 3-column markdown table data row whose final (Source) cell is empty.
+_UNCITED_ROW = re.compile(r"^\|[^|]+\|[^|]+\|\s*\|\s*$")
+# Header / separator rows to skip (Indicator header, or the |---|---| separator).
+_TABLE_NONDATA = re.compile(r"^\|\s*(indicator|---)", re.IGNORECASE)
+
+
+def _family_id_from_schema(schema: dict[str, Any]) -> str:
+    fam = schema.get("procedure_family")
+    if isinstance(fam, dict) and fam.get("id"):
+        return str(fam["id"])
+    return ""
+
+
+def check_source_coverage(schema: dict[str, Any], markdown_text: str) -> list[str]:
+    """Fail when a sourceable clinical claim is left uncited (family-keyed)."""
+    family = _family_id_from_schema(schema)
+    sections = SOURCEABLE_SECTIONS.get(family)
+    if not sections:
+        return []
+    failures: list[str] = []
+
+    # 1) needs-synthesis anywhere is a sourceable-area failure.
+    if _NEEDS_SYNTHESIS.search(markdown_text):
+        failures.append("source-coverage: 'needs synthesis' found where evidence is expected")
+
+    # 2) Within each registered sourceable section, every data table row must cite.
+    in_section = False
+    for line in markdown_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            in_section = any(stripped == s for s in sections)
+            continue
+        if not in_section:
+            continue
+        if _TABLE_NONDATA.match(stripped):
+            continue
+        if _UNCITED_ROW.match(stripped):
+            failures.append(f"source-coverage: uncited prognostic row -> {stripped}")
+    return failures
+
 # TODO: call project numeric guardrail when exposed as a reusable pure function.
 
 _CONCEPT_ALIASES: dict[str, tuple[str, ...]] = {
@@ -126,6 +174,8 @@ def evaluate_case_output(output_dir: Path, canonical_case: CanonicalCase) -> Eva
     missing_concepts = _missing_concepts(all_text, canonical_case.required_concepts)
     for concept in missing_concepts:
         failures.append(f"required concept missing: {concept}")
+
+    failures.extend(check_source_coverage(schema, markdown_text))
 
     score = max(0, 100 - 10 * len(failures))
     return EvalReport(
