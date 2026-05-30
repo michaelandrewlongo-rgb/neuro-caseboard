@@ -860,7 +860,8 @@ def _write_core_artifacts(
     try:
         _bind_prognostic_signs(schema, provenance)
     except Exception as exc:  # never block the briefing on prognostic binding
-        warnings.append(f"Prognostic signs: {exc}")
+        if warnings is not None:
+            warnings.append(f"Prognostic signs: {exc}")
 
     corpus_ids = {"corpus"}
     rendered_files = render_caseprep_files(
