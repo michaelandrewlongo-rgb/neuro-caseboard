@@ -39,6 +39,7 @@ from caseprep.retrievers.corpus import CorpusRetriever
 from caseprep.retrievers.corpus_semantic import SemanticCorpusRetriever
 from caseprep.retrievers.pubmed import PubMedRetriever
 from caseprep.retrievers.radiology import RadiologyRetriever
+from caseprep.retrievers.board_cards import BoardCardRecord, BoardCardRetriever
 from caseprep.synthesis.section_synthesis import SectionDraft, synthesize_sections
 
 from .contracts import (
@@ -103,6 +104,7 @@ class CoreRetrieverSet:
     radiology: RadiologyRetrieverProtocol
     corpus: CorpusRetrieverProtocol
     corpus_semantic: CorpusRetrieverProtocol | None = None
+    board_cards: BoardCardRetriever | None = None
 
 
 MAX_RETRIEVAL_CAP = 10
@@ -244,6 +246,7 @@ def default_core_retrievers() -> CoreRetrieverSet:
         radiology=RadiologyRetriever(),
         corpus=CorpusRetriever(),
         corpus_semantic=SemanticCorpusRetriever(),
+        board_cards=BoardCardRetriever(top_n=5),
     )
 
 
@@ -833,9 +836,17 @@ def _write_core_artifacts(
                     warnings.append(f"Auditor: {exc}")
 
         # ── Compiler: assemble audited claims into case board ────────
+        board_pearls = None
+        if audited is not None and provider_set is not None and provider_set.board_cards is not None:
+            try:
+                board_pearls = provider_set.board_cards.retrieve(topic)
+            except Exception as exc:
+                if warnings is not None:
+                    warnings.append(f"Board pearls: {exc}")
+
         if audited is not None:
             try:
-                board = compile_board(audited, topic=topic)
+                board = compile_board(audited, topic=topic, board_pearls=board_pearls)
                 board_json = json.dumps(board.to_dict(), indent=2) + "\n"
             except Exception as exc:
                 if warnings is not None:
