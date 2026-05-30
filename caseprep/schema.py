@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from caseprep.fact_projection import fact_line, has_known_fact, missing_or_confirm_line
+from caseprep.prognostic_signs import prognostic_signs_for_family, resolve_pack_refs
 
 
 SCHEMA_VERSION = "0.2"
@@ -2219,7 +2220,8 @@ def _render_thrombectomy_risk(schema: dict[str, Any], generated_body: str | None
 
 
 def _render_thrombectomy_prognostic_signs(schema: dict[str, Any]) -> str:
-    from caseprep.prognostic_signs import prognostic_signs_for_family, resolve_pack_refs
+    if not _is_thrombectomy(schema):
+        return ""
 
     block = schema.get("case", {}).get("prognostic_signs")
     if not isinstance(block, dict) or not (block.get("favorable") or block.get("unfavorable")):
