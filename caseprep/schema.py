@@ -2219,19 +2219,17 @@ def _render_thrombectomy_risk(schema: dict[str, Any], generated_body: str | None
 {_generated_section_thrombectomy(generated_body) if _is_thrombectomy(schema) else _generated_section("Evidence-Derived Notes", generated_body)}"""
 
 
-def _render_thrombectomy_prognostic_signs(schema: dict[str, Any]) -> str:
-    if not _is_thrombectomy(schema):
-        return ""
-
+def _render_prognostic_signs(schema: dict[str, Any]) -> str:
+    family_id = _procedure_family_id(schema)
     block = schema.get("case", {}).get("prognostic_signs")
     if not isinstance(block, dict) or not (block.get("favorable") or block.get("unfavorable")):
-        block = prognostic_signs_for_family("endovascular_thrombectomy")
+        block = prognostic_signs_for_family(family_id)
     if not block:
         return ""
 
     def _rows(entries: list[dict[str, Any]]) -> str:
         if not entries:
-            return "| _none_ | | |"
+            return "_none recorded_"
         out = []
         for e in entries:
             refs = resolve_pack_refs(list(e.get("source_ids", [])))
@@ -2253,15 +2251,14 @@ def _render_thrombectomy_prognostic_signs(schema: dict[str, Any]) -> str:
 {_rows(block.get('unfavorable', []))}"""
 
 
-def _render_thrombectomy_postop(schema: dict[str, Any]) -> str:
-    prognostic = _render_thrombectomy_prognostic_signs(schema)
-    body = _render_postop_body(schema)
-    return _markdown_sections(f"# Outcome & Postop Plan - {schema['topic']}", prognostic, body)
-
-
 def _render_postop(schema: dict[str, Any]) -> str:
-    if _is_thrombectomy(schema):
-        return _render_thrombectomy_postop(schema)
+    prognostic = _render_prognostic_signs(schema)
+    if prognostic:
+        return _markdown_sections(
+            f"# Outcome & Postop Plan - {schema['topic']}",
+            prognostic,
+            _render_postop_body(schema),
+        )
     return f"""# Postop Plan - {schema["topic"]}
 
 {_render_postop_body(schema)}"""

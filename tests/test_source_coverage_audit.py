@@ -82,3 +82,27 @@ def test_rendered_thrombectomy_postop_passes_audit():
     }
     md = _render_postop(schema)
     assert check_source_coverage(schema, md) == []  # real render is fully cited
+
+
+def test_rendered_postop_with_uncited_indicator_fails_audit():
+    # A prognostic block whose entry has NO source_ids renders an empty Source cell,
+    # which the audit must catch end-to-end through the real renderer.
+    schema = {
+        "topic": "left MCA thrombectomy",
+        "procedure_family": {"id": "endovascular_thrombectomy"},
+        "case": {
+            "prognostic_signs": {
+                "favorable": [{"indicator": "Made-up sign", "detail": "no citation", "source_ids": []}],
+                "unfavorable": [{"indicator": "Low ASPECTS", "detail": "x", "source_ids": ["hermes"]}],
+            },
+            "postop_plan": {
+                "destination": "ICU", "neuro_checks": "q1h", "bp_goals": "x",
+                "imaging_timing": "24h", "dvt_prophylaxis": "x",
+                "medications": [], "drains_devices": [], "labs_monitoring": [],
+                "discharge_criteria": [],
+            },
+        },
+    }
+    md = _render_postop(schema)
+    failures = check_source_coverage(schema, md)
+    assert any("uncited" in f.lower() for f in failures)
