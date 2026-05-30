@@ -100,9 +100,10 @@ Two units + two integration touch-points, both built family-agnostic.
     comorbidity, distal/tortuous access.
   - Each indicator references ≥1 stable evidence-pack item ID.
 - **Provenance:** one `ProvenanceRecord` per block,
-  `field_path = "prognostic_signs"`, `value_status = "generated"`,
-  `source_ids = <union of cited pack item IDs>`,
-  `generated_by = "caseprep"`. Enters the existing generated→verified flow.
+  `field_path = "case.prognostic_signs"` (the data lives under `schema["case"]`),
+  `value_status = "generated"`, `source_ids = <union of cited pack item IDs>`,
+  `generated_by = "caseprep.prognostic_signs"`. Enters the existing
+  generated→verified flow.
 - **Depends on:** the thrombectomy evidence pack (for valid source IDs), the
   procedure taxonomy (`family.id`).
 
@@ -111,33 +112,45 @@ Two units + two integration touch-points, both built family-agnostic.
 - **`check_source_coverage(schema, rendered) -> list[str]`** — returns
   failure messages (empty = pass), appended to
   `EvalReport.deterministic_failures`.
-- **Family-keyed registries:**
-  - `SOURCEABLE_FIELDS[family.id]` — claim-bearing field paths that must carry a
-    citation when the evidence pack has applicable sources (thrombectomy:
-    `prognostic_signs.favorable/unfavorable`,
-    `risk_and_rescue.likely_complications`,
-    `risk_and_rescue.catastrophic_complications`, evidence-derived notes).
-  - `PATIENT_DATA_EXEMPT[family.id]` — known patient-data `needs input` markers
-    (NIHSS/ASPECTS/LKW) that never fail.
-- **Rules:** for each sourceable field with content, fail if it has no
-  `source_id`/citation ref; fail if it holds `needs input`/`needs synthesis`
-  while the evidence pack has applicable sources for that topic; never fail on a
-  patient-data exempt marker.
+- **Family-keyed registry (as built, Cycle 1):**
+  - `SOURCEABLE_SECTIONS[family.id]` — rendered markdown section headings whose
+    data-table rows must be cited. Cycle 1 registers **only**
+    `("## Prognostic Signs",)` for `endovascular_thrombectomy`. Extending the
+    registry to `risk_and_rescue.likely_complications` / `catastrophic` and
+    evidence-derived notes is a deliberate fast-follow (it would require citing
+    the existing authored risk bullets) and is intentionally out of Cycle 1 to
+    keep the canonical eval green.
+- **Patient-data exemption (as built):** achieved by *scoping* — the audit only
+  inspects lines inside registered sourceable sections, so legitimate
+  patient-data `needs input` markers (NIHSS/ASPECTS/LKW), which live in other
+  sections, are never seen. No separate `PATIENT_DATA_EXEMPT` registry is needed
+  at this scope; one can be added if a sourceable section ever also carries
+  patient-data markers.
+- **Rules:** within a registered sourceable section, fail any data-table row
+  whose final (Source) cell is empty, and fail any `needs synthesis` line.
+  Sections outside the registry are not inspected.
 - **Depends on:** the rendered schema/markdown, the evidence pack, the procedure
   taxonomy.
 
-### Touch-point 1 — Renderer (`schema.py` / `renderers/markdown.py`)
+### Touch-point 1 — Renderer (`schema.py`)
 
-`_render_thrombectomy_prognostic_signs(schema)` emits a "## Prognostic Signs"
-section: a two-column **Favorable | Unfavorable** table (or two labeled
-subsections) with per-row source refs (PMID/DOI via the existing `_source_ref`
-helpers). Rendered at the top of `06-postop-plan.md`. No other layout changes.
+A **family-agnostic** `_render_prognostic_signs(schema)` emits a
+"## Prognostic Signs" section: **Favorable** and **Unfavorable** subsection
+tables with per-row source refs (PMID/DOI via `resolve_pack_refs`). It derives
+the family via `_procedure_family_id(schema)` and renders whenever that family
+has registered prognostic data (or a `case.prognostic_signs` block) — adding a
+family is registration-only, no renderer edits. `_render_postop` prepends it and
+uses the heading "Outcome & Postop Plan" when prognostic content is present
+(else plain "Postop Plan"). Rendered within `06-postop-plan.md` — no file
+renumbering.
 
 ### Touch-point 2 — Builder (`core/builder.py`)
 
-Populate `schema["prognostic_signs"]` for thrombectomy during the core build
-(family-keyed), emit its provenance record into the existing provenance list,
-and ensure the rendered output flows through `render_caseprep_files`.
+`_bind_prognostic_signs(schema, provenance)` populates
+`schema["case"]["prognostic_signs"]` (family-keyed, guarded by try/except so a
+failure never blocks the briefing), emits the provenance record into the
+existing provenance list, and the rendered output flows through
+`render_caseprep_files`.
 
 ## Data flow
 
@@ -151,12 +164,12 @@ builder: prognostic_signs[family.id] = {favorable[], unfavorable[]}   (authored 
 schema.prognostic_signs              ProvenanceRecord (generated, source_ids = pack items)
         │
         ▼
-_render_thrombectomy_prognostic_signs → "## Prognostic Signs" in 06-postop-plan.md
+_render_prognostic_signs → "## Prognostic Signs" in 06-postop-plan.md
         │
         ▼
 rubric.check_source_coverage(schema, rendered)
-   = for SOURCEABLE_FIELDS[family]: uncited claim OR needs-input-where-evidence-exists → fail
-     (PATIENT_DATA_EXEMPT[family] markers never fail)
+   = within SOURCEABLE_SECTIONS[family]: uncited table row OR `needs synthesis` → fail
+     (sections outside the registry are not inspected → patient-data needs-input is exempt)
         │
         ▼
 EvalReport.deterministic_failures  → canonical eval passes/fails
