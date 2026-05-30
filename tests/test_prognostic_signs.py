@@ -30,3 +30,10 @@ def test_resolve_pack_refs_renders_pmid():
     refs = resolve_pack_refs(["hermes"])
     assert "hermes" in refs.lower()
     assert "26898852" in refs  # HERMES PMID
+
+
+def test_returned_block_is_isolated_from_registry():
+    a = prognostic_signs_for_family("endovascular_thrombectomy")
+    a["favorable"][0]["source_ids"].append("MUTANT")
+    b = prognostic_signs_for_family("endovascular_thrombectomy")
+    assert "MUTANT" not in b["favorable"][0]["source_ids"]

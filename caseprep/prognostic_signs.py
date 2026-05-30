@@ -62,7 +62,10 @@ def prognostic_signs_for_family(family_id: str) -> dict[str, list[dict[str, Any]
     block = _FAMILY_PROGNOSTIC_SIGNS.get(family_id)
     if block is None:
         return None
-    return {group: [dict(entry) for entry in entries] for group, entries in block.items()}
+    return {
+        group: [dict(entry, source_ids=list(entry["source_ids"])) for entry in entries]
+        for group, entries in block.items()
+    }
 
 
 def _thrombectomy_item_index() -> dict[str, Any]:
