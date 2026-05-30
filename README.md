@@ -105,3 +105,27 @@ standard. Design + plan:
 **Next cycles (2–6):** apply the same pattern to the rest of the neuro-IR family
 — aneurysm coiling, flow diversion, AVM/dAVF embolization, carotid stenting, and
 venous procedures.
+
+## Inline Figure Hovercards
+
+The briefing can render an interactive `briefing.html` where clinically-salient
+words carry a hover superscript revealing the most relevant figure (from the
+`image_bank` PMC corpus or the `textbook_figures` corpus), each traceable to its
+source. Design + plan:
+`docs/superpowers/specs/2026-05-30-inline-figure-hovercards-design.md`.
+
+It is **two-stage**: tag-match decides which words are marked; semantic
+similarity decides which single figure pops up. Both run offline against a local
+figure store.
+
+**One-time build (needs the Postgres corpus + the embedding model):**
+
+```bash
+uv run --with sentence-transformers python -m caseprep.image_bank.figure_build
+```
+
+This merges both corpora into `caseprep/image_bank/figure_store.sqlite`
+(image_bank captions are embedded with `all-mpnet-base-v2`; textbook figures copy
+their existing embedding + image bytes). After it exists, generating a briefing
+also emits `briefing.html` with the hovercards. Without the store, the briefing
+renders normally (no hovercards) — the export is best-effort and never blocks.
