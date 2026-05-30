@@ -59,16 +59,6 @@ def _data_uri(rec: FigureRecord) -> str | None:
     return f"data:{_mime_for(rec, raw)};base64," + base64.b64encode(raw).decode("ascii")
 
 
-def _source_html(rec: FigureRecord) -> str:
-    ref = rec.source_ref
-    pmcid = ref.get("pmcid")
-    if pmcid:
-        url = f"https://pmc.ncbi.nlm.nih.gov/articles/{_html.escape(pmcid)}/"
-        return f'source: <a href="{url}">{_html.escape(pmcid)}</a>'
-    if ref.get("heading_path"):
-        return f"source: {_html.escape(str(ref['heading_path']))}"
-    return ""
-
 
 def _enclosing_sentence(text: str, start: int, end: int) -> str:
     left = max(text.rfind(".", 0, start), text.rfind("\n", 0, start)) + 1
@@ -481,7 +471,7 @@ def render_briefing_html(
     # Conditional blocks: only include figref CSS/JS/elements when figs exist
     css_figs_block = f"\n<style>\n{_CSS_FIGS}\n</style>" if nfig else ""
     if nfig:
-        figs_json = json.dumps(figs)
+        figs_json = json.dumps(figs).replace("</", "<\\/")
         js_figs_block = _JS_FIGS_TEMPLATE.format(figs_json=figs_json)
         hover_html = (
             '<div id="hover"><div class="frame"><img alt=""><span class="tag">Reference</span></div>'
@@ -541,7 +531,7 @@ def render_briefing_html(
     <nav class="rail" id="rail">
       <div class="t">Briefing Index</div>
       <div id="railItems"></div>
-      <div class="legend">Highlighted terms link to reference figures &mdash; hover to preview, click to expand.</div>
+      {"<div class=\"legend\">Highlighted terms link to reference figures &mdash; hover to preview, click to expand.</div>" if nfig else ""}
     </nav>
     <main><div class="doc reveal" id="doc">{body_html}</div></main>
   </div>

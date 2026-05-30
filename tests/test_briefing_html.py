@@ -39,3 +39,12 @@ def test_textbook_blob_png_mime(tmp_path):
     recs=[FigureRecord("textbook","2",["aspects"],"cap","",b"\x89PNG\r\n\x1a\n",{"heading_path":"H"},[1.0,0.0])]
     html=render_briefing_html("## I\n\nASPECTS here.\n",recs,embed_fn=lambda t:[[1.0,0.0]],floor=0.2)
     assert "data:image/png;base64," in html
+
+def test_caption_with_script_tag_is_neutralized(tmp_path):
+    img=tmp_path/"a.jpg"; img.write_bytes(b"JPEGBYTES")
+    recs=[FigureRecord("image_bank","1",["aspects"],
+          'ASPECTS</script><script>alert(1)</script>',str(img),None,{"pmcid":"PMC1"},[1.0,0.0])]
+    html=render_briefing_html("## I\n\nASPECTS here.\n",recs,embed_fn=lambda t:[[1.0,0.0]],floor=0.2)
+    # the raw closing tag must not survive inside the FIGS script payload
+    assert "</script><script>alert(1)</script>" not in html
+    assert "<\\/script>" in html   # neutralized form present
