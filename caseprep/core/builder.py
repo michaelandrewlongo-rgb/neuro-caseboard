@@ -20,6 +20,7 @@ from caseprep.evidence_packs.thrombectomy import (
     get_thrombectomy_pack,
 )
 from caseprep.fact_validation import validate_rendered_fact_consistency
+from caseprep.prognostic_signs import prognostic_signs_for_family
 from caseprep.profile_classifier import classify_profile
 from caseprep.persistence import CasePrepRunStore, resolve_caseprep_store
 from caseprep.provenance import build_core_provenance, enforce_provenance
@@ -46,6 +47,7 @@ from .contracts import (
     BuildCasePlanResult,
     EvidenceRecord,
     OutputIntentPlan,
+    ProvenanceRecord,
 )
 from caseprep.audit.card_auditor import audit_manifest
 from caseprep.compile.case_compiler import compile_board
@@ -711,6 +713,31 @@ def _core_literature_summary(markdown: str) -> str:
     return f"## Core Search Appendix\n\n{markdown}"
 
 
+def _bind_prognostic_signs(schema: dict[str, Any], provenance: list[ProvenanceRecord]) -> None:
+    """Attach the authored prognostic-signs block + provenance for supported families."""
+    family_id = ""
+    fam = schema.get("procedure_family")
+    if isinstance(fam, dict):
+        family_id = str(fam.get("id") or "")
+    block = prognostic_signs_for_family(family_id)
+    if not block:
+        return
+    schema.setdefault("case", {})["prognostic_signs"] = block
+    source_ids: list[str] = []
+    for group in ("favorable", "unfavorable"):
+        for entry in block.get(group, []):
+            for sid in entry.get("source_ids", []):
+                if sid not in source_ids:
+                    source_ids.append(sid)
+    provenance.append(ProvenanceRecord(
+        field_path="case.prognostic_signs",
+        source_ids=source_ids,
+        value_status="generated",
+        generated_by="caseprep.prognostic_signs",
+        notes="Authored favorable/unfavorable outcome indicators cited to thrombectomy evidence-pack items.",
+    ))
+
+
 def _write_core_artifacts(
     *,
     request: BuildCasePlanRequest,
@@ -830,6 +857,11 @@ def _write_core_artifacts(
         f"What anatomy and imaging findings should change the plan for {topic}?",
         f"What complications and rescue plans are most important for {topic}?",
     ]
+    try:
+        _bind_prognostic_signs(schema, provenance)
+    except Exception as exc:  # never block the briefing on prognostic binding
+        warnings.append(f"Prognostic signs: {exc}")
+
     corpus_ids = {"corpus"}
     rendered_files = render_caseprep_files(
         schema,
