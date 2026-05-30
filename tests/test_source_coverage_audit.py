@@ -46,3 +46,23 @@ def test_patient_data_needs_input_is_exempt():
 
 def test_non_thrombectomy_family_is_noop():
     assert check_source_coverage(_schema("spine_acdf"), "anything") == []
+
+
+def test_needs_synthesis_outside_sourceable_section_is_ignored():
+    md = (
+        "## Prognostic Signs\n\n### Favorable\n"
+        "| Indicator | Why | Source |\n|---|---|---|\n"
+        "| Reperfusion | matters | hermes (PMID 26898852) |\n\n"
+        "## Imaging\nneeds synthesis here\n"
+    )
+    assert check_source_coverage(_schema(), md) == []
+
+
+def test_uncited_four_column_row_is_caught():
+    md = (
+        "## Prognostic Signs\n\n### Favorable\n"
+        "| Indicator | Context | Strength | Source |\n|---|---|---|---|\n"
+        "| Reperfusion | early | strong | |\n"  # empty final cell
+    )
+    failures = check_source_coverage(_schema(), md)
+    assert any("uncited" in f.lower() for f in failures)

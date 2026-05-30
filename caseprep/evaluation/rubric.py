@@ -57,8 +57,8 @@ SOURCEABLE_SECTIONS: dict[str, tuple[str, ...]] = {
 
 # needs-synthesis is never legitimate in a sourceable area.
 _NEEDS_SYNTHESIS = re.compile(r"needs\s+synthesis", re.IGNORECASE)
-# A 3-column markdown table data row whose final (Source) cell is empty.
-_UNCITED_ROW = re.compile(r"^\|[^|]+\|[^|]+\|\s*\|\s*$")
+# A markdown table data row with >=2 filled leading cells and an empty final (Source) cell.
+_UNCITED_ROW = re.compile(r"^\|(?:[^|]+\|){2,}\s*\|\s*$")
 # Header / separator rows to skip (Indicator header, or the |---|---| separator).
 _TABLE_NONDATA = re.compile(r"^\|\s*(indicator|---)", re.IGNORECASE)
 
@@ -77,12 +77,6 @@ def check_source_coverage(schema: dict[str, Any], markdown_text: str) -> list[st
     if not sections:
         return []
     failures: list[str] = []
-
-    # 1) needs-synthesis anywhere is a sourceable-area failure.
-    if _NEEDS_SYNTHESIS.search(markdown_text):
-        failures.append("source-coverage: 'needs synthesis' found where evidence is expected")
-
-    # 2) Within each registered sourceable section, every data table row must cite.
     in_section = False
     for line in markdown_text.splitlines():
         stripped = line.strip()
@@ -90,6 +84,9 @@ def check_source_coverage(schema: dict[str, Any], markdown_text: str) -> list[st
             in_section = any(stripped == s for s in sections)
             continue
         if not in_section:
+            continue
+        if _NEEDS_SYNTHESIS.search(stripped):
+            failures.append("source-coverage: 'needs synthesis' found where evidence is expected")
             continue
         if _TABLE_NONDATA.match(stripped):
             continue
