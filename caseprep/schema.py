@@ -2218,10 +2218,55 @@ def _render_thrombectomy_risk(schema: dict[str, Any], generated_body: str | None
 {_generated_section_thrombectomy(generated_body) if _is_thrombectomy(schema) else _generated_section("Evidence-Derived Notes", generated_body)}"""
 
 
+def _render_thrombectomy_prognostic_signs(schema: dict[str, Any]) -> str:
+    from caseprep.prognostic_signs import prognostic_signs_for_family, resolve_pack_refs
+
+    block = schema.get("case", {}).get("prognostic_signs")
+    if not isinstance(block, dict) or not (block.get("favorable") or block.get("unfavorable")):
+        block = prognostic_signs_for_family("endovascular_thrombectomy")
+    if not block:
+        return ""
+
+    def _rows(entries: list[dict[str, Any]]) -> str:
+        if not entries:
+            return "| _none_ | | |"
+        out = []
+        for e in entries:
+            refs = resolve_pack_refs(list(e.get("source_ids", [])))
+            out.append(f"| {_md_cell(e.get('indicator'))} | {_md_cell(e.get('detail'))} | {_md_cell(refs)} |")
+        return "\n".join(out)
+
+    return f"""## Prognostic Signs
+
+### Favorable
+
+| Indicator | Why it matters | Source |
+|---|---|---|
+{_rows(block.get('favorable', []))}
+
+### Unfavorable
+
+| Indicator | Why it matters | Source |
+|---|---|---|
+{_rows(block.get('unfavorable', []))}"""
+
+
+def _render_thrombectomy_postop(schema: dict[str, Any]) -> str:
+    prognostic = _render_thrombectomy_prognostic_signs(schema)
+    body = _render_postop_body(schema)
+    return _markdown_sections(f"# Outcome & Postop Plan - {schema['topic']}", prognostic, body)
+
+
 def _render_postop(schema: dict[str, Any]) -> str:
+    if _is_thrombectomy(schema):
+        return _render_thrombectomy_postop(schema)
     return f"""# Postop Plan - {schema["topic"]}
 
-## Immediate Postop Orders
+{_render_postop_body(schema)}"""
+
+
+def _render_postop_body(schema: dict[str, Any]) -> str:
+    return f"""## Immediate Postop Orders
 
 - Destination: {_section_scalar(schema, "postop_plan", "destination")}
 - Neuro checks: {_section_scalar(schema, "postop_plan", "neuro_checks")}
@@ -2243,8 +2288,7 @@ def _render_postop(schema: dict[str, Any]) -> str:
 
 ## Discharge Criteria
 
-{_list_block(_section_list(schema, "postop_plan", "discharge_criteria"))}
-"""
+{_list_block(_section_list(schema, "postop_plan", "discharge_criteria"))}"""
 
 
 def _thrombectomy_source_applicability_notes(schema: dict[str, Any]) -> list[str]:
