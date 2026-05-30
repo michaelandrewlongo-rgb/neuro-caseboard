@@ -105,9 +105,24 @@ def _brief_card_line(card) -> str:
 
 
 
-def _section_intro(section) -> str:
-    """Render section intro line."""
-    return f"**{section.heading}**: *{section.description}*\n\n"
+def _section_intro(heading: str) -> str:
+    """Render section intro line from heading name."""
+    intros = {
+        "Anatomy at Risk": (
+            "Structures that must be identified, preserved, or monitored during this approach."
+        ),
+        "Operative Plan": (
+            "Critical steps, decision points, and stop criteria for this procedure."
+        ),
+        "Risk and Rescue": (
+            "Expected and catastrophic complications with specific rescue sequences."
+        ),
+    }
+    desc = intros.get(heading, "")
+    if desc:
+        return f"**{heading}**: *{desc}*\n\n"
+    return f"**{heading}**\n\n"
+
 
 def _confidence_band(confidence) -> str:
     """Map normalized confidence to band label."""
@@ -124,33 +139,44 @@ def _confidence_band(confidence) -> str:
     else:
         return "low"
 
-    intros = {
-        "Anatomy at Risk": (
-            "Structures that must be identified, preserved, or monitored during this approach."
-        ),
-        "Operative Plan": (
-            "Critical steps, decision points, and stop criteria for this procedure."
-        ),
-        "Risk and Rescue": (
-            "Expected and catastrophic complications with specific rescue sequences."
-        ),
-    }
-    return intros.get(heading, "")
-
 
 # ── public API ───────────────────────────────────────────────────────────────
+
+
+def _render_board_pearls(pearls: list, *, top_n: int = 5) -> str:
+    """Render board card hits as a compact reference section."""
+    if not pearls:
+        return ""
+    lines = [
+        "**High-yield board pearls semantically matched to this case:**\n",
+    ]
+    for i, p in enumerate(pearls[:top_n], 1):
+        sim_str = f" ({p.similarity:.2f})" if hasattr(p, "similarity") else ""
+        q = (p.question or "—")[:150]
+        a = (p.answer or "—")[:150]
+        tags_str = ", ".join(p.tags[:4]) if p.tags else ""
+        lines.append(f"{i}. **Q:** {q}{sim_str}")
+        lines.append(f"   **A:** {a}")
+        if tags_str:
+            lines.append(f"   *Tags: {tags_str}*")
+        lines.append("")
+    return "\n".join(lines)
 
 
 def compile_board(
     audited_manifest,  # AuditedManifest
     *,
     topic: str = "",
+    board_pearls: list | None = None,  # list[BoardCardRecord]
 ) -> CompiledBoard:
     """Compile audited claims into a surgeon-facing case board.
 
     Supported claims become primary guidance.  Needs-review claims become
     VERIFY prompts.  Off-target / no-evidence claims are quarantined to
     the appendix.
+
+    If *board_pearls* is provided, a \"Board Pearls\" section is appended
+    with the top semantically-matched ABNS flashcard hits.
     """
     # Group cards by target_file
     groups: dict[str, list] = {
@@ -261,6 +287,17 @@ def compile_board(
         )
         # Append to the existing summary section's body
         sections[0].body = confidence_summary + sections[0].body
+
+    # ── board pearls section ──────────────────────────────────────────
+    if board_pearls:
+        pearl_body = _render_board_pearls(board_pearls)
+        if pearl_body:
+            sections.append(CompiledSection(
+                heading="Board Pearls (ABNS Review)",
+                body=pearl_body,
+                source_cards=[p.question for p in board_pearls[:5] if p.question],
+                is_primary=True,
+            ))
 
     return CompiledBoard(
         title=f"Case Board — {topic}" if topic else "Case Board",
