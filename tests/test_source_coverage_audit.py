@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from caseprep.evaluation.rubric import check_source_coverage
+from caseprep.schema import _render_postop
 
 FAMILY = "endovascular_thrombectomy"
 
@@ -66,3 +67,18 @@ def test_uncited_four_column_row_is_caught():
     )
     failures = check_source_coverage(_schema(), md)
     assert any("uncited" in f.lower() for f in failures)
+
+
+def test_rendered_thrombectomy_postop_passes_audit():
+    schema = {
+        "topic": "left MCA thrombectomy",
+        "procedure_family": {"id": "endovascular_thrombectomy"},
+        "case": {"postop_plan": {
+            "destination": "Neuro-ICU", "neuro_checks": "q1h", "bp_goals": "x",
+            "imaging_timing": "24h", "dvt_prophylaxis": "x",
+            "medications": [], "drains_devices": [], "labs_monitoring": [],
+            "discharge_criteria": [],
+        }},
+    }
+    md = _render_postop(schema)
+    assert check_source_coverage(schema, md) == []  # real render is fully cited

@@ -83,3 +83,25 @@ The goal is to bring **all** procedure families to the same level of output qual
 4. **Per-family clinical applicability rules** — Each family needs tuned quarantine rules like the ACDF rules added here, keyed off `family.id` in `classify_clinical_applicability()`.
 
 5. **Deterministic eval hardening** — Tighten gates so `needs input` / `needs synthesis` placeholders in evidence sections fail the canonical eval for any family that has completed its evidence pipeline.
+
+## Briefing Completeness (Neuro-IR)
+
+A program to bring each procedure family's briefing to a complete, fully-sourced
+standard. Design + plan:
+`docs/superpowers/specs/2026-05-30-thrombectomy-briefing-completeness-design.md`.
+
+**Cycle 1 — thrombectomy (in progress):**
+
+1. **`prognostic_signs` block.** Favorable / unfavorable outcome indicators
+   (ASPECTS, collaterals, time-to-reperfusion, final mTICI, core size, late-window
+   mismatch, etc.), authored and **cited to landmark thrombectomy trials**
+   (HERMES, DAWN, DEFUSE-3, SELECT2, AHA/ASA), rendered atop the postop file.
+2. **Source-coverage audit.** A deterministic check (`check_source_coverage` in
+   `caseprep/evaluation/rubric.py`) that fails the canonical eval when a sourceable
+   prognostic claim is left uncited or a `needs synthesis` appears in a sourceable
+   section. This is a first, scoped delivery of "Planned Improvements" item 5
+   (eval hardening), built family-agnostic via a `SOURCEABLE_SECTIONS` registry.
+
+**Next cycles (2–6):** apply the same pattern to the rest of the neuro-IR family
+— aneurysm coiling, flow diversion, AVM/dAVF embolization, carotid stenting, and
+venous procedures.
