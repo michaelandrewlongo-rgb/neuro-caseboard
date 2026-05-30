@@ -22,11 +22,23 @@ def build_figure_store(out_path: str | Path, *, bank_conn: sqlite3.Connection,
     return FigureStore(out_path).write(all_records())
 
 
+def _pg_kwargs() -> dict:  # pragma: no cover - needs Postgres
+    import os, re
+    url = os.environ.get(
+        "PAPERS_CORPUS_DB_URL",
+        "postgresql+psycopg://corpus_pipeline:corpus_pipeline@127.0.0.1:5432/corpus_pipeline",
+    )
+    m = re.match(r"postgresql(?:\+psycopg)?://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)", url)
+    if not m:
+        raise ValueError(f"Unsupported DB URL: {url[:60]}")
+    user, pwd, host, port, db = m.groups()
+    return {"host": host, "port": int(port), "dbname": db, "user": user, "password": pwd}
+
+
 def _fetch_textbook_rows() -> Iterable[dict[str, Any]]:  # pragma: no cover - needs Postgres
     import psycopg2
     from pgvector.psycopg2 import register_vector
-    from caseprep.image_bank.textbook_embed import _db_kwargs
-    conn = psycopg2.connect(**_db_kwargs())
+    conn = psycopg2.connect(**_pg_kwargs())
     register_vector(conn)
     cur = conn.cursor()
     cur.execute(

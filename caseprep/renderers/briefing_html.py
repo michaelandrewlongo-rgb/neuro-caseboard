@@ -38,6 +38,22 @@ def _line_is_table_row(text: str, pos: int) -> bool:
     return line.lstrip().startswith("|")
 
 
+def _mime_for(rec: FigureRecord, raw: bytes) -> str:
+    if rec.image_path:
+        ext = Path(rec.image_path).suffix.lower()
+        return {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".gif": "image/gif", ".webp": "image/webp"}.get(ext, "image/jpeg")
+    if raw[:8].startswith(b"\x89PNG"):
+        return "image/png"
+    if raw[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if raw[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/jpeg"
+
+
 def _data_uri(rec: FigureRecord) -> str | None:
     raw: bytes | None = None
     if rec.image_blob is not None:
@@ -46,7 +62,7 @@ def _data_uri(rec: FigureRecord) -> str | None:
         raw = Path(rec.image_path).read_bytes()
     if not raw:
         return None
-    return "data:image/*;base64," + base64.b64encode(raw).decode("ascii")
+    return f"data:{_mime_for(rec, raw)};base64," + base64.b64encode(raw).decode("ascii")
 
 
 def _source_html(rec: FigureRecord) -> str:

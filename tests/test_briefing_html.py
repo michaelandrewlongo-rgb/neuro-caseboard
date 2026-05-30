@@ -19,6 +19,7 @@ def test_marks_term_with_embedded_image_and_source(tmp_path):
     assert "fig-card" in html
     assert "ASPECTS" in html
     assert "data:image" in html
+    assert "data:image/jpeg;base64," in html
     assert base64.b64encode(b"JPEGBYTES").decode() in html
     assert "PMC1" in html
     assert 'src="' + str(img) not in html
@@ -34,6 +35,14 @@ def test_unmatched_text_stays_plain(tmp_path):
 def test_no_store_renders_plain_html(tmp_path):
     html = render_briefing_html("## H\n\nASPECTS.\n", [], embed_fn=None)
     assert "fig-card" not in html and "<h2" in html.lower()
+
+
+def test_textbook_blob_png_mime(tmp_path):
+    recs = [FigureRecord("textbook", "2", ["aspects"], "cap", "", b"\x89PNG\r\n\x1a\n",
+                         {"heading_path": "H"}, [1.0, 0.0])]
+    md = "## I\n\nASPECTS here.\n"
+    html = render_briefing_html(md, recs, embed_fn=lambda t: [[1.0, 0.0]], floor=0.2)
+    assert "data:image/png;base64," in html
 
 
 def test_table_row_term_is_not_wrapped():

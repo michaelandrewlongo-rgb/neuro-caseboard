@@ -1,5 +1,6 @@
 """Pick the single most relevant figure for a term's context. Pure-Python cosine
-over unit-norm embeddings; deterministic tag-overlap fallback when no embedder."""
+over unit-norm embeddings; deterministic tag-overlap fallback when no embedder
+(returns None when overlap is zero)."""
 from __future__ import annotations
 
 import re
@@ -32,4 +33,4 @@ def best_figure(context: str, candidates: list[FigureRecord], *,
     def overlap(c: FigureRecord) -> int:
         return len(ctx & _tokens(" ".join(c.tags)))
     ranked = sorted(candidates, key=lambda c: (-overlap(c), f"{c.source}:{c.fig_id}"))
-    return ranked[0] if overlap(ranked[0]) > 0 else ranked[0]
+    return ranked[0] if overlap(ranked[0]) > 0 else None

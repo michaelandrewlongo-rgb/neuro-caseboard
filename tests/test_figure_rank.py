@@ -26,3 +26,8 @@ def test_fallback_when_no_embed_fn():
              _rec("textbook:2", [0.0, 1.0], tags=["aspects", "collaterals"])]
     r = best_figure("good collaterals here", cands, embed_fn=None, floor=0.2)
     assert r is not None and r.fig_id == "2"
+
+
+def test_fallback_zero_overlap_returns_none():
+    cands = [_rec("image_bank:1", [1.0, 0.0], tags=["aspects"])]
+    assert best_figure("totally unrelated wording", cands, embed_fn=None, floor=0.2) is None
