@@ -70,3 +70,20 @@ def image_bank_records(conn: sqlite3.Connection, *, embed_fn: EmbedFn,
         if len(pending) >= batch:
             yield from flush()
     yield from flush()
+
+
+def textbook_records(rows: Iterable[dict[str, Any]]) -> Iterator[FigureRecord]:
+    for row in rows:
+        emb = row.get("embedding")
+        img = row.get("image_data")
+        if not emb or not img:
+            continue
+        tags = normalize_tags(row.get("vlm_keywords"), row.get("vlm_anatomy"),
+                              row.get("vlm_pathology"), row.get("vlm_procedure"))
+        cap = str(row.get("caption_vlm") or row.get("caption") or "")
+        yield FigureRecord(
+            source="textbook", fig_id=str(row.get("id")), tags=tags, caption=cap,
+            image_path="", image_blob=bytes(img),
+            source_ref={"heading_path": str(row.get("heading_path") or "")},
+            embedding=[float(x) for x in emb],
+        )
