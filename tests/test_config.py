@@ -28,7 +28,7 @@ def test_phase2_defaults_present(tmp_path, monkeypatch):
     assert cfg.synth_provider == "vertex"
     assert cfg.google_cloud_location == "us-central1"
     assert cfg.vertex_model  # non-empty Flash-tier default
-    assert cfg.max_figure_images == 3
+    assert cfg.max_figure_images == 5
     assert cfg.figure_dpi == 160
     assert abs(cfg.figure_area_threshold - 0.1) < 1e-9
     assert str(cfg.assets_dir).endswith("assets/figures")

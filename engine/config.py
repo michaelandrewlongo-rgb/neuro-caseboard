@@ -18,7 +18,7 @@ DEFAULTS = {
     "GOOGLE_CLOUD_PROJECT": "",
     "GOOGLE_CLOUD_LOCATION": "us-central1",
     "VERTEX_MODEL": "gemini-2.5-flash",
-    "MAX_FIGURE_IMAGES": "3",
+    "MAX_FIGURE_IMAGES": "5",
     "FIGURE_DPI": "160",
     "FIGURE_AREA_THRESHOLD": "0.1",
     "ASSETS_DIR": str(Path.home() / "neuro-textbook-rag" / "assets" / "figures"),

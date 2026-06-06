@@ -208,7 +208,7 @@ variables override the file, then built-in defaults in `engine/config.py` apply.
 | `GOOGLE_CLOUD_PROJECT` | — | GCP project (required when provider is `vertex`) |
 | `GOOGLE_CLOUD_LOCATION` | `us-central1` | Vertex region |
 | `VERTEX_MODEL` | `gemini-2.5-flash` | Vertex multimodal synthesis model |
-| `MAX_FIGURE_IMAGES` | `3` | Max figure-page images attached per query (cost cap) |
+| `MAX_FIGURE_IMAGES` | `5` | Max figure-page images attached per query (cost cap; also the # of fused text+visual figure slots) |
 | `FIGURE_DPI` | `160` | Render DPI for figure pages |
 | `FIGURE_AREA_THRESHOLD` | `0.1` | Min image area fraction to count a page as a figure |
 | `ASSETS_DIR` | `~/neuro-textbook-rag/assets/figures` | Cached figure-page PNGs |
