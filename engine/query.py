@@ -43,8 +43,13 @@ class Engine:
         if not (self.config.visual_retrieval and self.visual_embedder is not None
                 and self.visual_index is not None):
             return []
-        qv = self.visual_embedder.embed_query(question)
-        return self.visual_index.image_search(qv, self.config.visual_retrieve_k)
+        try:
+            qv = self.visual_embedder.embed_query(question)
+            return self.visual_index.image_search(qv, self.config.visual_retrieve_k)
+        except Exception:
+            # The visual lane is an enhancement; a runtime failure (model load,
+            # OOM) must never break the worded answer — fall back to text-only.
+            return []
 
     def _collect_figures(self, question, top):
         """Return aligned (figures, images): RRF-fuse figure-bearing text hits with
@@ -62,8 +67,14 @@ class Engine:
             if h.figure_path:
                 by_path[h.figure_path] = h
 
-        fused = reciprocal_rank_fusion([[h.figure_path for h in text_fig],
-                                        [h.figure_path for h in visual]])
+        # Dedup each lane by figure_path (preserving best rank) BEFORE fusing: a
+        # multi-chunk figure page yields several hits with the same path, which
+        # would otherwise inflate its RRF score once per chunk and bias toward
+        # text-dense pages — the exact effect the visual lane exists to counter.
+        fused = reciprocal_rank_fusion([
+            list(dict.fromkeys(h.figure_path for h in text_fig if h.figure_path)),
+            list(dict.fromkeys(h.figure_path for h in visual if h.figure_path)),
+        ])
 
         passage_index = {}
         for i, h in enumerate(top, 1):

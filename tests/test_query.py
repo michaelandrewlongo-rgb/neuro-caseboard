@@ -65,6 +65,50 @@ def _engine(cfg, index, synth, vemb=None, vidx=None):
                   synth_fn=capturing_synth, visual_embedder=vemb, visual_index=vidx)
 
 
+def test_rrf_dedups_multichunk_page(tmp_path):
+    # A figure page split across 2 chunks must not get an inflated RRF score and
+    # displace single-chunk pages. Reranked order: Y(0), Z(1), X(2), X(3).
+    def fig(book, page, fname):
+        p = tmp_path / fname
+        p.write_bytes(b"X")
+        return Hit(id=f"{book}{page}", book=book, chapter="C", page=page,
+                   text="t", has_figure=True, caption="c", figure_path=str(p))
+
+    y = fig("BookY", 1, "y.png")
+    z = fig("BookZ", 2, "z.png")
+    x1 = fig("BookX", 3, "x.png")
+    x2 = Hit(id="x3b", book="BookX", chapter="C", page=3, text="t2",
+             has_figure=True, caption="c", figure_path=x1.figure_path)
+    top = [y, z, x1, x2]
+
+    class Cfg(FakeConfig):
+        rerank_k = 5
+        max_figure_images = 2
+
+    sc = FakeSynthClient()
+    result = _engine(Cfg(), FakeIndex(top), sc).query("q")
+    # Without dedup, X's doubled rank would beat Z and the set would be {X,Y}.
+    assert {f.book for f in result.figures} == {"BookY", "BookZ"}
+
+
+def test_visual_lane_error_falls_back(tmp_path):
+    png = tmp_path / "p12.png"
+    png.write_bytes(b"PNG")
+    top = [Hit(id="a", book="Rhoton", chapter="S", page=12, text="cs",
+               has_figure=True, caption="c", figure_path=str(png))]
+
+    class BoomEmbedder:
+        def embed_query(self, text):
+            raise RuntimeError("model load failed")
+
+    sc = FakeSynthClient()
+    eng = _engine(FakeConfig(), FakeIndex(top), sc,
+                  vemb=BoomEmbedder(), vidx=FakeVisualIndex([]))
+    result = eng.query("q")  # must not raise
+    assert len(result.figures) == 1
+    assert result.figures[0].book == "Rhoton"  # text lane still works
+
+
 def test_engine_query_text_only():
     hits = [Hit(id="a", book="B", chapter="C", page=1, text="t1"),
             Hit(id="b", book="B", chapter="C", page=2, text="t2")]

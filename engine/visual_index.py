@@ -36,6 +36,9 @@ class VisualIndex:
         self.tbl = self.db.open_table(FIGURES_TABLE)
 
     def image_search(self, query_vector, k):
+        # Default L2 metric gives the same rank order as cosine here because the
+        # vectors are L2-normalized at embed time (VisualEmbedder), and the caller
+        # fuses by rank, not score.
         rows = (self.tbl.search([float(x) for x in query_vector])
                 .limit(k).to_list())
         return [
