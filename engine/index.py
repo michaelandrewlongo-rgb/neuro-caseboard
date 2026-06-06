@@ -14,6 +14,9 @@ class Hit:
     page: int
     text: str
     score: float = 0.0
+    has_figure: bool = False
+    caption: Optional[str] = None
+    figure_path: Optional[str] = None
 
 
 def reciprocal_rank_fusion(rankings, k=60):
@@ -43,6 +46,9 @@ def build_index(chunks, embedder, index_dir, batch_size=256, on_progress=None):
             "page": int(c.page),
             "text": c.text,
             "vector": [float(x) for x in v],
+            "has_figure": bool(c.has_figure),
+            "caption": c.caption or "",
+            "figure_path": c.figure_path or "",
         })
     tbl = db.create_table(TABLE, data=rows, mode="overwrite")
     tbl.create_fts_index("text", replace=True)
@@ -59,6 +65,9 @@ class Index:
             id=row["id"], book=row["book"],
             chapter=row["chapter"] or None, page=int(row["page"]),
             text=row["text"],
+            has_figure=bool(row.get("has_figure", False)),
+            caption=(row.get("caption") or None),
+            figure_path=(row.get("figure_path") or None),
         )
 
     def vector_search(self, query_vector, k):

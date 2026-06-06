@@ -48,3 +48,24 @@ def test_build_and_hybrid_search(tmp_path):
     assert hits[0].book == "NeuroICU"
     assert hits[0].page == 10
     assert hits[0].chapter == "Pressure"
+
+
+@pytest.mark.integration
+def test_figure_columns_round_trip(tmp_path):
+    chunks = [
+        Chunk(id="a::p1::0", book="Rhoton", chapter="Sellar", page=12,
+              text="cavernous sinus anatomy lateral view", has_figure=True,
+              caption="Figure 12-1: cavernous sinus", figure_path="/x/p0012.png"),
+        Chunk(id="b::p2::0", book="Greenberg", chapter="Tumors", page=40,
+              text="meningioma grading text only"),
+    ]
+    emb = FakeEmbedder()
+    build_index(chunks, emb, tmp_path / "idx")
+    idx = Index(tmp_path / "idx")
+    hits = idx.hybrid_search("cavernous sinus", emb.embed_query("spine"), k=2)
+    by_book = {h.book: h for h in hits}
+    assert by_book["Rhoton"].has_figure is True
+    assert by_book["Rhoton"].figure_path == "/x/p0012.png"
+    assert "cavernous sinus" in by_book["Rhoton"].caption
+    assert by_book["Greenberg"].has_figure is False
+    assert by_book["Greenberg"].figure_path is None
