@@ -6,6 +6,8 @@ from engine.ingest import extract_pages, coverage_from_records
 from engine.chunk import chunk_pages
 from engine.embed import Embedder
 from engine.index import build_index
+from engine.visual_embed import VisualEmbedder
+from engine.visual_index import build_visual_index
 
 
 def main():
@@ -51,6 +53,20 @@ def main():
     build_index(chunks, embedder, cfg.index_dir, on_progress=progress)
     print(f"\nIndex built at {cfg.index_dir} "
           f"(embedding took {time.time() - t1:.0f}s)")
+
+    if cfg.visual_retrieval:
+        fig_pages = {}
+        for r in records:
+            if r.has_figure and r.figure_path and r.figure_path not in fig_pages:
+                fig_pages[r.figure_path] = {
+                    "book": r.book, "chapter": r.chapter, "page": r.page,
+                    "figure_path": r.figure_path, "caption": r.caption}
+        fig_pages = list(fig_pages.values())
+        print(f"\nBuilding visual index ({len(fig_pages)} figure pages) "
+              f"with '{cfg.visual_model}' ...", flush=True)
+        vemb = VisualEmbedder(cfg.visual_model, device=device)
+        build_visual_index(fig_pages, vemb, cfg.index_dir)
+        print("Visual index built.")
 
 
 if __name__ == "__main__":
