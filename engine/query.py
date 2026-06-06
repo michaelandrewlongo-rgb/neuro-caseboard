@@ -2,10 +2,12 @@ from dataclasses import dataclass, field
 
 from .config import load_config
 from .embed import Embedder
-from .index import Index
+from .index import Index, reciprocal_rank_fusion
 from .rerank import Reranker
 from .synthesize import synthesize
 from .synth_clients import make_synth_client
+from .visual_embed import VisualEmbedder
+from .visual_index import VisualIndex
 
 
 @dataclass
@@ -27,33 +29,64 @@ class QueryResult:
 
 class Engine:
     def __init__(self, config, embedder, index, reranker, synth_client,
-                 synth_fn=synthesize):
+                 synth_fn=synthesize, visual_embedder=None, visual_index=None):
         self.config = config
         self.embedder = embedder
         self.index = index
         self.reranker = reranker
         self.synth_client = synth_client
         self.synth_fn = synth_fn
+        self.visual_embedder = visual_embedder
+        self.visual_index = visual_index
 
-    def _collect_figures(self, hits):
-        """Return aligned (figures, images) for figure-bearing top hits, deduped
-        by path and capped by max_figure_images. A figure whose PNG can't be read
-        is dropped from BOTH lists rather than crashing the query."""
-        figures = []
-        images = []
-        seen = set()
-        for i, h in enumerate(hits, 1):
+    def _visual_hits(self, question):
+        if not (self.config.visual_retrieval and self.visual_embedder is not None
+                and self.visual_index is not None):
+            return []
+        qv = self.visual_embedder.embed_query(question)
+        return self.visual_index.image_search(qv, self.config.visual_retrieve_k)
+
+    def _collect_figures(self, question, top):
+        """Return aligned (figures, images): RRF-fuse figure-bearing text hits with
+        visual-lane hits (keyed by figure_path), dedupe, cap, assign citation source
+        numbers (reuse a passage number if the page is cited, else append), and read
+        bytes (dropping unreadable PNGs from BOTH lists)."""
+        text_fig = [h for h in top if h.has_figure and h.figure_path]
+        visual = self._visual_hits(question)
+
+        by_path = {}
+        for h in visual:        # text metadata wins on overlap
+            if h.figure_path:
+                by_path[h.figure_path] = h
+        for h in text_fig:
+            if h.figure_path:
+                by_path[h.figure_path] = h
+
+        fused = reciprocal_rank_fusion([[h.figure_path for h in text_fig],
+                                        [h.figure_path for h in visual]])
+
+        passage_index = {}
+        for i, h in enumerate(top, 1):
+            passage_index.setdefault((h.book, h.page), i)
+
+        figures, images = [], []
+        next_appended = len(top) + 1
+        for path, _score in fused:
             if len(figures) >= self.config.max_figure_images:
                 break
-            if not (h.has_figure and h.figure_path) or h.figure_path in seen:
+            h = by_path.get(path)
+            if h is None:
                 continue
-            seen.add(h.figure_path)
-            image = self._read_image(h.figure_path)
+            image = self._read_image(path)
             if image is None:
                 continue
-            figures.append(Figure(source_n=i, book=h.book,
+            src = passage_index.get((h.book, h.page))
+            if src is None:
+                src = next_appended
+                next_appended += 1
+            figures.append(Figure(source_n=src, book=h.book,
                                   chapter=h.chapter or "", page=h.page,
-                                  image_path=h.figure_path, caption=h.caption or ""))
+                                  image_path=path, caption=h.caption or ""))
             images.append(image)
         return figures, images
 
@@ -65,11 +98,19 @@ class Engine:
         except OSError:
             return None
 
-    def query(self, question):
+    def _retrieve(self, question):
         qv = self.embedder.embed_query(question)
         hits = self.index.hybrid_search(question, qv, self.config.retrieve_k)
-        top = self.reranker.rerank(question, hits, self.config.rerank_k)
-        figures, images = self._collect_figures(top)
+        return self.reranker.rerank(question, hits, self.config.rerank_k)
+
+    def select_figures(self, question):
+        """Figures the system would attach, without calling synthesis (for eval)."""
+        figures, _ = self._collect_figures(question, self._retrieve(question))
+        return figures
+
+    def query(self, question):
+        top = self._retrieve(question)
+        figures, images = self._collect_figures(question, top)
         syn = self.synth_fn(question, top, figures, images, self.synth_client)
         return QueryResult(answer=syn.answer, citations=syn.citations,
                            figures=figures)
@@ -87,7 +128,18 @@ def get_engine(config=None):
     index = Index(config.index_dir)
     reranker = Reranker(config.rerank_model, device=config.embed_device)
     synth_client = make_synth_client(config)
-    _engine = Engine(config, embedder, index, reranker, synth_client)
+    visual_embedder = None
+    visual_index = None
+    if config.visual_retrieval:
+        try:
+            visual_index = VisualIndex(config.index_dir)
+            visual_embedder = VisualEmbedder(config.visual_model,
+                                             device=config.embed_device)
+        except Exception:
+            visual_index = None
+            visual_embedder = None
+    _engine = Engine(config, embedder, index, reranker, synth_client,
+                     visual_embedder=visual_embedder, visual_index=visual_index)
     return _engine
 
 
