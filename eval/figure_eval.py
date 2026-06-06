@@ -21,19 +21,16 @@ def main():
     passed = 0
     for case in cases:
         q = case["question"]
-        qv = engine.embedder.embed_query(q)
-        hits = engine.index.hybrid_search(q, qv, engine.config.retrieve_k)
-        top = engine.reranker.rerank(q, hits, engine.config.rerank_k)
+        figs = engine.select_figures(q)
         want_book = case["expect_book_contains"].lower()
         want_page = case.get("expect_page")
-        fig_hits = [h for h in top if h.has_figure
-                    and want_book in h.book.lower()
-                    and (want_page is None or h.page == want_page)]
-        ok = len(fig_hits) > 0
+        matches = [f for f in figs
+                   if want_book in f.book.lower()
+                   and (want_page is None or f.page == want_page)]
+        ok = len(matches) > 0
         passed += ok
         print(f"[{'PASS' if ok else 'FAIL'}] {q}")
-        print(f"    figure hits in top: "
-              f"{[(h.book, h.page) for h in top if h.has_figure]}")
+        print(f"    figures attached: {[(f.book, f.page) for f in figs]}")
         if args.synthesize:
             result = engine.query(q)
             print(f"    answer: {result.answer[:600]}")
