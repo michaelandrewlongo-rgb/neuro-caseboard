@@ -11,3 +11,6 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# Rendered figure-page images (copyrighted textbook pages)
+assets/
