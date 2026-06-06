@@ -14,6 +14,14 @@ DEFAULTS = {
     "RETRIEVE_K": "20",
     "RERANK_K": "6",
     "EMBED_DEVICE": "auto",
+    "SYNTH_PROVIDER": "vertex",
+    "GOOGLE_CLOUD_PROJECT": "",
+    "GOOGLE_CLOUD_LOCATION": "us-central1",
+    "VERTEX_MODEL": "gemini-2.5-flash",
+    "MAX_FIGURE_IMAGES": "3",
+    "FIGURE_DPI": "160",
+    "FIGURE_AREA_THRESHOLD": "0.1",
+    "ASSETS_DIR": str(Path.home() / "neuro-textbook-rag" / "assets" / "figures"),
 }
 
 
@@ -56,6 +64,14 @@ class Config:
     retrieve_k: int
     rerank_k: int
     embed_device: str
+    synth_provider: str
+    google_cloud_project: str
+    google_cloud_location: str
+    vertex_model: str
+    max_figure_images: int
+    figure_dpi: int
+    figure_area_threshold: float
+    assets_dir: Path
 
 
 def load_config(env_file=".env"):
@@ -80,4 +96,12 @@ def load_config(env_file=".env"):
         retrieve_k=int(get("RETRIEVE_K")),
         rerank_k=int(get("RERANK_K")),
         embed_device=get("EMBED_DEVICE"),
+        synth_provider=get("SYNTH_PROVIDER"),
+        google_cloud_project=get("GOOGLE_CLOUD_PROJECT"),
+        google_cloud_location=get("GOOGLE_CLOUD_LOCATION"),
+        vertex_model=get("VERTEX_MODEL"),
+        max_figure_images=int(get("MAX_FIGURE_IMAGES")),
+        figure_dpi=int(get("FIGURE_DPI")),
+        figure_area_threshold=float(get("FIGURE_AREA_THRESHOLD")),
+        assets_dir=Path(get("ASSETS_DIR")),
     )
