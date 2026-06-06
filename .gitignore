@@ -1,0 +1,13 @@
+# Indexes & data
+.lancedb/
+index/
+*.lance
+
+# Env & secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
