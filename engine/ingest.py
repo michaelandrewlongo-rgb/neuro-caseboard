@@ -4,6 +4,8 @@ from typing import Iterator, Optional
 
 import fitz  # PyMuPDF
 
+from engine.figures import page_figure_info, render_page_png
+
 
 @dataclass
 class PageRecord:
@@ -11,6 +13,9 @@ class PageRecord:
     page: int          # 1-based
     text: str
     chapter: Optional[str]
+    has_figure: bool = False
+    caption: Optional[str] = None
+    figure_path: Optional[str] = None
 
 
 def _chapter_entries(doc):
@@ -33,18 +38,28 @@ def _chapter_for_page(entries, page):
     return chapter
 
 
-def extract_pages(pdf_path):
+def extract_pages(pdf_path, render=False, assets_dir=None, dpi=160,
+                  area_threshold=0.1):
     pdf_path = Path(pdf_path)
     book = pdf_path.stem
     doc = fitz.open(pdf_path)
     entries = _chapter_entries(doc)
     records = []
     for i in range(len(doc)):
-        text = doc[i].get_text().strip()
-        page = i + 1
+        page = doc[i]
+        text = page.get_text().strip()
+        pageno = i + 1
+        info = page_figure_info(page, area_threshold)
+        figure_path = None
+        if info.has_figure and render and assets_dir is not None:
+            out = Path(assets_dir) / book / f"p{pageno:04d}.png"
+            render_page_png(page, dpi, out)
+            figure_path = str(out)
         records.append(
-            PageRecord(book=book, page=page, text=text,
-                       chapter=_chapter_for_page(entries, page))
+            PageRecord(book=book, page=pageno, text=text,
+                       chapter=_chapter_for_page(entries, pageno),
+                       has_figure=info.has_figure, caption=info.caption,
+                       figure_path=figure_path)
         )
     doc.close()
     return records
@@ -69,6 +84,7 @@ def coverage_from_records(records):
             "pages": total,
             "pages_with_text": nonempty,
             "coverage": round(nonempty / total, 3) if total else 0.0,
+            "pages_with_figures": sum(1 for r in recs if r.has_figure),
         }
     return report
 
