@@ -2,9 +2,12 @@ from dataclasses import dataclass, field
 
 SYSTEM_PROMPT = (
     "You are a neurosurgical reference assistant. Answer ONLY from the provided "
-    "textbook passages. Rules:\n"
+    "textbook passages and any attached page images. Rules:\n"
     "- Cite the bracketed source number for every clinical claim, e.g. [2].\n"
-    "- If the passages do not contain the answer, say "
+    "- Some sources include an attached page image (a figure/plate). When an image "
+    "is attached for a source, you may describe what the figure shows and must "
+    "still cite that source number. Do not describe images that are not attached.\n"
+    "- If the passages/images do not contain the answer, say "
     "\"Not found in the provided sources.\"\n"
     "- If sources disagree, state the disagreement explicitly and attribute each "
     "view to its source.\n"
@@ -38,17 +41,18 @@ def _format_passages(hits):
     return "\n\n".join(lines)
 
 
-def synthesize(question, hits, client, model):
+def _figure_note(figures):
+    if not figures:
+        return ""
+    refs = ", ".join(f"[{f.source_n}] {f.book}, p.{f.page}" for f in figures)
+    return ("\n\nAttached page images (in order) correspond to these sources: "
+            f"{refs}. Use them to describe the relevant figure and cite the source.")
+
+
+def synthesize(question, hits, figures, images, synth_client):
     user = f"Question: {question}\n\nPassages:\n{_format_passages(hits)}"
-    resp = client.chat.completions.create(
-        model=model,
-        temperature=0.1,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user},
-        ],
-    )
-    answer = resp.choices[0].message.content
+    user += _figure_note(figures)
+    answer = synth_client.generate(SYSTEM_PROMPT, user, images)
     citations = [
         Citation(n=i, book=h.book, chapter=h.chapter or "", page=h.page)
         for i, h in enumerate(hits, 1)
