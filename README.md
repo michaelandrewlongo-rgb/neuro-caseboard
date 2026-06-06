@@ -137,10 +137,54 @@ streamlit run app/streamlit_app.py --server.address 0.0.0.0
 ### Figure-retrieval limitations
 
 - **Whole-page display**, not a tight crop — the caption and figure travel together.
-- **Retrieval is still text-driven** (caption/label text on the page), so a
-  caption-less, purely-visual page can be missed. If the figure gate shows weak
-  recall, the documented next step is **Approach B** (per-figure BiomedCLIP visual
-  embeddings) — see the Phase 2 spec.
+- **Phase 2a retrieval is text-driven** (caption/label text on the page), so a
+  caption-less, purely-visual page can be missed. **Phase 2b** (below) adds a
+  visual retrieval lane that fixes this.
+
+## Phase 2b — visual retrieval
+
+Phase 2a ranks figure pages by their page *text*, so pure-atlas plates (e.g.
+Fukushima) can lose to text-dense operative books even when their image is the
+better answer. Phase 2b adds a **local visual retrieval lane**: every figure page
+is embedded with a CLIP-family model (`VISUAL_MODEL`, swappable) into a `figures`
+table; at query time the question is embedded with the CLIP text tower,
+image-searched, and the visual hits are **RRF-fused** with the text-figure hits to
+choose which figures get attached. The worded answer is unchanged — only figure
+selection improves. A figure surfaced only by image search becomes an appended
+citable source. Image embeddings stay on-box; only query-time synthesis uses Vertex.
+
+**1. Build the visual index** — no full re-index needed; this reuses the figure
+PNGs already rendered by the Phase 2a build:
+
+```bash
+python -m scripts.build_visual_index
+```
+
+**2. A/B the lane** on the figure gate:
+
+```bash
+VISUAL_RETRIEVAL=off python -m eval.figure_eval   # Phase 2a text-only baseline
+python -m eval.figure_eval                          # with the visual lane
+```
+
+**3. Model bake-off** — the default is BiomedCLIP; compare against SigLIP and keep
+the winner in `.env`:
+
+```bash
+VISUAL_MODEL='hf-hub:timm/ViT-SO400M-14-SigLIP-384' python -m scripts.build_visual_index
+VISUAL_MODEL='hf-hub:timm/ViT-SO400M-14-SigLIP-384' python -m eval.figure_eval
+```
+
+The figure gate evaluates the actual fused (text+visual) figures the system would
+attach. Tune `eval/figure_answers.yaml` to your corpus (encode the genuinely
+correct source — don't game it to pass).
+
+### Visual-retrieval limitations
+- **Whole-page embedding** (reuses the rendered PNGs), so a small figure on a
+  text-heavy page embeds muddily — but those are text-findable anyway. Per-figure
+  cropping is the documented next refinement.
+- A general/biomedical CLIP may be imperfect on surgical line-drawings — mitigated
+  by `VISUAL_MODEL` swappability and the bake-off.
 
 ## Configuration
 
@@ -168,6 +212,9 @@ variables override the file, then built-in defaults in `engine/config.py` apply.
 | `FIGURE_DPI` | `160` | Render DPI for figure pages |
 | `FIGURE_AREA_THRESHOLD` | `0.1` | Min image area fraction to count a page as a figure |
 | `ASSETS_DIR` | `~/neuro-textbook-rag/assets/figures` | Cached figure-page PNGs |
+| `VISUAL_MODEL` | `hf-hub:microsoft/BiomedCLIP-...` | Local CLIP model for the visual lane (swappable) |
+| `VISUAL_RETRIEVE_K` | `10` | Figure-page candidates from the visual lane before fusion |
+| `VISUAL_RETRIEVAL` | `true` | Turn the visual retrieval lane on/off (A/B) |
 
 ### Synthesis model
 
@@ -207,13 +254,16 @@ engine/          # the RAG core — single query(question) -> {answer, citations
   index.py       #   LanceDB build + hybrid (vector + FTS) search, RRF
   rerank.py      #   BGE cross-encoder reranking
   figures.py     #   figure-page detection, caption, page→PNG rendering
+  visual_embed.py  # local CLIP image/text embedder (open_clip, swappable)
+  visual_index.py  # `figures` table build + image_search (visual lane)
   synthesize.py  #   multimodal synth: passages (+figure images), cite-or-refuse
   synth_clients.py #  Vertex / OpenRouter adapters + provider select
-  query.py       #   wires it together; figures ride the query() seam
+  query.py       #   wires it together; RRF-fuses text+visual figure selection
   config.py      #   .env / env / defaults
 cli/ask.py       # thin command-line entry point
 app/streamlit_app.py  # minimal web viewer (answer + figures + citations)
-scripts/build_index.py
+scripts/build_index.py        # full build (text index + visual index)
+scripts/build_visual_index.py # visual index only, over already-rendered PNGs
 eval/            # retrieval + figure + synthesis gates
 tests/           # unit tests + real LanceDB integration tests
 docs/superpowers/  # design spec and implementation plan
@@ -245,11 +295,14 @@ reworking the core.
 
 - **Phase 2a — figure retrieval: implemented** (see
   [Phase 2 — figure retrieval](#phase-2--figure-retrieval) above).
-- **Phase 2b — phone/web layer: deferred.** The Streamlit viewer is a local,
+- **Phase 2b — visual retrieval lane: implemented** (see
+  [Phase 2b — visual retrieval](#phase-2b--visual-retrieval) above). Atlas plates
+  surface on image similarity, RRF-fused with the text lane.
+- **Phase 2c — phone/web layer: deferred.** The Streamlit viewer is a local,
   single-user seed; a dedicated phone/web app attaches at the same `engine.query`
   seam without reworking the core.
-- **Approach B (per-figure BiomedCLIP visual embeddings): deferred fallback**, to
-  add only if text-driven figure recall proves weak.
+- **Per-figure crops: deferred refinement**, to add only if whole-page visual
+  embedding proves muddy on small-figure pages.
 
 ## Design docs
 
@@ -257,3 +310,5 @@ reworking the core.
 - Plan: `docs/superpowers/plans/2026-06-06-neuro-textbook-rag.md`
 - Phase 2 spec: `docs/superpowers/specs/2026-06-06-neuro-textbook-rag-phase2-figure-retrieval-design.md`
 - Phase 2 plan: `docs/superpowers/plans/2026-06-06-phase2-figure-retrieval.md`
+- Phase 2b spec: `docs/superpowers/specs/2026-06-06-neuro-textbook-rag-phase2b-visual-retrieval-design.md`
+- Phase 2b plan: `docs/superpowers/plans/2026-06-06-phase2b-visual-retrieval.md`
