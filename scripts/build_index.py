@@ -19,7 +19,9 @@ def main():
     t0 = time.time()
     for i, pdf in enumerate(pdfs, 1):
         print(f"  [{i}/{len(pdfs)}] reading {pdf.name} ...", flush=True)
-        recs = extract_pages(pdf)
+        recs = extract_pages(pdf, render=True, assets_dir=cfg.assets_dir,
+                             dpi=cfg.figure_dpi,
+                             area_threshold=cfg.figure_area_threshold)
         records.extend(recs)
         print(f"        {len(recs)} pages "
               f"({time.time() - t0:.0f}s elapsed)", flush=True)
@@ -27,7 +29,8 @@ def main():
     print("\nCoverage report (ingest gate):")
     for book, stats in coverage_from_records(records).items():
         print(f"  {book}: {stats['pages_with_text']}/{stats['pages']} pages "
-              f"with text ({stats['coverage'] * 100:.1f}%)")
+              f"with text ({stats['coverage'] * 100:.1f}%), "
+              f"{stats['pages_with_figures']} figure pages")
 
     chunks = chunk_pages(records, cfg.chunk_max_words, cfg.chunk_overlap_words)
     print(f"\nTotal pages: {len(records)} | total chunks: {len(chunks)}")
