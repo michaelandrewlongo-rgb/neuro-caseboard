@@ -40,3 +40,18 @@ def test_env_overrides_synth_provider(tmp_path):
     cfg = load_config(env_file=str(env))
     assert cfg.synth_provider == "openrouter"
     assert cfg.max_figure_images == 1
+
+
+def test_phase2b_visual_defaults(tmp_path):
+    cfg = load_config(env_file=str(tmp_path / "missing.env"))
+    assert cfg.visual_model  # non-empty default
+    assert cfg.visual_retrieve_k == 10
+    assert cfg.visual_retrieval is True
+
+
+def test_visual_retrieval_toggle_parsing(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text("VISUAL_RETRIEVAL=off\nVISUAL_RETRIEVE_K=5\n")
+    cfg = load_config(env_file=str(env))
+    assert cfg.visual_retrieval is False
+    assert cfg.visual_retrieve_k == 5
