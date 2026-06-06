@@ -49,12 +49,37 @@ def _figure_note(figures):
             f"{refs}. Use them to describe the relevant figure and cite the source.")
 
 
+def _appended_figures(hits, figures):
+    k = len(hits)
+    return sorted((f for f in figures if f.source_n > k),
+                  key=lambda f: f.source_n)
+
+
+def _format_appended(appended):
+    if not appended:
+        return ""
+    lines = []
+    for f in appended:
+        loc = f.book
+        if f.chapter:
+            loc += f", {f.chapter}"
+        loc += f", p.{f.page}"
+        cap = f": {f.caption}" if f.caption else ""
+        lines.append(f"[{f.source_n}] {loc} (figure){cap}")
+    return "\n\nAdditional figure sources:\n" + "\n".join(lines)
+
+
 def synthesize(question, hits, figures, images, synth_client):
+    appended = _appended_figures(hits, figures)
     user = f"Question: {question}\n\nPassages:\n{_format_passages(hits)}"
+    user += _format_appended(appended)
     user += _figure_note(figures)
     answer = synth_client.generate(SYSTEM_PROMPT, user, images)
     citations = [
         Citation(n=i, book=h.book, chapter=h.chapter or "", page=h.page)
         for i, h in enumerate(hits, 1)
     ]
+    for f in appended:
+        citations.append(Citation(n=f.source_n, book=f.book,
+                                  chapter=f.chapter or "", page=f.page))
     return Synthesis(answer=answer, citations=citations)

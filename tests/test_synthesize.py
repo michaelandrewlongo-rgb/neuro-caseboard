@@ -55,3 +55,29 @@ def test_synthesize_no_hits_is_empty_refusal_path():
     out = synthesize("obscure?", [], figures=[], images=[], synth_client=client)
     assert out.citations == []
     assert client.captured["user"].rstrip().endswith("Passages:")
+
+
+class FullFakeFigure:
+    def __init__(self, source_n, book, chapter, page, caption):
+        self.source_n = source_n
+        self.book = book
+        self.chapter = chapter
+        self.page = page
+        self.caption = caption
+
+
+def test_synthesize_appends_visual_only_figure_source():
+    client = FakeSynthClient()
+    hit = _hit()  # one passage -> len(hits) == 1
+    fig = FullFakeFigure(source_n=2, book="Rhoton", chapter="Sellar", page=531,
+                         caption="cavernous sinus plate")
+    out = synthesize("cs?", [hit], figures=[fig], images=[b"PNG"],
+                     synth_client=client)
+    user = client.captured["user"]
+    assert "Additional figure sources:" in user
+    assert "[2] Rhoton, Sellar, p.531 (figure)" in user
+    assert "cavernous sinus plate" in user
+    ns = [c.n for c in out.citations]
+    assert ns == [1, 2]
+    assert out.citations[1].book == "Rhoton"
+    assert out.citations[1].page == 531
