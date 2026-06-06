@@ -26,12 +26,14 @@ def reciprocal_rank_fusion(rankings, k=60):
     return sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
 
 
-def build_index(chunks, embedder, index_dir, batch_size=256):
+def build_index(chunks, embedder, index_dir, batch_size=256, on_progress=None):
     db = lancedb.connect(str(index_dir))
     texts = [c.text for c in chunks]
     vectors = []
     for i in range(0, len(texts), batch_size):
         vectors.extend(embedder.embed_texts(texts[i:i + batch_size]))
+        if on_progress:
+            on_progress(min(i + batch_size, len(texts)), len(texts))
     rows = []
     for c, v in zip(chunks, vectors):
         rows.append({
