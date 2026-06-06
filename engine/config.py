@@ -13,8 +13,19 @@ DEFAULTS = {
     "CHUNK_OVERLAP_WORDS": "80",
     "RETRIEVE_K": "20",
     "RERANK_K": "6",
-    "EMBED_DEVICE": "cuda",
+    "EMBED_DEVICE": "auto",
 }
+
+
+def resolve_device(device):
+    """Resolve 'auto' to 'cuda' when available, else 'cpu'. Pass other values through."""
+    if device != "auto":
+        return device
+    try:
+        import torch
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    except Exception:
+        return "cpu"
 
 
 def _parse_env_file(path):

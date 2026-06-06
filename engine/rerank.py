@@ -1,3 +1,6 @@
+from .config import resolve_device
+
+
 class Reranker:
     def __init__(self, model_name, device="cpu", scorer=None):
         self.model_name = model_name
@@ -8,7 +11,8 @@ class Reranker:
     def scorer(self):
         if self._scorer is None:
             from sentence_transformers import CrossEncoder
-            self._scorer = CrossEncoder(self.model_name, device=self.device)
+            self._scorer = CrossEncoder(
+                self.model_name, device=resolve_device(self.device))
         return self._scorer
 
     def rerank(self, query, hits, top_k):

@@ -1,5 +1,7 @@
 import numpy as np
 
+from .config import resolve_device
+
 QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 
 
@@ -13,7 +15,8 @@ class Embedder:
     def encoder(self):
         if self._encoder is None:
             from sentence_transformers import SentenceTransformer
-            self._encoder = SentenceTransformer(self.model_name, device=self.device)
+            self._encoder = SentenceTransformer(
+                self.model_name, device=resolve_device(self.device))
         return self._encoder
 
     def embed_texts(self, texts):

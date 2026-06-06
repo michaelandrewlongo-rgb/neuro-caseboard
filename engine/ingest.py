@@ -56,15 +56,22 @@ def iter_corpus(corpus_dir) -> Iterator[PageRecord]:
             yield rec
 
 
-def coverage_report(corpus_dir):
+def coverage_from_records(records):
+    """Coverage stats grouped by book, computed from already-extracted records."""
+    by_book = {}
+    for r in records:
+        by_book.setdefault(r.book, []).append(r)
     report = {}
-    for pdf in sorted(Path(corpus_dir).glob("*.pdf")):
-        recs = extract_pages(pdf)
+    for book, recs in by_book.items():
         total = len(recs)
         nonempty = sum(1 for r in recs if len(r.text) > 50)
-        report[pdf.stem] = {
+        report[book] = {
             "pages": total,
             "pages_with_text": nonempty,
             "coverage": round(nonempty / total, 3) if total else 0.0,
         }
     return report
+
+
+def coverage_report(corpus_dir):
+    return coverage_from_records(list(iter_corpus(corpus_dir)))

@@ -12,7 +12,8 @@ def main():
                     help="Also call the LLM and print answers for blinded review")
     args = ap.parse_args()
 
-    cases = yaml.safe_load(open(args.set))
+    with open(args.set) as f:
+        cases = yaml.safe_load(f)
     engine = get_engine()
     passed = 0
     for case in cases:
@@ -27,7 +28,11 @@ def main():
         print(f"[{'PASS' if ok else 'FAIL'}] {q}")
         print(f"    top books: {books}")
         if args.synthesize:
-            print(f"    answer: {engine.query(q).answer[:600]}\n")
+            # Reuse the passages already retrieved/reranked above instead of
+            # re-running the whole pipeline via engine.query().
+            syn = engine.synth_fn(q, top, engine.client,
+                                  engine.config.openrouter_model)
+            print(f"    answer: {syn.answer[:600]}\n")
     print(f"\nRetrieval gate: {passed}/{len(cases)} passed")
 
 

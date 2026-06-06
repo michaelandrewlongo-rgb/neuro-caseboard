@@ -1,5 +1,5 @@
 # tests/test_synthesize.py
-from engine.synthesize import synthesize, SYSTEM_PROMPT
+from engine.synthesize import synthesize, SYSTEM_PROMPT, _format_passages
 from engine.index import Hit
 
 
@@ -51,3 +51,15 @@ def test_synthesize_builds_prompt_and_citations():
     assert out.citations[0].n == 1
     assert out.citations[0].book == "NeuroICU"
     assert out.citations[0].page == 10
+
+
+def test_synthesize_no_hits_is_empty_refusal_path():
+    # The refusal path the spec requires: with no retrieved passages, the
+    # passages section is empty and no citations are produced. (The system
+    # prompt instructs the model to answer "Not found in the provided sources.")
+    assert _format_passages([]) == ""
+    client = FakeClient()
+    out = synthesize("obscure question?", [], client, "anthropic/claude-sonnet-4.6")
+    assert out.citations == []
+    user_msg = client.captured["messages"][1]
+    assert user_msg["content"].rstrip().endswith("Passages:")
