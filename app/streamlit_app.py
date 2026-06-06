@@ -1,3 +1,10 @@
+import sys
+from pathlib import Path
+
+# `streamlit run app/streamlit_app.py` puts app/ on sys.path, not the repo root,
+# so make `engine` importable regardless of how this script is launched.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import streamlit as st
 
 from engine.query import query
