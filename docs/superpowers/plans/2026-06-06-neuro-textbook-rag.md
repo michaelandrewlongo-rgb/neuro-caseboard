@@ -606,11 +606,11 @@ from engine.chunk import Chunk
 
 
 def test_rrf_rewards_agreement():
-    # 'b' is high in both rankings -> should win
-    fused = reciprocal_rank_fusion([["a", "b", "c"], ["b", "a", "d"]])
+    # 'b' is rank-0 in BOTH rankings -> unambiguously highest fused score
+    fused = reciprocal_rank_fusion([["b", "a", "c"], ["b", "c", "a"]])
     ids = [i for i, _ in fused]
     assert ids[0] == "b"
-    assert set(ids) == {"a", "b", "c", "d"}
+    assert set(ids) == {"a", "b", "c"}
 
 
 class FakeEmbedder:
