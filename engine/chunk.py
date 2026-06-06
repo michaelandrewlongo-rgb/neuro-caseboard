@@ -9,6 +9,9 @@ class Chunk:
     chapter: Optional[str]
     page: int
     text: str
+    has_figure: bool = False
+    caption: Optional[str] = None
+    figure_path: Optional[str] = None
 
 
 def chunk_page(record, max_words, overlap):
@@ -27,6 +30,9 @@ def chunk_page(record, max_words, overlap):
             chapter=record.chapter,
             page=record.page,
             text=text,
+            has_figure=record.has_figure,
+            caption=record.caption,
+            figure_path=record.figure_path,
         ))
         idx += 1
         if start + max_words >= len(words):

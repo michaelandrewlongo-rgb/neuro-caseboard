@@ -35,3 +35,12 @@ def test_chunk_pages_concatenates():
     recs = [_rec("a b c", page=1), _rec("d e f", page=2)]
     chunks = chunk_pages(recs, max_words=600, overlap=80)
     assert [c.page for c in chunks] == [1, 2]
+
+
+def test_chunks_carry_figure_attrs():
+    rec = PageRecord(book="B", page=3, text="alpha beta", chapter="C",
+                     has_figure=True, caption="Figure 3-1: x", figure_path="/p3.png")
+    chunks = chunk_page(rec, max_words=600, overlap=80)
+    assert chunks[0].has_figure is True
+    assert chunks[0].caption == "Figure 3-1: x"
+    assert chunks[0].figure_path == "/p3.png"
