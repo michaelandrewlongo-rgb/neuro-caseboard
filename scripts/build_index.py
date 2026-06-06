@@ -1,7 +1,7 @@
 import time
 from pathlib import Path
 
-from engine.config import load_config
+from engine.config import load_config, resolve_device
 from engine.ingest import extract_pages, coverage_from_records
 from engine.chunk import chunk_pages
 from engine.embed import Embedder
@@ -32,9 +32,14 @@ def main():
     chunks = chunk_pages(records, cfg.chunk_max_words, cfg.chunk_overlap_words)
     print(f"\nTotal pages: {len(records)} | total chunks: {len(chunks)}")
 
+    device = resolve_device(cfg.embed_device)
     print(f"Loading embedding model '{cfg.embed_model}' on device "
-          f"'{cfg.embed_device}' (first run downloads ~1.3 GB) ...", flush=True)
-    embedder = Embedder(cfg.embed_model, device=cfg.embed_device)
+          f"'{device}' (requested '{cfg.embed_device}'; first run downloads "
+          f"~1.3 GB) ...", flush=True)
+    if device == "cpu":
+        print("  WARNING: running on CPU — embedding 26k chunks will take "
+              "~1 hour. Set EMBED_DEVICE=cuda if you have a GPU.", flush=True)
+    embedder = Embedder(cfg.embed_model, device=device)
 
     def progress(done, total):
         print(f"    embedded {done}/{total} chunks", flush=True)
