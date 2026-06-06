@@ -99,3 +99,40 @@ def test_engine_query_respects_max_figure_images(tmp_path):
     result = engine.query("q")
     # same figure_path dedupes to one figure regardless of the cap
     assert len(result.figures) == 1
+
+
+def test_engine_query_caps_distinct_figures(tmp_path):
+    # Three DISTINCT figure pages, cap=2 -> exactly two are attached (the cap,
+    # not dedup, is what limits here).
+    hits = []
+    for i in range(1, 4):
+        png = tmp_path / f"p{i}.png"
+        png.write_bytes(b"X")
+        hits.append(Hit(id=str(i), book="Rhoton", chapter="C", page=i, text="t",
+                        has_figure=True, caption="cap", figure_path=str(png)))
+
+    class Cfg(FakeConfig):
+        rerank_k = 5
+        max_figure_images = 2
+
+    sc = FakeSynthClient()
+    engine = Engine(Cfg(), FakeEmbedder(), FakeIndex(hits), FakeReranker(),
+                    synth_client=sc, synth_fn=capturing_synth)
+    result = engine.query("q")
+    assert len(result.figures) == 2
+    assert len(sc.captured["images"]) == 2
+
+
+def test_engine_query_drops_missing_figure_file(tmp_path):
+    # figure_path points at a file that does not exist -> the figure is dropped
+    # (from figures AND images) and the query still succeeds.
+    missing = tmp_path / "gone.png"  # never created
+    hits = [Hit(id="a", book="Rhoton", chapter="C", page=12, text="cs",
+                has_figure=True, caption="cap", figure_path=str(missing)),
+            Hit(id="b", book="Greenberg", chapter="C", page=40, text="text only")]
+    sc = FakeSynthClient()
+    engine = Engine(FakeConfig(), FakeEmbedder(), FakeIndex(hits), FakeReranker(),
+                    synth_client=sc, synth_fn=capturing_synth)
+    result = engine.query("q")
+    assert result.figures == []
+    assert sc.captured["images"] == []

@@ -33,7 +33,7 @@ class OpenRouterSynthClient:
                 {"role": "user", "content": content},
             ],
         )
-        return resp.choices[0].message.content
+        return resp.choices[0].message.content or ""
 
 
 class VertexSynthClient:
@@ -66,7 +66,7 @@ class VertexSynthClient:
             config=types.GenerateContentConfig(
                 system_instruction=system, temperature=0.1),
         )
-        return resp.text
+        return resp.text or ""
 
 
 def make_synth_client(config):
