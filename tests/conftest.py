@@ -8,10 +8,10 @@ def tiny_pdf(tmp_path):
     path = tmp_path / "Sample Book.pdf"
     doc = fitz.open()
     bodies = [
-        "Introduction alpha content about diagnosis",
-        "Introduction beta content about imaging",
-        "Methods gamma content about surgical technique",
-        "Methods delta content about postoperative care",
+        "Introduction alpha: clinical content about diagnosis and patient management",
+        "Introduction beta: imaging content about radiographic evaluation and findings",
+        "Methods gamma: operative content about surgical technique and exposure steps",
+        "Methods delta: content about postoperative care and complication management",
     ]
     for i, body in enumerate(bodies):
         page = doc.new_page()

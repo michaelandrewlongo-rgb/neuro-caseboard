@@ -61,7 +61,7 @@ def coverage_report(corpus_dir):
     for pdf in sorted(Path(corpus_dir).glob("*.pdf")):
         recs = extract_pages(pdf)
         total = len(recs)
-        nonempty = sum(1 for r in recs if len(r.text) > 45)
+        nonempty = sum(1 for r in recs if len(r.text) > 50)
         report[pdf.stem] = {
             "pages": total,
             "pages_with_text": nonempty,
