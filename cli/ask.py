@@ -15,6 +15,10 @@ def main():
     for c in result.citations:
         loc = c.book + (f", {c.chapter}" if c.chapter else "") + f", p.{c.page}"
         print(f"  [{c.n}] {loc}")
+    if result.figures:
+        print("\nFigures:")
+        for f in result.figures:
+            print(f"  [{f.source_n}] {f.book}, p.{f.page} -> {f.image_path}")
 
 
 if __name__ == "__main__":

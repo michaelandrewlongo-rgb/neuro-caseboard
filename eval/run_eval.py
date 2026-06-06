@@ -28,10 +28,8 @@ def main():
         print(f"[{'PASS' if ok else 'FAIL'}] {q}")
         print(f"    top books: {books}")
         if args.synthesize:
-            # Reuse the passages already retrieved/reranked above instead of
-            # re-running the whole pipeline via engine.query().
-            syn = engine.synth_fn(q, top, engine.client,
-                                  engine.config.openrouter_model)
+            # Reuse the passages already retrieved/reranked above.
+            syn = engine.synth_fn(q, top, [], [], engine.synth_client)
             print(f"    answer: {syn.answer[:600]}\n")
     print(f"\nRetrieval gate: {passed}/{len(cases)} passed")
 
