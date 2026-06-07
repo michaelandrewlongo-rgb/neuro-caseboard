@@ -61,3 +61,9 @@ def test_default_vertex_model_is_pro(monkeypatch):
     monkeypatch.delenv("VERTEX_MODEL", raising=False)
     cfg = load_config(env_file="does-not-exist.env")
     assert cfg.vertex_model == "gemini-2.5-pro"
+
+
+def test_default_app_passcode_is_empty(monkeypatch):
+    monkeypatch.delenv("APP_PASSCODE", raising=False)
+    cfg = load_config(env_file="does-not-exist.env")
+    assert cfg.app_passcode == ""

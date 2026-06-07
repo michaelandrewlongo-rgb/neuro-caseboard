@@ -25,6 +25,7 @@ DEFAULTS = {
     "VISUAL_MODEL": "hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224",
     "VISUAL_RETRIEVE_K": "10",
     "VISUAL_RETRIEVAL": "true",
+    "APP_PASSCODE": "",
 }
 
 
@@ -78,6 +79,7 @@ class Config:
     visual_model: str
     visual_retrieve_k: int
     visual_retrieval: bool
+    app_passcode: str
 
 
 def load_config(env_file=".env"):
@@ -114,4 +116,5 @@ def load_config(env_file=".env"):
         visual_retrieve_k=int(get("VISUAL_RETRIEVE_K")),
         visual_retrieval=get("VISUAL_RETRIEVAL").strip().lower() in
         ("1", "true", "yes", "on"),
+        app_passcode=get("APP_PASSCODE"),
     )
