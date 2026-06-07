@@ -47,9 +47,15 @@ Keep `server/main.py` as-is, including the endpoints that already work:
 **The only server change:** the static mount at `/` (currently `webapp/`) points to
 a new `web/` directory instead.
 
-The passcode middleware stays in place but is **inert locally**: with no
-`APP_PASSCODE` in `.env`, the gate passes everything through, so there is no login
-on localhost.
+The passcode middleware stays in place but is **inert locally** when `APP_PASSCODE`
+is unset: the gate then passes everything through, so there is no login on localhost.
+
+> **Implementation note:** verification found `.env` actually *had* a leftover
+> `APP_PASSCODE` (from the tunnel/Cloud Run work), so localhost redirected to
+> `/login`. Per the user's choice it was **commented out** in `.env`
+> (`#APP_PASSCODE=<value>`, value preserved — restore = uncomment). `.env` is not
+> tracked in git. With it commented, `GET /` returns 200 and serves the page
+> directly (verified against the live server).
 
 Launch with the existing `scripts/serve.sh` (uvicorn; the engine is warmed once on
 startup via the lifespan hook, so the first real query isn't slow).
