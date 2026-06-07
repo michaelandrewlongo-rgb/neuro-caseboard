@@ -110,13 +110,14 @@ async function ask(question){
   try {
     const r = await fetch("/ask", {method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({question})});
+    if(r.status === 401){ window.location.href = "/login"; return; }
     if(!r.ok) throw new Error("HTTP " + r.status);
     const data = await r.json();
     render(question, data);
     pushHistory(question);
   } catch(e){
     resultEl.innerHTML = '<div class="status error">Can\'t reach the textbook server — '
-      + 'is your workstation awake and Tailscale connected? '
+      + 'is the server running? '
       + '<button id="retry-btn">Retry</button></div>';
     document.getElementById("retry-btn").onclick = () => ask(question);
   } finally {
