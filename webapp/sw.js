@@ -1,6 +1,6 @@
 // Bump this version string whenever a shell asset (index.html / app.js / styles.css / icons)
 // changes — cache-first would otherwise keep serving the old shell to installed clients.
-const CACHE = "neuro-rag-v1";
+const CACHE = "neuro-rag-v2";
 const SHELL = ["/", "/index.html", "/styles.css", "/app.js",
   "/manifest.webmanifest", "/icons/icon-192.png", "/icons/apple-touch-icon.png",
   "/icons/icon-512.png"];

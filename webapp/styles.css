@@ -1,4 +1,5 @@
 :root{
+  color-scheme: light;   /* render light even when the phone is in Dark Mode */
   --ink:#0f172a; --paper:#ffffff; --muted:#6b7280; --line:#e6e8ec;
   --accent:#1d4ed8; --accent-soft:#eef2ff; --bg:#f5f6f8;
 }
@@ -14,7 +15,7 @@ body{margin:0;background:var(--bg);color:var(--ink);
 #ask-form{display:flex;gap:8px;padding:12px 14px;position:sticky;top:0;
   background:var(--bg);border-bottom:1px solid var(--line);z-index:5}
 #q{flex:1;border:1px solid #d6dae0;border-radius:22px;padding:12px 16px;
-  font-size:16px;background:var(--paper)}
+  font-size:16px;background:var(--paper);color:var(--ink)}
 #ask-btn{border:none;background:var(--accent);color:#fff;border-radius:22px;
   padding:0 20px;font-size:15px;font-weight:600}
 #ask-btn:disabled{opacity:.5}
