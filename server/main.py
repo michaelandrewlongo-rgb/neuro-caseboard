@@ -1,14 +1,16 @@
+import hmac
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from engine.config import load_config
 from engine.query import get_engine, query as engine_query
 
+from .auth import COOKIE_NAME, OPEN_PATHS, expected_token, is_authed, login_page
 from .schemas import AskRequest, AskResponse, to_response
 
 CONFIG = load_config()
@@ -29,6 +31,34 @@ async def lifespan(app):
 
 
 app = FastAPI(title="Neuro Textbook RAG", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def passcode_gate(request: Request, call_next):
+    pc = CONFIG.app_passcode
+    if not pc or request.url.path in OPEN_PATHS or is_authed(request, pc):
+        return await call_next(request)
+    accept = request.headers.get("accept", "")
+    if request.method == "GET" and ("text/html" in accept or "*/*" in accept):
+        return RedirectResponse("/login", status_code=303)
+    return Response("Unauthorized", status_code=401)
+
+
+@app.get("/login")
+def login_get():
+    return login_page()
+
+
+@app.post("/login")
+def login_post(request: Request, passcode: str = Form("")):
+    pc = CONFIG.app_passcode
+    if pc and hmac.compare_digest(passcode, pc):
+        resp = RedirectResponse("/", status_code=303)
+        secure = request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+        resp.set_cookie(COOKIE_NAME, expected_token(pc), max_age=60 * 60 * 24 * 30,
+                        httponly=True, samesite="lax", secure=secure)
+        return resp
+    return login_page(error=True)
 
 
 @app.post("/ask", response_model=AskResponse)

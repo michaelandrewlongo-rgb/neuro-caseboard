@@ -44,6 +44,7 @@ def _client(monkeypatch, result):
     import server.main as m
     from fastapi.testclient import TestClient
     monkeypatch.setattr(m, "get_engine", lambda config=None: object())
+    monkeypatch.setattr(m.CONFIG, "app_passcode", "")
     monkeypatch.setattr(m, "engine_query", lambda q, config=None: result)
     return TestClient(m.app)
 
@@ -101,6 +102,7 @@ def test_figures_served_and_guarded(monkeypatch, tmp_path):
     png = tmp_path / "rhoton_p212.png"
     png.write_bytes(b"\x89PNG\r\n\x1a\nFAKE")
     monkeypatch.setattr(m, "get_engine", lambda config=None: object())
+    monkeypatch.setattr(m.CONFIG, "app_passcode", "")
     monkeypatch.setattr(m.CONFIG, "assets_dir", tmp_path)
     with TestClient(m.app) as client:
         ok = client.get("/figures/rhoton_p212.png")
@@ -137,6 +139,7 @@ def test_figures_rejects_symlink_escape(monkeypatch, tmp_path):
     assets.mkdir()
     (assets / "leak.png").symlink_to(outside)
     monkeypatch.setattr(m, "get_engine", lambda config=None: object())
+    monkeypatch.setattr(m.CONFIG, "app_passcode", "")
     monkeypatch.setattr(m.CONFIG, "assets_dir", assets)
     with TestClient(m.app) as client:
         assert client.get("/figures/leak.png").status_code == 404
@@ -146,6 +149,7 @@ def test_pwa_shell_and_assets_served(monkeypatch):
     import server.main as m
     from fastapi.testclient import TestClient
     monkeypatch.setattr(m, "get_engine", lambda config=None: object())
+    monkeypatch.setattr(m.CONFIG, "app_passcode", "")
     with TestClient(m.app) as client:
         root = client.get("/")
         assert root.status_code == 200
