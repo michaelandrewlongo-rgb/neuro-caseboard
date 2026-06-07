@@ -14,7 +14,7 @@ def test_to_response_maps_fields_and_builds_figure_url():
                         image_path="/home/u/assets/figures/rhoton_p212.png",
                         caption="Circle of Willis")],
     )
-    resp = to_response(result)
+    resp = to_response(result, "/home/u/assets/figures")
     assert resp.answer == "Give nimodipine 60 mg q4h [1]."
     assert resp.citations[0].model_dump() == {
         "n": 1, "book": "Greenberg", "chapter": "SAH", "page": 1290}
@@ -22,6 +22,20 @@ def test_to_response_maps_fields_and_builds_figure_url():
     assert fig.model_dump() == {
         "source_n": 1, "book": "Rhoton", "page": 212,
         "caption": "Circle of Willis", "url": "/figures/rhoton_p212.png"}
+
+
+def test_to_response_nested_figure_url_is_relative_and_encoded():
+    """Figure URLs keep the per-book subdir (filenames collide across books) and
+    percent-encode spaces in the book name."""
+    from server.schemas import to_response
+    result = QueryResult(
+        answer="See the plate.",
+        figures=[Figure(source_n=1, book="Rhoton Cranial Anatomy", chapter="", page=1,
+                        image_path="/home/u/assets/figures/Rhoton Cranial Anatomy/p0001.png",
+                        caption="Circle of Willis")],
+    )
+    resp = to_response(result, "/home/u/assets/figures")
+    assert resp.figures[0].url == "/figures/Rhoton%20Cranial%20Anatomy/p0001.png"
 
 
 def _client(monkeypatch, result):
@@ -42,6 +56,8 @@ def test_ask_returns_schema(monkeypatch):
                         image_path="/x/assets/figures/rhoton_p212.png",
                         caption="Circle of Willis")],
     )
+    import server.main as m
+    monkeypatch.setattr(m.CONFIG, "assets_dir", "/x/assets/figures")
     with _client(monkeypatch, result) as client:
         r = client.post("/ask", json={"question": "nimodipine dosing?"})
     assert r.status_code == 200
@@ -91,13 +107,20 @@ def test_figures_served_and_guarded(monkeypatch, tmp_path):
         assert ok.status_code == 200
         assert ok.content == b"\x89PNG\r\n\x1a\nFAKE"
         assert client.get("/figures/missing.png").status_code == 404
-        # Starlette's router rejects percent-encoded separators before the handler.
+        # traversal is rejected by the assets-dir containment check
         assert client.get("/figures/..%2f..%2fsecret.txt").status_code == 404
+        # nested per-book path with a space in the book name must serve
+        book = tmp_path / "Rhoton Cranial Anatomy"
+        book.mkdir()
+        (book / "p0001.png").write_bytes(b"\x89PNGnested")
+        nested = client.get("/figures/Rhoton%20Cranial%20Anatomy/p0001.png")
+        assert nested.status_code == 200
+        assert nested.content == b"\x89PNGnested"
 
 
-def test_figure_guard_rejects_separator_names():
-    """Directly exercise the `safe != name` guard branch (a URL with separators is
-    404'd by the router before reaching the handler, so call the handler itself)."""
+def test_figure_guard_rejects_traversal():
+    """A name with traversal components resolves outside assets_dir and is rejected
+    by the is_relative_to containment check (call the handler directly)."""
     import server.main as m
     with pytest.raises(HTTPException) as exc:
         m.figure("../secret.txt")

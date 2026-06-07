@@ -33,7 +33,7 @@ app = FastAPI(title="Neuro Textbook RAG", lifespan=lifespan)
 
 @app.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest):
-    return to_response(engine_query(req.question, CONFIG))
+    return to_response(engine_query(req.question, CONFIG), CONFIG.assets_dir)
 
 
 @app.get("/healthz")
@@ -41,12 +41,12 @@ def healthz():
     return {"warm": _state["warm"]}
 
 
-@app.get("/figures/{name}")
+@app.get("/figures/{name:path}")
 def figure(name: str):
-    safe = Path(name).name           # strip any directory component
+    # name includes the per-book subdir, e.g. "Rhoton Cranial Anatomy/p0001.png".
     assets = Path(CONFIG.assets_dir).resolve()
-    path = (assets / safe).resolve()  # resolve() so a symlink can't escape assets
-    if safe != name or not path.is_relative_to(assets) or not path.is_file():
+    path = (assets / name).resolve()  # resolve() so traversal/symlinks can't escape
+    if not path.is_relative_to(assets) or not path.is_file():
         raise HTTPException(status_code=404)
     return FileResponse(path, media_type="image/png")
 
