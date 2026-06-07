@@ -145,7 +145,7 @@ def test_figures_rejects_symlink_escape(monkeypatch, tmp_path):
         assert client.get("/figures/leak.png").status_code == 404
 
 
-def test_pwa_shell_and_assets_served(monkeypatch):
+def test_minimal_page_served(monkeypatch):
     import server.main as m
     from fastapi.testclient import TestClient
     monkeypatch.setattr(m, "get_engine", lambda config=None: object())
@@ -154,6 +154,7 @@ def test_pwa_shell_and_assets_served(monkeypatch):
         root = client.get("/")
         assert root.status_code == 200
         assert 'id="ask-form"' in root.text
-        assert client.get("/manifest.webmanifest").status_code == 200
-        assert client.get("/sw.js").status_code == 200
         assert client.get("/app.js").status_code == 200
+        # The PWA shell is archived: no service worker, no manifest.
+        assert client.get("/sw.js").status_code == 404
+        assert client.get("/manifest.webmanifest").status_code == 404

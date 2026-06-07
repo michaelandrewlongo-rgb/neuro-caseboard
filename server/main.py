@@ -81,6 +81,6 @@ def figure(name: str):
     return FileResponse(path, media_type="image/png")
 
 
-# Static PWA at root — MUST be mounted last so /ask, /healthz, /figures win.
-_WEBAPP_DIR = Path(__file__).resolve().parent.parent / "webapp"
-app.mount("/", StaticFiles(directory=_WEBAPP_DIR, html=True), name="webapp")
+# Minimal local viewer at root — MUST be mounted last so /ask, /healthz, /figures win.
+_WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+app.mount("/", StaticFiles(directory=_WEB_DIR, html=True), name="web")
