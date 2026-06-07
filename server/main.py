@@ -1,7 +1,9 @@
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 
 from engine.config import load_config
 from engine.query import get_engine, query as engine_query
@@ -36,3 +38,13 @@ def ask(req: AskRequest):
 @app.get("/healthz")
 def healthz():
     return {"warm": _state["warm"]}
+
+
+@app.get("/figures/{name}")
+def figure(name: str):
+    safe = Path(name).name           # strip any directory component
+    assets = Path(CONFIG.assets_dir).resolve()
+    path = (assets / safe).resolve()  # resolve() so a symlink can't escape assets
+    if safe != name or not path.is_relative_to(assets) or not path.is_file():
+        raise HTTPException(status_code=404)
+    return FileResponse(path, media_type="image/png")

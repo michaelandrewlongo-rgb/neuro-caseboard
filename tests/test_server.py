@@ -1,3 +1,6 @@
+import pytest
+from fastapi import HTTPException
+
 from engine.query import QueryResult, Figure
 from engine.synthesize import Citation
 
@@ -74,3 +77,43 @@ def test_healthz_cold(monkeypatch):
     monkeypatch.setattr(m, "get_engine", boom)
     with TestClient(m.app) as client:
         assert client.get("/healthz").json() == {"warm": False}
+
+
+def test_figures_served_and_guarded(monkeypatch, tmp_path):
+    import server.main as m
+    from fastapi.testclient import TestClient
+    png = tmp_path / "rhoton_p212.png"
+    png.write_bytes(b"\x89PNG\r\n\x1a\nFAKE")
+    monkeypatch.setattr(m, "get_engine", lambda config=None: object())
+    monkeypatch.setattr(m.CONFIG, "assets_dir", tmp_path)
+    with TestClient(m.app) as client:
+        ok = client.get("/figures/rhoton_p212.png")
+        assert ok.status_code == 200
+        assert ok.content == b"\x89PNG\r\n\x1a\nFAKE"
+        assert client.get("/figures/missing.png").status_code == 404
+        # Starlette's router rejects percent-encoded separators before the handler.
+        assert client.get("/figures/..%2f..%2fsecret.txt").status_code == 404
+
+
+def test_figure_guard_rejects_separator_names():
+    """Directly exercise the `safe != name` guard branch (a URL with separators is
+    404'd by the router before reaching the handler, so call the handler itself)."""
+    import server.main as m
+    with pytest.raises(HTTPException) as exc:
+        m.figure("../secret.txt")
+    assert exc.value.status_code == 404
+
+
+def test_figures_rejects_symlink_escape(monkeypatch, tmp_path):
+    """A symlink inside assets_dir pointing outside it must not be served."""
+    import server.main as m
+    from fastapi.testclient import TestClient
+    outside = tmp_path / "outside.txt"
+    outside.write_text("secret")
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    (assets / "leak.png").symlink_to(outside)
+    monkeypatch.setattr(m, "get_engine", lambda config=None: object())
+    monkeypatch.setattr(m.CONFIG, "assets_dir", assets)
+    with TestClient(m.app) as client:
+        assert client.get("/figures/leak.png").status_code == 404
