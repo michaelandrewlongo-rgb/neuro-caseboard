@@ -27,7 +27,7 @@ def test_phase2_defaults_present(tmp_path, monkeypatch):
     cfg = load_config(env_file=str(tmp_path / "missing.env"))
     assert cfg.synth_provider == "vertex"
     assert cfg.google_cloud_location == "us-central1"
-    assert cfg.vertex_model  # non-empty Flash-tier default
+    assert cfg.vertex_model  # non-empty Pro-tier default
     assert cfg.max_figure_images == 5
     assert cfg.figure_dpi == 160
     assert abs(cfg.figure_area_threshold - 0.1) < 1e-9
@@ -55,3 +55,9 @@ def test_visual_retrieval_toggle_parsing(tmp_path):
     cfg = load_config(env_file=str(env))
     assert cfg.visual_retrieval is False
     assert cfg.visual_retrieve_k == 5
+
+
+def test_default_vertex_model_is_pro(monkeypatch):
+    monkeypatch.delenv("VERTEX_MODEL", raising=False)
+    cfg = load_config(env_file="does-not-exist.env")
+    assert cfg.vertex_model == "gemini-2.5-pro"
