@@ -14,3 +14,4 @@ venv/
 
 # Rendered figure-page images (copyrighted textbook pages)
 assets/
+.superpowers/
