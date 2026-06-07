@@ -334,6 +334,19 @@ history and copy/share are built in. Synthesis runs on Vertex `gemini-2.5-pro`
 (`SYNTH_PROVIDER=vertex`, `VERTEX_MODEL=gemini-2.5-pro`), billed to your Google Cloud
 credit.
 
+### Remote access (Cloudflare tunnel)
+
+To reach the app from anywhere without the Tailscale/WSL bridge:
+
+1. One-time: install `cloudflared` in WSL2 —
+   `mkdir -p ~/.local/bin && curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o ~/.local/bin/cloudflared && chmod +x ~/.local/bin/cloudflared`
+2. Set a passcode in `.env`: `APP_PASSCODE=<something only you know>` (the public URL needs a gate).
+3. `./scripts/serve.sh` in one WSL terminal, then `./scripts/tunnel.sh` in another.
+4. Open the printed `https://<...>.trycloudflare.com` on your phone, enter the passcode, done.
+
+Local mode is unchanged: leave `APP_PASSCODE` empty and just run `serve.sh` (reach it over
+LAN/Tailscale). The quick-tunnel URL changes each time `cloudflared` restarts.
+
 ## Design docs
 
 - Spec: `docs/superpowers/specs/2026-06-06-neuro-textbook-rag-design.md`
@@ -344,3 +357,5 @@ credit.
 - Phase 2b plan: `docs/superpowers/plans/2026-06-06-phase2b-visual-retrieval.md`
 - Phase 2c spec: `docs/superpowers/specs/2026-06-07-neuro-textbook-rag-phase2c-phone-web-layer-design.md`
 - Phase 2c plan: `docs/superpowers/plans/2026-06-07-phase2c-phone-web-layer.md`
+- Tunnel spec: `docs/superpowers/specs/2026-06-07-cloudflare-tunnel-remote-access-design.md`
+- Tunnel plan: `docs/superpowers/plans/2026-06-07-cloudflare-tunnel-remote-access.md`
