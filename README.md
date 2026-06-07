@@ -14,6 +14,11 @@ whole books, never the index.
 
 > Decision-support reference tool, not a substitute for clinical judgment.
 
+**Not just neurosurgery.** Nothing in the pipeline is specialty-specific — point
+`CORPUS_DIR` at any folder of textbook PDFs you own and it becomes a grounded
+Q&A tool for that field. The books never leave your computer; you're building a
+personal, local reference, not redistributing copyrighted material.
+
 ## How it works
 
 ```
@@ -33,8 +38,9 @@ PDFs ──▶ extract text + TOC chapters ──▶ page-exact word chunks
                 BGE-reranker-v2-m3 cross-encoder (top 6)
                                 │
                                 ▼
-          OpenRouter synthesis — cite every claim, refuse if
-            not found, surface disagreements between books
+     Vertex AI Gemini synthesis (default; OpenRouter optional) —
+     cite every claim, refuse if not found, surface disagreements;
+            a refusal carries no sources or figures
 ```
 
 - **Retrieval is hybrid:** dense vectors *and* a native FTS keyword index, fused
@@ -51,7 +57,9 @@ PDFs ──▶ extract text + TOC chapters ──▶ page-exact word chunks
 - A NVIDIA GPU is strongly recommended. Embedding the full corpus on CPU takes
   ~1 hour; on GPU it's minutes. Querying works on CPU but reloads the models
   (tens of seconds) each run.
-- An [OpenRouter](https://openrouter.ai) API key for the synthesis step.
+- A cloud account for the synthesis step: **Vertex AI Gemini** by default (a
+  Google Cloud project + `gcloud` login), or set `SYNTH_PROVIDER=openrouter` to
+  use an [OpenRouter](https://openrouter.ai) API key instead.
 - A folder of textbook PDFs that **have real text layers** (this pipeline
   extracts text; it does not OCR scanned images).
 
@@ -59,7 +67,8 @@ PDFs ──▶ extract text + TOC chapters ──▶ page-exact word chunks
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env      # then add your OPENROUTER_API_KEY and set CORPUS_DIR
+cp .env.example .env      # set CORPUS_DIR and your synthesis provider
+                          # (GOOGLE_CLOUD_PROJECT for Vertex, or OPENROUTER_API_KEY)
 ```
 
 On the first index build, the embedding model (~1.3 GB) downloads
@@ -94,6 +103,21 @@ Sources:
   [2] Greenberg, ...
 ```
 
+## See the answers locally (desktop viewer)
+
+The CLI prints text and figure file paths but can't show images. To read answers
+**and see the figure images** in your browser, run the local viewer:
+
+```bash
+./scripts/serve.sh        # serves http://localhost:8000
+```
+
+Open `http://localhost:8000`, type a question, and you get the answer with
+tappable `[n]` citations, the matched figure images inline, and the numbered
+sources. It calls the same `engine.query` seam as the CLI, so answers are
+identical. It's passcode-free on localhost and exposes nothing beyond your
+machine.
+
 ## Phase 2 — figure retrieval
 
 Visual/anatomy questions (atlas plates, radiology figures) are answered by
@@ -127,11 +151,11 @@ python -m eval.figure_eval --synthesize  # also print answers + figures for blin
 
 Tune `eval/figure_answers.yaml` to your own corpus and known plates.
 
-**4. Launch the viewer** — answer + figure thumbnails + citations, reachable from
-your phone on the same network:
+**4. View answers with their figures** — use the local desktop viewer (see
+[See the answers locally](#see-the-answers-locally-desktop-viewer)):
 
 ```bash
-streamlit run app/streamlit_app.py --server.address 0.0.0.0
+./scripts/serve.sh   # then open http://localhost:8000
 ```
 
 ### Figure-retrieval limitations
@@ -207,7 +231,7 @@ variables override the file, then built-in defaults in `engine/config.py` apply.
 | `SYNTH_PROVIDER` | `vertex` | `vertex` (Vertex AI Gemini) or `openrouter` |
 | `GOOGLE_CLOUD_PROJECT` | — | GCP project (required when provider is `vertex`) |
 | `GOOGLE_CLOUD_LOCATION` | `us-central1` | Vertex region |
-| `VERTEX_MODEL` | `gemini-2.5-flash` | Vertex multimodal synthesis model |
+| `VERTEX_MODEL` | `gemini-2.5-pro` | Vertex multimodal synthesis model (swap to `gemini-2.5-flash` for lower cost) |
 | `MAX_FIGURE_IMAGES` | `5` | Max figure-page images attached per query (cost cap; also the # of fused text+visual figure slots) |
 | `FIGURE_DPI` | `160` | Render DPI for figure pages |
 | `FIGURE_AREA_THRESHOLD` | `0.1` | Min image area fraction to count a page as a figure |
@@ -219,7 +243,7 @@ variables override the file, then built-in defaults in `engine/config.py` apply.
 ### Synthesis model
 
 **The default provider is now Vertex AI Gemini** (`SYNTH_PROVIDER=vertex`,
-`VERTEX_MODEL=gemini-2.5-flash`) so synthesis — including multimodal figure
+`VERTEX_MODEL=gemini-2.5-pro`) so synthesis — including multimodal figure
 reading — runs on GCP (and can draw on GCP credit). Set
 `SYNTH_PROVIDER=openrouter` to fall back to the OpenRouter path described next.
 
@@ -261,7 +285,10 @@ engine/          # the RAG core — single query(question) -> {answer, citations
   query.py       #   wires it together; RRF-fuses text+visual figure selection
   config.py      #   .env / env / defaults
 cli/ask.py       # thin command-line entry point
-app/streamlit_app.py  # minimal web viewer (answer + figures + citations)
+server/main.py   # FastAPI: POST /ask, GET /figures/{name}, serves web/ at root
+web/             # minimal local desktop viewer (index.html + app.js, no build step)
+app/streamlit_app.py  # alternate Streamlit viewer
+archive/webapp/  # archived phone-first PWA (deferred; see Roadmap)
 scripts/build_index.py        # full build (text index + visual index)
 scripts/build_visual_index.py # visual index only, over already-rendered PNGs
 eval/            # retrieval + figure + synthesis gates
@@ -298,16 +325,22 @@ reworking the core.
 - **Phase 2b — visual retrieval lane: implemented** (see
   [Phase 2b — visual retrieval](#phase-2b--visual-retrieval) above). Atlas plates
   surface on image similarity, RRF-fused with the text lane.
-- **Phase 2c — phone/web layer: implemented.** A FastAPI server (`server/main.py`)
-  wraps `engine.query` and serves an installable phone-first PWA (`webapp/`, Layout A).
-  Retrieval + corpus stay local in WSL2; synthesis runs on Vertex `gemini-2.5-pro`.
-  Launch with `scripts/serve.sh`; reach it from your phone over Tailscale after a
-  one-time `scripts/setup-wsl-bridge.ps1` on the Windows host. See
-  [Phase 2c — phone/web app](#phase-2c--phoneweb-app) below.
+- **Phase 3 — local desktop viewer: implemented (current path).** The FastAPI
+  server (`server/main.py`) serves a minimal browser page (`web/`) at
+  `http://localhost:8000` showing the answer, inline figure images, and citations.
+  See [See the answers locally](#see-the-answers-locally-desktop-viewer).
+- **Phone / remote access: deferred.** The earlier phone-first PWA + Tailscale +
+  Cloudflare-tunnel work is archived under `archive/webapp/` (and the Phase 2c
+  notes below) to keep the local path simple. Revisit if off-network access is
+  ever needed.
 - **Per-figure crops: deferred refinement**, to add only if whole-page visual
   embedding proves muddy on small-figure pages.
 
-## Phase 2c — phone/web app
+## Phase 2c — phone/web app (archived / deferred)
+
+> The active path is the [local desktop viewer](#see-the-answers-locally-desktop-viewer)
+> above. This phone/remote layer is kept for reference only; the PWA front end now
+> lives in `archive/webapp/`.
 
 A FastAPI server wraps the same `engine.query` seam and serves an installable,
 phone-first PWA so you can ask from your phone on the floor. Retrieval and the
