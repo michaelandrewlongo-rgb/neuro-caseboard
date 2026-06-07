@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Neuro Textbook RAG</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/styles.css">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Neuro RAG">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Neuro Textbook RAG</h1>
+    <button id="history-toggle" class="iconbtn">Recent</button>
+  </header>
+
+  <form id="ask-form" autocomplete="off">
+    <input id="q" name="q" type="text" inputmode="search"
+           placeholder="Ask a clinical or anatomy question" enterkeyhint="search"
+           aria-label="Question">
+    <button id="ask-btn" type="submit" aria-label="Ask">Ask</button>
+  </form>
+
+  <section id="history" class="history hidden" aria-label="Recent questions"></section>
+
+  <main id="result" class="result" aria-live="polite"></main>
+
+  <p class="disclaimer">Decision-support only · not a clinical order</p>
+
+  <div id="lightbox" class="lightbox hidden" role="dialog" aria-modal="true">
+    <img id="lightbox-img" alt="">
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

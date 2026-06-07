@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from engine.config import load_config
 from engine.query import get_engine, query as engine_query
@@ -48,3 +49,8 @@ def figure(name: str):
     if safe != name or not path.is_relative_to(assets) or not path.is_file():
         raise HTTPException(status_code=404)
     return FileResponse(path, media_type="image/png")
+
+
+# Static PWA at root — MUST be mounted last so /ask, /healthz, /figures win.
+_WEBAPP_DIR = Path(__file__).resolve().parent.parent / "webapp"
+app.mount("/", StaticFiles(directory=_WEBAPP_DIR, html=True), name="webapp")
