@@ -132,5 +132,13 @@ form.onsubmit = (e) => {
   if(q) ask(q);
 };
 
+// No service worker: every answer needs the live server, so there is no offline
+// mode. Older versions registered a cache-first worker that served a stale, broken
+// shell; proactively remove any worker and caches it left behind, and never
+// register again. (The kill-switch /sw.js handles devices still stuck on the old
+// worker; this handles devices that reach this fresh app.js.)
 if("serviceWorker" in navigator)
-  navigator.serviceWorker.register("/sw.js").catch(() => {});
+  navigator.serviceWorker.getRegistrations()
+    .then(regs => regs.forEach(r => r.unregister())).catch(() => {});
+if(window.caches && caches.keys)
+  caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});

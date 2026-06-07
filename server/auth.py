@@ -4,7 +4,10 @@ import hmac
 from fastapi.responses import HTMLResponse
 
 COOKIE_NAME = "neuro_auth"
-OPEN_PATHS = {"/login", "/healthz"}
+# /sw.js is open so a logged-out browser can always fetch the service worker. The
+# worker is now a kill-switch (no secrets); gating it would 303-redirect the SW
+# update to /login, which is an invalid SW script, leaving a stale worker stuck.
+OPEN_PATHS = {"/login", "/healthz", "/sw.js"}
 
 
 def expected_token(passcode: str) -> str:

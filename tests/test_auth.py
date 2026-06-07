@@ -46,6 +46,18 @@ def test_gated_without_cookie(monkeypatch):
         assert c.get("/healthz").status_code == 200   # liveness stays open
 
 
+def test_service_worker_script_is_open(monkeypatch):
+    # The SW script must be fetchable WITHOUT auth. A logged-out device's browser
+    # checks /sw.js for updates; if that 303-redirects to /login it is an invalid
+    # SW script and the update fails, so a stale cache-first worker can never be
+    # replaced by the kill-switch worker. Keeping /sw.js open is what lets a
+    # trapped device self-heal.
+    with _app(monkeypatch, "letmein") as c:
+        r = c.get("/sw.js", follow_redirects=False)
+        assert r.status_code == 200
+        assert "javascript" in r.headers["content-type"]
+
+
 def test_login_flow_grants_access(monkeypatch):
     with _app(monkeypatch, "letmein") as c:
         bad = c.post("/login", data={"passcode": "nope"}, follow_redirects=False)
