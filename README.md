@@ -298,11 +298,41 @@ reworking the core.
 - **Phase 2b — visual retrieval lane: implemented** (see
   [Phase 2b — visual retrieval](#phase-2b--visual-retrieval) above). Atlas plates
   surface on image similarity, RRF-fused with the text lane.
-- **Phase 2c — phone/web layer: deferred.** The Streamlit viewer is a local,
-  single-user seed; a dedicated phone/web app attaches at the same `engine.query`
-  seam without reworking the core.
+- **Phase 2c — phone/web layer: implemented.** A FastAPI server (`server/main.py`)
+  wraps `engine.query` and serves an installable phone-first PWA (`webapp/`, Layout A).
+  Retrieval + corpus stay local in WSL2; synthesis runs on Vertex `gemini-2.5-pro`.
+  Launch with `scripts/serve.sh`; reach it from your phone over Tailscale after a
+  one-time `scripts/setup-wsl-bridge.ps1` on the Windows host. See
+  [Phase 2c — phone/web app](#phase-2c--phoneweb-app) below.
 - **Per-figure crops: deferred refinement**, to add only if whole-page visual
   embedding proves muddy on small-figure pages.
+
+## Phase 2c — phone/web app
+
+A FastAPI server wraps the same `engine.query` seam and serves an installable,
+phone-first PWA so you can ask from your phone on the floor. Retrieval and the
+copyrighted corpus stay on the workstation; only the answer reaches your device, over
+your private Tailscale network.
+
+Run it inside WSL2:
+
+```bash
+./scripts/serve.sh            # serves on 0.0.0.0:8000; engine warmed once at startup
+```
+
+One-time Windows bridge (so the phone can reach the WSL2 port via the host's Tailscale
+interface) — run in an elevated PowerShell on the Windows host:
+
+```powershell
+./scripts/setup-wsl-bridge.ps1   # netsh portproxy + firewall allow; re-run after a reboot
+```
+
+Then open `http://<your-PC-tailscale-ip>:8000` on your phone and, in Safari, use
+**Share → Add to Home Screen** to install it. The screen is Layout A: an answer with
+tappable `[n]` citations → figures (tap for full-screen) → sources; recent-question
+history and copy/share are built in. Synthesis runs on Vertex `gemini-2.5-pro`
+(`SYNTH_PROVIDER=vertex`, `VERTEX_MODEL=gemini-2.5-pro`), billed to your Google Cloud
+credit.
 
 ## Design docs
 
@@ -312,3 +342,5 @@ reworking the core.
 - Phase 2 plan: `docs/superpowers/plans/2026-06-06-phase2-figure-retrieval.md`
 - Phase 2b spec: `docs/superpowers/specs/2026-06-06-neuro-textbook-rag-phase2b-visual-retrieval-design.md`
 - Phase 2b plan: `docs/superpowers/plans/2026-06-06-phase2b-visual-retrieval.md`
+- Phase 2c spec: `docs/superpowers/specs/2026-06-07-neuro-textbook-rag-phase2c-phone-web-layer-design.md`
+- Phase 2c plan: `docs/superpowers/plans/2026-06-07-phase2c-phone-web-layer.md`
