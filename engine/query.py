@@ -4,7 +4,7 @@ from .config import load_config
 from .embed import Embedder
 from .index import Index, reciprocal_rank_fusion
 from .rerank import Reranker
-from .synthesize import synthesize
+from .synthesize import synthesize, is_refusal
 from .synth_clients import make_synth_client
 from .visual_embed import VisualEmbedder
 from .visual_index import VisualIndex
@@ -123,6 +123,12 @@ class Engine:
         top = self._retrieve(question)
         figures, images = self._collect_figures(question, top)
         syn = self.synth_fn(question, top, figures, images, self.synth_client)
+        if is_refusal(syn.answer):
+            # Synthesis found nothing relevant. The figures and citations were
+            # collected from retrieval independently of the answer, so on a refusal
+            # they are spurious — drop both rather than show sources/plates that
+            # don't support a "Not found" answer.
+            return QueryResult(answer=syn.answer, citations=[], figures=[])
         return QueryResult(answer=syn.answer, citations=syn.citations,
                            figures=figures)
 

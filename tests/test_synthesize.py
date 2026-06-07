@@ -1,6 +1,29 @@
 # tests/test_synthesize.py
-from engine.synthesize import synthesize, SYSTEM_PROMPT, _format_passages
+from engine.synthesize import (
+    synthesize, SYSTEM_PROMPT, REFUSAL, is_refusal, _format_passages)
 from engine.index import Hit
+
+
+def test_prompt_still_embeds_the_refusal_string():
+    # The constant refactor must not change the instruction the model sees.
+    assert f'"{REFUSAL}"' in SYSTEM_PROMPT
+    assert REFUSAL == "Not found in the provided sources."
+
+
+def test_is_refusal_matches_contract_with_normalization():
+    assert is_refusal(REFUSAL)
+    assert is_refusal("Not found in the provided sources.")
+    assert is_refusal("Not found in the provided sources")        # no period
+    assert is_refusal("  Not found in the provided sources.\n")   # whitespace
+    assert is_refusal("not found in the provided sources.")       # case
+
+
+def test_is_refusal_false_for_real_answers():
+    assert not is_refusal("The cavernous sinus contains CN III-VI [1].")
+    assert not is_refusal("")
+    # mentions the phrase but is a real answer -> equality (not substring) -> False
+    assert not is_refusal(
+        "Not found in the provided sources for dosing, but [1] gives the range.")
 
 
 class FakeSynthClient:

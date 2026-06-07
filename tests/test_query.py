@@ -207,6 +207,50 @@ def test_drops_missing_figure_file(tmp_path):
     assert sc.captured["images"] == []
 
 
+def test_refusal_drops_figures_and_citations(tmp_path):
+    # Real-shaped reproduction of the reported bug: retrieval yields a figure-bearing
+    # hit (so figures ARE collected upstream), but synthesis abstains. A "Not found in
+    # the provided sources." answer must carry NO figures and NO sources — both are
+    # spurious retrieval artifacts when nothing relevant was found.
+    png = tmp_path / "p0012.png"
+    png.write_bytes(b"PNGBYTES")
+    hits = [Hit(id="a", book="Rhoton", chapter="Sellar", page=12, text="cs",
+                has_figure=True, caption="cap", figure_path=str(png))]
+
+    def refusal_synth(question, hits, figures, images, synth_client):
+        synth_client.generate("sys", "user", images)
+        # figures/citations were collected, but the model found nothing.
+        return Synthesis(answer="Not found in the provided sources.",
+                         citations=[Citation(1, "Rhoton", "Sellar", 12)])
+
+    eng = Engine(FakeConfig(), FakeEmbedder(), FakeIndex(hits), FakeReranker(),
+                 synth_client=FakeSynthClient(), synth_fn=refusal_synth)
+    result = eng.query("what's the weather today?")
+    assert result.answer == "Not found in the provided sources."
+    assert result.figures == []      # the bug: previously non-empty
+    assert result.citations == []    # same root cause (sources are also spurious)
+
+
+def test_normal_answer_keeps_figures_and_citations(tmp_path):
+    # Guard against over-correction: a real (non-refusal) answer must STILL carry its
+    # figures and citations. This is the tempting wrong-but-adjacent failure mode.
+    png = tmp_path / "p0012.png"
+    png.write_bytes(b"PNGBYTES")
+    hits = [Hit(id="a", book="Rhoton", chapter="Sellar", page=12, text="cs",
+                has_figure=True, caption="cap", figure_path=str(png))]
+
+    def answer_synth(question, hits, figures, images, synth_client):
+        synth_client.generate("sys", "user", images)
+        return Synthesis(answer="The cavernous sinus contains CN III-VI [1].",
+                         citations=[Citation(1, "Rhoton", "Sellar", 12)])
+
+    eng = Engine(FakeConfig(), FakeEmbedder(), FakeIndex(hits), FakeReranker(),
+                 synth_client=FakeSynthClient(), synth_fn=answer_synth)
+    result = eng.query("cavernous sinus contents?")
+    assert len(result.figures) == 1
+    assert len(result.citations) == 1
+
+
 def test_select_figures_no_synthesis(tmp_path):
     png = tmp_path / "p12.png"
     png.write_bytes(b"PNG")

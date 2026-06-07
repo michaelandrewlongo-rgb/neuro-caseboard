@@ -1,5 +1,10 @@
 from dataclasses import dataclass, field
 
+# The exact abstention string the model is instructed to emit when the passages/
+# images don't contain the answer. Single source of truth: used both in the prompt
+# below and by is_refusal() so the instruction and the detector can never drift.
+REFUSAL = "Not found in the provided sources."
+
 SYSTEM_PROMPT = (
     "You are a neurosurgical reference assistant. Answer ONLY from the provided "
     "textbook passages and any attached page images. Rules:\n"
@@ -7,13 +12,24 @@ SYSTEM_PROMPT = (
     "- Some sources include an attached page image (a figure/plate). When an image "
     "is attached for a source, you may describe what the figure shows and must "
     "still cite that source number. Do not describe images that are not attached.\n"
-    "- If the passages/images do not contain the answer, say "
-    "\"Not found in the provided sources.\"\n"
+    f"- If the passages/images do not contain the answer, say \"{REFUSAL}\"\n"
     "- If sources disagree, state the disagreement explicitly and attribute each "
     "view to its source.\n"
     "- Be concise and clinically precise. This is decision-support, not a "
     "substitute for clinical judgment."
 )
+
+
+def is_refusal(answer: str) -> bool:
+    """True when synthesis abstained (emitted REFUSAL verbatim).
+
+    Normalizes for trailing punctuation, surrounding whitespace, and case so a
+    genuine abstention still matches small model formatting wobble, but requires
+    the WHOLE answer to be the refusal (equality, not substring) so a real answer
+    that merely mentions the phrase is not misclassified as a refusal."""
+    def norm(s: str) -> str:
+        return s.strip().rstrip(".").strip().casefold()
+    return norm(answer) == norm(REFUSAL)
 
 
 @dataclass
