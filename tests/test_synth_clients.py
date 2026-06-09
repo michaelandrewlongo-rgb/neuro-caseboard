@@ -1,6 +1,10 @@
 import base64
 
-from engine.synth_clients import OpenRouterSynthClient, make_synth_client
+from engine.synth_clients import (
+    LocalSynthClient,
+    OpenRouterSynthClient,
+    make_synth_client,
+)
 
 
 class _FakeCompletions:
@@ -62,3 +66,27 @@ def test_make_synth_client_selects_provider():
 
     c = make_synth_client(Cfg())
     assert isinstance(c, OpenRouterSynthClient)
+
+
+def test_make_synth_client_selects_local():
+    class Cfg:
+        synth_provider = "local"
+        local_base_url = "http://localhost:11434/v1"
+        local_model = "qwen2.5:7b"
+
+    c = make_synth_client(Cfg())
+    assert isinstance(c, LocalSynthClient)
+    assert c.base_url == "http://localhost:11434/v1"
+    assert c.model == "qwen2.5:7b"
+
+
+def test_local_is_text_only_even_with_images():
+    # Text-only by design: figure images are dropped, the user prompt is sent as a
+    # plain string (no image_url parts), citations come from the prompt text.
+    fake = FakeOpenAI()
+    c = LocalSynthClient(base_url="http://x/v1", model="m", client=fake)
+    out = c.generate("SYS", "USER", images=[b"PNGBYTES"])
+    assert out == "answer text"
+    msgs = fake.captured["messages"]
+    assert msgs[0] == {"role": "system", "content": "SYS"}
+    assert msgs[1] == {"role": "user", "content": "USER"}
