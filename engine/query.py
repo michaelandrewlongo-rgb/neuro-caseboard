@@ -6,6 +6,7 @@ from .index import Index, reciprocal_rank_fusion
 from .rerank import Reranker
 from .synthesize import synthesize, is_refusal
 from .synth_clients import make_synth_client
+from .gpu_guard import ensure_gpu_ready
 from .visual_embed import VisualEmbedder
 from .visual_index import VisualIndex
 
@@ -160,5 +161,8 @@ def get_engine(config=None):
     return _engine
 
 
-def query(question, config=None):
+def query(question, config=None, force=False):
+    config = config or load_config()
+    if config.synth_provider == "local" and config.gpu_guard:
+        ensure_gpu_ready(config, force=force)
     return get_engine(config).query(question)

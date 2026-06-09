@@ -1,4 +1,5 @@
 # tests/test_query.py
+import engine.query as q
 from engine.query import Engine, QueryResult, Figure
 from engine.index import Hit
 from engine.synthesize import Synthesis, Citation
@@ -261,3 +262,53 @@ def test_select_figures_no_synthesis(tmp_path):
     figs = eng.select_figures("q")
     assert len(figs) == 1 and figs[0].book == "Rhoton"
     assert sc.captured == {}
+
+
+def _stub_engine(_config):
+    class _E:
+        def query(self, question):
+            return f"ANS:{question}"
+    return _E()
+
+
+def test_query_runs_guard_for_local_provider(monkeypatch):
+    calls = {}
+
+    class Cfg:
+        synth_provider = "local"
+        gpu_guard = True
+
+    monkeypatch.setattr(q, "ensure_gpu_ready",
+                        lambda config, force=False: calls.__setitem__("force", force))
+    monkeypatch.setattr(q, "get_engine", _stub_engine)
+    out = q.query("hi", config=Cfg(), force=True)
+    assert out == "ANS:hi"
+    assert calls["force"] is True  # force propagated to the guard
+
+
+def test_query_skips_guard_for_non_local(monkeypatch):
+    calls = {}
+
+    class Cfg:
+        synth_provider = "vertex"
+        gpu_guard = True
+
+    monkeypatch.setattr(q, "ensure_gpu_ready",
+                        lambda config, force=False: calls.__setitem__("ran", True))
+    monkeypatch.setattr(q, "get_engine", _stub_engine)
+    q.query("hi", config=Cfg())
+    assert "ran" not in calls
+
+
+def test_query_skips_guard_when_disabled(monkeypatch):
+    calls = {}
+
+    class Cfg:
+        synth_provider = "local"
+        gpu_guard = False
+
+    monkeypatch.setattr(q, "ensure_gpu_ready",
+                        lambda config, force=False: calls.__setitem__("ran", True))
+    monkeypatch.setattr(q, "get_engine", _stub_engine)
+    q.query("hi", config=Cfg())
+    assert "ran" not in calls
