@@ -67,3 +67,27 @@ def test_default_app_passcode_is_empty(monkeypatch):
     monkeypatch.delenv("APP_PASSCODE", raising=False)
     cfg = load_config(env_file="does-not-exist.env")
     assert cfg.app_passcode == ""
+
+
+def test_local_provider_defaults(tmp_path, monkeypatch):
+    for k in ("LOCAL_BASE_URL", "LOCAL_MODEL"):
+        monkeypatch.delenv(k, raising=False)
+    cfg = load_config(env_file=str(tmp_path / "missing.env"))
+    assert cfg.local_base_url == "http://localhost:11434/v1"
+    assert cfg.local_model == "qwen2.5:7b"
+
+
+def test_gpu_guard_defaults(tmp_path, monkeypatch):
+    for k in ("GPU_GUARD", "GPU_MIN_FREE_MIB"):
+        monkeypatch.delenv(k, raising=False)
+    cfg = load_config(env_file=str(tmp_path / "missing.env"))
+    assert cfg.gpu_guard is True
+    assert cfg.gpu_min_free_mib == 10000
+
+
+def test_gpu_guard_toggle_off(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text("GPU_GUARD=off\nGPU_MIN_FREE_MIB=8000\n")
+    cfg = load_config(env_file=str(env))
+    assert cfg.gpu_guard is False
+    assert cfg.gpu_min_free_mib == 8000

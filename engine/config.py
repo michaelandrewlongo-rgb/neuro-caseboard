@@ -9,6 +9,10 @@ DEFAULTS = {
     "RERANK_MODEL": "BAAI/bge-reranker-v2-m3",
     "OPENROUTER_MODEL": "anthropic/claude-sonnet-4.6",
     "OPENROUTER_API_KEY": "",
+    "LOCAL_BASE_URL": "http://localhost:11434/v1",
+    "LOCAL_MODEL": "qwen2.5:7b",
+    "GPU_GUARD": "true",
+    "GPU_MIN_FREE_MIB": "10000",
     "CHUNK_MAX_WORDS": "600",
     "CHUNK_OVERLAP_WORDS": "80",
     "RETRIEVE_K": "20",
@@ -63,6 +67,10 @@ class Config:
     rerank_model: str
     openrouter_model: str
     openrouter_api_key: str
+    local_base_url: str
+    local_model: str
+    gpu_guard: bool
+    gpu_min_free_mib: int
     chunk_max_words: int
     chunk_overlap_words: int
     retrieve_k: int
@@ -99,6 +107,10 @@ def load_config(env_file=".env"):
         rerank_model=get("RERANK_MODEL"),
         openrouter_model=get("OPENROUTER_MODEL"),
         openrouter_api_key=get("OPENROUTER_API_KEY"),
+        local_base_url=get("LOCAL_BASE_URL"),
+        local_model=get("LOCAL_MODEL"),
+        gpu_guard=get("GPU_GUARD").strip().lower() in ("1", "true", "yes", "on"),
+        gpu_min_free_mib=int(get("GPU_MIN_FREE_MIB")),
         chunk_max_words=int(get("CHUNK_MAX_WORDS")),
         chunk_overlap_words=int(get("CHUNK_OVERLAP_WORDS")),
         retrieve_k=int(get("RETRIEVE_K")),
