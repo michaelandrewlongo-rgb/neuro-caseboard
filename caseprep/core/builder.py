@@ -1159,6 +1159,36 @@ async def build_core_case_plan(
             )
         )
 
+    if provider_set.textbook is not None:
+        try:
+            textbook_records = await _maybe_await(
+                provider_set.textbook.retrieve(
+                    corpus_query,
+                    subdomain=corpus_subdomain,
+                    top_n=corpus_top_n,
+                )
+            )
+        except CasePrepError as exc:
+            warnings.append(f"Textbook: {exc}")
+        else:
+            textbook_records = list(textbook_records)[:corpus_top_n]
+            evidence.extend(
+                _tag_evidence(
+                    textbook_records,
+                    axis="Textbook",
+                    query=corpus_query,
+                    case_spec=query_case_spec,
+                    family=retrieval_family,
+                    procedure_family=retrieval_family.id if retrieval_family else None,
+                    broad_profile=(
+                        retrieval_family.broad_profile
+                        if retrieval_family
+                        else query_case_spec.broad_profile.value
+                    ),
+                    retrieval_source="textbook_rag",
+                )
+            )
+
     semantic_query = topic
     semantic_used = False
     if provider_set.corpus_semantic is not None:
