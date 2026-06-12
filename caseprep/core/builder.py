@@ -990,6 +990,14 @@ def _write_core_artifacts(
                 label="case_board.json",
             )
         )
+        if request.options.get("pdf"):
+            try:
+                from caseprep.export.pdf import export_board_pdf
+
+                artifacts.append(export_board_pdf(board, evidence, output_dir))
+            except Exception as exc:
+                if warnings is not None:
+                    warnings.append(f"PDF export: {exc}")
 
     return artifacts
 

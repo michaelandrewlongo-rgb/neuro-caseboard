@@ -68,3 +68,41 @@ def test_board_to_pdf_skips_appendix_sections(tmp_path):
     art = board_to_pdf(board, tmp_path / "x.pdf", figures=None)
     assert art.metadata["sections"] == 2  # board sections counted
     assert Path(art.path).exists()
+
+
+def test_unmatched_figure_groups_render_in_trailing_section(tmp_path):
+    """Figures keyed by a heading absent from the board still land in the
+    PDF (trailing group), instead of being silently dropped."""
+    board = CompiledBoard(
+        title="T",
+        sections=[CompiledSection(heading="Operative Plan", body="b",
+                                  is_primary=True)],
+    )
+    figs = {"Evidence": [(_png(tmp_path), "Benzel Spine, p.592 - Fig 69-3")]}
+    with_figs = tmp_path / "with.pdf"
+    without_figs = tmp_path / "without.pdf"
+    board_to_pdf(board, with_figs, figures=figs)
+    board_to_pdf(board, without_figs, figures=None)
+    assert with_figs.stat().st_size > without_figs.stat().st_size + 500
+
+
+def test_export_board_pdf_embeds_textbook_figures(tmp_path):
+    from caseprep.core import EvidenceRecord
+    from caseprep.export.pdf import export_board_pdf
+
+    board = CompiledBoard(
+        title="C5-6 Corpectomy",
+        sections=[CompiledSection(heading="Operative Plan", body="plan",
+                                  is_primary=True)],
+    )
+    evidence = [EvidenceRecord(
+        id="textbook-Benzel-p726", source="textbook", title="Benzel p.592",
+        text="corpectomy", metadata={"figure_path": _png(tmp_path),
+                                     "citation": "Benzel Spine, p.592",
+                                     "caption": "Fig 69-3"},
+    )]
+    art = export_board_pdf(board, evidence, tmp_path)
+    assert art.kind == "pdf"
+    assert Path(art.path).name == "case-prep.pdf"
+    assert Path(art.path).exists()
+    assert Path(art.path).stat().st_size > 1000
