@@ -45,4 +45,12 @@ def split_compound(text: str) -> list[str]:
     if t.count(";") >= 2:
         return [p.strip() for p in t.split(";") if p.strip()]
 
+    # long multi-scenario prose (e.g. rescue sequences stacked into one bullet):
+    # split on sentence boundaries, but only when clearly dense (3+ real sentences
+    # in a long bullet) so ordinary 1-2 sentence claims are left intact.
+    if len(t) > 180:
+        sentences = [s.strip() for s in re.split(r"(?<=[.])\s+", t) if len(s.strip()) > 15]
+        if len(sentences) >= 3:
+            return sentences
+
     return []

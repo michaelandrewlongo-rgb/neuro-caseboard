@@ -32,10 +32,12 @@ _PROFILE_SIGNALS = {
               "acdf", "laminectomy", "laminoplasty", "discectomy", "fusion",
               "myelopathy", "radiculopathy", "vertebral", "scoliosis", "kyphosis",
               "c1", "c2"),
+    # NOTE: bare "meningioma" is deliberately excluded — it is location-dependent
+    # (a convexity meningioma is not skull base). True skull-base meningiomas still
+    # match via petrous/clivus/cpa/cavernous/etc.
     "skull_base": ("vestibular schwannoma", "acoustic", "cpa", "cerebellopontine",
                    "retrosigmoid", "translabyrinthine", "petrous", "clivus",
-                   "pituitary", "transsphenoidal", "meningioma", "skull base",
-                   "cavernous"),
+                   "pituitary", "transsphenoidal", "skull base", "cavernous"),
     "vascular": ("aneurysm", "avm", "carotid", "endarterectomy", "thrombectomy",
                  "bypass", "clipping", "coiling", "arteriovenous", "moyamoya",
                  "fistula", "embolization"),

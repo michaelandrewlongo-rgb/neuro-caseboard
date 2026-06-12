@@ -47,6 +47,21 @@ def test_every_subspecialty_monitoring_card_splits(topic):
     assert len(split_compound(q)) >= 2
 
 
+def test_splits_long_multi_sentence_rescue_bullet():
+    # dense rescue prose (multiple scenarios in one bullet) -> per-sentence checkboxes
+    text = ("VA injury: pack with muscle and Surgicel, consider primary repair. "
+            "IONM loss: warm irrigation, raise MAP, release retraction. "
+            "Cord swelling: widen decompression and give IV steroids. "
+            "Air embolism: flood the field and place in Trendelenburg.")
+    parts = split_compound(text)
+    assert len(parts) == 4
+    assert parts[0].startswith("VA injury")
+
+
+def test_short_two_sentence_bullet_is_not_split():
+    assert split_compound("Confirm the level. Then expose the disc space.") == []
+
+
 def test_scrub_strips_explorer_tokens():
     assert scrub_question("VERIFY: Confirm level [needs_patient_fact]") == "Confirm level"
     assert "[needs_evidence]" not in scrub_question("Check this [needs_evidence]")

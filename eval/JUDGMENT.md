@@ -1,0 +1,63 @@
+# Blind evaluation — neuro-caseboard
+
+Two independent agents were used, neither aware of the implementation:
+
+- an **attending-neurosurgeon agent** authored 6 pre-operative cases spanning the
+  breadth of neurosurgery, each with `must_cover` (clinical elements a good board must
+  contain) and `red_flags` (off-target content) — see `cases.json`;
+- a separate **judge agent** read only the generated boards + the grading ground truth
+  and scored them blind.
+
+Run condition: **no literature corpus attached** (offline), so every item is shown as
+`⚠ to verify`. The judge was told to grade structure / clinical content / presentation
+and not to penalize the uniform marker.
+
+## Scores (0–10)
+
+| Case | Subspecialty | Clinical | Off-target | Presentation | Overall |
+|------|--------------|:---:|:---:|:---:|:---:|
+| spine_acdf_c56 | Spine (ACDF) | 2 | 4 | 7 | 2 |
+| skullbase_vs_retrosigmoid | Skull base / CPA | 8 | 8 | 8 | 8 |
+| functional_awake_glioma | Functional / awake | 8 | 10 | 9 | 9 |
+| vascular_mca_clip | Vascular (clip) | 1 | 5 | 8 | 2 |
+| neurooncology_convexity_meningioma | Onc (convexity) | 3 | 3 | 8 | 3 |
+| pediatric_posterior_fossa_medulloblastoma | Peds / post. fossa | 1 | 5 | 8 | 2 |
+| **Mean** | | **3.8** | **5.8** | **8.0** | **4.3** |
+
+## Headline finding
+
+The eval cleanly separates two layers:
+
+- **Presentation (what this repo builds): mean 8.0, and "the presentation fixes held
+  uniformly across all six boards."** The judge verified, per board: no broken/placeholder
+  glyphs, a single coherent evidence axis (no confidence/evidence contradiction), no noise
+  `[low]` heading tags, a marker legend, claim/`Why:` separation, checkbox de-densification,
+  no dangling appendix pointer, and no within-board near-verbatim duplication. **The nine
+  defects from the original review are fixed and generalise across subspecialties — the
+  central claim being tested.**
+
+- **Clinical depth (inherited from caseprep's Explorer): mean 3.8.** Rich and usable where
+  hand-written family templates exist (awake glioma 9/10, vestibular schwannoma 8/10), but:
+  - the vascular and pediatric boards fall back to a **byte-identical generic craniotomy
+    template** (no aneurysm- or posterior-fossa-specific content);
+  - the convexity meningioma imports **CPA cranial-nerve / sigmoid-sinus content** (the
+    generic generator keyword-matches "meningioma" → CPA);
+  - the C5-6 ACDF returns **posterior C1-2 intradural-tumor content** (wrong operation /
+    wrong level).
+
+These are upstream Explorer-breadth limitations, not presentation defects, and are the
+recommended next investment (extend caseprep's hand-written family templates + fix the
+generic generator's anatomy routing). Two were addressed in this repo after the eval:
+more aggressive checkbox splitting of dense multi-sentence rescue bullets (#6), and
+dropping the over-broad `meningioma → skull_base` profile route.
+
+## Judge's top recommendations (verbatim, condensed)
+
+1. Fix the specialization collapse — 3 of 6 boards fall back to one generic template
+   (vascular and pediatric are literally identical files); emit case-specific operative
+   content for every subspecialty.
+2. Fix wrong-procedure / wrong-anatomy retrieval — ACDF returned posterior C1-2 content;
+   strip the posterior-fossa CN bleed from the convexity meningioma.
+3. Eliminate shared template carryovers (the generic "abort: VA/carotid bleeding" line,
+   "awake-vs-asleep" prompts) — the awake-glioma board proves the tool *can* author
+   case-specific abort logic; propagate that.

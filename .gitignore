@@ -12,3 +12,4 @@ venv/
 out/
 /tmp/
 .DS_Store
+eval/_outputs/
