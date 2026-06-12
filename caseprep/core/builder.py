@@ -40,6 +40,8 @@ from caseprep.retrievers.corpus_semantic import SemanticCorpusRetriever
 from caseprep.retrievers.pubmed import PubMedRetriever
 from caseprep.retrievers.radiology import RadiologyRetriever
 from caseprep.retrievers.board_cards import BoardCardRecord, BoardCardRetriever
+from caseprep.retrievers import resolve_textbook_enabled
+from caseprep.retrievers.textbook import TextbookRetriever
 from caseprep.synthesis.section_synthesis import SectionDraft, synthesize_sections
 
 from .contracts import (
@@ -105,6 +107,7 @@ class CoreRetrieverSet:
     corpus: CorpusRetrieverProtocol
     corpus_semantic: CorpusRetrieverProtocol | None = None
     board_cards: BoardCardRetriever | None = None
+    textbook: CorpusRetrieverProtocol | None = None
 
 
 MAX_RETRIEVAL_CAP = 10
@@ -247,6 +250,7 @@ def default_core_retrievers() -> CoreRetrieverSet:
         corpus=CorpusRetriever(),
         corpus_semantic=SemanticCorpusRetriever(),
         board_cards=BoardCardRetriever(top_n=5),
+        textbook=TextbookRetriever() if resolve_textbook_enabled() else None,
     )
 
 
