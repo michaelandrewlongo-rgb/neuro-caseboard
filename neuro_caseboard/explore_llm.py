@@ -32,8 +32,14 @@ _SLOTS_BY_FILE = {
     "05-risk-and-rescue.md": _RISK_SLOTS,
 }
 
-DEFAULT_MODEL = os.environ.get("CASEBOARD_LLM_MODEL", "claude-opus-4-8")
+_ANTHROPIC_DEFAULT = "claude-opus-4-8"
+_OPENROUTER_DEFAULT = "openai/gpt-4o"
 _MIN_CARDS = 6  # below this we treat the generation as failed and fall back
+
+
+def _resolve_model(model: str | None, *, openrouter: bool) -> str:
+    return (model or os.environ.get("CASEBOARD_LLM_MODEL")
+            or (_OPENROUTER_DEFAULT if openrouter else _ANTHROPIC_DEFAULT))
 
 _SYSTEM = """You are a fellowship-trained attending neurosurgeon building a pre-operative \
 case board for a resident. Given ONE specific procedure, produce a comprehensive set of \
@@ -45,10 +51,16 @@ points, stop criteria, closure/reconstruction, monitoring, equipment/adjuncts, a
 - Risk and Rescue (05-risk-and-rescue.md): likely complications, catastrophic \
 complications, mitigation, rescue triggers
 
-Each card MUST be specific to THIS exact procedure and approach. Name the actual nerves, \
-vessels, bony landmarks, operative steps, decision thresholds, complications, and rescue \
-maneuvers that apply to this case. Write each card as a VERIFY prompt — something the \
-surgeon confirms before/during the case — not a fact stated as already answered.
+Each card MUST be specific to THIS exact procedure and approach. The `question` field \
+should STATE the specific clinical content as a concise assertion the surgeon will \
+confirm — the actual structure and where it runs, the actual operative step or numeric \
+threshold, the actual complication and its rescue maneuver. State the fact \
+("Recurrent laryngeal nerve runs in the tracheoesophageal groove; the right-sided course \
+is more variable"), NOT a content-free prompt ("VERIFY the recurrent laryngeal nerve"). \
+Do NOT begin cards with "VERIFY". Every card must carry real case-specific substance — \
+avoid generic filler (generic positioning, "attending preferences", "confirm tool \
+availability", generic "anatomical variants", "criteria for stopping") unless you make it \
+concretely specific to this procedure.
 
 HARD RULES:
 - Be procedure-specific. For a C5-6 ACDF, cover the recurrent laryngeal nerve, carotid \
@@ -96,28 +108,88 @@ _SCHEMA = {
 
 
 def llm_available() -> bool:
-    """True when a key is configured and the SDK is importable."""
-    if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
-        return False
-    try:
-        import anthropic  # noqa: F401
-    except Exception:
-        return False
-    return True
+    """True when a provider key is configured and its client lib is importable.
+
+    OpenRouter (OpenAI-compatible gateway) is preferred when OPENROUTER_API_KEY is set;
+    otherwise the first-party Anthropic API.
+    """
+    if os.environ.get("OPENROUTER_API_KEY"):
+        try:
+            import requests  # noqa: F401
+            return True
+        except Exception:
+            return False
+    if os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"):
+        try:
+            import anthropic  # noqa: F401
+            return True
+        except Exception:
+            return False
+    return False
 
 
-def _anthropic_complete(system: str, user: str, *, model: str = DEFAULT_MODEL) -> str:
-    """Real Claude call (used only when a key is present). Returns the JSON text block."""
+def _openrouter_complete(system: str, user: str, *, model: str | None = None,
+                         retries: int = 2) -> str:
+    """OpenAI-compatible chat completion via OpenRouter. Returns the JSON message text.
+
+    Retries transient failures (timeouts, 429, 5xx) so a single flake doesn't drop the
+    whole board to the deterministic fallback.
+    """
+    import time
+    import requests
+    payload = {
+        "model": _resolve_model(model, openrouter=True),
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.3,
+        "max_tokens": 8000,
+    }
+    headers = {
+        "Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}",
+        "Content-Type": "application/json",
+        "X-Title": "neuro-caseboard",
+    }
+    last = None
+    for attempt in range(retries + 1):
+        try:
+            resp = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers, json=payload, timeout=180)
+            if resp.status_code == 429 or resp.status_code >= 500:
+                last = requests.HTTPError(f"{resp.status_code}: {resp.text[:200]}")
+                raise last
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+        except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as exc:
+            last = exc
+            if attempt < retries:
+                time.sleep(1.5 * (attempt + 1))
+            else:
+                raise
+    raise last  # pragma: no cover
+
+
+def _anthropic_complete(system: str, user: str, *, model: str | None = None) -> str:
+    """First-party Claude call. Returns the JSON text block."""
     import anthropic
     client = anthropic.Anthropic()
     resp = client.messages.create(
-        model=model,
+        model=_resolve_model(model, openrouter=False),
         max_tokens=12000,
         system=system,
         messages=[{"role": "user", "content": user}],
         output_config={"format": {"type": "json_schema", "schema": _SCHEMA}},
     )
     return next(b.text for b in resp.content if b.type == "text")
+
+
+def _default_complete(system: str, user: str, *, model: str | None = None) -> str:
+    if os.environ.get("OPENROUTER_API_KEY"):
+        return _openrouter_complete(system, user, model=model)
+    return _anthropic_complete(system, user, model=model)
 
 
 def _coerce_cards(raw: dict):
@@ -148,7 +220,7 @@ def _coerce_cards(raw: dict):
 
 def build_llm_manifest(topic: str, *, complete_fn=None, model: str | None = None):
     """Generate a case-specific QuestionManifest for *topic*, or None on any failure."""
-    complete_fn = complete_fn or (lambda s, u: _anthropic_complete(s, u, model=model or DEFAULT_MODEL))
+    complete_fn = complete_fn or (lambda s, u: _default_complete(s, u, model=model))
     user = f"Procedure: {topic.strip()}"
     try:
         text = complete_fn(_SYSTEM, user)

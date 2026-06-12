@@ -83,4 +83,10 @@ def test_returns_none_when_too_few_valid_cards():
 def test_llm_unavailable_without_api_key(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     assert llm_available() is False
+
+
+def test_llm_available_with_openrouter_key(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    assert llm_available() is True

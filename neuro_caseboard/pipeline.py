@@ -87,14 +87,26 @@ def build_manifest(topic: str, *, use_llm=None):
     if use_llm is None:
         use_llm = llm_enabled()
 
-    manifest = None
+    llm_manifest = None
     if use_llm:
         from neuro_caseboard.explore_llm import build_llm_manifest
         try:
-            manifest = build_llm_manifest(topic)
+            llm_manifest = build_llm_manifest(topic)
         except Exception:
-            manifest = None
-    if manifest is None or not manifest.cards:
+            llm_manifest = None
+
+    if llm_manifest is not None and llm_manifest.cards:
+        # Merge curated hand-written family templates (which outperform a general model on
+        # their own family) as a high-priority floor; the LLM fills the long tail and the
+        # subspecialties no template covers.
+        cards = list(llm_manifest.cards)
+        key = _detect_manifest_key("", topic)
+        if key and key in _FAMILY_MANIFESTS:
+            template_cards = [c for cs in _FAMILY_MANIFESTS[key].values() for c in cs]
+            cards = _merge_cards(template_cards, cards)  # templates win their slots
+        manifest = QuestionManifest(
+            procedure_family=("llm+template" if key else "llm_generated"), cards=cards)
+    else:
         manifest = _deterministic_manifest(topic, profile)
 
     return prune_offtarget(manifest, topic), profile
