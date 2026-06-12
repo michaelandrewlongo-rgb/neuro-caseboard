@@ -19,12 +19,15 @@ def main(argv=None) -> int:
     b.add_argument("--pdf", action="store_true", help="Also export case-board.pdf")
     b.add_argument("--no-enrich", action="store_true",
                    help="Skip corpus enrichment (offline verify-only checklist)")
+    b.add_argument("--no-llm", action="store_true",
+                   help="Force the deterministic Explorer (skip the LLM case-specific Explorer)")
 
     args = parser.parse_args(argv)
     if args.cmd == "build":
         out = args.output or f"{_slug(args.topic)}-caseboard"
         dossier, artifacts = generate(
-            args.topic, output_dir=out, pdf=args.pdf, enrich=not args.no_enrich)
+            args.topic, output_dir=out, pdf=args.pdf, enrich=not args.no_enrich,
+            use_llm=False if args.no_llm else None)
         print(f"Wrote {artifacts['markdown']}")
         if "pdf" in artifacts:
             print(f"Wrote {artifacts['pdf']}")

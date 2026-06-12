@@ -26,6 +26,25 @@ defects of the legacy exporter:
 Every fix is **topic-agnostic** — driven by card metadata and text structure, never
 hardcoded clinical phrases — so the dossier generalises across all of neurosurgery.
 
+## Clinical depth — the Explorer
+
+The *presentation* fixes generalise across all of neurosurgery, but the *clinical content*
+of a board is only as good as the question-cards the Explorer produces. To make the
+content generalise too, the Explorer is **LLM-first**:
+
+- `explore_llm.py` asks Claude (`claude-opus-4-8`, structured JSON output) to generate
+  **case-specific** anatomy/operative/risk cards for the exact procedure — naming the real
+  nerves, vessels, steps, complications, and rescue maneuvers — with a system prompt that
+  forbids content from other operations/subspecialties. **Requires `ANTHROPIC_API_KEY`.**
+- Without a key it **falls back** to caseprep's deterministic rule-based + family-template
+  Explorer (rich where a hand-written template exists, generic elsewhere).
+- Either way the manifest passes through `guard.py` (`prune_offtarget`), a deterministic
+  anti-bleed filter that strips cross-region content (e.g. CPA / posterior-fossa cranial
+  nerves on a supratentorial convexity case).
+
+Toggle: set `CASEBOARD_LLM=0` to force the deterministic path, or pass `caseboard build
+--no-llm`. Override the model with `CASEBOARD_LLM_MODEL`.
+
 ## Layout
 
 ```

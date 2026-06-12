@@ -9,6 +9,7 @@ checklist); with the FTS5 corpus lane, cards earn corpus-supported / quarantined
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import re
 
 from caseprep.explorer.question_manifest import (
@@ -23,6 +24,7 @@ from caseprep.audit.card_auditor import audit_manifest
 from caseprep.core.contracts import EvidenceRecord
 
 from neuro_caseboard.retrieve import build_retriever
+from neuro_caseboard.guard import prune_offtarget
 from neuro_caseboard.compile import compile_dossier
 from neuro_caseboard.render_md import render_markdown
 from neuro_caseboard.render_pdf import render_pdf
@@ -52,23 +54,50 @@ def classify_profile(topic: str) -> str:
     return ""
 
 
-def build_manifest(topic: str):
-    """Deterministic, offline Explorer: generic rule-based cards (any topic) merged with
-    hand-written family templates when the topic matches one. Avoids the KG/LLM adapters
-    in build_question_manifest, which block on an unavailable knowledge-graph database.
-    """
-    profile = classify_profile(topic)
+def llm_enabled() -> bool:
+    """LLM Explorer is used when a key is configured and not explicitly disabled."""
+    from neuro_caseboard.explore_llm import llm_available
+    return llm_available() and os.environ.get("CASEBOARD_LLM", "1") != "0"
+
+
+def _deterministic_manifest(topic: str, profile: str):
+    """Offline Explorer: generic rule-based cards (any topic) merged with hand-written
+    family templates when the topic matches one. Avoids the KG/LLM adapters in
+    build_question_manifest, which block on an unavailable knowledge-graph database."""
     generic = build_generic_manifest(topic, profile=profile)
     cards = list(generic.cards) if generic else []
-
     key = _detect_manifest_key("", topic)
     if key and key in _FAMILY_MANIFESTS:
         template_cards = []
         for section_cards in _FAMILY_MANIFESTS[key].values():
             template_cards.extend(section_cards)
         cards = _merge_cards(template_cards, cards)  # hand-written templates take priority
+    return QuestionManifest(procedure_family=key or profile or "generic", cards=cards)
 
-    return QuestionManifest(procedure_family=key or profile or "generic", cards=cards), profile
+
+def build_manifest(topic: str, *, use_llm=None):
+    """Build the question manifest for *topic*.
+
+    Clinical depth comes from the LLM Explorer (case-specific cards for any procedure)
+    when a key is available; otherwise the deterministic generator. Either way the result
+    passes through the anti-bleed guard, which strips cross-region content. Returns
+    ``(manifest, profile)``.
+    """
+    profile = classify_profile(topic)
+    if use_llm is None:
+        use_llm = llm_enabled()
+
+    manifest = None
+    if use_llm:
+        from neuro_caseboard.explore_llm import build_llm_manifest
+        try:
+            manifest = build_llm_manifest(topic)
+        except Exception:
+            manifest = None
+    if manifest is None or not manifest.cards:
+        manifest = _deterministic_manifest(topic, profile)
+
+    return prune_offtarget(manifest, topic), profile
 
 
 def _sources_from_audited(audited, *, limit: int = 15):
@@ -87,9 +116,9 @@ def _sources_from_audited(audited, *, limit: int = 15):
     return out
 
 
-def build_dossier(topic: str, *, enrich: bool = True):
+def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
     """Run the full pipeline and return a compiled Dossier."""
-    manifest, _profile = build_manifest(topic)
+    manifest, _profile = build_manifest(topic, use_llm=use_llm)
     retriever = build_retriever() if enrich else None
     enriched = enrich_manifest(manifest, topic=topic, retriever=retriever, top_n=3)
     audited = audit_manifest(enriched, topic=topic)
@@ -101,9 +130,9 @@ def _slug(topic: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (topic or "").lower()).strip("-")[:40] or "case"
 
 
-def generate(topic: str, *, output_dir, pdf: bool = False, enrich: bool = True):
+def generate(topic: str, *, output_dir, pdf: bool = False, enrich: bool = True, use_llm=None):
     """Build a dossier and write case-board.md (+ case-board.pdf) to output_dir."""
-    dossier = build_dossier(topic, enrich=enrich)
+    dossier = build_dossier(topic, enrich=enrich, use_llm=use_llm)
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     artifacts = {}

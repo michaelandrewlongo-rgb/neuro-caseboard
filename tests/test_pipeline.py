@@ -19,6 +19,31 @@ def test_classify_profile(topic, prof):
     assert classify_profile(topic) == prof
 
 
+def test_build_manifest_prunes_offtarget_bleed_offline():
+    from neuro_caseboard.pipeline import build_manifest
+    m, _ = build_manifest("right frontal non-eloquent convexity meningioma resection",
+                          use_llm=False)
+    text = " ".join(f"{c.question} {c.why_it_matters}" for c in m.cards).lower()
+    assert "cerebellopontine" not in text
+    assert "ix-xi" not in text  # the posterior/CPA lower-cranial-nerve litany is stripped
+
+
+def test_build_manifest_uses_llm_when_enabled(monkeypatch):
+    """When use_llm=True, the LLM Explorer's case-specific cards are used (mocked here)."""
+    from caseprep.explorer.question_manifest import QuestionCard, QuestionManifest
+    from neuro_caseboard import pipeline
+
+    fake = QuestionManifest(procedure_family="llm_generated", cards=[
+        QuestionCard(target_file="04-operative-plan.md", section_key="critical_steps",
+                     question=f"LLM-specific operative step {i}", why_it_matters="w",
+                     compiler_slot="Critical Steps")
+        for i in range(8)])
+    monkeypatch.setattr("neuro_caseboard.explore_llm.build_llm_manifest", lambda topic: fake)
+
+    m, _ = pipeline.build_manifest("some procedure with no template", use_llm=True)
+    assert any("LLM-specific" in c.question for c in m.cards)
+
+
 @pytest.mark.parametrize("topic", [
     "C5-6 corpectomy",
     "left vestibular schwannoma retrosigmoid",

@@ -26,6 +26,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "pdfplumber>=0.11"]
+# LLM-backed Explorer (case-specific question generation for any procedure).
+# Needs ANTHROPIC_API_KEY at runtime; falls back to the deterministic Explorer without it.
+llm = ["anthropic>=0.40"]
 
 [project.scripts]
 caseboard = "neuro_caseboard.cli:main"
