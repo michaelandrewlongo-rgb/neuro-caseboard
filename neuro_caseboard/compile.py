@@ -35,8 +35,10 @@ _INTRO = {
     "Operative Plan": "Critical steps, decision points, and stop criteria.",
     "Risk and Rescue": "Expected and catastrophic complications with rescue sequences.",
 }
-_PRIMARY = {"supported", "needs_review"}
-_STATUS = {"supported": "supported", "needs_review": "verify"}
+# no_evidence cards are still surgeon-facing VERIFY prompts (the Explorer designs them
+# as such); only genuinely off-target retrievals are quarantined to the appendix.
+_PRIMARY = {"supported", "needs_review", "no_evidence"}
+_STATUS = {"supported": "supported", "needs_review": "verify", "no_evidence": "verify"}
 
 
 def _humanize(name: str) -> str:
@@ -140,12 +142,11 @@ def compile_dossier(
     if citations:
         appendix_entries.append(AppendixEntry(heading="Evidence Sources", sources=citations))
 
-    # #2 single evidence axis (no confidence)
+    # #2 single evidence axis (no confidence); one clean partition
     summary = EvidenceSummary(
         supported=sum(1 for c in cards if c.audit_status == "supported"),
-        verify=sum(1 for c in cards if c.audit_status == "needs_review"),
+        to_verify=sum(1 for c in cards if c.audit_status in ("needs_review", "no_evidence")),
         quarantined=sum(1 for c in cards if c.audit_status == "off_target"),
-        no_evidence=sum(1 for c in cards if c.audit_status == "no_evidence"),
     )
 
     title = f"Case Board — {topic}" if topic else "Case Board"

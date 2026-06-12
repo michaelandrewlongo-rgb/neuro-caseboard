@@ -55,12 +55,12 @@ class Section:
 
 @dataclass
 class EvidenceSummary:
-    """Single evidence axis (defect #2: no confidence axis to contradict it)."""
+    """One clean evidence-disposition partition (defect #2: no second axis to
+    contradict it). supported + to_verify + quarantined == total cards."""
 
-    supported: int = 0
-    verify: int = 0
-    quarantined: int = 0
-    no_evidence: int = 0
+    supported: int = 0       # corpus-supported
+    to_verify: int = 0       # needs_review + no corpus match -> clinician verifies
+    quarantined: int = 0     # off-target retrievals, moved to the appendix
 
 
 @dataclass

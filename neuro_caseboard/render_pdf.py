@@ -92,8 +92,8 @@ def render_pdf(dossier: Dossier, out_path) -> ArtifactRef:
     s = dossier.summary
     pdf.set_font(fam, "", 10)
     summ = (f"Evidence:   {glyph('supported')} {s.supported} corpus-supported    "
-            f"{glyph('verify')} {s.verify} need verification    "
-            f"{s.quarantined} quarantined    {s.no_evidence} no retrievable evidence")
+            f"{glyph('verify')} {s.to_verify} to verify    "
+            f"{s.quarantined} quarantined (appendix)")
     pdf.multi_cell(0, 5, t(summ), new_x="LMARGIN", new_y="NEXT")
 
     has_appendix = not dossier.appendix.is_empty()

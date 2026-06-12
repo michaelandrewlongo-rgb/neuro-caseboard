@@ -25,10 +25,13 @@ def test_title_includes_topic(built):
     assert f.topic in d.title
 
 
-def test_summary_is_evidence_axis_with_real_counts(built):
+def test_summary_is_single_evidence_axis_partition(built):
     f, d = built
-    assert (d.summary.supported, d.summary.verify,
-            d.summary.quarantined, d.summary.no_evidence) == (3, 2, 1, 1)
+    # one clean partition (supported + to_verify + quarantined == all cards),
+    # no second axis to contradict it. needs_review(2) + no_evidence(1) -> to_verify 3.
+    assert (d.summary.supported, d.summary.to_verify, d.summary.quarantined) == (3, 3, 1)
+    total = d.summary.supported + d.summary.to_verify + d.summary.quarantined
+    assert total == len(f.manifest.cards)
 
 
 def test_canonical_sections_present(built):
