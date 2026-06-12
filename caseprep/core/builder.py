@@ -798,13 +798,22 @@ def _write_core_artifacts(
 
         # ── Enrichment: attach corpus evidence to each question card ───
         if provider_set is not None and not family_has_defaults:
-            semantic = provider_set.corpus_semantic
-            if semantic is not None:
+            # Answer each high-yield card from every available grounded lane:
+            # the semantic corpus AND the user's textbook library. The textbook
+            # lane carries page-grounded passages and figure paths, so a card
+            # gets answered (and illustrated) even when the corpus backend is
+            # offline.
+            from caseprep.retrievers.composite import CompositeRetriever
+
+            card_retriever = CompositeRetriever(
+                [provider_set.corpus_semantic, provider_set.textbook]
+            )
+            if card_retriever.any_lanes():
                 try:
                     enriched = enrich_manifest(
                         manifest,
                         topic=topic,
-                        retriever=semantic,
+                        retriever=card_retriever,
                         top_n=3,
                     )
                     enriched_json = json.dumps(enriched.to_dict(), indent=2) + "\n"
