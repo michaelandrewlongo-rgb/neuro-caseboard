@@ -31,10 +31,14 @@ def assemble_caption(first_line: str, following_lines, *, max_chars: int = 240) 
         if sum(len(p) + 1 for p in parts) >= max_chars:
             break
     cap = " ".join(p for p in parts if p)
-    if len(cap) > max_chars:
-        cut = cap[:max_chars]
-        dot = cut.rfind(". ")
-        cap = (cut[: dot + 1] if dot > 60 else cut.rsplit(" ", 1)[0] + " …")
+    # A page often has no blank line after the caption, so the join may absorb the body
+    # paragraph. Keep the caption's first sentence — the first ". " past the figure-number
+    # periods (index 60 clears "Figure 26.17."-style labels) — else cap the length.
+    end = next((i for i in range(60, len(cap)) if cap[i:i + 2] == ". "), None)
+    if end is not None:
+        cap = cap[: end + 1]
+    elif len(cap) > max_chars:
+        cap = cap[:max_chars].rsplit(" ", 1)[0] + " …"
     return cap
 
 
