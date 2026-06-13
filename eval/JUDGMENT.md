@@ -359,3 +359,24 @@ and the verdict is unanimous across all three rotations. **Decision: ship the Ge
 corpus + the two guards.** Remaining minor dings (a blood-blister-aneurysm plate and a generic
 gyral plate still occupy 2 of 8 MCA slots) are candidates for the optional Gemini per-claim
 image RE-RANK lever if a future round wants MCA >9.
+
+### Generalization test — 3 untuned queries + flowchart guard
+
+Tested the re-captioned lane on three queries it was never tuned for (decompressive craniectomy
+for TBI; endovascular vasospasm rescue in SAH; stent-assisted coiling of wide-necked aneurysms),
+grading the opened images. **Stent-coiling: excellent** (jailed-microcatheter/self-expanding-stent
+p282, Y-stent basilar-apex p310, balloon-assisted coiling p277 — all real endovascular technique
+plates, found because the Gemini captions now name "jailed microcatheter", "Y-stent",
+"dome-to-neck ratio"). **Decompressive crani: good** (hemicraniectomy bone-flap diagram Greenberg
+p1759; herniation-types + ICP curve Schmidek p1939; tentorial-incisura CN III). **Vasospasm:
+mixed** (balloon-angioplasty-for-vasospasm p388 bullseye; lenticulostriate p134) with one real
+off-target leak: a **cerebral-venous-thrombosis management flowchart** (Decision-making p135)
+matched on generic management words.
+
+Fix: a flowchart/algorithm DEMOTION (`_FLOWCHART`, retrieve.py) — decision/management-pathway
+figures are demoted x0.35 (not blocked), so a genuinely on-topic algorithm can still surface when
+it is the best candidate, but a tangential one loses to real anatomy. After the guard the vasospasm
+"circle of Willis collateral" slot flips from the CVT flowchart to a real Circle-of-Willis plate
+(Neurointerventional p75). A calibration nuance worth recording: the diagnostic-image guard
+correctly does NOT block DSA/angiograms here, because for an *endovascular* case the angiogram is
+the operative medium (the guard's "no patient scans" rule is implicitly an open-surgery rule). 178 tests.

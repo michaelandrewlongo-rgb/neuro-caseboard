@@ -269,6 +269,15 @@ _DIAGNOSTIC_IMAGE = ("ct angiogram", "ct scan", "axial ct", "coronal ct", "sagit
 _VIGNETTE = re.compile(r"\b\d{1,3}[\s-]?year[\s-]?old\b|\bpresented with\b|\ba \d{1,2}[- ]year",
                        re.IGNORECASE)
 
+# Decision-making / management-pathway flowcharts are text diagrams, not operative anatomy. A blind
+# generalization test had a cerebral-venous-thrombosis management algorithm leak onto a vasospasm
+# board. These are DEMOTED, not blocked: a genuinely on-topic algorithm (a strong lexical match for
+# the case's own subject) can still surface when it is the best candidate, but a tangential one
+# loses to real anatomy plates.
+_FLOWCHART = ("algorithm", "flowchart", "flow chart", "flow-chart", "decision tree",
+              "management pathway", "treatment pathway", "management algorithm",
+              "treatment algorithm", "decision-making algorithm", "schematic algorithm")
+
 
 def _cap_toks(s: str):
     return [t for t in re.findall(r"[a-z0-9]+", (s or "").lower()) if len(t) > 2]
@@ -445,6 +454,9 @@ class FigureCaptionRetriever:
             s = sum(ct[t] * self._idf(t) for t in matched)
             if _VIGNETTE.search(row["caption"]):
                 s *= 0.4                    # demote patient case-vignette/clinical-image figures
+            cap_low = row["caption"].lower()
+            if any(f in cap_low for f in _FLOWCHART):
+                s *= 0.35                   # demote decision/management flowcharts (keep if strong)
             if s > 0:
                 scored.append((s, row))
         scored.sort(key=lambda x: x[0], reverse=True)

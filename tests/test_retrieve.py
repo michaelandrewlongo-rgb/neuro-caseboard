@@ -255,6 +255,29 @@ def test_figure_guard_anterior_posterior_fossa_divide():
     assert _figure_offtarget(aica_cpa, cpa) is False
 
 
+def test_flowchart_demoted_but_not_blocked():
+    from neuro_caseboard.retrieve import FigureCaptionRetriever
+    query = "vasospasm of the middle cerebral artery"
+    topic = "endovascular treatment of cerebral vasospasm"
+    anatomy = {"book": "Atlas", "page": 1, "figure_path": "/x/p1.png", "context": "",
+               "caption": "Balloon angioplasty of the middle cerebral artery for vasospasm"}
+    flow = {"book": "Decision", "page": 2, "figure_path": "/x/p2.png", "context": "",
+            # same anatomy terms as the plate above, plus the flowchart tell-tale
+            "caption": "Decision-making algorithm for vasospasm of the middle cerebral artery"}
+    # a filler so the shared anatomy terms aren't in every row (otherwise IDF collapses to 0)
+    filler = {"book": "Spine", "page": 9, "figure_path": "/x/p9.png", "context": "",
+              "caption": "Lumbar pedicle screw entry point and trajectory"}
+    ranked = FigureCaptionRetriever([anatomy, flow, filler]).retrieve(query, topic=topic, top_n=3)
+    pages = [r.metadata["page"] for r in ranked]
+    # the real anatomy plate outranks the equally-matching flowchart (demotion), ...
+    assert pages[0] == 1
+    # ... but the flowchart is NOT hard-blocked — it still appears when relevant.
+    assert 2 in pages
+    # a flowchart that is the ONLY relevant candidate still returns (soft demotion, not a block)
+    assert 2 in [r.metadata["page"]
+                 for r in FigureCaptionRetriever([flow, filler]).retrieve(query, topic=topic, top_n=3)]
+
+
 def test_figure_guard_blocks_nonoperative_angio_positioning():
     from neuro_caseboard.retrieve import _figure_offtarget
     mca = "pterional craniotomy for clipping an MCA bifurcation aneurysm"
