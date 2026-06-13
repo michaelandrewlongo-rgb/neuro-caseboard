@@ -65,11 +65,12 @@ def main() -> int:
                  for q, tf in parse_cards(board.read_text(encoding="utf-8"))]
         ce, _ = _collect_figures(QuestionManifest(procedure_family="x", cards=cards),
                                  c["query"], figret=figret, max_total=8, per_card=1)
-        figs = [(q[:60], r.metadata["citation"], r.metadata["caption"][:130])
+        figs = [(q[:60], r.metadata["citation"], r.metadata["caption"][:160],
+                 r.metadata.get("figure_path", ""))
                 for q, recs in ce.items() for r in recs]
         blocks.append(f"## {c['id']}\nQUERY: {c['query']}\nFIGURES ({len(figs)}):")
-        for claim, cite, cap in figs:
-            blocks.append(f"- [{cite}] {cap}\n    claim: {claim}")
+        for claim, cite, cap, path in figs:
+            blocks.append(f"- [{cite}] {cap}\n    IMAGE: {path}\n    claim: {claim}")
         blocks.append("")
     txt = "\n".join(blocks)
     (HERE / "FIGURE_REPORT.md").write_text(txt, encoding="utf-8")

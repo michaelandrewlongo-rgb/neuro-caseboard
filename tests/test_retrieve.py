@@ -119,6 +119,35 @@ def test_collect_figures_dedups_pages_and_links_cards():
 
 # --- figure-caption retrieval (fixes lexical whole-page drift) ---------------
 
+def test_figure_guard_blocks_diagnostic_cross_sectional_imaging():
+    from neuro_caseboard.retrieve import _figure_offtarget
+    # CT / MRI / CT-angiogram are diagnostic scans, not operative atlas anatomy — the
+    # bigger cropped index surfaces these and they must be dropped from a surgical board.
+    assert _figure_offtarget("Fig 28.1 CT angiogram showing the right MCA aneurysm",
+                             "pterional craniotomy for MCA bifurcation clipping")
+    assert _figure_offtarget("Axial temporal bone CT images, profound sensorineural hearing loss",
+                             "left retrosigmoid CPA vestibular schwannoma")
+    assert _figure_offtarget("Sagittal T2-weighted MRI of the cervical spine",
+                             "C1-C2 Goel-Harms atlantoaxial fixation")
+    # but an intra-op fluoroscopy / plain lateral X-ray of a construct is KEPT (useful)
+    assert not _figure_offtarget("Lateral plain X-ray used to identify the correct surgical level",
+                                 "C1-C2 Goel-Harms atlantoaxial fixation",
+                                 book="Spine Surgery Tricks of the Trade Vaccaro")
+
+
+def test_figure_guard_recognizes_new_spine_atlas_as_spine_book():
+    from neuro_caseboard.retrieve import _figure_offtarget
+    bk = "Surgical Anatomy and Techniques to the Spine"
+    # the new spine atlas must NOT leak onto cranial cases (observed: p.669 post-op MRI)
+    assert _figure_offtarget("Figure 66-12 MRI after posterior approach for schwannoma",
+                             "left retrosigmoid CPA vestibular schwannoma", book=bk)
+    assert _figure_offtarget("Figure 12-1 instrumentation construct",
+                             "pterional MCA bifurcation aneurysm clipping", book=bk)
+    # but it is welcome on a spine case (it supplies the C1-C2 bullseyes)
+    assert not _figure_offtarget("C1 lateral mass and C2 pars screw construct",
+                                 "C1-C2 Goel-Harms atlantoaxial fixation", book=bk)
+
+
 def test_figure_region_guard_rejects_cross_region_and_level():
     from neuro_caseboard.retrieve import _figure_offtarget
     # cranial case must reject a spine plate
@@ -207,3 +236,49 @@ def test_figure_caption_retriever_ranks_by_caption_and_region_filters():
     # an ambiguous "pedicle screw" query in a cranial case must NOT surface the lumbar plate
     recs2 = r.retrieve("pedicle screw", topic="retrosigmoid craniotomy CPA", top_n=3)
     assert all(x.metadata["page"] != 516 for x in recs2)
+
+
+def test_hybrid_semantic_adds_lexically_missed_in_region_plate():
+    import numpy as np
+    from neuro_caseboard.retrieve import FigureCaptionRetriever
+    rows = [
+        {"book": "Rhoton", "page": 1, "figure_path": "/x/p1.png", "context": "",
+         "caption": "Middle cerebral artery bifurcation at the limen insulae",
+         "vector": [1.0, 0.0, 0.0]},
+        {"book": "Rhoton", "page": 2, "figure_path": "/x/p2.png", "context": "",
+         "caption": "Sylvian fissure candelabra exposure",   # no lexical overlap w/ query
+         "vector": [0.0, 1.0, 0.0]},
+    ]
+    query = "middle cerebral artery bifurcation M1 M2"
+    topic = "pterional MCA bifurcation aneurysm clipping"
+    # fake BiomedCLIP text encoder: the claim lands on row 2's axis (semantic match)
+    embed = lambda t: np.array([0.0, 1.0, 0.0], dtype="float32")
+    lex_pages = {r.metadata["page"]
+                 for r in FigureCaptionRetriever(rows).retrieve(query, topic=topic, top_n=2)}
+    hyb_pages = {r.metadata["page"]
+                 for r in FigureCaptionRetriever(rows, embed_fn=embed).retrieve(
+                     query, topic=topic, top_n=2)}
+    assert 2 not in lex_pages          # lexical lane misses the zero-overlap caption
+    assert 2 in hyb_pages              # semantic lane surfaces it
+
+
+def test_hybrid_offtarget_guard_overrides_semantic():
+    import numpy as np
+    from neuro_caseboard.retrieve import FigureCaptionRetriever
+    rows = [
+        {"book": "Benzel", "page": 10, "figure_path": "/x/p10.png",
+         "caption": "Lumbar pedicle screw trajectory and dimensions",
+         "context": "lumbar L4 L5 pedicle screw", "vector": [1.0, 0.0, 0.0]},
+        {"book": "Rhoton", "page": 11, "figure_path": "/x/p11.png", "context": "",
+         "caption": "Middle cerebral artery bifurcation M1 M2 perforators",
+         "vector": [0.0, 1.0, 0.0]},
+    ]
+    query = "middle cerebral artery bifurcation"
+    topic = "pterional MCA bifurcation aneurysm clipping"
+    # fake encoder maxes cosine on the LUMBAR plate — the region guard must still drop it
+    embed = lambda t: np.array([1.0, 0.0, 0.0], dtype="float32")
+    pages = {r.metadata["page"]
+             for r in FigureCaptionRetriever(rows, embed_fn=embed).retrieve(
+                 query, topic=topic, top_n=2)}
+    assert 10 not in pages             # lumbar plate dropped despite max cosine
+    assert 11 in pages

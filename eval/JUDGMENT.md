@@ -220,6 +220,54 @@ not indexed at all. The real path to "board-acceptable" (8+) is upstream in text
 crop individual figures from pages (+ re-embed) and ingest the missing plates — not more
 retrieval-code tuning. Domain cleanliness (no off-target leak) is solved.
 
+## Upstream round — 2 atlases + per-figure cropping (vs the same blind image-judge)
+
+Acted on the ceiling above. Two moves, measured on the 3-case acceptance test (`eval/figure_cases.json`,
+`eval/figure_eval.py`, blind image-verifying judge; targets **domain ≥ 8.5, specific ≥ 8**).
+
+**(B) Ingested two figure-rich atlases** ("Brain Anatomy and Neurosurgical Approaches",
+"Surgical Anatomy and Techniques to the Spine") into textbook-rag (chunks 22.2k→28.0k,
+figures 7071→7815, 14→16 books). Page-image + lexical, with the region guard taught the new
+spine book (`_SPINE_BOOKS += "techniques to the spine"`): **7.8/5.7 → 8.7/7.3 — domain target
+MET.** The spine atlas supplied the previously-missing C1-C2 bullseyes (construct, C2-pars
+trajectory, occipitocervical venous plexus). *This is the shipped configuration.*
+
+**(A) Cropped per-figure plates** (textbook-rag `engine/figures.py`: `page.get_image_info()`
+bbox grouping → `page.get_pixmap(clip=...)` per plate; one figures.lance row per plate, 10,379
+plates; BiomedCLIP re-embed) + a hybrid BiomedCLIP-cosine semantic re-rank in neuro-caseboard,
+all behind flags (`FIGURE_CROP`, `CASEBOARD_FIGURE_SEMANTIC`). Trajectory (domain/specific):
+crop+hybrid **6.5/5.3**, crop+lexical **6.0/6.5** → after fixes **7.8/6.5** — *below* page-image.
+
+Two root causes found and fixed (kept for the record — both bit hard):
+1. **Bloated per-plate captions.** `get_text("blocks")` returns the figure's *entire*
+   multi-paragraph legend (a pituitary plate's caption was 3,697 chars). Stray words then
+   poison the caption-based region guards — "disc dissector" in a pituitary legend set
+   `c_spine=True` and let an intracranial plate leak onto the C1-C2 spine case. Fix:
+   `_caption_head` caps the caption to ~320 chars (keeps panel detail "A, the AICA passes…",
+   drops the legend). First-sentence truncation was *too* aggressive (it dropped the AICA
+   panel detail and lost the CPA gold plate) — a char cap is the right knob.
+2. **Diagnostic-image proliferation.** The larger cropped index surfaced CT/MRI/CT-angiogram
+   plates; added a content guard (`_DIAGNOSTIC_IMAGE`) — a surgical-anatomy board shows
+   operative anatomy, not patient scans (plain X-ray/fluoroscopy kept — it can be intra-op).
+
+**Why cropping still trailed page-image (the honest read):** (a) BiomedCLIP **semantic** is
+too coarse for fine neuroanatomy — it pulls visually-similar wrong-region plates on *both*
+page and crop indexes, so it is **default-off**; (b) page-level captions are naturally
+caption-sized, so the page-image config never hit the caption-length tradeoff cropping forces;
+(c) cropping multiplies candidates → more within-region drift (a craniopharyngioma plate into
+MCA, a subaxial construct into C1-C2 — within-cranial / cervical-sublevel leaks the
+caption+book guard can't catch). **MCA is the universal ceiling: NO plate in the whole corpus
+has a caption that names the M1/MCA bifurcation** — Rhoton shows it but captions it generically
+("arteries entering the anterior perforated substance"), so caption-lexical can't target it and
+BiomedCLIP can't recognize it. That one figure caps MCA specific-relevance at ~5 in every config.
+
+**Decision: ship page-image (8.7/7.3).** Cropping is fully diagnosed and one caption-fix away
+from parity; the remaining path to *beating* page-image is upstream/orthogonal — a stronger
+vision encoder for the semantic lane, multi-panel-aware caption association, two within-region
+guards, and a real M1-bifurcation plate. Board generation runs on Vertex AI (GCP credits,
+gemini-2.5-pro) via a new provider in `explore_llm.py`. All work is flag-gated and tested
+(neuro-caseboard 174, textbook-rag 109).
+
 ## Figure integration — wired + agent-tested
 
 The figure plumbing (inline `FigureItem` with complete caption + bidirectional

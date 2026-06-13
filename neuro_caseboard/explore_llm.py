@@ -46,6 +46,7 @@ _SLOTS_BY_FILE = {
 _ANTHROPIC_DEFAULT = "claude-opus-4-8"
 _OPENROUTER_AUTHOR = "openai/gpt-4o"       # cheap, big-token author call
 _OPENROUTER_STRONG = "google/gemini-2.5-pro"  # strong, small planner/critic calls
+_VERTEX_DEFAULT = "gemini-2.5-pro"         # quality-first on the GCP free credit
 _MIN_CARDS = 6  # below this we treat the author generation as failed and fall back
 
 _SECTION_KEYS = """  03-anatomy-at-risk.md: surgical_corridor, landmarks_in_order, neural_structures, \
@@ -55,20 +56,47 @@ stop_points, closure_reconstruction, monitoring, equipment_adjuncts, attending_p
   05-risk-and-rescue.md: likely_complications, catastrophic_complications, mitigation, rescue_triggers"""
 
 
-def _resolve_model(model: str | None, *, openrouter: bool) -> str:
-    return (model or os.environ.get("CASEBOARD_LLM_MODEL")
-            or (_OPENROUTER_AUTHOR if openrouter else _ANTHROPIC_DEFAULT))
+def _llm_provider() -> str:
+    """The active LLM provider. An explicit ``CASEBOARD_LLM_PROVIDER``
+    (vertex|openrouter|anthropic) wins; otherwise infer from configured keys.
+    ``vertex`` is opt-in (explicit only) so it never activates unexpectedly in tests."""
+    p = (os.environ.get("CASEBOARD_LLM_PROVIDER") or "").strip().lower()
+    if p:
+        return p
+    if os.environ.get("OPENROUTER_API_KEY"):
+        return "openrouter"
+    if os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"):
+        return "anthropic"
+    return ""
+
+
+def _resolve_model(model: str | None, *, provider: str | None = None) -> str:
+    if model:
+        return model
+    env = os.environ.get("CASEBOARD_LLM_MODEL")
+    if env:
+        return env
+    provider = provider or _llm_provider()
+    if provider == "vertex":
+        return _VERTEX_DEFAULT
+    if provider == "openrouter":
+        return _OPENROUTER_AUTHOR
+    return _ANTHROPIC_DEFAULT
 
 
 def _model_for(role: str) -> str:
-    """Resolve the model for a pipeline role (author/planner/critic), env-overridable."""
-    openrouter = bool(os.environ.get("OPENROUTER_API_KEY"))
+    """Resolve the model for a pipeline role (author/planner/critic), env-overridable.
+    On Vertex the strong model drives EVERY role — with the GCP free credit there is no
+    reason to drop the author to a cheap tier (quality over value)."""
     env = {"author": "CASEBOARD_AUTHOR_MODEL", "planner": "CASEBOARD_PLANNER_MODEL",
            "critic": "CASEBOARD_CRITIC_MODEL"}[role]
     m = os.environ.get(env) or os.environ.get("CASEBOARD_LLM_MODEL")
     if m:
         return m
-    if openrouter:
+    provider = _llm_provider()
+    if provider == "vertex":
+        return _VERTEX_DEFAULT
+    if provider == "openrouter":
         return _OPENROUTER_AUTHOR if role == "author" else _OPENROUTER_STRONG
     return _ANTHROPIC_DEFAULT
 
@@ -171,14 +199,23 @@ Cards in "add" use the exact section_keys:
 # --- provider calls --------------------------------------------------------
 
 def llm_available() -> bool:
-    """True when a provider key is configured and its client lib is importable."""
-    if os.environ.get("OPENROUTER_API_KEY"):
+    """True when the active provider is configured and its client lib is importable."""
+    provider = _llm_provider()
+    if provider == "vertex":
+        if not os.environ.get("GOOGLE_CLOUD_PROJECT"):
+            return False
+        try:
+            import google.genai  # noqa: F401
+            return True
+        except Exception:
+            return False
+    if provider == "openrouter":
         try:
             import requests  # noqa: F401
             return True
         except Exception:
             return False
-    if os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"):
+    if provider == "anthropic":
         try:
             import anthropic  # noqa: F401
             return True
@@ -193,7 +230,7 @@ def _openrouter_complete(system: str, user: str, *, model: str | None = None,
     import time
     import requests
     payload = {
-        "model": _resolve_model(model, openrouter=True),
+        "model": _resolve_model(model, provider="openrouter"),
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -233,7 +270,7 @@ def _anthropic_complete(system: str, user: str, *, model: str | None = None,
     import anthropic
     client = anthropic.Anthropic()
     resp = client.messages.create(
-        model=_resolve_model(model, openrouter=False),
+        model=_resolve_model(model, provider="anthropic"),
         max_tokens=12000,
         temperature=temperature,
         system=system,
@@ -242,9 +279,36 @@ def _anthropic_complete(system: str, user: str, *, model: str | None = None,
     return next(b.text for b in resp.content if b.type == "text")
 
 
+def _vertex_complete(system: str, user: str, *, model: str | None = None,
+                     temperature: float = 0.3) -> str:
+    """Vertex AI Gemini completion returning JSON text. Auth via Application Default
+    Credentials (``gcloud auth application-default login``); spends the GCP project's
+    credit rather than a paid OpenRouter/Anthropic key. Targets google-genai >= 1.0.
+    Not unit-tested (network); the dispatch into it is."""
+    from google import genai
+    from google.genai import types
+    client = genai.Client(
+        vertexai=True,
+        project=os.environ.get("GOOGLE_CLOUD_PROJECT"),
+        location=os.environ.get("GOOGLE_CLOUD_LOCATION") or "us-central1")
+    resp = client.models.generate_content(
+        model=_resolve_model(model, provider="vertex"),
+        contents=[types.Content(role="user", parts=[types.Part.from_text(text=user)])],
+        config=types.GenerateContentConfig(
+            system_instruction=system,
+            temperature=temperature,
+            max_output_tokens=32000,
+            response_mime_type="application/json"),
+    )
+    return resp.text or ""
+
+
 def _default_complete(system: str, user: str, *, model: str | None = None,
                       temperature: float = 0.3) -> str:
-    if os.environ.get("OPENROUTER_API_KEY"):
+    provider = _llm_provider()
+    if provider == "vertex":
+        return _vertex_complete(system, user, model=model, temperature=temperature)
+    if provider == "openrouter":
         return _openrouter_complete(system, user, model=model, temperature=temperature)
     return _anthropic_complete(system, user, model=model, temperature=temperature)
 

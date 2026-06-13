@@ -88,8 +88,67 @@ def test_llm_unavailable_without_api_key(monkeypatch):
 
 
 def test_llm_available_with_openrouter_key(monkeypatch):
+    monkeypatch.delenv("CASEBOARD_LLM_PROVIDER", raising=False)
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
     assert llm_available() is True
+
+
+# --- Vertex AI provider (GCP free credits, quality-first) ------------------
+
+from neuro_caseboard.explore_llm import _llm_provider, _model_for
+import neuro_caseboard.explore_llm as _el
+
+
+def test_explicit_provider_vertex_overrides_other_keys(monkeypatch):
+    monkeypatch.setenv("CASEBOARD_LLM_PROVIDER", "vertex")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")   # present but must be ignored
+    assert _llm_provider() == "vertex"
+
+
+def test_provider_defaults_to_openrouter_then_anthropic(monkeypatch):
+    monkeypatch.delenv("CASEBOARD_LLM_PROVIDER", raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    assert _llm_provider() == "openrouter"
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    assert _llm_provider() == "anthropic"
+
+
+def test_vertex_uses_gemini_pro_for_every_role(monkeypatch):
+    monkeypatch.setenv("CASEBOARD_LLM_PROVIDER", "vertex")
+    for v in ("CASEBOARD_LLM_MODEL", "CASEBOARD_AUTHOR_MODEL",
+              "CASEBOARD_PLANNER_MODEL", "CASEBOARD_CRITIC_MODEL"):
+        monkeypatch.delenv(v, raising=False)
+    # quality, not value: the strong model on every role (no cheap author tier)
+    assert _model_for("author") == "gemini-2.5-pro"
+    assert _model_for("planner") == "gemini-2.5-pro"
+    assert _model_for("critic") == "gemini-2.5-pro"
+
+
+def test_vertex_model_env_override(monkeypatch):
+    monkeypatch.setenv("CASEBOARD_LLM_PROVIDER", "vertex")
+    monkeypatch.setenv("CASEBOARD_LLM_MODEL", "gemini-2.5-flash")
+    assert _model_for("author") == "gemini-2.5-flash"
+
+
+def test_llm_available_with_vertex(monkeypatch):
+    monkeypatch.setenv("CASEBOARD_LLM_PROVIDER", "vertex")
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "proj-x")
+    assert llm_available() is True
+
+
+def test_default_complete_routes_to_vertex(monkeypatch):
+    monkeypatch.setenv("CASEBOARD_LLM_PROVIDER", "vertex")
+    seen = {}
+
+    def fake_vertex(s, u, **k):
+        seen["args"] = (s, u, k)
+        return '{"cards": []}'
+
+    monkeypatch.setattr(_el, "_vertex_complete", fake_vertex)
+    out = _el._default_complete("SYS", "USR", model="m", temperature=0.2)
+    assert out == '{"cards": []}'
+    assert seen["args"][0] == "SYS" and seen["args"][1] == "USR"
 
 
 # --- planner -> author -> critic -------------------------------------------

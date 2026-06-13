@@ -233,12 +233,34 @@ _SELLAR = ("pituitary", "sella", "sellar", "hypophys", "transsphenoidal", "paras
 # figure lane for a surgical board should not draw from them.
 _DIAGNOSTIC_BOOKS = ("neuroradiology core requisites", "neuroicu", "neurocritical")
 
+# Cross-sectional diagnostic imaging (CT/MRI/CT-angiogram) is a patient scan, not operative
+# atlas anatomy. The larger cropped index surfaces these; a surgical-anatomy board should not
+# show them. Plain X-ray / fluoroscopy is intentionally NOT here — it is often intra-op
+# construct imaging that IS wanted (e.g. a lateral film confirming a C1-C2 construct).
+_DIAGNOSTIC_IMAGE = ("ct angiogram", "ct scan", "axial ct", "coronal ct", "sagittal ct",
+                     "3d ct", "3-d ct", "ct images", "ct image", "mri", "magnetic resonance",
+                     "t1-weighted", "t2-weighted", "t2 weighted", "computed tomography",
+                     "angiogram showing", "angiogram demonstrating", "3d reconstruction",
+                     "diffusion-weighted", "flair")
+
 _VIGNETTE = re.compile(r"\b\d{1,3}[\s-]?year[\s-]?old\b|\bpresented with\b|\ba \d{1,2}[- ]year",
                        re.IGNORECASE)
 
 
 def _cap_toks(s: str):
     return [t for t in re.findall(r"[a-z0-9]+", (s or "").lower()) if len(t) > 2]
+
+
+def _caption_head(text: str, max_chars: int = 320) -> str:
+    """Cap a (possibly legend-bloated) figure caption to caption length: keep the panel
+    detail the lexical lane needs but drop the trailing legend that ``get_text('blocks')``
+    glues on. Trim to the last sentence boundary in the window, else the last word."""
+    text = re.sub(r"\s+", " ", (text or "").strip())
+    if len(text) <= max_chars:
+        return text
+    head = text[:max_chars]
+    cut = head.rfind(". ")
+    return head[:cut + 1] if cut >= 60 else head.rsplit(" ", 1)[0]
 
 
 # Medical abbreviations / synonyms so a claim saying "MCA" / "lenticulostriate" matches an
@@ -269,8 +291,12 @@ def _levels_in(text: str):
     return {lv for lv, terms in _LEVELS.items() if any(t in low for t in terms)}
 
 
-_SPINE_BOOKS = ("benzel spine", "bridwell", "spinal surgery", "vaccaro", "spine surgery")
+_SPINE_BOOKS = ("benzel spine", "bridwell", "spinal surgery", "vaccaro", "spine surgery",
+                "techniques to the spine")   # "Surgical Anatomy and Techniques to the Spine"
 _CRANIAL_BOOKS = ("rhoton", "fukushima", "greenberg")  # Schmidek/NeuroICU/Neuroradiology: mixed
+# "Brain Anatomy and Neurosurgical Approaches" is deliberately NOT book-classified cranial:
+# its far-lateral/suboccipital approach plates are legitimately wanted on CVJ (C1-C2) cases,
+# so it is left to the per-figure caption/region guards rather than a blanket book block.
 
 
 def _figure_offtarget(caption: str, topic: str, book: str = "", context: str = "") -> bool:
@@ -281,6 +307,8 @@ def _figure_offtarget(caption: str, topic: str, book: str = "", context: str = "
     cap = (caption or "").lower()
     top = (topic or "").lower()
     bk = (book or "").lower()
+    if any(x in cap for x in _DIAGNOSTIC_IMAGE):
+        return True                          # diagnostic scan, not operative atlas anatomy
     t_spine = any(s in top for s in _SPINE_SIG)
     t_cran = any(s in top for s in _CRANIAL_SIG)
     c_spine = any(s in cap for s in _SPINE_SIG)
@@ -320,11 +348,34 @@ def _figure_offtarget(caption: str, topic: str, book: str = "", context: str = "
     return False
 
 
-class FigureCaptionRetriever:
-    """Rank figures.lance rows by IDF caption overlap with the claim, region-guarded."""
+def _fuse_rankings(lex, sem, top_n, *, k: int = 60):
+    """Reciprocal-rank fusion of the lexical (score, row) and semantic (score, row)
+    rankings, keyed by figure_path so a plate appearing in BOTH lanes is rewarded.
+    Returns [(row, fused_score)] best-first, truncated to ``top_n``."""
+    scores: dict = {}
+    rowmap: dict = {}
+    for rank, (_s, row) in enumerate(lex):
+        key = row["figure_path"]
+        scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank + 1)
+        rowmap[key] = row
+    for rank, (_s, row) in enumerate(sem):
+        key = row["figure_path"]
+        scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank + 1)
+        rowmap[key] = row
+    ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+    return [(rowmap[key], sc) for key, sc in ranked[:top_n]]
 
-    def __init__(self, rows):
+
+class FigureCaptionRetriever:
+    """Rank figures.lance rows for a claim, region/level/domain-guarded. Lexical lane =
+    IDF caption overlap; optional semantic lane = BiomedCLIP text<->image cosine (the crop
+    embeddings). When an ``embed_fn`` is given the two lanes are RRF-fused (hybrid),
+    otherwise it is pure lexical (unchanged). The guards run BEFORE either lane, so domain
+    cleanliness never depends on ranking."""
+
+    def __init__(self, rows, *, embed_fn=None):
         self._rows = rows
+        self._embed_fn = embed_fn
         df = collections.Counter()
         for row in rows:
             for t in set(_cap_toks(row["caption"])):
@@ -335,16 +386,9 @@ class FigureCaptionRetriever:
     def _idf(self, t: str) -> float:
         return math.log((self._n + 1) / (self._df.get(t, 0) + 1))
 
-    def retrieve(self, query, *, topic: str = "", subdomain=None, top_n: int = 3):
-        from caseprep.core.contracts import EvidenceRecord
-        from neuro_caseboard.captions import assemble_caption
-        qterms = _expand_terms(set(_cap_toks(query)))
-        if not qterms:
-            return []
+    def _lexical_ranked(self, qterms, candidates):
         scored = []
-        for row in self._rows:
-            if _figure_offtarget(row["caption"], topic, row["book"], row.get("context", "")):
-                continue
+        for row in candidates:
             ct = collections.Counter(_cap_toks(row["caption"]))
             matched = [t for t in qterms if t in ct]
             if len(matched) < 2:            # need >=2 shared terms to avoid single-word noise
@@ -355,8 +399,49 @@ class FigureCaptionRetriever:
             if s > 0:
                 scored.append((s, row))
         scored.sort(key=lambda x: x[0], reverse=True)
+        return scored
+
+    def _semantic_ranked(self, query, candidates):
+        """Cosine of the claim's BiomedCLIP text vector against each candidate plate's
+        image vector. [] when no encoder / no vectors / the encoder errors (graceful)."""
+        if not self._embed_fn:
+            return []
+        try:
+            import numpy as np
+            qv = np.asarray(self._embed_fn(query), dtype="float32").ravel()
+        except Exception:
+            return []
+        qn = float(np.linalg.norm(qv)) or 1.0
+        sims = []
+        for row in candidates:
+            v = row.get("vector")
+            if v is None:
+                continue
+            v = np.asarray(v, dtype="float32").ravel()
+            if v.size != qv.size:
+                continue
+            vn = float(np.linalg.norm(v)) or 1.0
+            sims.append((float(qv @ v) / (qn * vn), row))
+        sims.sort(key=lambda x: x[0], reverse=True)
+        return sims
+
+    def retrieve(self, query, *, topic: str = "", subdomain=None, top_n: int = 3):
+        from caseprep.core.contracts import EvidenceRecord
+        from neuro_caseboard.captions import assemble_caption
+        qterms = _expand_terms(set(_cap_toks(query)))
+        if not qterms:
+            return []
+        candidates = [row for row in self._rows
+                      if not _figure_offtarget(row["caption"], topic, row["book"],
+                                               row.get("context", ""))]
+        lex = self._lexical_ranked(qterms, candidates)
+        sem = self._semantic_ranked(query, candidates)
+        if sem:
+            ordered = _fuse_rankings(lex, sem, top_n)
+        else:
+            ordered = [(row, s) for s, row in lex[:top_n]]
         out = []
-        for s, row in scored[:top_n]:
+        for row, s in ordered:
             cap = assemble_caption(row["caption"], [])
             cite = f'{row["book"]}, p.{row["page"]}' if row["book"] else ""
             out.append(EvidenceRecord(
@@ -364,7 +449,7 @@ class FigureCaptionRetriever:
                 title=f'{row["book"]} (p.{row["page"]})', text=cap,
                 metadata={"figure_path": row["figure_path"], "caption": cap,
                           "citation": cite, "book": row["book"], "page": row["page"],
-                          "score": round(float(s), 2), "retrieval_source": "textbook_figcap"}))
+                          "score": round(float(s), 4), "retrieval_source": "textbook_figcap"}))
         return out
 
 
@@ -389,13 +474,19 @@ def _load_figure_rows(index_dir: str | None = None):
             if "figures" in names:
                 for r in db.open_table("figures").search().limit(100000).to_list():
                     fp = r.get("figure_path") or ""
-                    cap = (r.get("caption") or "").strip()
+                    # Cropped plates store the FULL multi-paragraph legend; cap it to caption
+                    # length. Too-long bloat poisons the region guards with stray substrings
+                    # ("disc dissector" -> spine) and dilutes the IDF lane; too-short (first
+                    # sentence) drops panel detail ("A, the AICA passes between VII/VIII") that
+                    # the lexical lane needs. A ~320-char head keeps panels, cuts the legend.
+                    cap = _caption_head((r.get("caption") or "").strip())
                     book = r.get("book") or ""
                     if any(d in book.lower() for d in _DIAGNOSTIC_BOOKS):
                         continue                 # radiology/ICU books: not operative anatomy
                     if cap and fp and os.path.isfile(fp):
                         rows_out.append({"book": book, "page": r.get("page"),
-                                         "figure_path": fp, "caption": cap, "context": ""})
+                                         "figure_path": fp, "caption": cap, "context": "",
+                                         "vector": r.get("vector")})
             # page context (chunk body text) so the region/level guard isn't blind to a
             # column-truncated caption (e.g. a lumbar plate captioned "Pedicle screw placement").
             if rows_out and "chunks" in names:
@@ -414,12 +505,34 @@ def _load_figure_rows(index_dir: str | None = None):
     return rows_out
 
 
+def _build_figure_embed_fn(repo: str | None = None):
+    """A ``claim text -> BiomedCLIP text vector`` function (CPU), or None when disabled or
+    unavailable. Reuses textbook-rag's ``VisualEmbedder`` so the query embedding lives in
+    the same space as the figures.lance image vectors. Default OFF: a blind image judge found
+    the BiomedCLIP semantic lane *hurts* (it surfaces visually-similar but wrong-region plates
+    — too coarse for fine neuroanatomy), on both page-image and cropped indexes. Set
+    ``CASEBOARD_FIGURE_SEMANTIC=1`` to opt in (e.g. once a stronger vision model is wired)."""
+    if os.environ.get("CASEBOARD_FIGURE_SEMANTIC", "0") != "1":
+        return None
+    repo = repo or _default_textbook_repo()
+    if repo and os.path.isdir(repo) and repo not in sys.path:
+        sys.path.insert(0, repo)
+    try:
+        from engine.visual_embed import VisualEmbedder   # type: ignore
+        from engine.config import load_config            # type: ignore
+        embedder = VisualEmbedder(load_config().visual_model, device="cpu")
+        return lambda text: embedder.embed_query(text)
+    except Exception:
+        return None
+
+
 def build_figure_retriever(*, index_dir: str | None = None):
-    """A no-GPU figure retriever ranking on figure captions, or None if unavailable."""
+    """A figure retriever: caption-IDF lexical lane plus an optional BiomedCLIP semantic
+    lane (hybrid), region/level/domain-guarded. None if no figure rows are available."""
     rows = _load_figure_rows(index_dir)
     if not rows:
         return None
-    return FigureCaptionRetriever(rows)
+    return FigureCaptionRetriever(rows, embed_fn=_build_figure_embed_fn())
 
 
 def build_retriever(*, enable_corpus: bool = True, enable_textbook=None):
