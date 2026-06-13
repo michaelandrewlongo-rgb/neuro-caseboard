@@ -227,6 +227,7 @@ _SUBAXIAL_TERMS = ("c3", "c4", "c5", "c6", "c7", "subaxial")
 _PERIPHERAL_NERVE = ("nerve transfer", "nerve graft", "brachial plexus", "fascicular",
                      "neurotization", "peripheral nerve", "ulnar nerve", "median nerve",
                      "radial nerve", "brachialis", "supraclavicular")
+_SELLAR = ("pituitary", "sella", "sellar", "hypophys", "transsphenoidal", "parasellar")
 
 # Diagnostic-imaging / ICU books are radiographs and tracings, not operative anatomy — a
 # figure lane for a surgical board should not draw from them.
@@ -293,6 +294,12 @@ def _figure_offtarget(caption: str, topic: str, book: str = "", context: str = "
     # peripheral-nerve/brachial-plexus figures don't belong on a cranial or spinal board
     if any(x in cap for x in _PERIPHERAL_NERVE) and not any(x in top for x in _PERIPHERAL_NERVE):
         return True
+    # a sellar/pituitary plate doesn't belong on a non-sellar cranial case (e.g. an MCA clip)
+    if t_cran:
+        t_sellar = any(x in top for x in _SELLAR)
+        f_sellar = any(x in cap for x in _SELLAR)
+        if f_sellar and not t_sellar:
+            return True
     if t_spine:
         # block a clearly different region (thoracolumbar/sacral) the case isn't about,
         # read from caption + full page context.
