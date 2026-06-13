@@ -14,8 +14,12 @@ import re
 _FIG_LABEL = re.compile(r"^\s*(fig(?:ure)?|plate)\b", re.IGNORECASE)
 
 
-def assemble_caption(first_line: str, following_lines) -> str:
-    """Join a caption's continuation lines until a blank line or the next figure label."""
+def assemble_caption(first_line: str, following_lines, *, max_chars: int = 240) -> str:
+    """Join a caption's continuation lines until a blank line or the next figure label.
+
+    Textbook page text often has no blank line between a caption and the body paragraph,
+    so the join is also bounded to ``max_chars`` and trimmed back to the last sentence end
+    — this keeps the complete caption without absorbing the following body text."""
     parts = [first_line.strip()]
     for ln in following_lines:
         s = (ln or "").strip()
@@ -24,7 +28,14 @@ def assemble_caption(first_line: str, following_lines) -> str:
         if _FIG_LABEL.match(s):
             break
         parts.append(s)
-    return " ".join(p for p in parts if p)
+        if sum(len(p) + 1 for p in parts) >= max_chars:
+            break
+    cap = " ".join(p for p in parts if p)
+    if len(cap) > max_chars:
+        cut = cap[:max_chars]
+        dot = cut.rfind(". ")
+        cap = (cut[: dot + 1] if dot > 60 else cut.rsplit(" ", 1)[0] + " …")
+    return cap
 
 
 def complete_caption(record, *, page_text: str | None = None) -> str:

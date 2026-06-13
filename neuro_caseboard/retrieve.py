@@ -116,9 +116,10 @@ def _default_index_dir() -> str:
 def _hit_to_dict(h) -> dict:
     """Convert a textbook-rag ``Hit`` to the dict shape InProcessTextbookRetriever wants.
 
-    Figures are intentionally omitted in this lexical v1 (the index stores PDF ``page``
-    only, no ``printed_page``; figure->claim linkage is a later visual-lane concern)."""
-    return {
+    Includes the figure (page image + caption) when the chunk is figure-bearing and the
+    image file actually exists on disk, so the renderer never points at a missing image.
+    The index stores the PDF ``page`` only (no ``printed_page``)."""
+    d = {
         "book": getattr(h, "book", "") or "",
         "chapter": getattr(h, "chapter", None),
         "page": getattr(h, "page", None),
@@ -126,6 +127,11 @@ def _hit_to_dict(h) -> dict:
         "score": getattr(h, "score", None),
         "text": getattr(h, "text", "") or "",
     }
+    fp = getattr(h, "figure_path", None)
+    if getattr(h, "has_figure", False) and fp and os.path.isfile(fp):
+        d["figure_path"] = fp
+        d["caption"] = getattr(h, "caption", None) or ""
+    return d
 
 
 def _index_search_fn(*, index_dir: str | None = None, repo: str | None = None):

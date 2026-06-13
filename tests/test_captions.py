@@ -28,6 +28,18 @@ def test_assemble_stops_at_next_figure_label():
     assert "Second caption" not in out
 
 
+def test_assemble_caps_runon_body_text_at_sentence_end():
+    # textbook page with no blank line between caption and body -> must not absorb body
+    first = ("Figure 26.17 Horner syndrome on the right with ipsilateral ptosis, miosis, "
+             "anhidrosis, and enophthalmos.")
+    body = ["Dural Tear Dural tears should be repaired primarily at the time of injury.",
+            "OPLL may be associated with dural deficiency."]
+    out = assemble_caption(first, body)
+    assert out.endswith("enophthalmos.")          # stops at the caption's sentence end
+    assert "Dural Tear" not in out                # body text not captured
+    assert len(out) <= 240
+
+
 @pytest.mark.parametrize("topic", fx.ALL_TOPICS)
 def test_complete_caption_recovers_full_text_for_every_topic(topic):
     f = fx.build(topic)

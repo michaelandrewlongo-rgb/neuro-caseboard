@@ -128,6 +128,50 @@ def _sources_from_audited(audited, *, limit: int = 15):
     return out
 
 
+def _fig_query(question: str, topic: str) -> str:
+    return f"{topic} {question}"
+
+
+def _collect_figures(manifest, topic, retriever, *, max_total: int = 8, per_card: int = 1):
+    """Gather figure-bearing evidence (textbook page images + captions) for the cards.
+
+    Returns ``(card_evidence, page_texts)`` where card_evidence maps a card's question to
+    its figure EvidenceRecords (compile turns these into inline FigureItems with a
+    bidirectional claim<->figure cross-link) and page_texts maps the image path to the
+    figure page's full text so the complete caption can be reassembled. Each page image is
+    used at most once per board and the board is capped at ``max_total`` figures."""
+    card_evidence: dict = {}
+    page_texts: dict = {}
+    used: set = set()
+    total = 0
+    for card in manifest.cards:
+        if total >= max_total:
+            break
+        try:
+            recs = retriever.retrieve(_fig_query(card.question, topic), top_n=4)
+        except Exception:
+            continue
+        picked = []
+        for r in recs or []:
+            meta = getattr(r, "metadata", {}) or {}
+            fp = meta.get("figure_path")
+            if not fp or fp in used:
+                continue
+            picked.append(r)
+            used.add(fp)
+            page_texts[fp] = getattr(r, "text", "") or ""
+            total += 1
+            if len(picked) >= per_card or total >= max_total:
+                break
+        if picked:
+            card_evidence[card.question] = picked
+    return card_evidence, page_texts
+
+
+def _figures_enabled() -> bool:
+    return os.environ.get("CASEBOARD_TEXTBOOK_FIGURES", "1") != "0"
+
+
 def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
     """Run the full pipeline and return a compiled Dossier."""
     manifest, _profile = build_manifest(topic, use_llm=use_llm)
@@ -135,7 +179,11 @@ def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
     enriched = enrich_manifest(manifest, topic=topic, retriever=retriever, top_n=3)
     audited = audit_manifest(enriched, topic=topic)
     evidence = _sources_from_audited(audited)
-    return compile_dossier(audited, topic=topic, evidence=evidence)
+    card_evidence, page_texts = ({}, {})
+    if retriever is not None and _figures_enabled():
+        card_evidence, page_texts = _collect_figures(manifest, topic, retriever)
+    return compile_dossier(audited, topic=topic, evidence=evidence,
+                           card_evidence=card_evidence, page_texts=page_texts)
 
 
 def _slug(topic: str) -> str:
