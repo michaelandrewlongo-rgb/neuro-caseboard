@@ -1,0 +1,55 @@
+{
+  "_note": "Ground truth for the figure-retrieval acceptance test (attending-authored). For each case: the figures a good board WOULD want, and figure types that are OFF-TARGET. A blind image-verifying judge grades the figures the pipeline attaches. Targets: domain correctness >= 8.5, specific relevance >= 8 (0-10).",
+  "cases": [
+    {
+      "id": "cpa-vs-retrosig",
+      "query": "Left retrosigmoid craniotomy for resection of a 2.5 cm left cerebellopontine angle vestibular schwannoma, hearing-preservation attempt",
+      "figures_wanted": [
+        "CPA axial showing CN VII/VIII complex and the AICA loop, tumor displacing the facial nerve",
+        "Internal acoustic canal anatomy: porus, transverse (falciform) crest, Bill's bar",
+        "CN V (trigeminal) and superior petrosal vein at the superior CPA / tentorial edge",
+        "Lower cranial nerves IX/X/XI at the caudal pole / pontomedullary junction",
+        "Suboccipital/retrosigmoid landmarks: asterion, transverse-sigmoid junction, mastoid emissary vein"
+      ],
+      "off_target": [
+        "Anterior-circulation aneurysm / circle of Willis anatomy",
+        "Sellar / transsphenoidal / cavernous sinus anatomy",
+        "Lumbar or subaxial-cervical pedicle-screw figures"
+      ]
+    },
+    {
+      "id": "mca-bifurcation-clip",
+      "query": "Right pterional craniotomy for microsurgical clipping of a ruptured 7 mm right MCA bifurcation (M1) saccular aneurysm, Hunt-Hess 3, SAH",
+      "figures_wanted": [
+        "Sylvian fissure dissection showing M1, the MCA bifurcation, and the M2 trunks",
+        "Lenticulostriate perforators arising from M1 (to preserve)",
+        "Proximal control anatomy: ICA bifurcation, A1, M1, recurrent artery of Heubner",
+        "Aneurysm neck relationship to the parent M1 and early M2 branches",
+        "Pterional craniotomy / sphenoid-wing landmarks of the trans-sylvian corridor"
+      ],
+      "off_target": [
+        "Posterior fossa / CPA cranial-nerve anatomy",
+        "Vertebral artery V3 / craniovertebral junction anatomy",
+        "Spinal canal, cauda equina, or pedicle-screw figures",
+        "Sellar / pituitary anatomy"
+      ]
+    },
+    {
+      "id": "c1c2-goel-harms",
+      "query": "Posterior C1 lateral mass and C2 pars/pedicle screw fixation (Goel-Harms) for atlantoaxial instability from a type II odontoid nonunion",
+      "figures_wanted": [
+        "C1 posterior arch and lateral mass with the vertebral-artery groove (sulcus arteriosus)",
+        "C2 pars/pedicle anatomy and trajectory relative to the transverse foramen",
+        "V3 vertebral artery and the C1-C2 loop, including the high-riding/medialized variant",
+        "C2 nerve root / DRG and the C1-C2 joint venous plexus",
+        "Screw entry points and trajectories (C1 lateral mass, C2 pedicle, Goel-Harms construct)"
+      ],
+      "off_target": [
+        "Lumbar pedicle-screw / cauda equina anatomy",
+        "Intracranial vascular or cranial-nerve anatomy",
+        "Thoracic deformity / costotransverse / rib anatomy",
+        "Subaxial (C3-C7) constructs"
+      ]
+    }
+  ]
+}
