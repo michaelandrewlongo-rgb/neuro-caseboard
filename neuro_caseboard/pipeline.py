@@ -132,7 +132,8 @@ def _fig_query(question: str, topic: str) -> str:
     return f"{topic} {question}"
 
 
-def _collect_figures(manifest, topic, retriever, *, max_total: int = 8, per_card: int = 1):
+def _collect_figures(manifest, topic, retriever=None, *, figret=None,
+                     max_total: int = 8, per_card: int = 1):
     """Gather figure-bearing evidence (textbook page images + captions) for the cards.
 
     Returns ``(card_evidence, page_texts)`` where card_evidence maps a card's question to
@@ -140,6 +141,9 @@ def _collect_figures(manifest, topic, retriever, *, max_total: int = 8, per_card
     bidirectional claim<->figure cross-link) and page_texts maps the image path to the
     figure page's full text so the complete caption can be reassembled. Each page image is
     used at most once per board and the board is capped at ``max_total`` figures."""
+    from neuro_caseboard.retrieve import build_figure_retriever
+    if figret is None:
+        figret = build_figure_retriever()       # caption-ranked lane (preferred)
     card_evidence: dict = {}
     page_texts: dict = {}
     used: set = set()
@@ -147,8 +151,17 @@ def _collect_figures(manifest, topic, retriever, *, max_total: int = 8, per_card
     for card in manifest.cards:
         if total >= max_total:
             break
+        # figures earn their place on anatomy claims (named structures/landmarks/vessels),
+        # not on generic operative steps like positioning/closure that pull OR-setup noise.
+        if getattr(card, "target_file", "") != "03-anatomy-at-risk.md":
+            continue
         try:
-            recs = retriever.retrieve(_fig_query(card.question, topic), top_n=4)
+            if figret is not None:
+                recs = figret.retrieve(_fig_query(card.question, topic), topic=topic, top_n=4)
+            elif retriever is not None:
+                recs = retriever.retrieve(_fig_query(card.question, topic), top_n=4)
+            else:
+                recs = []
         except Exception:
             continue
         picked = []

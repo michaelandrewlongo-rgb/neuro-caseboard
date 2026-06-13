@@ -101,7 +101,7 @@ def test_collect_figures_dedups_pages_and_links_cards():
                           metadata={"figure_path": "/x/p27.png", "caption": "Fig B"})
 
     class _R:  # returns both figures for every card; _collect must dedup by page
-        def retrieve(self, query, top_n=4):
+        def retrieve(self, query, *, topic="", top_n=4):
             return [figA, figB]
 
     cards = [QuestionCard(target_file="03-anatomy-at-risk.md", section_key="neural_structures",
@@ -109,9 +109,84 @@ def test_collect_figures_dedups_pages_and_links_cards():
              for i in range(3)]
     mani = QuestionManifest(procedure_family="spine", cards=cards)
 
-    ce, pt = _collect_figures(mani, "C5-6 ACDF", _R(), max_total=8, per_card=1)
+    ce, pt = _collect_figures(mani, "C5-6 ACDF", figret=_R(), max_total=8, per_card=1)
     # each page image used at most once; first two cards get one distinct figure each
     assert ce["q0"][0].metadata["figure_path"] == "/x/p26.png"
     assert ce["q1"][0].metadata["figure_path"] == "/x/p27.png"
     assert "q2" not in ce                      # both pages already used
     assert pt == {"/x/p26.png": "pageA", "/x/p27.png": "pageB"}  # page text for caption recovery
+
+
+# --- figure-caption retrieval (fixes lexical whole-page drift) ---------------
+
+def test_figure_region_guard_rejects_cross_region_and_level():
+    from neuro_caseboard.retrieve import _figure_offtarget
+    # cranial case must reject a spine plate
+    assert _figure_offtarget("Lumbar pedicle screw entry point",
+                             "pterional craniotomy for MCA aneurysm")
+    # spine case must reject a cranial plate
+    assert _figure_offtarget("Sylvian fissure and middle cerebral artery branches",
+                             "C1-C2 posterior fusion for atlantoaxial instability")
+    # cervical case rejects a lumbar figure (level conflict)
+    assert _figure_offtarget("Lumbar pedicle angles and dimensions",
+                             "Posterior C1 lateral mass and C2 pedicle screw, atlantoaxial")
+    # on-target figures are kept
+    assert not _figure_offtarget(
+        "Left cerebellopontine angle: AICA between the facial and vestibulocochlear nerves",
+        "retrosigmoid craniotomy for vestibular schwannoma")
+    assert not _figure_offtarget("C1 lateral mass and C2 pedicle screw trajectory",
+                                 "C1-C2 atlantoaxial fixation")
+
+
+def test_figure_region_guard_uses_source_book():
+    from neuro_caseboard.retrieve import _figure_offtarget
+    # spine-book figure with a generic (no region term) caption on a cranial case -> blocked
+    assert _figure_offtarget("An attempt to correct shoulder asymmetry",
+                             "retrosigmoid craniotomy for vestibular schwannoma",
+                             book="Textbook of Spinal Surgery Bridwell")
+    # cranial-book figure on a spine case -> blocked
+    assert _figure_offtarget("Stepwise dissection of the cavernous sinus",
+                             "C1-C2 posterior atlantoaxial fixation", book="Rhoton Cranial Anatomy")
+    # same-region book stays
+    assert not _figure_offtarget("C1 lateral mass screw entry point",
+                                 "C1-C2 atlantoaxial fixation", book="Benzel Spine")
+
+
+def test_figure_level_guard_uses_page_context_for_truncated_caption():
+    from neuro_caseboard.retrieve import _figure_offtarget
+    # caption only says "Pedicle screw placement" but the page is lumbar -> blocked on a C1-C2 case
+    assert _figure_offtarget(
+        "Pedicle screw placement, entrance point", "Posterior C1 lateral mass and C2 pedicle screw, atlantoaxial",
+        book="Benzel Spine", context="Lumbar pedicle screw placement at L4 and L5 with the entrance point")
+    # a C4-C5 subaxial plate is off-target for a CVJ (C1-C2) case
+    assert _figure_offtarget("Lateral mass fixation at C4 and C5",
+                             "C1-C2 Goel-Harms atlantoaxial fixation", book="Bridwell")
+    # the atlantoaxial construct stays
+    assert not _figure_offtarget(
+        "Atlantoaxial bony anatomy after C1 lateral mass and C2 pedicle screw",
+        "C1-C2 Goel-Harms atlantoaxial", book="Schmidek and Sweet")
+    # ACDF (subaxial) must still reject a lumbar plate (interbody overlap bug guard)
+    assert _figure_offtarget("Interbody graft placement",
+                             "C5-6 ACDF for cervical myelopathy with interbody graft",
+                             context="lumbar interbody fusion at L4-L5")
+
+
+def test_figure_caption_retriever_ranks_by_caption_and_region_filters():
+    from neuro_caseboard.retrieve import FigureCaptionRetriever
+    rows = [
+        {"book": "Rhoton", "page": 538, "figure_path": "/x/p538.png",
+         "caption": "Left cerebellopontine angle: the AICA passes between the facial and vestibulocochlear nerves"},
+        {"book": "Benzel", "page": 516, "figure_path": "/x/p516.png",
+         "caption": "Lumbar pedicle angles and dimensions, transverse pedicle angle"},
+        {"book": "Rhoton", "page": 227, "figure_path": "/x/p227.png",
+         "caption": "Sylvian and insular veins, lateral view of the sylvian fissure"},
+    ]
+    r = FigureCaptionRetriever(rows)
+    # the CPA caption ranks first for a CPA query
+    recs = r.retrieve("cerebellopontine angle facial vestibulocochlear AICA",
+                      topic="retrosigmoid vestibular schwannoma", top_n=2)
+    assert recs and recs[0].metadata["page"] == 538
+    assert recs[0].metadata["retrieval_source"] == "textbook_figcap"
+    # an ambiguous "pedicle screw" query in a cranial case must NOT surface the lumbar plate
+    recs2 = r.retrieve("pedicle screw", topic="retrosigmoid craniotomy CPA", top_n=3)
+    assert all(x.metadata["page"] != 516 for x in recs2)

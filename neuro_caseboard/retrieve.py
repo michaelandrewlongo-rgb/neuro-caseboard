@@ -185,6 +185,181 @@ def _textbook_lane(enable: bool):
     return None
 
 
+# --- figure-caption retrieval (fixes lexical whole-page drift) --------------
+#
+# Ranking figures by the textbook PAGE body text pulls the right subspecialty but the wrong
+# target (a distal-M4 page for an M1-bifurcation case). Each row of figures.lance carries
+# the FIGURE'S OWN caption; ranking the claim against those captions (IDF-weighted, no GPU)
+# surfaces the actual plate (e.g. Rhoton's CPA / Sylvian views). A region guard then drops
+# cross-region figures (a lumbar plate on a C1-C2 board).
+
+import collections
+import math
+
+_CRANIAL_SIG = ("crani", "cortex", "cerebr", "cerebell", "ventricle", "aneurysm", "glioma",
+                "meningioma", "tumor", "tumour", "skull base", "sylvian", "pterional",
+                "temporal lobe", "frontal lobe", "cpa", "cerebellopontine", "vestibular",
+                "pituitary", " clip", "subarachnoid", "petrous", "clivus")
+_SPINE_SIG = ("spine", "spinal", "vertebra", "pedicle", "cervical", "thoracic", "lumbar",
+              "sacral", "disc", "laminectomy", "fusion", "acdf", "corpectomy", "odontoid",
+              "atlas", " axis", "atlantoaxial", "myelopath", "radiculopath", "scoliosis",
+              "kyphosis", "spondyl")
+# Split cervical into the craniovertebral junction (occiput-C2) vs subaxial (C3-C7) so a
+# C1-C2 case rejects a C4-C5 plate, and an ACDF rejects an atlantoaxial one.
+_LEVELS = {
+    "cvj": ("c1", "c2", "atlas", " axis", "atlanto", "odontoid", "dens", "occipitocervical",
+            "craniovertebral", "craniocervical", "suboccipital"),
+    "subaxial": ("c3", "c4", "c5", "c6", "c7", "subaxial"),
+    "thoracic": ("thoracic", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10",
+                 "t11", "t12", "costotransverse"),
+    "lumbar": ("lumbar", "l1", "l2", "l3", "l4", "l5", "cauda equina", "spondylolisthesis"),
+    "sacral": ("sacral", "sacrum", "s1", "iliac"),
+}
+
+_VIGNETTE = re.compile(r"\b\d{1,3}[\s-]?year[\s-]?old\b|\bpresented with\b|\ba \d{1,2}[- ]year",
+                       re.IGNORECASE)
+
+
+def _cap_toks(s: str):
+    return [t for t in re.findall(r"[a-z0-9]+", (s or "").lower()) if len(t) > 2]
+
+
+def _levels_in(text: str):
+    low = (text or "").lower()
+    return {lv for lv, terms in _LEVELS.items() if any(t in low for t in terms)}
+
+
+_SPINE_BOOKS = ("benzel spine", "bridwell", "spinal surgery", "vaccaro", "spine surgery")
+_CRANIAL_BOOKS = ("rhoton", "fukushima", "greenberg")  # Schmidek/NeuroICU/Neuroradiology: mixed
+
+
+def _figure_offtarget(caption: str, topic: str, book: str = "", context: str = "") -> bool:
+    """True when a figure is from a clearly different region than the case — by the
+    cranial<->spine divide (caption OR source book), or a conflicting spine level. Level is
+    read from the figure's PAGE CONTEXT (not just the column-truncated caption), so a lumbar
+    plate whose caption is merely "Pedicle screw placement" is still caught on a C1-C2 case."""
+    cap = (caption or "").lower()
+    top = (topic or "").lower()
+    bk = (book or "").lower()
+    t_spine = any(s in top for s in _SPINE_SIG)
+    t_cran = any(s in top for s in _CRANIAL_SIG)
+    c_spine = any(s in cap for s in _SPINE_SIG)
+    c_cran = any(s in cap for s in _CRANIAL_SIG)
+    b_spine = any(x in bk for x in _SPINE_BOOKS)
+    b_cran = any(x in bk for x in _CRANIAL_BOOKS)
+    if t_spine and not t_cran and ((c_cran and not c_spine) or b_cran):
+        return True
+    if t_cran and not t_spine and ((c_spine and not c_cran) or b_spine):
+        return True
+    if t_spine:
+        # trust the caption's own level; only consult the page context when the caption
+        # names no level (a column-truncated "Pedicle screw placement" on a lumbar page).
+        t_lv = _levels_in(top)
+        c_lv = _levels_in(cap) or _levels_in(context)
+        if t_lv and c_lv and not (t_lv & c_lv):
+            return True
+    return False
+
+
+class FigureCaptionRetriever:
+    """Rank figures.lance rows by IDF caption overlap with the claim, region-guarded."""
+
+    def __init__(self, rows):
+        self._rows = rows
+        df = collections.Counter()
+        for row in rows:
+            for t in set(_cap_toks(row["caption"])):
+                df[t] += 1
+        self._df = df
+        self._n = max(1, len(rows))
+
+    def _idf(self, t: str) -> float:
+        return math.log((self._n + 1) / (self._df.get(t, 0) + 1))
+
+    def retrieve(self, query, *, topic: str = "", subdomain=None, top_n: int = 3):
+        from caseprep.core.contracts import EvidenceRecord
+        from neuro_caseboard.captions import assemble_caption
+        qterms = set(_cap_toks(query))
+        if not qterms:
+            return []
+        scored = []
+        for row in self._rows:
+            if _figure_offtarget(row["caption"], topic, row["book"], row.get("context", "")):
+                continue
+            ct = collections.Counter(_cap_toks(row["caption"]))
+            matched = [t for t in qterms if t in ct]
+            if len(matched) < 2:            # need >=2 shared terms to avoid single-word noise
+                continue
+            s = sum(ct[t] * self._idf(t) for t in matched)
+            if _VIGNETTE.search(row["caption"]):
+                s *= 0.4                    # demote patient case-vignette/clinical-image figures
+            if s > 0:
+                scored.append((s, row))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        out = []
+        for s, row in scored[:top_n]:
+            cap = assemble_caption(row["caption"], [])
+            cite = f'{row["book"]}, p.{row["page"]}' if row["book"] else ""
+            out.append(EvidenceRecord(
+                id=f'fig-{row["book"]}-p{row["page"]}', source="textbook",
+                title=f'{row["book"]} (p.{row["page"]})', text=cap,
+                metadata={"figure_path": row["figure_path"], "caption": cap,
+                          "citation": cite, "book": row["book"], "page": row["page"],
+                          "score": round(float(s), 2), "retrieval_source": "textbook_figcap"}))
+        return out
+
+
+_FIGURE_ROWS = None
+
+
+def _load_figure_rows(index_dir: str | None = None):
+    """Load figure-bearing rows (book/page/figure_path/caption) from figures.lance once."""
+    global _FIGURE_ROWS
+    if _FIGURE_ROWS is not None:
+        return _FIGURE_ROWS
+    index_dir = index_dir or _default_index_dir()
+    rows_out: list[dict] = []
+    if os.path.isdir(index_dir):
+        try:
+            import lancedb
+            db = lancedb.connect(index_dir)
+            try:
+                names = set(db.list_tables())
+            except Exception:
+                names = set(db.table_names())
+            if "figures" in names:
+                for r in db.open_table("figures").search().limit(100000).to_list():
+                    fp = r.get("figure_path") or ""
+                    cap = (r.get("caption") or "").strip()
+                    if cap and fp and os.path.isfile(fp):
+                        rows_out.append({"book": r.get("book") or "", "page": r.get("page"),
+                                         "figure_path": fp, "caption": cap, "context": ""})
+            # page context (chunk body text) so the region/level guard isn't blind to a
+            # column-truncated caption (e.g. a lumbar plate captioned "Pedicle screw placement").
+            if rows_out and "chunks" in names:
+                ctx: dict = {}
+                for r in db.open_table("chunks").search().limit(1000000).to_list():
+                    t = (r.get("text") or "").strip()
+                    if not t:
+                        continue
+                    k = (r.get("book") or "", str(r.get("page")))
+                    ctx[k] = (ctx.get(k, "") + " " + t)[:1200]
+                for row in rows_out:
+                    row["context"] = ctx.get((row["book"], str(row["page"])), "")
+        except Exception:
+            rows_out = []
+    _FIGURE_ROWS = rows_out
+    return rows_out
+
+
+def build_figure_retriever(*, index_dir: str | None = None):
+    """A no-GPU figure retriever ranking on figure captions, or None if unavailable."""
+    rows = _load_figure_rows(index_dir)
+    if not rows:
+        return None
+    return FigureCaptionRetriever(rows)
+
+
 def build_retriever(*, enable_corpus: bool = True, enable_textbook=None):
     """Compose the available retrieval lanes, or return None when none are available."""
     if enable_textbook is None:
