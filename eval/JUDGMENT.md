@@ -191,3 +191,25 @@ Evidence Sources appendix citing real pages (Schmidek p.460/561, Greenberg p.127
 Benzel, Bridwell, Vaccaro). Figures deferred (lexical v1; index stores PDF page only).
 Next: a retrieval-as-verifier pass (entailment over anatomy cards) to flag/contradict the
 AChA-class fabrication against source, and hybrid semantic recall (GPU, flagged).
+
+## Figure integration — wired + agent-tested
+
+The figure plumbing (inline `FigureItem` with complete caption + bidirectional
+claim<->figure cross-link, defect #7) existed but was unfed. Wired it: `_hit_to_dict`
+carries `figure_path`+caption when the chunk is figure-bearing and the page image exists;
+`pipeline._collect_figures` gathers figure-bearing evidence per card (dedup page images,
+cap 8/board) into `card_evidence`; `CASEBOARD_TEXTBOOK_FIGURES` gate. Source figures are
+whole-page PNGs (`assets/figures/<book>/pNNNN.png`); captions reassembled + capped to the
+first sentence, with `_tidy` dropping column-truncation tails.
+
+**Tested with a query agent + a judge agent** (both attending personas; judge blind). The
+query agent posed 3 figure-dense cases (CPA vestibular schwannoma, MCA-bifurcation clip,
+C1-C2 Goel-Harms) with per-case wanted/off-target figure ground truth. Judge scores
+(0-10, mean over 3 boards): **technical integrity 7.0** (real on-disk images, Book+page
+citations, working bidirectional cross-links; dinged for source-truncated captions — since
+fixed), **domain correctness 8.3** (the strongest axis — *no figure leaked across
+subspecialties*; no off-target slipped through), **specific relevance 4.7**. Verdict: the
+integration works and is safe; the relevance gap is a **retrieval-quality limit** (lexical
+*whole-page* matching drifts within the right subspecialty — e.g. a distal-M4 page for an
+M1-bifurcation case — rather than a wiring bug), fixable with cropped-plate / hybrid
+semantic + visual retrieval (the deferred GPU lane). 159 tests.
