@@ -130,3 +130,58 @@ fact is worse than an omission; an anti-over-reach guardrail line is the next ch
 (neuraxis MRI/CSF cytology) still flicker out run-to-run, adenosine flow-arrest and
 ACDF durotomy/lumbar-drain intermittently missing — partly model variance, partly the
 template-less ceiling that a stronger model would raise.
+
+## Expert-panel round — PLANNER -> AUTHOR -> CRITIC + honest instrument
+
+A 4-lens expert panel (clinical, LLM-systems, retrieval, eval-methodology) converged: the
+depth ceiling is (1) no mechanism guaranteeing the case-defining items appear (flicker),
+(2) a blunt global refine menu that both injects off-target adjuncts and *pumps*
+fabrication ("must name a specific" -> invents the anterior-choroidal-artery error), (3)
+quiz-voice/filler, and (4) an unreliable instrument (90% "coverage" counted questions; a
+single un-gated judge whose 6.5 hid a fabrication).
+
+**Instrument fixes (Phase A):** `coverage.py` now scores DECLARATIVE cards only (a
+question states no fact); `cases.json` carries a dev/holdout split (tune on dev, confirm on
+holdout) to resist overfitting `must_cover`; the judge rubric splits into four orthogonal
+axes with a **correctness gate** (one confident false claim caps a board's depth <=4).
+
+**Generation rearchitecture (Phase B):** `explore_llm` is now PLANNER -> AUTHOR -> CRITIC.
+The Planner (strong model, small call) enumerates the case-defining coverage themes, seeded
+by a topic-agnostic archetype->dimensions ontology (`ontology.py`) that *guarantees*
+structural dimensions (hydrocephalus-if-posterior-fossa, blood-loss-if-tumor, anesthesia/
+thresholds/post-op-watch), with self-consistency union over samples to kill flicker. The
+Author (cheap model, big call) expands each theme into concrete cards — assert-don't-ask,
+**hedge-don't-invent** (state the relationship you're sure of rather than fabricate a
+specific). The Critic (strong model, small call) adds any missing-theme cards and
+**re-anchors** wrong/unverifiable specifics DOWN to a correct statement instead of deleting.
+Strong model (gemini-2.5-pro) on the small planner/critic calls, cheap (gpt-4o) on the big
+author call — cost-aware. Roles are env-gated and model-overridable; ~4-5 calls/board.
+
+**Blind 4-axis judge (A/B, grader blind to which is the fix), under the correctness gate:**
+
+| Axis | prior (dense+refine) | PLANNER->AUTHOR->CRITIC |
+|------|:---:|:---:|
+| Clinical depth | 4.8 | **7.2** |
+| Correctness / safety | 7.8 | **9.0** |
+| Off-target | 8.8 | **9.7** |
+| Presentation | 5.7 | **7.2** |
+
+The prior architecture's depth is 4.8 here (not the earlier 6.5) precisely because this
+round *gates on correctness*: its two confident fabrications (SCM retracted "medially";
+AChA "at the MCA bifurcation") cap their cases — the earlier 6.5 was inflated by ignoring
+them. The new architecture carries **0 hard anatomical errors** (both flagged fabrications
+gone), wins every axis on every divergent case, and reaches attending-level on spine (8),
+meningioma (8), vascular (7). The judge's top residual — the pediatric board omitting
+hydrocephalus + oncologic staging (post-op items with no section home) — was then closed by
+routing pre-planned post-op management into the operative/risk slots (peds must_cover
+6/8 -> 8/8, with EVD/ETV + neuraxis-MRI/CSF-cytology/M-stage). De-gamed `must_cover`
+coverage 98.1% (51/52; the lone miss is VS lower-CN, which is template-bound via
+`_merge_cards`). 149 tests.
+
+**Deferred (panel-identified, highest next lever):** retrieval grounding. The textbook
+corpus EXISTS and is live (22,221 chunks across Rhoton/Greenberg/Schmidek + 7,071 figures
+at `/home/michael/neuro-textbook-rag/index/`); the lane is dead only because
+`retrieve.py` imports a non-existent `engine.query.search` (swallowed by `except: pass`).
+Wiring `Index.text_search` (no-GPU lexical) turns -> cards into cited claims and enables a
+retrieval-as-verifier pass to catch the AChA-class fabrication against source — the
+product's citation identity, distinct from raw depth.

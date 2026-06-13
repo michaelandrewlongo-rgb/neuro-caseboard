@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -87,8 +88,38 @@ ANCHORS = {
 }
 
 
+_INTERROGATIVE = ("what", "which", "how", "when", "should", "is ", "are ", "do ",
+                  "does ", "can ", "would ", "could ", "where", "why ", "who ")
+
+
+def declarative_text(board: str) -> str:
+    """Return only the DECLARATIVE content of a board for honest coverage scoring.
+
+    A card rendered as a question ("- ⚠ What role does ICG play…?") states no clinical
+    fact, so counting its keywords inflates coverage. Drop any claim bullet that is a
+    question (and its ``*Why:*`` line); keep declarative claims + their rationale."""
+    out, skip_why = [], False
+    for line in board.splitlines():
+        s = line.strip()
+        m = re.match(r"^- [⚠✓✗]\s+(.*)$", s)
+        if m:
+            claim = m.group(1).strip()
+            low = claim.lower()
+            is_q = claim.endswith("?") or low.startswith(_INTERROGATIVE)
+            skip_why = is_q
+            if not is_q:
+                out.append(claim)
+            continue
+        if s.lower().startswith("*why:") or s.startswith("- *why"):
+            if not skip_why:
+                out.append(s)
+            continue
+        out.append(s)
+    return "\n".join(out)
+
+
 def score_board(text: str, items):
-    low = text.lower()
+    low = declarative_text(text).lower()
     covered, missing = [], []
     for label, anchors in items:
         if any(a in low for a in anchors):

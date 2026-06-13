@@ -92,56 +92,87 @@ def test_llm_available_with_openrouter_key(monkeypatch):
     assert llm_available() is True
 
 
-# --- refinement (two-pass) -------------------------------------------------
+# --- planner -> author -> critic -------------------------------------------
 
-def _two_pass(draft_payload, refine_payload):
-    """complete_fn that returns the draft on the 1st call, refinement on the 2nd."""
-    calls = {"n": 0}
-
-    def fn(system, user):
-        calls["n"] += 1
-        return draft_payload if calls["n"] == 1 else refine_payload
-    return fn
+from neuro_caseboard.explore_llm import plan_coverage
 
 
-_REFINE_EXTRA = {
-    "cards": [
-        # genuinely new, same slot as an existing risk card -> must be ADDED
+def _roles(*, themes=None, draft=None, critic=None):
+    """Role-specific fakes returning canned JSON for planner / author / critic."""
+    return (
+        (lambda s, u: json.dumps(themes)) if themes is not None else None,
+        (lambda s, u: json.dumps(draft)) if draft is not None else None,
+        (lambda s, u: json.dumps(critic)) if critic is not None else None,
+    )
+
+
+def test_planner_unions_ontology_floor_and_samples():
+    plan_fn = lambda s, u: json.dumps({"themes": ["Sphenoid ridge drilling for a flat approach"]})
+    themes = plan_coverage("pterional clipping of a ruptured left MCA aneurysm", plan_fn)
+    joined = " | ".join(themes).lower()
+    assert "proximal control" in joined                          # ontology aneurysm dimension
+    assert "adenosine" in joined                                 # ontology aneurysm rescue
+    assert any("sphenoid ridge" in t.lower() for t in themes)    # planner-contributed theme
+
+
+def test_planner_floor_survives_planner_failure():
+    def boom(s, u):
+        raise RuntimeError("planner down")
+    themes = plan_coverage(
+        "suboccipital resection of pediatric fourth-ventricle medulloblastoma", boom)
+    joined = " | ".join(themes).lower()
+    assert "hydrocephalus" in joined and "csf cytology" in joined  # ontology floor still present
+
+
+_CRITIC_ADD = {
+    "add": [
+        # genuinely new -> added even though same risk slot as a draft card
         _card("05-risk-and-rescue.md", "catastrophic_complications",
-              "Adenosine-induced flow arrest for premature aneurysm rupture"),
-        # near-duplicate of an existing draft card -> must be DROPPED
+              "Adenosine-induced flow arrest for a premature aneurysm-neck rupture"),
+        # near-duplicate of a draft card -> dropped
         _card("05-risk-and-rescue.md", "rescue_triggers",
               "Plan for intraoperative seizure: cold saline irrigation"),
-    ]
+    ],
+    "fix": [],
 }
 
 
-def test_refine_pass_adds_distinct_cards_and_dedups(monkeypatch):
-    monkeypatch.setenv("CASEBOARD_LLM_REFINE", "1")
-    fn = _two_pass(json.dumps(VALID_CARDS), json.dumps(_REFINE_EXTRA))
-    m = build_llm_manifest("ruptured MCA aneurysm clipping", complete_fn=fn)
+def test_critic_adds_distinct_and_dedups():
+    plan_fn, author_fn, critic_fn = _roles(
+        themes={"themes": ["proximal control"]}, draft=VALID_CARDS, critic=_CRITIC_ADD)
+    m = build_llm_manifest("ruptured MCA aneurysm clipping",
+                           plan_fn=plan_fn, author_fn=author_fn, critic_fn=critic_fn)
     qs = [c.question for c in m.cards]
-    assert any("Adenosine-induced flow arrest" in q for q in qs)      # distinct -> added
-    assert sum("cold saline irrigation" in q for q in qs) == 1        # near-dup -> not duplicated
-    assert len(m.cards) == 7                                          # 6 draft + 1 new
+    assert any("Adenosine-induced flow arrest" in q for q in qs)   # distinct -> added
+    assert sum("cold saline irrigation" in q for q in qs) == 1     # near-dup -> not duplicated
+    assert len(m.cards) == 7                                        # 6 draft + 1 new
 
 
-def test_refine_disabled_by_env(monkeypatch):
-    monkeypatch.setenv("CASEBOARD_LLM_REFINE", "0")
-    fn = _two_pass(json.dumps(VALID_CARDS), json.dumps(_REFINE_EXTRA))
-    m = build_llm_manifest("anything", complete_fn=fn)
-    assert len(m.cards) == 6                                          # draft only
+def test_critic_reanchors_fabrication_instead_of_deleting():
+    fix = {"add": [], "fix": [{
+        "match": "corticospinal tract location",
+        "question": ("Corticospinal tract runs in the posterior limb of the internal "
+                     "capsule; confirm its position relative to the cavity"),
+        "why_it_matters": "A wrong tract location risks motor injury"}]}
+    plan_fn, author_fn, critic_fn = _roles(themes={"themes": []}, draft=VALID_CARDS, critic=fix)
+    m = build_llm_manifest("awake left frontal glioma",
+                           plan_fn=plan_fn, author_fn=author_fn, critic_fn=critic_fn)
+    qs = [c.question for c in m.cards]
+    assert any("posterior limb of the internal capsule" in q for q in qs)  # re-anchored
+    assert len(m.cards) == 6                                                # repaired, not added/deleted
 
 
-def test_refine_failure_keeps_draft(monkeypatch):
-    monkeypatch.setenv("CASEBOARD_LLM_REFINE", "1")
-    calls = {"n": 0}
+def test_critic_disabled_by_env(monkeypatch):
+    monkeypatch.setenv("CASEBOARD_LLM_CRITIC", "0")
+    plan_fn, author_fn, critic_fn = _roles(
+        themes={"themes": []}, draft=VALID_CARDS, critic=_CRITIC_ADD)
+    m = build_llm_manifest("anything", plan_fn=plan_fn, author_fn=author_fn, critic_fn=critic_fn)
+    assert len(m.cards) == 6                                        # critic skipped
 
-    def fn(system, user):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            return json.dumps(VALID_CARDS)
-        raise RuntimeError("refine api down")
 
-    m = build_llm_manifest("anything", complete_fn=fn)
-    assert m is not None and len(m.cards) == 6                        # draft survives
+def test_critic_failure_keeps_draft():
+    def boom(s, u):
+        raise RuntimeError("critic down")
+    plan_fn, author_fn, _ = _roles(themes={"themes": []}, draft=VALID_CARDS)
+    m = build_llm_manifest("anything", plan_fn=plan_fn, author_fn=author_fn, critic_fn=boom)
+    assert m is not None and len(m.cards) == 6                      # draft survives

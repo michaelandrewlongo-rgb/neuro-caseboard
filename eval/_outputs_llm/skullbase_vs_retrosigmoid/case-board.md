@@ -2,7 +2,7 @@
 
 **Markers:** ✓ corpus-supported   ⚠ needs clinician verification
 
-**Evidence:** ✓ 0 corpus-supported · ⚠ 20 to verify · 0 quarantined (appendix)
+**Evidence:** ✓ 0 corpus-supported · ⚠ 21 to verify · 0 quarantined (appendix)
 
 ## Anatomy at Risk
 *Structures to identify, preserve, or monitor for this approach.*
@@ -85,11 +85,14 @@
   - [ ] Preferred IAC closure (muscle plug, bone wax, fascia)?
   - [ ] Postoperative lumbar drain threshold?
 
-- ⚠ Stop resection if facial nerve stimulation indicates potential damage.
-  - *Why:* Avoiding nerve damage prevents postoperative complications such as facial paralysis.
+- ⚠ Surgery should be stopped if there is a significant drop in ABR wave V amplitude, indicating potential cochlear nerve injury.
+  - *Why:* Stopping at this point helps prevent permanent hearing loss, which is a key goal of the procedure.
 
-- ⚠ Close the dura securely and reconstruct the craniotomy site to prevent CSF leaks.
-  - *Why:* Proper closure prevents postoperative complications such as CSF leaks and infections.
+- ⚠ Closure involves a multilayer watertight dural closure with bone wax application to seal petrous and mastoid air cells, and possibly a fat graft for additional reinforcement.
+  - *Why:* A watertight closure is critical to prevent CSF leaks, which can lead to meningitis and other complications.
+
+- ⚠ Obtain an immediate post-operative MRI with DWI, T1+C, and T2/FLAIR sequences to rule out infarct, assess for residual tumor, and check for postoperative hematoma.
+  - *Why:* Early imaging provides a baseline, confirms the extent of resection, and allows for rapid detection of ischemic or hemorrhagic complications that may require urgent intervention.
 
 ## Risk and Rescue
 *Expected and catastrophic complications with rescue sequences.*

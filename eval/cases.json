@@ -13,13 +13,14 @@
         "Durotomy/CSF leak (higher with OPLL or ossified PLL); have repair/patch and lumbar drain plan",
         "Endplate preparation, interbody graft/cage sizing, anterior plating, and restoration of segmental lordosis",
         "C5 nerve root palsy as a recognized post-decompression deficit",
-        "Expanding postoperative neck hematoma causing airway compromise — emergent bedside wound evacuation and reintubation as rescue"
+        "Expanding postoperative neck hematoma causing airway compromise \u2014 emergent bedside wound evacuation and reintubation as rescue"
       ],
       "red_flags": [
         "Posterior fossa or cerebellar anatomy",
         "Cranial nerve VII/VIII monitoring or intracranial aneurysm clipping",
         "Awake cortical language or motor mapping"
-      ]
+      ],
+      "split": "holdout"
     },
     {
       "id": "skullbase_vs_retrosigmoid",
@@ -30,10 +31,10 @@
         "Cochlear nerve (CN VIII) and hearing preservation with intraoperative ABR/BAER monitoring",
         "Trigeminal nerve (CN V) at the superior tumor pole",
         "Lower cranial nerves (IX, X, XI) at the caudal pole",
-        "AICA and its loop/branches adherent to the capsule — preserve to avoid brainstem/cerebellar infarct",
+        "AICA and its loop/branches adherent to the capsule \u2014 preserve to avoid brainstem/cerebellar infarct",
         "Internal auditory canal drilling with preservation of the labyrinth/posterior semicircular canal to protect hearing",
         "Brainstem compression and cerebellar retraction injury",
-        "CSF leak through opened mastoid/petrous air cells — bone wax sealing and watertight closure; pseudomeningocele",
+        "CSF leak through opened mastoid/petrous air cells \u2014 bone wax sealing and watertight closure; pseudomeningocele",
         "Positioning (lateral/park-bench vs semi-sitting) and venous air embolism precautions if sitting"
       ],
       "red_flags": [
@@ -41,7 +42,8 @@
         "Carotid endarterectomy or cervical carotid content",
         "Awake language or motor cortex mapping",
         "Lumbar disc or peripheral nerve content"
-      ]
+      ],
+      "split": "dev"
     },
     {
       "id": "functional_awake_glioma",
@@ -49,10 +51,10 @@
       "case_query": "Awake craniotomy for left dominant frontal glioma with language and motor mapping",
       "must_cover": [
         "Cortical language mapping with stimulation (speech arrest, naming/anomia, Broca's area) before and during resection",
-        "Subcortical white-matter tract mapping — arcuate/superior longitudinal fasciculus and IFOF",
+        "Subcortical white-matter tract mapping \u2014 arcuate/superior longitudinal fasciculus and IFOF",
         "Primary motor cortex and corticospinal tract stimulation/monitoring",
         "Asleep-awake-asleep anesthesia with scalp block and airway/LMA contingency",
-        "Stimulation-induced intraoperative seizure — iced saline/Ringer's irrigation as rescue, with after-discharge monitoring",
+        "Stimulation-induced intraoperative seizure \u2014 iced saline/Ringer's irrigation as rescue, with after-discharge monitoring",
         "Functional (negative-mapping) resection margins prioritizing language/motor preservation over maximal extent",
         "MCA/Sylvian branch and cortical vein preservation",
         "Neuronavigation with awareness of brain shift; intraoperative ultrasound or imaging adjunct",
@@ -63,7 +65,8 @@
         "Spinal hardware or fusion",
         "Carotid endarterectomy",
         "Skull base petrous/internal auditory canal drilling"
-      ]
+      ],
+      "split": "holdout"
     },
     {
       "id": "vascular_mca_clip",
@@ -74,9 +77,9 @@
         "Wide Sylvian fissure split with preservation of M1 and M2 branches",
         "Lenticulostriate perforator preservation off M1",
         "Aneurysm neck dissection and clip placement without parent-vessel or perforator compromise",
-        "Intraoperative rupture plan — temporary proximal clip, two suckers, then clip the neck",
+        "Intraoperative rupture plan \u2014 temporary proximal clip, two suckers, then clip the neck",
         "ICG videoangiography and/or micro-Doppler to confirm clip position and downstream vessel patency",
-        "Brain relaxation — basal cistern/lamina terminalis CSF drainage, mannitol, ventriculostomy",
+        "Brain relaxation \u2014 basal cistern/lamina terminalis CSF drainage, mannitol, ventriculostomy",
         "Adenosine-induced transient flow arrest as a rescue for a difficult or prematurely ruptured neck",
         "Post-SAH cerebral vasospasm risk with nimodipine; optic nerve/chiasm proximity at the skull base"
       ],
@@ -85,7 +88,8 @@
         "Cranial nerve VII/VIII or lower cranial nerve monitoring",
         "Awake cortical language mapping",
         "Oncologic resection margins or tumor pathology grading"
-      ]
+      ],
+      "split": "dev"
     },
     {
       "id": "neurooncology_convexity_meningioma",
@@ -95,7 +99,7 @@
         "Circumferential dural devascularization and Simpson grade I resection (tumor plus dural attachment plus abnormal bone)",
         "Middle meningeal/external carotid feeding vessels; consider preoperative embolization for a hypervascular tumor",
         "Cortical draining vein preservation along the tumor margin",
-        "Anticipated blood loss — type and cross, large-bore IV access",
+        "Anticipated blood loss \u2014 type and cross, large-bore IV access",
         "Peritumoral edema management with dexamethasone and gentle brain handling",
         "Internal debulking followed by capsule dissection off the pial plane (piecemeal vs en bloc)",
         "Dural reconstruction/graft and cranioplasty of involved bone with watertight closure to prevent CSF leak",
@@ -106,28 +110,30 @@
         "Awake cortical language mapping (lesion is non-eloquent)",
         "Spinal fusion or instrumentation",
         "Carotid endarterectomy"
-      ]
+      ],
+      "split": "dev"
     },
     {
       "id": "pediatric_posterior_fossa_medulloblastoma",
       "subspecialty": "Pediatric or posterior fossa",
       "case_query": "Suboccipital craniotomy for resection of pediatric fourth-ventricle medulloblastoma",
       "must_cover": [
-        "Hydrocephalus management — preoperative EVD or ETV and a postoperative CSF diversion plan",
+        "Hydrocephalus management \u2014 preoperative EVD or ETV and a postoperative CSF diversion plan",
         "Telovelar approach (rather than transvermian) to avoid vermian splitting and reduce cerebellar mutism/posterior fossa syndrome",
         "Fourth ventricle floor and brainstem with facial colliculus preservation",
-        "Lower cranial nerves (IX, X, XII) at the floor — swallow/airway function and risk of postoperative bulbar dysfunction",
+        "Lower cranial nerves (IX, X, XII) at the floor \u2014 swallow/airway function and risk of postoperative bulbar dysfunction",
         "PICA and tonsillar/brainstem perforator preservation",
         "Watertight dural closure to prevent CSF leak and pseudomeningocele",
         "Prone positioning, weight-based blood loss accounting, and venous air embolism risk in a child",
-        "Oncologic staging — postoperative MRI within 48 hours plus neuraxis MRI and CSF cytology for leptomeningeal spread"
+        "Oncologic staging \u2014 postoperative MRI within 48 hours plus neuraxis MRI and CSF cytology for leptomeningeal spread"
       ],
       "red_flags": [
         "Carotid endarterectomy or cervical vascular content",
         "Awake language or motor mapping",
         "Lumbar disc or anterior cervical fusion content",
         "Intracranial aneurysm clipping"
-      ]
+      ],
+      "split": "holdout"
     }
   ]
 }
