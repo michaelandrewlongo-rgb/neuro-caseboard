@@ -192,6 +192,34 @@ Benzel, Bridwell, Vaccaro). Figures deferred (lexical v1; index stores PDF page 
 Next: a retrieval-as-verifier pass (entailment over anatomy cards) to flag/contradict the
 AChA-class fabrication against source, and hybrid semantic recall (GPU, flagged).
 
+### Figure retrieval — caption-ranked rework (iterated vs a blind image-judge)
+
+The original lane ranked figures by textbook PAGE body text, so figures drifted within the
+right subspecialty (a distal-M4 page for an M1 case; relevance 4.7/10). Reworked to rank by
+each figure's OWN caption (`figures.lance`, ~5.7k figs, in-process IDF, no GPU,
+`FigureCaptionRetriever`) with layered region guards. Iterated 6 rounds against an
+**image-verifying** blind judge (it opened every page PNG), each round fixing the leaks it
+found: cranial↔spine divide (caption + source book); thoracolumbar block from caption +
+full page context; caption-based CVJ-vs-subaxial; peripheral-nerve, brain-cortex, and
+sellar/pituitary domain guards; exclude diagnostic-imaging books (Neuroradiology Core
+Requisites, NeuroICU); medical synonym expansion (MCA→middle cerebral,
+lenticulostriate→perforated …); figures only on anatomy-section claims.
+
+Judge trajectory (domain / specific-relevance, 0–10): page-text baseline **8.3 / 4.7** →
+caption-rank **7.0 / 5.7** → +region guard **6.7 / 5.5** → +book/level/domain guards + synonyms
+**7.8 / 5.7**. Final state: CPA and C1-C2 boards are regionally clean with genuine bullseyes
+(Rhoton CPA CN VII/VIII+AICA and IAC fundus; atlantoaxial/odontoid constructs); MCA is
+domain-clean but only ~1 figure shows the M1 bifurcation.
+
+**Ceiling reached — a corpus/asset limit, not a retrieval bug.** Two things cap relevance
+at ~5.7: (1) the indexed assets are whole **page images** (text-dominated), not cropped
+figure plates — so BiomedCLIP **semantic** re-ranking (tested live on CPU) is *worse* than
+caption-lexical (it returned a turbinate page for a CPA query, a pelvis page for C1-C2); and
+(2) some ideal plates (a V3-VA C1-C2-loop figure, a dedicated MCA-bifurcation clip plate) are
+not indexed at all. The real path to "board-acceptable" (8+) is upstream in textbook-rag:
+crop individual figures from pages (+ re-embed) and ingest the missing plates — not more
+retrieval-code tuning. Domain cleanliness (no off-target leak) is solved.
+
 ## Figure integration — wired + agent-tested
 
 The figure plumbing (inline `FigureItem` with complete caption + bidirectional
