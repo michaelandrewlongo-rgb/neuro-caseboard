@@ -3,14 +3,20 @@
 Deliberately avoids caseprep's heavy lanes (SemanticCorpusRetriever / board_cards need a
 pgvector DB that may be unavailable and blocks for a long time). Uses the offline FTS5
 ``CorpusRetriever``, plus an optional textbook lane: in-process via textbook-rag's
-``engine.query.search`` when importable, else the subprocess ``TextbookRetriever`` when
-the ``textbook-rag`` CLI is on PATH. Any lane that fails to construct is simply skipped.
+no-GPU lexical ``engine.index.Index.text_search`` when the repo + LanceDB index are
+present, else the subprocess ``TextbookRetriever`` when the ``textbook-rag`` CLI is on
+PATH. Any lane that fails to construct is simply skipped.
+
+The textbook lane is enabled with ``CASEPREP_TEXTBOOK=1``; the repo and index locations
+default to ``/home/michael/neuro-textbook-rag`` and ``<repo>/index`` and are overridable
+via ``TEXTBOOK_RAG_REPO`` / ``TEXTBOOK_INDEX_DIR``.
 """
 
 from __future__ import annotations
 
 import os
 import shutil
+import sys
 
 
 import re
@@ -99,10 +105,67 @@ class InProcessTextbookRetriever:
         return out
 
 
+def _default_textbook_repo() -> str:
+    return os.environ.get("TEXTBOOK_RAG_REPO") or "/home/michael/neuro-textbook-rag"
+
+
+def _default_index_dir() -> str:
+    return os.environ.get("TEXTBOOK_INDEX_DIR") or os.path.join(_default_textbook_repo(), "index")
+
+
+def _hit_to_dict(h) -> dict:
+    """Convert a textbook-rag ``Hit`` to the dict shape InProcessTextbookRetriever wants.
+
+    Figures are intentionally omitted in this lexical v1 (the index stores PDF ``page``
+    only, no ``printed_page``; figure->claim linkage is a later visual-lane concern)."""
+    return {
+        "book": getattr(h, "book", "") or "",
+        "chapter": getattr(h, "chapter", None),
+        "page": getattr(h, "page", None),
+        "printed_page": None,            # index has PDF page only
+        "score": getattr(h, "score", None),
+        "text": getattr(h, "text", "") or "",
+    }
+
+
+def _index_search_fn(*, index_dir: str | None = None, repo: str | None = None):
+    """A no-GPU lexical ``search_fn(query, k) -> list[dict]`` backed by textbook-rag's
+    ``Index.text_search``, or ``None`` when the engine or LanceDB index are unavailable."""
+    repo = repo or _default_textbook_repo()
+    index_dir = index_dir or _default_index_dir()
+    if not os.path.isdir(index_dir):
+        return None
+    if repo and os.path.isdir(repo) and repo not in sys.path:
+        sys.path.insert(0, repo)
+    try:
+        from engine.index import Index  # type: ignore
+        index = Index(index_dir)
+    except Exception:
+        return None
+
+    def search_fn(query, k):
+        terms = _SanitizingCorpus._clean(query, 8)   # FTS-safe bare clinical terms
+        if not terms:
+            return []
+        try:
+            hits = index.text_search(terms, k) or []
+        except Exception:
+            return []
+        return [_hit_to_dict(h) for h in hits]
+
+    return search_fn
+
+
 def _textbook_lane(enable: bool):
     if not enable:
         return None
-    try:  # in-process (textbook-rag importable as a library on its seam branch)
+    try:  # in-process lexical lane (textbook-rag Index.text_search, no GPU)
+        fn = _index_search_fn()
+        if fn is not None:
+            return InProcessTextbookRetriever(fn)
+    except Exception:
+        pass
+    try:  # legacy in-process entrypoint, if a build ever exposes engine.query.search
         from engine.query import search as tb_search  # type: ignore
         return InProcessTextbookRetriever(lambda q, k: tb_search(q, k))
     except Exception:
