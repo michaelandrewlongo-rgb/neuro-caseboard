@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import lancedb
 
 from .index import Hit
@@ -18,8 +20,11 @@ def build_visual_index(figure_pages, embedder, index_dir, batch_size=64,
             on_progress(min(i + batch_size, len(paths)), len(paths))
     rows = []
     for fp, v in zip(figure_pages, vectors):
+        # Unique per plate (……/p0042_f02.png -> "Book::p0042_f02"); falls back to the
+        # page id for whole-page renders. Several plates can share a page.
+        plate = Path(fp["figure_path"]).stem or f"p{fp['page']}"
         rows.append({
-            "id": f"{fp['book']}::p{fp['page']}",
+            "id": f"{fp['book']}::{plate}",
             "book": fp["book"],
             "chapter": fp.get("chapter") or "",
             "page": int(fp["page"]),

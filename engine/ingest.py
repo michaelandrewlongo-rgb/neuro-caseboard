@@ -1,10 +1,10 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator, Optional
 
 import fitz  # PyMuPDF
 
-from engine.figures import page_figure_info, render_page_png
+from engine.figures import page_figure_info, render_page_png, extract_figure_plates
 
 
 @dataclass
@@ -16,6 +16,8 @@ class PageRecord:
     has_figure: bool = False
     caption: Optional[str] = None
     figure_path: Optional[str] = None
+    # Per-figure cropped plates (crop mode only); empty in whole-page mode.
+    figures: list = field(default_factory=list)
 
 
 def _chapter_entries(doc):
@@ -39,7 +41,11 @@ def _chapter_for_page(entries, page):
 
 
 def extract_pages(pdf_path, render=False, assets_dir=None, dpi=160,
-                  area_threshold=0.1):
+                  area_threshold=0.1, figure_crop=False):
+    """Extract page text + figures. With ``figure_crop`` each figure page yields one
+    cropped plate per figure (``PageRecord.figures``, full per-plate captions) for the
+    visual lane; the chunk's ``figure_path`` points at the first plate. Without it (the
+    default) a figure page renders to a single whole-page PNG, unchanged."""
     pdf_path = Path(pdf_path)
     book = pdf_path.stem
     doc = fitz.open(pdf_path)
@@ -51,18 +57,39 @@ def extract_pages(pdf_path, render=False, assets_dir=None, dpi=160,
         pageno = i + 1
         info = page_figure_info(page, area_threshold)
         figure_path = None
+        plates = []
         if info.has_figure and render and assets_dir is not None:
-            out = Path(assets_dir) / book / f"p{pageno:04d}.png"
-            render_page_png(page, dpi, out)
-            figure_path = str(out)
+            if figure_crop:
+                plates = extract_figure_plates(
+                    page, area_threshold, dpi=dpi, assets_dir=assets_dir,
+                    book=book, pageno=pageno)
+            if plates:
+                figure_path = plates[0].figure_path     # chunk links to the first plate
+            else:                                         # whole-page (default / vector-only)
+                out = Path(assets_dir) / book / f"p{pageno:04d}.png"
+                render_page_png(page, dpi, out)
+                figure_path = str(out)
         records.append(
             PageRecord(book=book, page=pageno, text=text,
                        chapter=_chapter_for_page(entries, pageno),
                        has_figure=info.has_figure, caption=info.caption,
-                       figure_path=figure_path)
+                       figure_path=figure_path, figures=plates)
         )
     doc.close()
     return records
+
+
+def figure_records(records):
+    """Flatten per-page cropped plates into one dict per plate for the visual index
+    (book, chapter, page, figure_path, full caption, bbox). Whole-page records contribute
+    nothing — their visual lane is built from the page render via the chunks table."""
+    out = []
+    for r in records:
+        for pl in (r.figures or []):
+            out.append({"book": r.book, "chapter": r.chapter, "page": r.page,
+                        "figure_path": pl.figure_path, "caption": pl.caption or "",
+                        "bbox": pl.bbox})
+    return out
 
 
 def iter_corpus(corpus_dir) -> Iterator[PageRecord]:

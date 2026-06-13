@@ -25,6 +25,7 @@ DEFAULTS = {
     "MAX_FIGURE_IMAGES": "5",
     "FIGURE_DPI": "160",
     "FIGURE_AREA_THRESHOLD": "0.1",
+    "FIGURE_CROP": "false",
     "ASSETS_DIR": str(Path.home() / "neuro-textbook-rag" / "assets" / "figures"),
     "VISUAL_MODEL": "hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224",
     "VISUAL_RETRIEVE_K": "10",
@@ -83,6 +84,7 @@ class Config:
     max_figure_images: int
     figure_dpi: int
     figure_area_threshold: float
+    figure_crop: bool
     assets_dir: Path
     visual_model: str
     visual_retrieve_k: int
@@ -123,6 +125,7 @@ def load_config(env_file=".env"):
         max_figure_images=int(get("MAX_FIGURE_IMAGES")),
         figure_dpi=int(get("FIGURE_DPI")),
         figure_area_threshold=float(get("FIGURE_AREA_THRESHOLD")),
+        figure_crop=get("FIGURE_CROP").strip().lower() in ("1", "true", "yes", "on"),
         assets_dir=Path(get("ASSETS_DIR")),
         visual_model=get("VISUAL_MODEL"),
         visual_retrieve_k=int(get("VISUAL_RETRIEVE_K")),

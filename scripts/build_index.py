@@ -2,7 +2,7 @@ import time
 from pathlib import Path
 
 from engine.config import load_config, resolve_device
-from engine.ingest import extract_pages, coverage_from_records
+from engine.ingest import extract_pages, coverage_from_records, figure_records
 from engine.chunk import chunk_pages
 from engine.embed import Embedder
 from engine.index import build_index
@@ -23,7 +23,8 @@ def main():
         print(f"  [{i}/{len(pdfs)}] reading {pdf.name} ...", flush=True)
         recs = extract_pages(pdf, render=True, assets_dir=cfg.assets_dir,
                              dpi=cfg.figure_dpi,
-                             area_threshold=cfg.figure_area_threshold)
+                             area_threshold=cfg.figure_area_threshold,
+                             figure_crop=cfg.figure_crop)
         records.extend(recs)
         print(f"        {len(recs)} pages "
               f"({time.time() - t0:.0f}s elapsed)", flush=True)
@@ -55,14 +56,18 @@ def main():
           f"(embedding took {time.time() - t1:.0f}s)")
 
     if cfg.visual_retrieval:
-        fig_pages = {}
-        for r in records:
-            if r.has_figure and r.figure_path and r.figure_path not in fig_pages:
-                fig_pages[r.figure_path] = {
-                    "book": r.book, "chapter": r.chapter, "page": r.page,
-                    "figure_path": r.figure_path, "caption": r.caption}
-        fig_pages = list(fig_pages.values())
-        print(f"\nBuilding visual index ({len(fig_pages)} figure pages) "
+        if cfg.figure_crop:
+            fig_pages = figure_records(records)        # one record per cropped plate
+        else:
+            fig_pages = {}
+            for r in records:
+                if r.has_figure and r.figure_path and r.figure_path not in fig_pages:
+                    fig_pages[r.figure_path] = {
+                        "book": r.book, "chapter": r.chapter, "page": r.page,
+                        "figure_path": r.figure_path, "caption": r.caption}
+            fig_pages = list(fig_pages.values())
+        kind = "cropped plates" if cfg.figure_crop else "figure pages"
+        print(f"\nBuilding visual index ({len(fig_pages)} {kind}) "
               f"with '{cfg.visual_model}' ...", flush=True)
         vemb = VisualEmbedder(cfg.visual_model, device=device)
         build_visual_index(fig_pages, vemb, cfg.index_dir)

@@ -1,10 +1,27 @@
 import time
+from pathlib import Path
 
 import lancedb
 
 from engine.config import load_config, resolve_device
+from engine.ingest import extract_pages, figure_records
 from engine.visual_embed import VisualEmbedder
 from engine.visual_index import build_visual_index
+
+
+def figure_records_from_corpus(cfg):
+    """One record per CROPPED plate, re-extracted from the corpus PDFs (renders skip
+    already-cropped PNGs). Used in crop mode because the chunks table keeps only the
+    first plate per page — this is the reliable per-plate source for a standalone
+    (OOM-recovery) visual build."""
+    out = []
+    for pdf in sorted(Path(cfg.corpus_dir).glob("*.pdf")):
+        recs = extract_pages(pdf, render=True, assets_dir=cfg.assets_dir,
+                             dpi=cfg.figure_dpi,
+                             area_threshold=cfg.figure_area_threshold,
+                             figure_crop=True)
+        out.extend(figure_records(recs))
+    return out
 
 
 def figure_pages_from_chunks(index_dir):
@@ -27,8 +44,12 @@ def figure_pages_from_chunks(index_dir):
 
 def main():
     cfg = load_config()
-    pages = figure_pages_from_chunks(cfg.index_dir)
-    print(f"{len(pages)} distinct figure pages to embed")
+    if cfg.figure_crop:
+        pages = figure_records_from_corpus(cfg)
+        print(f"{len(pages)} cropped plates to embed")
+    else:
+        pages = figure_pages_from_chunks(cfg.index_dir)
+        print(f"{len(pages)} distinct figure pages to embed")
     device = resolve_device(cfg.embed_device)
     print(f"Loading visual model '{cfg.visual_model}' on '{device}' "
           f"(first run downloads weights) ...", flush=True)
