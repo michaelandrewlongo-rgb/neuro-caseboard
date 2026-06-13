@@ -39,6 +39,16 @@ def assemble_caption(first_line: str, following_lines, *, max_chars: int = 240) 
         cap = cap[: end + 1]
     elif len(cap) > max_chars:
         cap = cap[:max_chars].rsplit(" ", 1)[0] + " …"
+    return _tidy(cap)
+
+
+def _tidy(cap: str) -> str:
+    """Drop a dangling unclosed parenthetical and a mid-word hyphen break left by the
+    source's column-truncated caption (e.g. "(Courtesy of Cochlear Cor-")."""
+    cap = (cap or "").strip()
+    if cap.count("(") > cap.count(")"):
+        cap = cap[: cap.rfind("(")].strip()
+    cap = re.sub(r"\s+\S*-$", "", cap).strip()      # trailing hyphenated word-break
     return cap
 
 
@@ -65,7 +75,7 @@ def complete_caption(record, *, page_text: str | None = None) -> str:
                 idx = i
                 break
     if idx is None:
-        return first
+        return assemble_caption(first, [])   # no figure line on the page: cap+tidy the field
     return assemble_caption(lines[idx], lines[idx + 1:])
 
 

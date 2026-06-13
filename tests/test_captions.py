@@ -59,6 +59,24 @@ def test_complete_caption_without_page_text_returns_the_first_line():
     assert out == rec.metadata["caption"]
 
 
+def test_tidy_drops_unclosed_paren_and_midword_hyphen():
+    from neuro_caseboard.captions import _tidy
+    assert _tidy("Auditory brain stem implant. (Courtesy of Cochlear Cor-") == \
+        "Auditory brain stem implant."
+    assert _tidy("the translational dynamic plate before evacu-") == \
+        "the translational dynamic plate before"
+
+
+def test_complete_caption_tidies_source_truncated_field_off_page():
+    # the figure caption is not a line on the chunk body page -> field is cap+tidied
+    class _Rec:
+        metadata = {"caption": "FIGURE 49-7  Auditory brain stem implant. (Courtesy of Cochlear Cor-"}
+        text = "body paragraph text with no figure label line on it"
+    out = complete_caption(_Rec(), page_text=_Rec.text)
+    assert out == "FIGURE 49-7  Auditory brain stem implant."
+    assert "Cor-" not in out and "Courtesy" not in out
+
+
 def test_relevance_line_is_subspecialty_neutral():
     line = relevance_line("Confirm vertebral artery course", "Benzel Spine, p.592")
     assert "Benzel Spine, p.592" in line
