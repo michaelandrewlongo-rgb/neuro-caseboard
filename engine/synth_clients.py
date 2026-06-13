@@ -71,18 +71,23 @@ class VertexSynthClient:
     Auth via Application Default Credentials (gcloud auth application-default login).
     Targets google-genai >= 1.0."""
 
-    def __init__(self, project, location, model, client=None):
+    def __init__(self, project, location, model, client=None, timeout_ms=None):
         self.project = project
         self.location = location
         self.model = model
+        self.timeout_ms = timeout_ms
         self._client = client
 
     @property
     def client(self):
         if self._client is None:
             from google import genai
+            from google.genai import types
+            http_options = (types.HttpOptions(timeout=self.timeout_ms)
+                            if self.timeout_ms else None)
             self._client = genai.Client(vertexai=True, project=self.project,
-                                        location=self.location)
+                                        location=self.location,
+                                        http_options=http_options)
         return self._client
 
     def generate(self, system, user, images):
