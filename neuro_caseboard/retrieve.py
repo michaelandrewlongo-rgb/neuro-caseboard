@@ -196,25 +196,41 @@ def _textbook_lane(enable: bool):
 import collections
 import math
 
-_CRANIAL_SIG = ("crani", "cortex", "cerebr", "cerebell", "ventricle", "aneurysm", "glioma",
-                "meningioma", "tumor", "tumour", "skull base", "sylvian", "pterional",
+_CRANIAL_SIG = ("crani", "cortex", "cortical", "cerebr", "cerebell", "ventricle", "aneurysm",
+                "glioma", "meningioma", "tumor", "tumour", "skull base", "sylvian", "pterional",
                 "temporal lobe", "frontal lobe", "cpa", "cerebellopontine", "vestibular",
-                "pituitary", " clip", "subarachnoid", "petrous", "clivus")
+                "pituitary", " clip", "subarachnoid", "petrous", "clivus", "sulcus", "gyrus",
+                "hemisphere", "thalam", "callosum", "insula")
 _SPINE_SIG = ("spine", "spinal", "vertebra", "pedicle", "cervical", "thoracic", "lumbar",
               "sacral", "disc", "laminectomy", "fusion", "acdf", "corpectomy", "odontoid",
               "atlas", " axis", "atlantoaxial", "myelopath", "radiculopath", "scoliosis",
               "kyphosis", "spondyl")
-# Split cervical into the craniovertebral junction (occiput-C2) vs subaxial (C3-C7) so a
-# C1-C2 case rejects a C4-C5 plate, and an ACDF rejects an atlantoaxial one.
+# Spine levels. Only thoracic/lumbar/sacral are *block-worthy* on a cervical/cranial case:
+# a cervical figure's page incidentally naming c3-c7 must NOT block a good atlantoaxial plate,
+# but a page naming lumbar/thoracic is unambiguously a different operation.
 _LEVELS = {
-    "cvj": ("c1", "c2", "atlas", " axis", "atlanto", "odontoid", "dens", "occipitocervical",
-            "craniovertebral", "craniocervical", "suboccipital"),
-    "subaxial": ("c3", "c4", "c5", "c6", "c7", "subaxial"),
+    "cervical": ("cervical", "c1", "c2", "c3", "c4", "c5", "c6", "c7", "atlas", " axis",
+                 "atlanto", "odontoid", "subaxial", "craniovertebral"),
     "thoracic": ("thoracic", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10",
                  "t11", "t12", "costotransverse"),
     "lumbar": ("lumbar", "l1", "l2", "l3", "l4", "l5", "cauda equina", "spondylolisthesis"),
-    "sacral": ("sacral", "sacrum", "s1", "iliac"),
+    "sacral": ("sacral", "sacrum", " s1", "iliac"),
 }
+_BLOCK_LEVELS = {"thoracic", "lumbar", "sacral"}
+
+# Cervical sub-region, read from CAPTIONS only (page context names c-levels too loosely):
+# the craniovertebral junction (occiput-C2) vs the subaxial spine (C3-C7).
+_CVJ_TERMS = ("c1", "c2", "atlas", " axis", "atlanto", "odontoid", "dens", "craniovertebral",
+              "occipitocervical", "suboccipital")
+_SUBAXIAL_TERMS = ("c3", "c4", "c5", "c6", "c7", "subaxial")
+# Peripheral-nerve / brachial-plexus surgery is a different subspecialty entirely.
+_PERIPHERAL_NERVE = ("nerve transfer", "nerve graft", "brachial plexus", "fascicular",
+                     "neurotization", "peripheral nerve", "ulnar nerve", "median nerve",
+                     "radial nerve", "brachialis", "supraclavicular")
+
+# Diagnostic-imaging / ICU books are radiographs and tracings, not operative anatomy — a
+# figure lane for a surgical board should not draw from them.
+_DIAGNOSTIC_BOOKS = ("neuroradiology core requisites", "neuroicu", "neurocritical")
 
 _VIGNETTE = re.compile(r"\b\d{1,3}[\s-]?year[\s-]?old\b|\bpresented with\b|\ba \d{1,2}[- ]year",
                        re.IGNORECASE)
@@ -222,6 +238,29 @@ _VIGNETTE = re.compile(r"\b\d{1,3}[\s-]?year[\s-]?old\b|\bpresented with\b|\ba \
 
 def _cap_toks(s: str):
     return [t for t in re.findall(r"[a-z0-9]+", (s or "").lower()) if len(t) > 2]
+
+
+# Medical abbreviations / synonyms so a claim saying "MCA" / "lenticulostriate" matches an
+# atlas caption that spells out "middle cerebral artery" / "perforated substance".
+_SYNONYMS = {
+    "mca": ("middle", "cerebral"), "m1": ("middle", "cerebral"), "m2": ("middle", "cerebral"),
+    "aca": ("anterior", "cerebral"), "a1": ("anterior", "cerebral"),
+    "pca": ("posterior", "cerebral"), "ica": ("internal", "carotid"),
+    "acom": ("anterior", "communicating"), "acoa": ("anterior", "communicating"),
+    "pcom": ("posterior", "communicating"), "pcoa": ("posterior", "communicating"),
+    "lenticulostriate": ("perforating", "perforator", "perforators", "perforated"),
+    "perforators": ("perforating", "perforated"), "perforator": ("perforating", "perforated"),
+    "aica": ("anterior", "inferior", "cerebellar"),
+    "pica": ("posterior", "inferior", "cerebellar"),
+    "sca": ("superior", "cerebellar"),
+}
+
+
+def _expand_terms(qterms: set) -> set:
+    extra: set = set()
+    for t in qterms:
+        extra.update(_SYNONYMS.get(t, ()))
+    return qterms | extra
 
 
 def _levels_in(text: str):
@@ -251,12 +290,25 @@ def _figure_offtarget(caption: str, topic: str, book: str = "", context: str = "
         return True
     if t_cran and not t_spine and ((c_spine and not c_cran) or b_spine):
         return True
+    # peripheral-nerve/brachial-plexus figures don't belong on a cranial or spinal board
+    if any(x in cap for x in _PERIPHERAL_NERVE) and not any(x in top for x in _PERIPHERAL_NERVE):
+        return True
     if t_spine:
-        # trust the caption's own level; only consult the page context when the caption
-        # names no level (a column-truncated "Pedicle screw placement" on a lumbar page).
+        # block a clearly different region (thoracolumbar/sacral) the case isn't about,
+        # read from caption + full page context.
         t_lv = _levels_in(top)
-        c_lv = _levels_in(cap) or _levels_in(context)
-        if t_lv and c_lv and not (t_lv & c_lv):
+        f_lv = _levels_in(f"{caption} {context}".lower())
+        if (f_lv & _BLOCK_LEVELS) - t_lv:
+            return True
+        # cervical sub-region (CAPTIONS only): a CVJ case rejects a subaxial-only plate and
+        # vice versa (context names c-levels too loosely to use here).
+        t_cvj = any(x in top for x in _CVJ_TERMS)
+        t_sub = any(x in top for x in _SUBAXIAL_TERMS)
+        f_cvj = any(x in cap for x in _CVJ_TERMS)
+        f_sub = any(x in cap for x in _SUBAXIAL_TERMS)
+        if t_cvj and not t_sub and f_sub and not f_cvj:
+            return True
+        if t_sub and not t_cvj and f_cvj and not f_sub:
             return True
     return False
 
@@ -279,7 +331,7 @@ class FigureCaptionRetriever:
     def retrieve(self, query, *, topic: str = "", subdomain=None, top_n: int = 3):
         from caseprep.core.contracts import EvidenceRecord
         from neuro_caseboard.captions import assemble_caption
-        qterms = set(_cap_toks(query))
+        qterms = _expand_terms(set(_cap_toks(query)))
         if not qterms:
             return []
         scored = []
@@ -331,8 +383,11 @@ def _load_figure_rows(index_dir: str | None = None):
                 for r in db.open_table("figures").search().limit(100000).to_list():
                     fp = r.get("figure_path") or ""
                     cap = (r.get("caption") or "").strip()
+                    book = r.get("book") or ""
+                    if any(d in book.lower() for d in _DIAGNOSTIC_BOOKS):
+                        continue                 # radiology/ICU books: not operative anatomy
                     if cap and fp and os.path.isfile(fp):
-                        rows_out.append({"book": r.get("book") or "", "page": r.get("page"),
+                        rows_out.append({"book": book, "page": r.get("page"),
                                          "figure_path": fp, "caption": cap, "context": ""})
             # page context (chunk body text) so the region/level guard isn't blind to a
             # column-truncated caption (e.g. a lumbar plate captioned "Pedicle screw placement").
@@ -343,7 +398,7 @@ def _load_figure_rows(index_dir: str | None = None):
                     if not t:
                         continue
                     k = (r.get("book") or "", str(r.get("page")))
-                    ctx[k] = (ctx.get(k, "") + " " + t)[:1200]
+                    ctx[k] = (ctx.get(k, "") + " " + t)[:6000]
                 for row in rows_out:
                     row["context"] = ctx.get((row["book"], str(row["page"])), "")
         except Exception:

@@ -158,17 +158,34 @@ def test_figure_level_guard_uses_page_context_for_truncated_caption():
     assert _figure_offtarget(
         "Pedicle screw placement, entrance point", "Posterior C1 lateral mass and C2 pedicle screw, atlantoaxial",
         book="Benzel Spine", context="Lumbar pedicle screw placement at L4 and L5 with the entrance point")
-    # a C4-C5 subaxial plate is off-target for a CVJ (C1-C2) case
-    assert _figure_offtarget("Lateral mass fixation at C4 and C5",
+    # a thoracic plate is off-target for a cervical/CVJ case
+    assert _figure_offtarget("Pedicle screws at T8 and T9 for deformity",
                              "C1-C2 Goel-Harms atlantoaxial fixation", book="Bridwell")
-    # the atlantoaxial construct stays
+    # the atlantoaxial construct stays even though its page mentions c3-c7 in passing
     assert not _figure_offtarget(
         "Atlantoaxial bony anatomy after C1 lateral mass and C2 pedicle screw",
-        "C1-C2 Goel-Harms atlantoaxial", book="Schmidek and Sweet")
-    # ACDF (subaxial) must still reject a lumbar plate (interbody overlap bug guard)
+        "C1-C2 Goel-Harms atlantoaxial", book="Schmidek and Sweet",
+        context="cervical spine C2 C3 C4 lateral mass screw technique")
+    # ACDF (cervical) must still reject a lumbar plate seen only in the page context
     assert _figure_offtarget("Interbody graft placement",
                              "C5-6 ACDF for cervical myelopathy with interbody graft",
                              context="lumbar interbody fusion at L4-L5")
+
+
+def test_figure_guard_blocks_peripheral_nerve_and_cervical_subregion():
+    from neuro_caseboard.retrieve import _figure_offtarget
+    # peripheral-nerve / brachial-plexus surgery figure on a C1-C2 case
+    assert _figure_offtarget("Double fascicular nerve transfer; the nerve to brachialis",
+                             "Posterior C1-C2 Goel-Harms atlantoaxial fixation")
+    # subaxial (C4-C5) plate on a CVJ (C1-C2) case
+    assert _figure_offtarget("Lateral mass fixation at C4 and C5 and pedicle screw",
+                             "Posterior C1 lateral mass and C2 pedicle Goel-Harms atlantoaxial")
+    # CVJ plate on a subaxial (ACDF) case
+    assert _figure_offtarget("Atlantoaxial C1-C2 transarticular screw and odontoid",
+                             "C5-6 ACDF subaxial cervical myelopathy")
+    # same sub-region stays
+    assert not _figure_offtarget("Atlantoaxial C1 lateral mass and C2 pedicle screw",
+                                 "C1-C2 Goel-Harms atlantoaxial")
 
 
 def test_figure_caption_retriever_ranks_by_caption_and_region_filters():
