@@ -178,10 +178,16 @@ routing pre-planned post-op management into the operative/risk slots (peds must_
 coverage 98.1% (51/52; the lone miss is VS lower-CN, which is template-bound via
 `_merge_cards`). 149 tests.
 
-**Deferred (panel-identified, highest next lever):** retrieval grounding. The textbook
-corpus EXISTS and is live (22,221 chunks across Rhoton/Greenberg/Schmidek + 7,071 figures
-at `/home/michael/neuro-textbook-rag/index/`); the lane is dead only because
-`retrieve.py` imports a non-existent `engine.query.search` (swallowed by `except: pass`).
-Wiring `Index.text_search` (no-GPU lexical) turns -> cards into cited claims and enables a
-retrieval-as-verifier pass to catch the AChA-class fabrication against source — the
-product's citation identity, distinct from raw depth.
+**Retrieval grounding — now WIRED (commit ace4d7b).** The panel found the textbook corpus
+live (22,221 chunks across Rhoton/Greenberg/Schmidek/Benzel/Bridwell/Vaccaro + 7,071
+figures at `/home/michael/neuro-textbook-rag/index/`) but the lane dead — `retrieve.py`
+imported a non-existent `engine.query.search` (swallowed by `except: pass`). Fixed by
+wiring the no-GPU lexical lane directly: `_index_search_fn` opens `engine.index.Index`
+and maps each `Hit` into the dict shape `InProcessTextbookRetriever` already consumes
+(`CASEPREP_TEXTBOOK=1`; repo/index via `TEXTBOOK_RAG_REPO`/`TEXTBOOK_INDEX_DIR`). On a
+live grounded C5-6 ACDF board the evidence flips from all-⚠ to **✓ 21 corpus-supported ·
+⚠ 4 · 1 quarantined**, with the RLN/vertebral-artery/landmark claims marked ✓ and an
+Evidence Sources appendix citing real pages (Schmidek p.460/561, Greenberg p.1276/1794,
+Benzel, Bridwell, Vaccaro). Figures deferred (lexical v1; index stores PDF page only).
+Next: a retrieval-as-verifier pass (entailment over anatomy cards) to flag/contradict the
+AChA-class fabrication against source, and hybrid semantic recall (GPU, flagged).
