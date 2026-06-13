@@ -42,34 +42,51 @@ def _resolve_model(model: str | None, *, openrouter: bool) -> str:
             or (_OPENROUTER_DEFAULT if openrouter else _ANTHROPIC_DEFAULT))
 
 _SYSTEM = """You are a fellowship-trained attending neurosurgeon building a pre-operative \
-case board for a resident. Given ONE specific procedure, produce a comprehensive set of \
-operative question-cards across exactly three sections:
-- Anatomy at Risk (03-anatomy-at-risk.md): surgical corridor, landmarks, neural \
+case board for a resident. Given ONE specific procedure, produce a COMPREHENSIVE, DENSE \
+set of operative question-cards across exactly three sections:
+- Anatomy at Risk (03-anatomy-at-risk.md): surgical corridor, landmarks in order, neural \
 structures, arteries/perforators/veins/sinuses, functional structures, anatomic variants, no-fly zones
 - Operative Plan (04-operative-plan.md): positioning, exposure, critical steps, decision \
 points, stop criteria, closure/reconstruction, monitoring, equipment/adjuncts, attending preferences
 - Risk and Rescue (05-risk-and-rescue.md): likely complications, catastrophic \
 complications, mitigation, rescue triggers
 
-Each card MUST be specific to THIS exact procedure and approach. The `question` field \
-should STATE the specific clinical content as a concise assertion the surgeon will \
-confirm — the actual structure and where it runs, the actual operative step or numeric \
-threshold, the actual complication and its rescue maneuver. State the fact \
-("Recurrent laryngeal nerve runs in the tracheoesophageal groove; the right-sided course \
-is more variable"), NOT a content-free prompt ("VERIFY the recurrent laryngeal nerve"). \
-Do NOT begin cards with "VERIFY". Every card must carry real case-specific substance — \
-avoid generic filler (generic positioning, "attending preferences", "confirm tool \
-availability", generic "anatomical variants", "criteria for stopping") unless you make it \
-concretely specific to this procedure.
+DEPTH IS THE PRIORITY. The resident already owns a textbook; this board must read like a \
+specific attending's intra-operative checklist for THIS exact case. The section_keys \
+below are a MINIMUM checklist, NOT a quota — emit AS MANY cards per section_key as the \
+case demands (usually several). A board with one generic card per key is a FAILURE.
+
+Each card's `question` field STATES the specific clinical content as a concise assertion \
+the surgeon will confirm, and MUST contain at least one CONCRETE specific — one of:
+  - a named structure AND where it runs / what it is adherent to,
+  - a named device or adjunct (e.g. neuronavigation, facial-nerve EMG, ABR, ICG \
+videoangiography, micro-Doppler, external ventricular drain, ultrasonic aspirator),
+  - a named drug and its role (e.g. mannitol for relaxation, adenosine for flow arrest, \
+nimodipine for vasospasm, dexamethasone for peritumoral edema, tranexamic acid),
+  - a numeric threshold or measurement, OR
+  - a named operative maneuver or step sequence.
+State the fact ("Recurrent laryngeal nerve runs in the tracheoesophageal groove; the \
+right-sided course is more variable"), NOT a content-free prompt ("VERIFY the recurrent \
+laryngeal nerve"). Do NOT begin cards with "VERIFY". BAN generic filler — no bare \
+"positioning", "attending preferences", "confirm tool availability", "anatomical \
+variants", "monitor for complications", or "stop if uncontrollable bleeding" unless made \
+concretely specific to THIS procedure with the detail above.
+
+RISK AND RESCUE must be the DEEPEST section. Enumerate the DISTINCT complications THIS \
+specific operation is known for — at least 6 — never one generic line. Give EACH \
+catastrophic complication its OWN card paired with a concrete, named, step-by-step rescue \
+sequence (e.g. for an expanding cervical wound hematoma after ACDF: "open the wound at \
+bedside, evacuate the clot, secure the airway / reintubate, then return to OR" — NOT \
+"stop and assess").
 
 HARD RULES:
 - Be procedure-specific. For a C5-6 ACDF, cover the recurrent laryngeal nerve, carotid \
-sheath, esophagus, the interbody/plate construct, C5 palsy, and neck-hematoma airway \
-rescue — NOT posterior laminectomy or C1-2 vertebral-artery anatomy.
+sheath, esophagus, the interbody/plate construct, C5 palsy, durotomy/CSF leak, and \
+expanding neck-hematoma airway rescue — NOT posterior laminectomy or C1-2 vertebral-artery anatomy.
 - Do NOT include content from a DIFFERENT operation or subspecialty. A convexity \
 meningioma board must not mention CPA cranial nerves, AICA/PICA, or the sigmoid sinus; a \
 carotid endarterectomy board must not mention craniotomy or eloquent cortex.
-- Cover every subsection listed above with at least one card; produce 15-28 cards total.
+- Produce 26-40 cards total, distributed across all three sections, with the depth above.
 - Use precise clinical terminology.
 
 Output ONLY JSON of the form:
@@ -145,7 +162,7 @@ def _openrouter_complete(system: str, user: str, *, model: str | None = None,
         ],
         "response_format": {"type": "json_object"},
         "temperature": 0.3,
-        "max_tokens": 8000,
+        "max_tokens": 12000,
     }
     headers = {
         "Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}",
@@ -218,8 +235,55 @@ def _coerce_cards(raw: dict):
     return cards
 
 
+_REFINE_SYSTEM = """You are the attending reviewing a resident's DRAFT pre-operative case \
+board for ONE specific procedure (the draft cards are listed below). Identify the \
+HIGH-YIELD, case-defining items a board for THIS exact operation MUST include but that \
+are MISSING or too generic in the draft — especially: named feeding vessels and whether \
+to embolize them, named perforators/veins/sinuses to preserve, named intra-operative \
+adjuncts/devices (e.g. ICG videoangiography, facial-nerve EMG, ABR, external ventricular \
+drain, micro-Doppler, ultrasonic aspirator, neuronavigation with brain-shift awareness), \
+named drugs and their role (e.g. adenosine for flow arrest, mannitol for relaxation, \
+nimodipine for vasospasm, dexamethasone for peritumoral edema, tranexamic acid), specific \
+numeric thresholds, named approach choices (e.g. telovelar vs transvermian), and a named \
+step-by-step rescue for EACH catastrophic complication.
+
+Output ONLY JSON {"cards":[...]} of ADDITIONAL cards (same schema and section_keys) that \
+fill these gaps. Do NOT repeat items already covered in the draft. Do NOT add content \
+from a different operation or subspecialty. If the draft is already complete, output \
+{"cards":[]}. Each card = {"target_file","section_key","question","why_it_matters"} using \
+the exact section_keys defined for each target_file."""
+
+
+def _draft_digest(cards) -> str:
+    by_file: dict[str, list[str]] = {}
+    for c in cards:
+        by_file.setdefault(c.target_file, []).append(f"- [{c.section_key}] {c.question}")
+    return "\n".join(f"{tf}:\n" + "\n".join(lines) for tf, lines in by_file.items())
+
+
+def _merge_distinct(base, extra, threshold: float = 0.7):
+    """Append *extra* cards that are not near-duplicates (word-overlap > threshold) of any
+    card already kept — regardless of slot, so the refine pass can add depth to a slot the
+    draft already touched (e.g. a second distinct catastrophic complication)."""
+    merged = list(base)
+    word_sets = [set(c.question.lower().split()) for c in merged]
+    for card in extra:
+        cw = set(card.question.lower().split())
+        if not cw:
+            continue
+        if any(ws and len(cw & ws) / min(len(cw), len(ws)) > threshold for ws in word_sets):
+            continue
+        merged.append(card)
+        word_sets.append(cw)
+    return merged
+
+
 def build_llm_manifest(topic: str, *, complete_fn=None, model: str | None = None):
-    """Generate a case-specific QuestionManifest for *topic*, or None on any failure."""
+    """Generate a case-specific QuestionManifest for *topic*, or None on any failure.
+
+    Two passes when ``CASEBOARD_LLM_REFINE`` != "0" (default on): a draft pass, then an
+    attending-review pass that adds case-defining items the draft missed. The refine pass
+    is best-effort — any failure leaves the draft untouched."""
     complete_fn = complete_fn or (lambda s, u: _default_complete(s, u, model=model))
     user = f"Procedure: {topic.strip()}"
     try:
@@ -230,6 +294,13 @@ def build_llm_manifest(topic: str, *, complete_fn=None, model: str | None = None
     cards = _coerce_cards(raw)
     if len(cards) < _MIN_CARDS:
         return None
+    if os.environ.get("CASEBOARD_LLM_REFINE", "1") != "0":
+        try:
+            rtext = complete_fn(_REFINE_SYSTEM, f"{user}\n\nDraft cards:\n{_draft_digest(cards)}")
+            extra = _coerce_cards(json.loads(_extract_json(rtext)))
+            cards = _merge_distinct(cards, extra)
+        except Exception:
+            pass
     return QuestionManifest(procedure_family="llm_generated", cards=cards)
 
 

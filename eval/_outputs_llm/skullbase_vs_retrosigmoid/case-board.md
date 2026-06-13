@@ -85,11 +85,11 @@
   - [ ] Preferred IAC closure (muscle plug, bone wax, fascia)?
   - [ ] Postoperative lumbar drain threshold?
 
-- ⚠ Stop resection if facial nerve stimulation thresholds increase significantly, indicating potential nerve injury.
-  - *Why:* Stopping at the right time prevents permanent nerve damage.
+- ⚠ Stop resection if facial nerve stimulation indicates potential damage.
+  - *Why:* Avoiding nerve damage prevents postoperative complications such as facial paralysis.
 
-- ⚠ Closure involves watertight dural closure and replacing the bone flap, ensuring no CSF leak.
-  - *Why:* Proper closure prevents postoperative complications such as CSF leaks and infection.
+- ⚠ Close the dura securely and reconstruct the craniotomy site to prevent CSF leaks.
+  - *Why:* Proper closure prevents postoperative complications such as CSF leaks and infections.
 
 ## Risk and Rescue
 *Expected and catastrophic complications with rescue sequences.*

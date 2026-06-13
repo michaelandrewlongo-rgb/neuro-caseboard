@@ -84,3 +84,49 @@ three judged rounds (same rubric + ground truth):
 3. Eliminate shared template carryovers (the generic "abort: VA/carotid bleeding" line,
    "awake-vs-asleep" prompts) — the awake-glioma board proves the tool *can* author
    case-specific abort logic; propagate that.
+
+## Root-cause round — depth was capped by the prompt, not the model
+
+Systematic debugging (no fixes before root cause). Instrumenting the Explorer→coerce
+boundary on the worst case (vascular MCA clip) showed gpt-4o emitted **20 cards across
+exactly 20 distinct `section_key` slots — one card per slot — with 0 dropped at coerce.**
+The shallow boards were therefore not a model-knowledge gap and not downstream content
+loss: the prompt ("cover every subsection with at least one card", 15–28 cards) was
+*satisfied* at one generic card per slot, crushing the 8–9 distinct catastrophic
+scenarios into the 4 risk slots. The hand-written templates score 8/10 precisely because
+they carry *many* deep cards per theme.
+
+**Fix (single variable — the prompt; model held at gpt-4o):** the `section_key` list is
+reframed as a *minimum checklist, not a quota* (emit multiple cards per key); every card
+must carry a concrete specific (named structure+course / named device / named drug+role /
+numeric threshold / named maneuver); Risk & Rescue must enumerate ≥6 distinct
+complications each with a named step-by-step rescue. A second, env-gated
+(`CASEBOARD_LLM_REFINE`) attending-review pass then adds case-defining items the draft
+missed (feeders/embolization, ICG/EVD/micro-Doppler, adenosine/mannitol/nimodipine,
+telovelar vs transvermian, etc.).
+
+**Deterministic `must_cover` coverage** (`eval/coverage.py`, a lenient mention-level
+proxy used to iterate without spending judge calls): **75.0% → 90.4%** overall, same
+model. Worst cases moved most: meningioma 37%→100%, vascular 66%→88%, spine 77%→88%.
+
+**Blind judge (A/B, grader unaware which system was the fix):**
+
+| Axis | pre-fix (one-per-slot) | post-fix (dense+refine) |
+|------|:---:|:---:|
+| Clinical depth | 5.3 | **6.5** |
+| Off-target (higher = cleaner) | 9.25 | 9.0 |
+| Presentation | 9.0 | 8.7 |
+
+Per-case clinical (post vs pre): spine 6.0/4.5, vascular 7.0/4.0, meningioma 5.5/3.5,
+peds 4.5/4.0; skull-base and awake-glioma tie (template-bound → `_merge_cards` keeps them
+byte-identical, so the fix correctly touches only the four template-less cases). The fix
+won or tied every case.
+
+**Honest tradeoff:** pushing depth makes gpt-4o occasionally over-reach — one anatomical
+error (anterior choroidal artery mislocated to the MCA bifurcation) and mild stretches
+(ICG in an ACDF). Every line is still marked ⚠ "needs clinician verification," but a wrong
+fact is worse than an omission; an anti-over-reach guardrail line is the next cheap lever.
+**Residual gaps:** pediatric hydrocephalus management (EVD/ETV) and oncologic staging
+(neuraxis MRI/CSF cytology) still flicker out run-to-run, adenosine flow-arrest and
+ACDF durotomy/lumbar-drain intermittently missing — partly model variance, partly the
+template-less ceiling that a stronger model would raise.

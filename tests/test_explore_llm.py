@@ -90,3 +90,58 @@ def test_llm_unavailable_without_api_key(monkeypatch):
 def test_llm_available_with_openrouter_key(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
     assert llm_available() is True
+
+
+# --- refinement (two-pass) -------------------------------------------------
+
+def _two_pass(draft_payload, refine_payload):
+    """complete_fn that returns the draft on the 1st call, refinement on the 2nd."""
+    calls = {"n": 0}
+
+    def fn(system, user):
+        calls["n"] += 1
+        return draft_payload if calls["n"] == 1 else refine_payload
+    return fn
+
+
+_REFINE_EXTRA = {
+    "cards": [
+        # genuinely new, same slot as an existing risk card -> must be ADDED
+        _card("05-risk-and-rescue.md", "catastrophic_complications",
+              "Adenosine-induced flow arrest for premature aneurysm rupture"),
+        # near-duplicate of an existing draft card -> must be DROPPED
+        _card("05-risk-and-rescue.md", "rescue_triggers",
+              "Plan for intraoperative seizure: cold saline irrigation"),
+    ]
+}
+
+
+def test_refine_pass_adds_distinct_cards_and_dedups(monkeypatch):
+    monkeypatch.setenv("CASEBOARD_LLM_REFINE", "1")
+    fn = _two_pass(json.dumps(VALID_CARDS), json.dumps(_REFINE_EXTRA))
+    m = build_llm_manifest("ruptured MCA aneurysm clipping", complete_fn=fn)
+    qs = [c.question for c in m.cards]
+    assert any("Adenosine-induced flow arrest" in q for q in qs)      # distinct -> added
+    assert sum("cold saline irrigation" in q for q in qs) == 1        # near-dup -> not duplicated
+    assert len(m.cards) == 7                                          # 6 draft + 1 new
+
+
+def test_refine_disabled_by_env(monkeypatch):
+    monkeypatch.setenv("CASEBOARD_LLM_REFINE", "0")
+    fn = _two_pass(json.dumps(VALID_CARDS), json.dumps(_REFINE_EXTRA))
+    m = build_llm_manifest("anything", complete_fn=fn)
+    assert len(m.cards) == 6                                          # draft only
+
+
+def test_refine_failure_keeps_draft(monkeypatch):
+    monkeypatch.setenv("CASEBOARD_LLM_REFINE", "1")
+    calls = {"n": 0}
+
+    def fn(system, user):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return json.dumps(VALID_CARDS)
+        raise RuntimeError("refine api down")
+
+    m = build_llm_manifest("anything", complete_fn=fn)
+    assert m is not None and len(m.cards) == 6                        # draft survives

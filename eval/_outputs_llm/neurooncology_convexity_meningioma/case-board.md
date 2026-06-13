@@ -2,73 +2,103 @@
 
 **Markers:** ✓ corpus-supported   ⚠ needs clinician verification
 
-**Evidence:** ✓ 0 corpus-supported · ⚠ 20 to verify · 0 quarantined (appendix)
+**Evidence:** ✓ 0 corpus-supported · ⚠ 30 to verify · 0 quarantined (appendix)
 
 ## Anatomy at Risk
 *Structures to identify, preserve, or monitor for this approach.*
 
-- ⚠ The surgical corridor involves a right frontal craniotomy, avoiding the frontal sinus to prevent postoperative CSF leak.
-  - *Why:* Avoiding the frontal sinus reduces the risk of CSF leaks and subsequent infections, ensuring a safe surgical approach.
+- ⚠ The surgical corridor for a right frontal convexity meningioma involves a right frontal craniotomy with careful dissection through the subdural space.
+  - *Why:* Establishing an appropriate surgical corridor ensures minimal disruption to surrounding brain tissue and provides optimal access to the tumor.
 
-- ⚠ Identify the coronal suture and the superior temporal line as key landmarks for craniotomy placement.
-  - *Why:* These landmarks help in accurately positioning the craniotomy flap, ensuring optimal access to the tumor while avoiding unnecessary exposure.
+- ⚠ Key landmarks in order include the coronal suture, superior sagittal sinus, and the frontal pole.
+  - *Why:* Identifying these landmarks helps in orienting the surgical approach and avoiding injury to critical structures such as the superior sagittal sinus.
 
-- ⚠ The frontal lobe is at risk during exposure; care must be taken to avoid retraction injury.
-  - *Why:* Excessive retraction can lead to brain tissue damage, affecting cognitive and motor functions.
+- ⚠ The frontal lobe cortex is at risk and should be gently retracted to avoid injury.
+  - *Why:* Protecting the frontal lobe cortex is crucial to prevent postoperative neurological deficits.
 
-- ⚠ The superior sagittal sinus is located medially and must be preserved to prevent venous infarction.
-  - *Why:* Injury to the superior sagittal sinus can lead to significant hemorrhage and venous infarction, complicating recovery.
+- ⚠ The superior sagittal sinus runs along the midline and must be preserved to prevent venous infarction.
+  - *Why:* Damage to the superior sagittal sinus can lead to significant venous bleeding and cerebral edema.
 
-- ⚠ Ensure the tumor does not encroach on the motor cortex, which is typically posterior to the surgical site.
-  - *Why:* Preservation of motor function is critical, and inadvertent damage can lead to permanent deficits.
+- ⚠ The frontal eye fields, located in the posterior part of the middle frontal gyrus, should be avoided to prevent gaze palsy.
+  - *Why:* Injury to the frontal eye fields can result in impaired voluntary eye movement and gaze preference.
 
-- ⚠ Consider variations in the frontal sinus anatomy which may affect craniotomy placement.
-  - *Why:* Anatomical variants in the frontal sinus can increase the risk of CSF leaks if not properly accounted for during craniotomy planning.
+- ⚠ Anatomic variants such as a prominent frontal emissary vein should be identified preoperatively using imaging.
+  - *Why:* Recognizing anatomic variants can help in planning the surgical approach and avoiding unexpected bleeding.
 
-- ⚠ Avoid the orbit and optic nerve, which lie inferior to the surgical field.
-  - *Why:* Injury to the optic nerve can result in visual deficits, impacting the patient's quality of life.
+- ⚠ The superior sagittal sinus and its bridging veins are no-fly zones during dissection.
+  - *Why:* Avoiding these areas prevents catastrophic venous bleeding and potential air embolism.
+
+- ⚠ Identify the named feeding vessels of the meningioma and consider preoperative embolization.
+  - *Why:* Understanding the vascular supply of the meningioma is crucial for planning surgical resection and minimizing intraoperative bleeding. Preoperative embolization of feeding vessels can reduce blood loss and facilitate safer tumor removal.
 
 ## Operative Plan
 *Critical steps, decision points, and stop criteria.*
 
-- ⚠ Position the patient supine with the head slightly elevated and rotated to the left to optimize access to the right frontal region.
-  - *Why:* Proper positioning facilitates surgical access and minimizes intracranial pressure, reducing the risk of complications.
+- ⚠ Position the patient supine with the head turned slightly to the left and elevated to reduce venous pressure.
+  - *Why:* Proper positioning minimizes venous congestion and provides optimal access to the right frontal region.
 
-- ⚠ Perform a right frontal craniotomy, ensuring the dura is opened in a curvilinear fashion to expose the meningioma.
-  - *Why:* Adequate exposure is necessary for complete tumor resection and minimizing residual disease.
+- ⚠ Perform a right frontal craniotomy extending from the midline to the lateral frontal bone.
+  - *Why:* Adequate exposure is necessary to access the tumor and achieve a Simpson grade I resection.
 
-- ⚠ Achieve Simpson grade I resection by removing the tumor, its dural attachment, and any involved bone.
-  - *Why:* Complete resection reduces recurrence risk and improves long-term outcomes.
+- ⚠ Critical steps include dural opening, tumor debulking, and careful dissection from the brain surface.
+  - *Why:* Following these steps ensures complete tumor removal while minimizing damage to surrounding structures.
 
-- ⚠ Evaluate the need for additional bone removal if tumor infiltration is suspected.
-  - *Why:* Deciding on bone removal is crucial for achieving complete resection and preventing recurrence.
+- ⚠ Decision points include assessing the extent of dural involvement and deciding on dural resection.
+  - *Why:* Determining the extent of dural involvement is crucial for achieving a Simpson grade I resection.
 
-- ⚠ Stop resection if the tumor is adherent to critical vascular structures to prevent catastrophic hemorrhage.
-  - *Why:* Recognizing when to stop prevents damage to vital structures and ensures patient safety.
+- ⚠ Stop if there is significant bleeding from the superior sagittal sinus or if brain swelling occurs.
+  - *Why:* Recognizing stop points prevents further complications and allows for reassessment of the surgical approach.
 
-- ⚠ Reconstruct the dura using a dural substitute if necessary and ensure watertight closure to prevent CSF leaks.
-  - *Why:* Proper closure prevents CSF leaks, reducing the risk of postoperative complications such as meningitis.
+- ⚠ Closure involves watertight dural closure and replacing the bone flap with fixation plates.
+  - *Why:* Proper closure prevents CSF leaks and ensures structural integrity of the skull.
 
-- ⚠ Monitor intracranial pressure and brain relaxation throughout the procedure to prevent brain swelling.
-  - *Why:* Monitoring helps in early detection of complications and ensures safe surgical conditions.
+- ⚠ Intraoperative monitoring includes EEG and somatosensory evoked potentials (SSEPs).
+  - *Why:* Monitoring helps detect early signs of neurological compromise, allowing for immediate intervention.
 
-- ⚠ Utilize neuronavigation to accurately locate the tumor and guide resection.
-  - *Why:* Neuronavigation enhances precision in tumor resection, minimizing damage to surrounding brain tissue.
+- ⚠ Use neuronavigation and intraoperative ultrasound to guide tumor resection.
+  - *Why:* These tools assist in accurately localizing the tumor and ensuring complete resection.
 
-- ⚠ Confirm the attending's preference for dural closure technique, whether primary repair or use of a dural substitute.
-  - *Why:* Understanding attending preferences ensures alignment with surgical strategy and optimizes patient outcomes.
+- ⚠ The attending prefers using a bipolar cautery for hemostasis and a micro-Doppler for assessing sinus patency.
+  - *Why:* Understanding the attending's preferences ensures a smooth operation and optimal outcomes.
+
+- ⚠ Consider using intraoperative ICG videoangiography to assess vascular structures and tumor blood supply.
+  - *Why:* ICG videoangiography provides real-time visualization of blood flow and vessel patency, aiding in the identification and preservation of critical vascular structures during tumor resection.
 
 ## Risk and Rescue
 *Expected and catastrophic complications with rescue sequences.*
 
-- ⚠ Postoperative headache and nausea are common and should be managed with appropriate analgesia and antiemetics.
-  - *Why:* Effective management of common complications improves patient comfort and recovery.
+- ⚠ Common complications include CSF leak, infection, and postoperative hematoma.
+  - *Why:* Awareness of these complications allows for prompt identification and management, reducing morbidity.
 
-- ⚠ Catastrophic hemorrhage can occur if the superior sagittal sinus is injured; immediate hemostatic control is required.
-  - *Why:* Rapid response to hemorrhage is critical to prevent severe blood loss and potential mortality.
+- ⚠ Catastrophic complications include massive venous bleeding from the superior sagittal sinus.
+  - *Why:* Massive bleeding can lead to hemodynamic instability and requires immediate intervention.
 
-- ⚠ Use meticulous surgical technique and intraoperative monitoring to mitigate the risk of brain swelling and hemorrhage.
-  - *Why:* Preventative measures reduce the likelihood of intraoperative complications, ensuring patient safety.
+- ⚠ Mitigation strategies include preoperative imaging to assess sinus patency and careful surgical technique.
+  - *Why:* Proactive measures reduce the risk of complications and improve surgical outcomes.
 
-- ⚠ Initiate rescue protocols if there is sudden brain swelling or significant hemorrhage, including hyperosmolar therapy and hemostatic agents.
-  - *Why:* Timely intervention in response to rescue triggers can prevent progression to catastrophic complications.
+- ⚠ Triggers for rescue include sudden hemodynamic instability or significant brain swelling.
+  - *Why:* Recognizing these triggers allows for timely intervention to prevent further deterioration.
+
+- ⚠ Severe brain edema can occur intraoperatively, leading to herniation.
+  - *Why:* Brain edema can cause life-threatening herniation and requires immediate management.
+
+- ⚠ In the event of severe brain edema, administer mannitol and hyperventilate the patient.
+  - *Why:* These measures reduce intracranial pressure and prevent herniation.
+
+- ⚠ Air embolism is a risk during sinus exposure and manipulation.
+  - *Why:* Air embolism can lead to cardiovascular collapse and requires immediate attention.
+
+- ⚠ If air embolism is suspected, flood the field with saline and place the patient in Trendelenburg position.
+  - *Why:* These actions help prevent further air entry and facilitate air removal from the circulation.
+
+- ⚠ Postoperative seizures can occur due to cortical irritation.
+  - *Why:* Seizures can lead to neurological deterioration and require prompt management.
+
+- ⚠ Administer antiepileptic drugs if seizures occur postoperatively.
+  - *Why:* Antiepileptic drugs control seizures and prevent further neurological damage.
+
+- ⚠ Intraoperative brain herniation can occur due to excessive retraction or swelling.
+  - *Why:* Herniation can cause irreversible brain damage and requires immediate intervention.
+
+- ⚠ If herniation occurs, release retraction, administer hypertonic saline, and consider decompressive craniectomy.
+  - *Why:* These steps reduce intracranial pressure and prevent further herniation.
