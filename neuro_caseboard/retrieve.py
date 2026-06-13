@@ -229,6 +229,29 @@ _PERIPHERAL_NERVE = ("nerve transfer", "nerve graft", "brachial plexus", "fascic
                      "radial nerve", "brachialis", "supraclavicular")
 _SELLAR = ("pituitary", "sella", "sellar", "hypophys", "transsphenoidal", "parasellar")
 
+# Within-cranial anterior(supratentorial)<->posterior-fossa divide. A blind image judge found a
+# posterior-fossa/CPA board pulling an anterior-perforated-substance / lenticulostriate (circle of
+# Willis) plate, and vice-versa risk: a posterior-fossa CN plate on an anterior-circulation (MCA)
+# board. The cranial<->spine and sellar guards don't catch this intra-cranial drift. A figure is
+# blocked only when it is UNAMBIGUOUSLY the other compartment (its compartment terms present, the
+# case's compartment terms absent), so a circle-of-Willis plate that also shows basilar/cerebellar
+# vessels is NOT blocked.
+_POSTERIOR_FOSSA = ("cerebellopontine", "cpa", "retrosigmoid", "suboccipital", "far lateral",
+                    "aica", "pica", "internal acoustic", "internal auditory", "vestibulocochlear",
+                    "vestibular schwannoma", "acoustic neuroma", "jugular foramen", "foramen magnum",
+                    "petroclival", "fourth ventricle", "brainstem", "cerebellar", "cerebellum",
+                    "semicircular", "labyrinth", "glossopharyngeal", "hypoglossal", "trigeminal",
+                    "petrous", "clivus", "meatal", "petrosal")
+_ANTERIOR_CIRC = ("middle cerebral", "lenticulostriate", "anterior perforated substance",
+                  "circle of willis", "anterior communicating", "recurrent artery of heubner",
+                  "sylvian", "pterional", " mca", "acom", "anterior cerebral")
+
+# Angiographic/fluoroscopic positioning & technique figures (projection setup, frame rate) are not
+# operative anatomy — they diluted an MCA board with a "view positioning" plate.
+_NONOP_ANGIO = ("view positioning", "haughton", "angiographic projection", "fluoroscopic projection",
+                "radiographic projection", "frames per second", "frame rate", "projection view",
+                "c-arm angulation", "tube angulation")
+
 # Diagnostic-imaging / ICU books are radiographs and tracings, not operative anatomy — a
 # figure lane for a surgical board should not draw from them.
 _DIAGNOSTIC_BOOKS = ("neuroradiology core requisites", "neuroicu", "neurocritical")
@@ -261,6 +284,20 @@ def _caption_head(text: str, max_chars: int = 320) -> str:
     head = text[:max_chars]
     cut = head.rfind(". ")
     return head[:cut + 1] if cut >= 60 else head.rsplit(" ", 1)[0]
+
+
+def _row_caption(r) -> str:
+    """The caption the figure lane keys on. Prefer the Gemini multimodal caption when
+    present: it NAMES the specific anatomy a surgeon needs (e.g. "MCA M1 bifurcation into
+    superior/inferior M2 trunks with lenticulostriate perforators") that the source's
+    generic first-line caption omits, so the gold plate becomes poolable + rankable. The
+    Gemini caption is pure signal (no ``get_text('blocks')`` legend bloat), so it gets a
+    larger cap; the source caption keeps the tighter cap that fights legend bloat / stray
+    substrings ("disc dissector" -> spine) poisoning the region guards."""
+    gem = (r.get("gemini_caption") or "").strip()
+    if gem:
+        return _caption_head(gem, max_chars=700)
+    return _caption_head((r.get("caption") or "").strip())
 
 
 # Medical abbreviations / synonyms so a claim saying "MCA" / "lenticulostriate" matches an
@@ -309,6 +346,8 @@ def _figure_offtarget(caption: str, topic: str, book: str = "", context: str = "
     bk = (book or "").lower()
     if any(x in cap for x in _DIAGNOSTIC_IMAGE):
         return True                          # diagnostic scan, not operative atlas anatomy
+    if any(x in cap for x in _NONOP_ANGIO):
+        return True                          # angio/fluoro positioning setup, not operative anatomy
     t_spine = any(s in top for s in _SPINE_SIG)
     t_cran = any(s in top for s in _CRANIAL_SIG)
     c_spine = any(s in cap for s in _SPINE_SIG)
@@ -328,6 +367,16 @@ def _figure_offtarget(caption: str, topic: str, book: str = "", context: str = "
         f_sellar = any(x in cap for x in _SELLAR)
         if f_sellar and not t_sellar:
             return True
+        # within-cranial anterior<->posterior-fossa divide: block a figure that is unambiguously
+        # the OTHER compartment from the case (its terms present, the case's terms absent).
+        t_post = any(x in top for x in _POSTERIOR_FOSSA)
+        t_ant = any(x in top for x in _ANTERIOR_CIRC)
+        f_post = any(x in cap for x in _POSTERIOR_FOSSA)
+        f_ant = any(x in cap for x in _ANTERIOR_CIRC)
+        if t_ant and not t_post and f_post and not f_ant:
+            return True                      # posterior-fossa plate on an anterior-circulation case
+        if t_post and not t_ant and f_ant and not f_post:
+            return True                      # anterior-circulation plate on a posterior-fossa case
     if t_spine:
         # block a clearly different region (thoracolumbar/sacral) the case isn't about,
         # read from caption + full page context.
@@ -474,12 +523,7 @@ def _load_figure_rows(index_dir: str | None = None):
             if "figures" in names:
                 for r in db.open_table("figures").search().limit(100000).to_list():
                     fp = r.get("figure_path") or ""
-                    # Cropped plates store the FULL multi-paragraph legend; cap it to caption
-                    # length. Too-long bloat poisons the region guards with stray substrings
-                    # ("disc dissector" -> spine) and dilutes the IDF lane; too-short (first
-                    # sentence) drops panel detail ("A, the AICA passes between VII/VIII") that
-                    # the lexical lane needs. A ~320-char head keeps panels, cuts the legend.
-                    cap = _caption_head((r.get("caption") or "").strip())
+                    cap = _row_caption(r)
                     book = r.get("book") or ""
                     if any(d in book.lower() for d in _DIAGNOSTIC_BOOKS):
                         continue                 # radiology/ICU books: not operative anatomy

@@ -238,6 +238,48 @@ def test_figure_caption_retriever_ranks_by_caption_and_region_filters():
     assert all(x.metadata["page"] != 516 for x in recs2)
 
 
+def test_figure_guard_anterior_posterior_fossa_divide():
+    from neuro_caseboard.retrieve import _figure_offtarget
+    cpa = "retrosigmoid craniotomy for a cerebellopontine angle vestibular schwannoma"
+    mca = "pterional craniotomy for clipping an MCA bifurcation aneurysm"
+    lenticulostriate = ("Perforating arteries of the anterior perforated substance, including the "
+                        "medial, intermediate, and lateral lenticulostriate arteries")
+    aica_cpa = "The AICA passes between the facial and vestibulocochlear nerves in the CPA"
+    # anterior-circulation plate is off-target on a posterior-fossa (CPA) case
+    assert _figure_offtarget(lenticulostriate, cpa) is True
+    # ...but on-target on the MCA case
+    assert _figure_offtarget(lenticulostriate, mca) is False
+    # posterior-fossa plate is off-target on the anterior-circulation (MCA) case
+    assert _figure_offtarget(aica_cpa, mca) is True
+    # ...but on-target on the CPA case
+    assert _figure_offtarget(aica_cpa, cpa) is False
+
+
+def test_figure_guard_blocks_nonoperative_angio_positioning():
+    from neuro_caseboard.retrieve import _figure_offtarget
+    mca = "pterional craniotomy for clipping an MCA bifurcation aneurysm"
+    pos = "Haughton view positioning for the ICA carotid siphon and MCA on angiography"
+    assert _figure_offtarget(pos, mca) is True
+
+
+def test_row_caption_prefers_gemini_then_falls_back_to_source():
+    from neuro_caseboard.retrieve import _row_caption
+    # Gemini caption (names the specific anatomy) wins over the generic source first-line.
+    cap = _row_caption({
+        "caption": "FIGURE 2.3. Pterional exposure of the circle of Willis.",
+        "gemini_caption": ("Pterional exposure: MCA (middle cerebral artery) M1 segment "
+                           "bifurcating into superior and inferior M2 trunks with "
+                           "lenticulostriate perforators.")})
+    assert "middle cerebral" in cap.lower() and "m2" in cap.lower()
+    # Falls back to the source caption when the Gemini caption is empty or absent.
+    assert _row_caption({"caption": "FIGURE 1. Source.", "gemini_caption": ""}) == "FIGURE 1. Source."
+    assert _row_caption({"caption": "FIGURE 1. Source."}) == "FIGURE 1. Source."
+    # The Gemini caption keeps a larger cap (it is pure signal, no legend bloat to trim),
+    # so a >320-char anatomy caption is not truncated like a source caption would be.
+    long_gem = "MCA (middle cerebral artery) M1 bifurcation with lenticulostriate. " * 10
+    assert len(_row_caption({"caption": "x", "gemini_caption": long_gem})) > 320
+
+
 def test_hybrid_semantic_adds_lexically_missed_in_region_plate():
     import numpy as np
     from neuro_caseboard.retrieve import FigureCaptionRetriever

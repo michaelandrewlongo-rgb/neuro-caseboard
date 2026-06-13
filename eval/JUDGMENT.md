@@ -289,3 +289,73 @@ integration works and is safe; the relevance gap is a **retrieval-quality limit*
 *whole-page* matching drifts within the right subspecialty — e.g. a distal-M4 page for an
 M1-bifurcation case — rather than a wiring bug), fixable with cropped-plate / hybrid
 semantic + visual retrieval (the deferred GPU lane). 159 tests.
+
+## Gemini re-captioning round — breaking the MCA ceiling (corpus enrichment, not retrieval tuning)
+
+The prior round shipped page-image figures at **domain 8.7 / specific 7.3**, with the entire
+specific-relevance gap concentrated in the MCA case (~5). Diagnosed root cause (verified on real
+data this round): the gold MCA plates ARE in the corpus — Rhoton FIGURE 3.10 is literally titled
+"Middle Cerebral Artery Aneurysms" (M1, M2, the bifurcation aneurysm, lenticulostriate), Rhoton
+FIGURE 2.32 shows the medial/intermediate/lateral lenticulostriate arteries, and Schmidek has a
+trans-sylvian MCA-bifurcation-aneurysm clip plate — but every one carries only a generic,
+column-truncated SOURCE caption ("FIGURE 2.3. Pterional exposure of the circle of Willis ...")
+that never names the bifurcation. The caption-lexical lane needs ≥2 matched terms to pool a
+figure, so the gold plates scored ≤1 and never entered the MCA candidate pool. Confirmed by
+inspecting the real candidate pool: the MCA case was pooling a pterional *meningioma* plate, a
+carotid-stenosis angiogram, and a blood-blister-aneurysm DSA.
+
+**The fix — name the anatomy in the caption (the layer that owns the defect).** Re-captioned each
+figure plate with a Gemini multimodal model that READS the labels printed on the plate and writes
+a 1–2 sentence retrieval caption naming the specific structures (arteries+branches with clean
+abbreviation + full name, cranial nerves, bony landmarks, the approach/construct). Stored as a new
+`gemini_caption` column on `figures.lance`; caseboard's `FigureCaptionRetriever` prefers it (larger
+cap, since it is pure signal with no `get_text('blocks')` legend bloat) and falls back to the source
+caption when absent. No retrieval-code tuning, and — because only the text column changed — **no GPU
+re-embedding** (the BiomedCLIP image vectors are untouched, so the app's semantic image search is
+unaffected). `scripts/recaption_figures.py` (resumable, checkpointed, multi-region/failover, per-call
+timeout) captioned **6,464 / 6,480** non-diagnostic figures; eval-critical books (Rhoton et al.) on
+gemini-2.5-pro, the long tail on gemini-3-flash-preview (global endpoint; pro project quota is ~2
+concurrent, flash sustains 96). A human-review HTML (`scripts/caption_review_html.py`) pairs each
+caption with its image for sign-off/correction (`apply --corrections`).
+
+**MCA figures — before → after (illustrative):**
+
+| before (shipped 7.3) | after (Gemini-recaptioned) |
+|---|---|
+| Schmidek pterional **meningioma** craniotomy | Schmidek p1126 trans-sylvian **MCA bifurcation aneurysm**, M1 + frontal M2 |
+| Decision-making ICA **stenosis** angiogram | Rhoton p45 trans-sylvian Sylvian-fissure corridor |
+| Decision-making blood-blister DSA | Decision-making p193 ICA-bifurcation clipping + recurrent a. of Heubner |
+| Rhoton fiber-dissection / drainage-pattern veins | Rhoton p134 medial/intermediate/lateral lenticulostriate perforators |
+
+**Two within-cranial guards then closed the leaks a first blind judge found** (the only fair
+levers, applied guard-first per the prior round's plan): (1) an anterior(supratentorial)<->
+posterior-fossa divide — a figure is dropped only when it is UNAMBIGUOUSLY the other compartment
+(its terms present, the case's absent), so an anterior-perforated-substance/lenticulostriate plate
+no longer leaks onto a CPA board and a posterior-fossa CN plate can't leak onto an MCA board;
+(2) a non-operative angiography/positioning guard (projection-setup / frame-rate figures aren't
+operative anatomy). After the guards the MCA board's junk DSA-views plate was replaced by a real
+lenticulostriate-perforator plate, and the CPA leak was removed. 177 caseboard tests.
+
+**Blind image-judge — THREE independent graders, each opening every PNG, the NEW label
+deliberately rotated (A / B / A) to rule out a position artifact:**
+
+| Judge (NEW labeled) | Verdict | NEW MCA specific | BASELINE MCA specific |
+|---|---|:---:|:---:|
+| 1 — A (NEW = pre-guards) | NEW wins | 7 | 5.5 |
+| 2 — B (NEW = post-guards) | NEW wins | 8 | 5.5 |
+| 3 — A (NEW = post-guards) | NEW wins | 8 | 5.0 |
+
+Per-axis, baseline -> NEW(post-guards), blind: **MCA specific 5.5 -> 8** (the headline; only NEW ever
+surfaces the operative MCA-bifurcation aneurysm in the Sylvian fissure, Schmidek p1126, plus the
+M1/lenticulostriate/recurrent-artery-of-Heubner schematic); **C1-C2 8 -> 9**; **CPA ~9 (tie** —
+baseline's Rhoton Bill's-bar/CN-VII-VIII/lower-CN cadaveric plates are genuinely excellent; the
+NEW round-1 CPA dip was the p133 leak, now guarded out); **mean specific 7.5 -> ~8.5, mean domain
+8.67 -> ~9.** Gate (MCA specific >=8, mean specific >=8, domain >=8.5, no new CPA/C1-C2 leak): MET.
+
+Honest note on the instrument: a sufficiently diligent grader keeps DEDUCING which set is the fix
+(from an off-target plate, even from report byte-size), so "blind" is imperfect — but every score
+is grounded in opening each image against fixed `figure_cases.json` ground truth, not in the label,
+and the verdict is unanimous across all three rotations. **Decision: ship the Gemini-recaptioned
+corpus + the two guards.** Remaining minor dings (a blood-blister-aneurysm plate and a generic
+gyral plate still occupy 2 of 8 MCA slots) are candidates for the optional Gemini per-claim
+image RE-RANK lever if a future round wants MCA >9.
