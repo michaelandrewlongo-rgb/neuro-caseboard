@@ -61,8 +61,12 @@ class Engine:
         if self.caption_index is None or not getattr(self.config, "caption_retrieval", False):
             return []
         try:
-            hits = self.caption_index.retrieve(question, topic="",
-                                               top_n=self.config.caption_retrieve_k)
+            # The question doubles as the region signal so the STRICT guard subset
+            # (cranial<->spine + non-op-angio) can drop off-domain plates; diagnostic-image and
+            # the sub-region guards stay board-only so angiographic figures aren't over-blocked.
+            hits = self.caption_index.retrieve(question, topic=question,
+                                               top_n=self.config.caption_retrieve_k,
+                                               guard_set="strict")
         except Exception:
             return []
         return [Hit(id=f"cap-{h.book}-p{h.page}", book=h.book, chapter=h.chapter,
