@@ -41,7 +41,7 @@ if "seed_topic" in st.session_state:
 # Session-scoped cross-feature evidence store: EvidenceRef.key -> set of feature labels.
 _store = st.session_state.setdefault("session_evidence", {})
 
-mode = st.sidebar.radio("Mode", ["Ask", "Build board"], key="mode")
+mode = st.sidebar.radio("Mode", ["Ask", "Build board", "Cards"], key="mode")
 
 
 def _badge(key, current_label):
@@ -82,7 +82,7 @@ if mode == "Ask":
             st.session_state["_pending_mode"] = "Build board"
             st.rerun()
 
-else:  # Build board
+elif mode == "Build board":
     st.title("Build a pre-op case board")
     st.caption("Structured, corpus-grounded pre-operative dossier. Decision-support only.")
     topic = st.text_input('Case, e.g. "C5-6 ACDF" or "left retrosigmoid vestibular schwannoma"',
@@ -132,3 +132,28 @@ else:  # Build board
             st.session_state["seed_question"] = choice
             st.session_state["_pending_mode"] = "Ask"
             st.rerun()
+
+elif mode == "Cards":
+    from neuro_core.cards_query import cards_query
+
+    st.title("Board-review card bank")
+    st.caption("Hybrid search over your SANS / ABNS deck. Decision-support only.")
+    q = st.text_input("Search the cards", key="cards_q")
+    k = st.sidebar.slider("Cards to show", 3, 20, 6)
+    if q:
+        with st.spinner("Searching cards..."):
+            res = cards_query(q, k=k)
+        if not res.cards:
+            st.info("No matching cards.")
+        for i, c in enumerate(res.cards, 1):
+            deck = c.deck_name or c.deck_full or "cards"
+            with st.expander(f"[{i}] {c.question_text}  —  {deck}", expanded=(i == 1)):
+                st.markdown(f"**Q.** {c.question_text}")
+                st.markdown(f"**A.** {c.answer_text}")
+                if c.tags:
+                    st.caption(f"tags: {c.tags}")
+                for p in c.image_paths:
+                    try:
+                        st.image(p, use_container_width=True)
+                    except Exception:
+                        st.caption(f"(image unavailable: {p})")
