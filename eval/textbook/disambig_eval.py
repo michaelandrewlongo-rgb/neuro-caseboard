@@ -9,6 +9,7 @@ from neuro_core.query import Clarification
 
 
 def _answer_text(result):
+    # A Clarification has no .answer -> "" -> conflation/wrong_variant treat it as clean.
     return getattr(result, "answer", "") or ""
 
 

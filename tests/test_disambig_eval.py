@@ -22,3 +22,14 @@ def test_over_ask_true_only_for_clarification_on_unambiguous_case():
     assert over_ask(Clarification(question="q", variants=[]), expect_ambiguous=False) is True
     assert over_ask(QueryResult(answer="x"), expect_ambiguous=False) is False
     assert over_ask(Clarification(question="q", variants=[]), expect_ambiguous=True) is False
+
+
+def test_wrong_variant_false_when_label_present():
+    r = QueryResult(answer="**Assuming unilateral FTP hemicraniectomy ...** flap 12x15 [1].")
+    assert wrong_variant(r, expected_label="unilateral FTP hemicraniectomy") is False
+
+
+def test_wrong_variant_false_on_clarification():
+    # The engine correctly asking for clarification is NOT a wrong-variant pick.
+    c = Clarification(question="q", variants=[])
+    assert wrong_variant(c, expected_label="unilateral FTP hemicraniectomy") is False

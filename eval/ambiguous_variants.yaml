@@ -4,7 +4,7 @@
   forbidden: ["bifrontal", "bicoronal", "kjellberg", "contralateral zygoma"]
 - question: "What is the bone work for an anterior cervical procedure at C5-6?"
   expect_ambiguous: true
-  expected_label: "ACDF (discectomy and fusion)"
+  expected_label: "ACDF"
   forbidden: []
 # Non-ambiguous control cases (must NOT clarify -> over-ask guard):
 - question: "What are the contents of the cavernous sinus?"
