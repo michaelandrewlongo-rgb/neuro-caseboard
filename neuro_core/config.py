@@ -35,6 +35,13 @@ DEFAULTS = {
     "CAPTION_RETRIEVAL": "true",
     "CAPTION_RETRIEVE_K": "10",
     "APP_PASSCODE": "",
+    # Board-review card lane (`cards` table) — built from the parsed SANS/ABNS Anki
+    # deck by neuro_core/scripts/build_cards_index.py. Source location is configured
+    # here (env -> .env -> default) exactly like CORPUS_DIR for the textbook build.
+    "CARDS_SOURCE_DB": str(Path.home() / "projects" / "abns-board-review-lancedb"),
+    "CARDS_SOURCE_TABLE": "cards",     # LanceDB table with Q/A text + image filename refs
+    "CARDS_MEDIA_TABLE": "images",     # filename -> image_bytes blob table; "" to disable
+    "CARDS_MEDIA_DIR": "",             # optional on-disk media folder fallback
 }
 
 
@@ -96,6 +103,10 @@ class Config:
     caption_retrieval: bool
     caption_retrieve_k: int
     app_passcode: str
+    cards_source_db: Path
+    cards_source_table: str
+    cards_media_table: str
+    cards_media_dir: str
 
 
 def load_config(env_file=".env"):
@@ -141,4 +152,8 @@ def load_config(env_file=".env"):
         ("1", "true", "yes", "on"),
         caption_retrieve_k=int(get("CAPTION_RETRIEVE_K")),
         app_passcode=get("APP_PASSCODE"),
+        cards_source_db=Path(get("CARDS_SOURCE_DB")),
+        cards_source_table=get("CARDS_SOURCE_TABLE"),
+        cards_media_table=get("CARDS_MEDIA_TABLE"),
+        cards_media_dir=get("CARDS_MEDIA_DIR"),
     )
