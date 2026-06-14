@@ -35,6 +35,10 @@ One engine, two features, exposed through one CLI and one local web app:
 - **Web** — `streamlit run app/streamlit_app.py` opens a single app with **Ask** and
   **Build board** modes over the same engine. Set `APP_PASSWORD` to gate access (no gate
   locally).
+- **Briefing PDF** — `neuro_caseboard.briefing_pdf.render_briefing_pdf(result, out, title=...)`
+  exports a Q&A result as a PDF styled to the **Neurosurgery Signal** design (dark navy +
+  teal/red signal accents, Syne display). Needs the `briefing` extra:
+  `pip install -e ".[briefing]" && playwright install chromium`.
 
 ## Clinical depth — the Explorer
 

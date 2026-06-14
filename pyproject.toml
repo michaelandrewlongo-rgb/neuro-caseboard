@@ -27,6 +27,9 @@ dev = ["pytest>=7", "pdfplumber>=0.11"]
 # LLM-backed Explorer (case-specific question generation for any procedure).
 # Needs ANTHROPIC_API_KEY at runtime; falls back to the deterministic Explorer without it.
 llm = ["anthropic>=0.40"]
+# Signal-styled briefing PDF export (neuro_caseboard.briefing_pdf). After install also run:
+#   playwright install chromium
+briefing = ["playwright>=1.40"]
 
 [project.scripts]
 caseboard = "neuro_caseboard.cli:main"
