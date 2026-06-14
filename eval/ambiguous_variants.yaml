@@ -5,7 +5,7 @@
 - question: "What is the bone work for an anterior cervical procedure at C5-6?"
   expect_ambiguous: true
   expected_label: "ACDF"
-  forbidden: []
+  forbidden: ["corpectomy"]
 # Non-ambiguous control cases (must NOT clarify -> over-ask guard):
 - question: "What are the contents of the cavernous sinus?"
   expect_ambiguous: false

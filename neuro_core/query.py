@@ -191,9 +191,10 @@ class Engine:
         return _Resolved(resolved, self._retrieve(resolved), analysis.chosen)
 
     def select_figures(self, question):
-        """Figures the system would attach, without calling synthesis (for eval).
-        Runs the disambiguation gate so figures match the resolved query; on a
-        clarify outcome there is no briefing, so no figures."""
+        """Figures the system would attach, without calling SYNTHESIS (for eval).
+        Note: runs the disambiguation gate, so on a gate-tripping question it may make
+        one LLM `analyze` call and select figures on the resolved query (parity with
+        query()); on a clarify outcome there is no briefing, so it returns no figures."""
         plan = self._plan_query(question)
         if isinstance(plan, Clarification):
             return []
