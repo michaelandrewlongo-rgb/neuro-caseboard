@@ -21,7 +21,7 @@ VARIANT_AXES = {
                      "decompressive craniotomy", "dhc"],
         "variants": {
             "unilateral FTP hemicraniectomy":
-                ["unilateral", "frontotemporoparietal", "hemicraniectomy"],
+                ["frontotemporoparietal", "hemicraniectomy"],
             "bifrontal (Kjellberg) decompression":
                 ["bifrontal", "bicoronal", "kjellberg"],
         },

@@ -30,3 +30,9 @@ def test_gate_clean_miss_on_unambiguous_query():
     g = ambiguity_gate("what are the cavernous sinus contents?", hits)
     assert g.tripped is False
     assert g.axis is None
+
+
+def test_gate_does_not_trip_on_single_variant_cluster_alone():
+    hits = [FakeHit("unilateral frontotemporoparietal hemicraniectomy technique")]
+    g = ambiguity_gate("how is the bone flap fashioned?", hits)
+    assert g.tripped is False
