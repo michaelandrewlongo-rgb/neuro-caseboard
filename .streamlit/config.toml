@@ -1,0 +1,17 @@
+# Neurosurgery Signal — base theme tokens for the Streamlit app.
+# These survive Streamlit version bumps; the rich brand layer lives in app/signal_theme.py
+# (injected CSS). Tokens mirror neuro_caseboard/briefing_pdf.py::SIGNAL_CSS so the web app,
+# the briefing PDF, and the sibling Signal site read as one product.
+[theme]
+base = "dark"
+primaryColor = "#22d3ee"            # teal signal — buttons, sliders, focus, links
+backgroundColor = "#080d16"         # navy canvas
+secondaryBackgroundColor = "#0e1626" # sidebar / widget fills
+textColor = "#f1f5f9"
+font = "sans-serif"
+
+[client]
+toolbarMode = "minimal"
+
+[ui]
+hideTopBar = false
