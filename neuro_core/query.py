@@ -2,14 +2,14 @@ from dataclasses import dataclass, field
 
 from .config import load_config
 from .embed import Embedder
-from .index import Index, reciprocal_rank_fusion
+from .index import Index, Hit, reciprocal_rank_fusion
 from .rerank import Reranker
 from .synthesize import synthesize, is_refusal
 from .synth_clients import make_synth_client
 from .gpu_guard import ensure_gpu_ready
 from .visual_embed import VisualEmbedder
 from .visual_index import VisualIndex
-from .caption_index import CaptionIndex
+from .figure_retriever import build_figure_retriever
 
 
 @dataclass
@@ -61,9 +61,13 @@ class Engine:
         if self.caption_index is None or not getattr(self.config, "caption_retrieval", False):
             return []
         try:
-            return self.caption_index.caption_search(question, self.config.caption_retrieve_k)
+            hits = self.caption_index.retrieve(question, topic="",
+                                               top_n=self.config.caption_retrieve_k)
         except Exception:
-            return []      # enhancement lane: never break the answer
+            return []
+        return [Hit(id=f"cap-{h.book}-p{h.page}", book=h.book, chapter=h.chapter,
+                    page=h.page, text=h.caption, score=h.score, has_figure=True,
+                    caption=h.caption, figure_path=h.figure_path) for h in hits]
 
     def _collect_figures(self, question, top):
         """Return aligned (figures, images): RRF-fuse figure-bearing text hits with
@@ -182,7 +186,7 @@ def get_engine(config=None):
     caption_index = None
     if config.caption_retrieval:
         try:
-            caption_index = CaptionIndex(config.index_dir)
+            caption_index = build_figure_retriever(config.index_dir)
         except Exception:
             caption_index = None
     _engine = Engine(config, embedder, index, reranker, synth_client,
