@@ -102,13 +102,14 @@ class VariantRewrite:
 class QueryAnalysis:
     ambiguous: bool
     axis: str | None = None
-    variants: list = field(default_factory=list)
+    variants: list[VariantRewrite] = field(default_factory=list)
     chosen: VariantRewrite | None = None
     confidence: float = 0.0
 
 
 def _parse_analysis(text):
-    """Parse the model reply into a QueryAnalysis, or raise ValueError."""
+    """Parse the model reply into a QueryAnalysis, or raise an exception
+    (caught by query_analyze's fail-open guard)."""
     cleaned = re.sub(r"^```(?:json)?|```$", "", (text or "").strip(), flags=re.MULTILINE)
     start, end = cleaned.find("{"), cleaned.rfind("}")
     if start == -1 or end == -1 or end < start:
@@ -116,10 +117,11 @@ def _parse_analysis(text):
     obj = json.loads(cleaned[start:end + 1])
     if not obj.get("ambiguous"):
         return QueryAnalysis(ambiguous=False)
+    raw_variants = obj.get("variants")
     variants = [VariantRewrite(label=str(v.get("label", "")).strip(),
                                rewrite=str(v.get("rewrite", "")).strip())
-                for v in (obj.get("variants") or [])
-                if v.get("label") and v.get("rewrite")]
+                for v in (raw_variants if isinstance(raw_variants, list) else [])
+                if isinstance(v, dict) and v.get("label") and v.get("rewrite")]
     chosen = next((v for v in variants if v.label == obj.get("chosen")), None)
     try:
         conf = float(obj.get("confidence", 0.0))

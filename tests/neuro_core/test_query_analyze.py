@@ -91,3 +91,14 @@ def test_query_analyze_not_ambiguous_when_fewer_than_two_variants():
 
 def test_clarify_threshold_is_a_float_between_zero_and_one():
     assert 0.0 < CLARIFY_THRESHOLD < 1.0
+
+
+def test_query_analyze_not_ambiguous_when_chosen_label_missing_from_variants():
+    reply = (
+        '{"ambiguous": true, "variants": ['
+        '  {"label": "A", "rewrite": "A steps"},'
+        '  {"label": "B", "rewrite": "B steps"}'
+        '], "chosen": "NONEXISTENT", "confidence": 0.9}'
+    )
+    a = query_analyze("q", [], FakeSynth(reply))
+    assert a.ambiguous is False
