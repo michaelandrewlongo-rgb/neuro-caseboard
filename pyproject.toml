@@ -14,22 +14,41 @@ dependencies = [
     "fpdf2>=2.8",
     "pillow>=10.0",
     "pymupdf>=1.23",
+    # Required for the advertised `caseboard` entry point to import: cli -> pipeline ->
+    # retrieve -> neuro_core.index imports lancedb at module top, and neuro_core.embed /
+    # visual_embed import numpy at module top. Both are CPU-only PyPI wheels (no GPU).
+    "lancedb>=0.5",
+    "numpy>=1.24",
 ]
 
 # neuro_core (the retrieval/figure engine, formerly the textbook-rag repo) now lives in this
-# repo as a first-class package and is imported directly — no sys.path hack. caseprep remains an
-# external editable install:  pip install -e ../caseprep
-# (The qa/ package holds the Q&A surfaces; large index/ and assets/ dirs stay on disk, located
-# via neuro_core.config / TEXTBOOK_INDEX_DIR.)
+# repo as a first-class package and is imported directly — no sys.path hack.
+#
+# caseprep remains an EXTERNAL dependency, not declared here so the local editable workflow
+# (`pip install -e ../caseprep`) is preserved. It is a hard import-time dependency of the
+# pipeline/CLI, so any environment (including CI) must install it first, e.g.:
+#   pip install "caseprep @ git+https://github.com/michaelandrewlongo-rgb/caseprep.git@<sha>"
+# CI pins a commit via the CASEPREP_REF workflow variable for reproducibility.
+#
+# (Large index/ and assets/ dirs stay on disk, located via neuro_core.config /
+# TEXTBOOK_INDEX_DIR; they are never required for the offline default path or for CI.)
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "pdfplumber>=0.11"]
 # LLM-backed Explorer (case-specific question generation for any procedure).
 # Needs ANTHROPIC_API_KEY at runtime; falls back to the deterministic Explorer without it.
 llm = ["anthropic>=0.40"]
+# Vertex AI provider for the Explorer (GCP free credits, quality-first). Needs
+# GOOGLE_CLOUD_PROJECT + ADC at runtime; falls back to the deterministic Explorer without it.
+vertex = ["google-genai>=1.0"]
 # Signal-styled briefing PDF export (neuro_caseboard.briefing_pdf). After install also run:
 #   playwright install chromium
 briefing = ["playwright>=1.40"]
+# Local web app (app/streamlit_app.py).
+web = ["streamlit>=1.30"]
+# Real (non-injected) embedding / rerank / visual backends. Heavy; CPU works but is slow.
+# Only needed to exercise the live retrieval engine — the test suite injects fakes instead.
+models = ["sentence-transformers>=2.2", "open-clip-torch>=2.20"]
 
 [project.scripts]
 caseboard = "neuro_caseboard.cli:main"
@@ -45,3 +64,15 @@ include = ["neuro_caseboard*", "neuro_core*"]
 
 [tool.setuptools.package-data]
 neuro_caseboard = ["assets/fonts/*.ttf"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# -ra: summarize non-pass outcomes. --strict-markers: an unregistered @pytest.mark.* is an
+# error, not a silent typo. --strict-config: a malformed config is an error.
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "integration: offline test that builds a real on-disk LanceDB table (no network/GPU); runs in required CI but deselectable with -m 'not integration' for a faster loop",
+    "smoke: end-to-end CLI/artifact smoke that shells out to the `caseboard` entry point",
+]
+# Tests are fully offline and must stay that way; surface warnings so regressions are visible.
+filterwarnings = ["default"]
