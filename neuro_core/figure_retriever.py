@@ -111,14 +111,14 @@ class FigureRetriever:
         sims.sort(key=lambda x: x[0], reverse=True)
         return sims
 
-    def retrieve(self, query, *, topic: str = "", top_n: int = 8):
+    def retrieve(self, query, *, topic: str = "", top_n: int = 8, guard_set: str = "full"):
         qterms = _expand_terms(set(_cap_toks(query)))
         if not qterms:
             return []
         if topic:
             candidates = [r for r in self._rows
                           if not figure_offtarget(r["caption"], topic, r.get("book", ""),
-                                                  r.get("context", ""))]
+                                                  r.get("context", ""), guards=guard_set)]
         else:
             candidates = list(self._rows)
         lex = self._lexical(qterms, candidates)
