@@ -1,0 +1,24 @@
+# Keep the Cloud Build upload context small. The image only needs engine/, app/,
+# index/, requirements.txt and the Dockerfile. Figures (7.6 GB) live in GCS.
+.git/
+.gitignore
+.gcloudignore
+assets/
+docs/
+eval/
+tests/
+webapp/
+server/
+scripts/
+cli/
+.superpowers/
+.claude/
+.pytest_cache/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.log
+.env
+.env.example
+*.md
+pytest.ini

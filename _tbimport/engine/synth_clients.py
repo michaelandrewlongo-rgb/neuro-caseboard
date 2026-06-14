@@ -1,0 +1,115 @@
+import base64
+
+
+class OpenRouterSynthClient:
+    """OpenAI-compatible (OpenRouter) backend. Fallback when GCP credit runs out."""
+
+    def __init__(self, api_key, model, client=None):
+        self.api_key = api_key
+        self.model = model
+        self._client = client
+
+    @property
+    def client(self):
+        if self._client is None:
+            from openai import OpenAI
+            self._client = OpenAI(base_url="https://openrouter.ai/api/v1",
+                                  api_key=self.api_key)
+        return self._client
+
+    def generate(self, system, user, images):
+        content = [{"type": "text", "text": user}]
+        for img in images:
+            b64 = base64.b64encode(img).decode("ascii")
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/png;base64,{b64}"},
+            })
+        resp = self.client.chat.completions.create(
+            model=self.model,
+            temperature=0.1,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": content},
+            ],
+        )
+        return resp.choices[0].message.content or ""
+
+
+class LocalSynthClient(OpenRouterSynthClient):
+    """Local OpenAI-compatible backend (Ollama / llama.cpp). Runs on your own GPU:
+    no passages/figures leave the machine, no cloud spend. Text-only by design — a
+    local text model can't use figure images, but the figure sources/captions are
+    already in the prompt text, so citations are unaffected. api_key is a dummy the
+    local server ignores (the openai client requires a non-empty value)."""
+
+    def __init__(self, base_url, model, api_key="local", client=None):
+        super().__init__(api_key=api_key, model=model, client=client)
+        self.base_url = base_url
+
+    @property
+    def client(self):
+        if self._client is None:
+            from openai import OpenAI
+            self._client = OpenAI(base_url=self.base_url, api_key=self.api_key)
+        return self._client
+
+    def generate(self, system, user, images):
+        resp = self.client.chat.completions.create(
+            model=self.model,
+            temperature=0.1,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+        )
+        return resp.choices[0].message.content or ""
+
+
+class VertexSynthClient:
+    """Vertex AI Gemini backend (default). Spends the GCP credit.
+    Auth via Application Default Credentials (gcloud auth application-default login).
+    Targets google-genai >= 1.0."""
+
+    def __init__(self, project, location, model, client=None, timeout_ms=None):
+        self.project = project
+        self.location = location
+        self.model = model
+        self.timeout_ms = timeout_ms
+        self._client = client
+
+    @property
+    def client(self):
+        if self._client is None:
+            from google import genai
+            from google.genai import types
+            http_options = (types.HttpOptions(timeout=self.timeout_ms)
+                            if self.timeout_ms else None)
+            self._client = genai.Client(vertexai=True, project=self.project,
+                                        location=self.location,
+                                        http_options=http_options)
+        return self._client
+
+    def generate(self, system, user, images):
+        from google.genai import types
+        parts = [types.Part.from_text(text=user)]
+        for img in images:
+            parts.append(types.Part.from_bytes(data=img, mime_type="image/png"))
+        resp = self.client.models.generate_content(
+            model=self.model,
+            contents=[types.Content(role="user", parts=parts)],
+            config=types.GenerateContentConfig(
+                system_instruction=system, temperature=0.1),
+        )
+        return resp.text or ""
+
+
+def make_synth_client(config):
+    if config.synth_provider == "local":
+        return LocalSynthClient(config.local_base_url, config.local_model)
+    if config.synth_provider == "openrouter":
+        return OpenRouterSynthClient(config.openrouter_api_key,
+                                     config.openrouter_model)
+    return VertexSynthClient(config.google_cloud_project,
+                             config.google_cloud_location,
+                             config.vertex_model)

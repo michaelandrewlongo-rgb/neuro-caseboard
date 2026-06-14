@@ -1,0 +1,17 @@
+# Visual / figure retrieval gate. Each case: a question + a substring expected in a
+# retrieved book name, optionally an expected page. PASS if a FIGURE-bearing hit
+# from the expected book (and page, if given) is in the reranked top hits.
+# Tune these to your actual corpus and known plates after the first run.
+- question: "Show the microsurgical anatomy of the cavernous sinus."
+  expect_book_contains: "Rhoton"
+- question: "Lateral view of the circle of Willis arterial anatomy."
+  expect_book_contains: "Rhoton"
+# Retuned after review: the system surfaces Schmidek & Sweet p630/604 and Rhoton
+# p531 here — all validated as correct petroclival/Meckel's-cave sources. The
+# original "Fukushima" target was wrong, not the retrieval.
+- question: "Anatomy of the petroclival region and Meckel's cave."
+  expect_book_contains: "Schmidek"
+- question: "Axial CT appearance of an acute epidural hematoma."
+  expect_book_contains: "neuroradiology"
+- question: "Angiographic appearance of a giant ICA aneurysm."
+  expect_book_contains: "neurovascular"
