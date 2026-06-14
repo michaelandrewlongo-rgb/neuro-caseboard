@@ -24,7 +24,7 @@ def test_empty_query_returns_empty():
     assert _SanitizingCorpus._clean("?? // (,)", 6) == ""
 
 
-# --- textbook lexical lane (engine.index.Index.text_search) -----------------
+# --- textbook lexical lane (neuro_core Index.text_search) -----------------
 
 from neuro_caseboard.retrieve import (
     _hit_to_dict, _index_search_fn, InProcessTextbookRetriever,
@@ -63,7 +63,7 @@ def test_hit_to_dict_drops_missing_figure_file():
 
 
 def test_index_search_fn_none_when_index_absent():
-    assert _index_search_fn(index_dir="/no/such/index", repo="/no/such/repo") is None
+    assert _index_search_fn(index_dir="/no/such/index") is None
 
 
 def test_inprocess_retriever_maps_hits_to_cited_records():
@@ -117,233 +117,25 @@ def test_collect_figures_dedups_pages_and_links_cards():
     assert pt == {"/x/p26.png": "pageA", "/x/p27.png": "pageB"}  # page text for caption recovery
 
 
-# --- figure-caption retrieval (fixes lexical whole-page drift) ---------------
+# --- board figure retriever adapter -----------------------------------------
 
-def test_figure_guard_blocks_diagnostic_cross_sectional_imaging():
-    from neuro_caseboard.retrieve import _figure_offtarget
-    # CT / MRI / CT-angiogram are diagnostic scans, not operative atlas anatomy — the
-    # bigger cropped index surfaces these and they must be dropped from a surgical board.
-    assert _figure_offtarget("Fig 28.1 CT angiogram showing the right MCA aneurysm",
-                             "pterional craniotomy for MCA bifurcation clipping")
-    assert _figure_offtarget("Axial temporal bone CT images, profound sensorineural hearing loss",
-                             "left retrosigmoid CPA vestibular schwannoma")
-    assert _figure_offtarget("Sagittal T2-weighted MRI of the cervical spine",
-                             "C1-C2 Goel-Harms atlantoaxial fixation")
-    # but an intra-op fluoroscopy / plain lateral X-ray of a construct is KEPT (useful)
-    assert not _figure_offtarget("Lateral plain X-ray used to identify the correct surgical level",
-                                 "C1-C2 Goel-Harms atlantoaxial fixation",
-                                 book="Spine Surgery Tricks of the Trade Vaccaro")
-
-
-def test_figure_guard_recognizes_new_spine_atlas_as_spine_book():
-    from neuro_caseboard.retrieve import _figure_offtarget
-    bk = "Surgical Anatomy and Techniques to the Spine"
-    # the new spine atlas must NOT leak onto cranial cases (observed: p.669 post-op MRI)
-    assert _figure_offtarget("Figure 66-12 MRI after posterior approach for schwannoma",
-                             "left retrosigmoid CPA vestibular schwannoma", book=bk)
-    assert _figure_offtarget("Figure 12-1 instrumentation construct",
-                             "pterional MCA bifurcation aneurysm clipping", book=bk)
-    # but it is welcome on a spine case (it supplies the C1-C2 bullseyes)
-    assert not _figure_offtarget("C1 lateral mass and C2 pars screw construct",
-                                 "C1-C2 Goel-Harms atlantoaxial fixation", book=bk)
-
-
-def test_figure_region_guard_rejects_cross_region_and_level():
-    from neuro_caseboard.retrieve import _figure_offtarget
-    # cranial case must reject a spine plate
-    assert _figure_offtarget("Lumbar pedicle screw entry point",
-                             "pterional craniotomy for MCA aneurysm")
-    # spine case must reject a cranial plate
-    assert _figure_offtarget("Sylvian fissure and middle cerebral artery branches",
-                             "C1-C2 posterior fusion for atlantoaxial instability")
-    # cervical case rejects a lumbar figure (level conflict)
-    assert _figure_offtarget("Lumbar pedicle angles and dimensions",
-                             "Posterior C1 lateral mass and C2 pedicle screw, atlantoaxial")
-    # on-target figures are kept
-    assert not _figure_offtarget(
-        "Left cerebellopontine angle: AICA between the facial and vestibulocochlear nerves",
-        "retrosigmoid craniotomy for vestibular schwannoma")
-    assert not _figure_offtarget("C1 lateral mass and C2 pedicle screw trajectory",
-                                 "C1-C2 atlantoaxial fixation")
-
-
-def test_figure_region_guard_uses_source_book():
-    from neuro_caseboard.retrieve import _figure_offtarget
-    # spine-book figure with a generic (no region term) caption on a cranial case -> blocked
-    assert _figure_offtarget("An attempt to correct shoulder asymmetry",
-                             "retrosigmoid craniotomy for vestibular schwannoma",
-                             book="Textbook of Spinal Surgery Bridwell")
-    # cranial-book figure on a spine case -> blocked
-    assert _figure_offtarget("Stepwise dissection of the cavernous sinus",
-                             "C1-C2 posterior atlantoaxial fixation", book="Rhoton Cranial Anatomy")
-    # same-region book stays
-    assert not _figure_offtarget("C1 lateral mass screw entry point",
-                                 "C1-C2 atlantoaxial fixation", book="Benzel Spine")
-
-
-def test_figure_level_guard_uses_page_context_for_truncated_caption():
-    from neuro_caseboard.retrieve import _figure_offtarget
-    # caption only says "Pedicle screw placement" but the page is lumbar -> blocked on a C1-C2 case
-    assert _figure_offtarget(
-        "Pedicle screw placement, entrance point", "Posterior C1 lateral mass and C2 pedicle screw, atlantoaxial",
-        book="Benzel Spine", context="Lumbar pedicle screw placement at L4 and L5 with the entrance point")
-    # a thoracic plate is off-target for a cervical/CVJ case
-    assert _figure_offtarget("Pedicle screws at T8 and T9 for deformity",
-                             "C1-C2 Goel-Harms atlantoaxial fixation", book="Bridwell")
-    # the atlantoaxial construct stays even though its page mentions c3-c7 in passing
-    assert not _figure_offtarget(
-        "Atlantoaxial bony anatomy after C1 lateral mass and C2 pedicle screw",
-        "C1-C2 Goel-Harms atlantoaxial", book="Schmidek and Sweet",
-        context="cervical spine C2 C3 C4 lateral mass screw technique")
-    # ACDF (cervical) must still reject a lumbar plate seen only in the page context
-    assert _figure_offtarget("Interbody graft placement",
-                             "C5-6 ACDF for cervical myelopathy with interbody graft",
-                             context="lumbar interbody fusion at L4-L5")
-
-
-def test_figure_guard_blocks_peripheral_nerve_and_cervical_subregion():
-    from neuro_caseboard.retrieve import _figure_offtarget
-    # peripheral-nerve / brachial-plexus surgery figure on a C1-C2 case
-    assert _figure_offtarget("Double fascicular nerve transfer; the nerve to brachialis",
-                             "Posterior C1-C2 Goel-Harms atlantoaxial fixation")
-    # subaxial (C4-C5) plate on a CVJ (C1-C2) case
-    assert _figure_offtarget("Lateral mass fixation at C4 and C5 and pedicle screw",
-                             "Posterior C1 lateral mass and C2 pedicle Goel-Harms atlantoaxial")
-    # CVJ plate on a subaxial (ACDF) case
-    assert _figure_offtarget("Atlantoaxial C1-C2 transarticular screw and odontoid",
-                             "C5-6 ACDF subaxial cervical myelopathy")
-    # same sub-region stays
-    assert not _figure_offtarget("Atlantoaxial C1 lateral mass and C2 pedicle screw",
-                                 "C1-C2 Goel-Harms atlantoaxial")
-
-
-def test_figure_caption_retriever_ranks_by_caption_and_region_filters():
-    from neuro_caseboard.retrieve import FigureCaptionRetriever
+def test_board_fig_retriever_adapts_to_evidence_and_applies_topic_guard():
+    from neuro_caseboard.retrieve import _BoardFigRetriever
+    from neuro_core.figure_retriever import FigureRetriever
     rows = [
-        {"book": "Rhoton", "page": 538, "figure_path": "/x/p538.png",
-         "caption": "Left cerebellopontine angle: the AICA passes between the facial and vestibulocochlear nerves"},
-        {"book": "Benzel", "page": 516, "figure_path": "/x/p516.png",
-         "caption": "Lumbar pedicle angles and dimensions, transverse pedicle angle"},
-        {"book": "Rhoton", "page": 227, "figure_path": "/x/p227.png",
-         "caption": "Sylvian and insular veins, lateral view of the sylvian fissure"},
+        {"book": "Rhoton", "page": 538, "figure_path": "/x/p538.png", "context": "",
+         "caption": "AICA between the facial and vestibulocochlear nerves in the CPA"},
+        {"book": "Benzel", "page": 516, "figure_path": "/x/p516.png", "context": "",
+         "caption": "Lumbar pedicle screw entry point and trajectory"},
     ]
-    r = FigureCaptionRetriever(rows)
-    # the CPA caption ranks first for a CPA query
-    recs = r.retrieve("cerebellopontine angle facial vestibulocochlear AICA",
-                      topic="retrosigmoid vestibular schwannoma", top_n=2)
+    r = _BoardFigRetriever(FigureRetriever(rows))
+    recs = r.retrieve("AICA facial vestibulocochlear", topic="retrosigmoid CPA schwannoma", top_n=3)
     assert recs and recs[0].metadata["page"] == 538
-    assert recs[0].metadata["retrieval_source"] == "textbook_figcap"
-    # an ambiguous "pedicle screw" query in a cranial case must NOT surface the lumbar plate
-    recs2 = r.retrieve("pedicle screw", topic="retrosigmoid craniotomy CPA", top_n=3)
-    assert all(x.metadata["page"] != 516 for x in recs2)
-
-
-def test_figure_guard_anterior_posterior_fossa_divide():
-    from neuro_caseboard.retrieve import _figure_offtarget
-    cpa = "retrosigmoid craniotomy for a cerebellopontine angle vestibular schwannoma"
-    mca = "pterional craniotomy for clipping an MCA bifurcation aneurysm"
-    lenticulostriate = ("Perforating arteries of the anterior perforated substance, including the "
-                        "medial, intermediate, and lateral lenticulostriate arteries")
-    aica_cpa = "The AICA passes between the facial and vestibulocochlear nerves in the CPA"
-    # anterior-circulation plate is off-target on a posterior-fossa (CPA) case
-    assert _figure_offtarget(lenticulostriate, cpa) is True
-    # ...but on-target on the MCA case
-    assert _figure_offtarget(lenticulostriate, mca) is False
-    # posterior-fossa plate is off-target on the anterior-circulation (MCA) case
-    assert _figure_offtarget(aica_cpa, mca) is True
-    # ...but on-target on the CPA case
-    assert _figure_offtarget(aica_cpa, cpa) is False
-
-
-def test_flowchart_demoted_but_not_blocked():
-    from neuro_caseboard.retrieve import FigureCaptionRetriever
-    query = "vasospasm of the middle cerebral artery"
-    topic = "endovascular treatment of cerebral vasospasm"
-    anatomy = {"book": "Atlas", "page": 1, "figure_path": "/x/p1.png", "context": "",
-               "caption": "Balloon angioplasty of the middle cerebral artery for vasospasm"}
-    flow = {"book": "Decision", "page": 2, "figure_path": "/x/p2.png", "context": "",
-            # same anatomy terms as the plate above, plus the flowchart tell-tale
-            "caption": "Decision-making algorithm for vasospasm of the middle cerebral artery"}
-    # a filler so the shared anatomy terms aren't in every row (otherwise IDF collapses to 0)
-    filler = {"book": "Spine", "page": 9, "figure_path": "/x/p9.png", "context": "",
-              "caption": "Lumbar pedicle screw entry point and trajectory"}
-    ranked = FigureCaptionRetriever([anatomy, flow, filler]).retrieve(query, topic=topic, top_n=3)
-    pages = [r.metadata["page"] for r in ranked]
-    # the real anatomy plate outranks the equally-matching flowchart (demotion), ...
-    assert pages[0] == 1
-    # ... but the flowchart is NOT hard-blocked — it still appears when relevant.
-    assert 2 in pages
-    # a flowchart that is the ONLY relevant candidate still returns (soft demotion, not a block)
-    assert 2 in [r.metadata["page"]
-                 for r in FigureCaptionRetriever([flow, filler]).retrieve(query, topic=topic, top_n=3)]
-
-
-def test_figure_guard_blocks_nonoperative_angio_positioning():
-    from neuro_caseboard.retrieve import _figure_offtarget
-    mca = "pterional craniotomy for clipping an MCA bifurcation aneurysm"
-    pos = "Haughton view positioning for the ICA carotid siphon and MCA on angiography"
-    assert _figure_offtarget(pos, mca) is True
-
-
-def test_row_caption_prefers_gemini_then_falls_back_to_source():
-    from neuro_caseboard.retrieve import _row_caption
-    # Gemini caption (names the specific anatomy) wins over the generic source first-line.
-    cap = _row_caption({
-        "caption": "FIGURE 2.3. Pterional exposure of the circle of Willis.",
-        "gemini_caption": ("Pterional exposure: MCA (middle cerebral artery) M1 segment "
-                           "bifurcating into superior and inferior M2 trunks with "
-                           "lenticulostriate perforators.")})
-    assert "middle cerebral" in cap.lower() and "m2" in cap.lower()
-    # Falls back to the source caption when the Gemini caption is empty or absent.
-    assert _row_caption({"caption": "FIGURE 1. Source.", "gemini_caption": ""}) == "FIGURE 1. Source."
-    assert _row_caption({"caption": "FIGURE 1. Source."}) == "FIGURE 1. Source."
-    # The Gemini caption keeps a larger cap (it is pure signal, no legend bloat to trim),
-    # so a >320-char anatomy caption is not truncated like a source caption would be.
-    long_gem = "MCA (middle cerebral artery) M1 bifurcation with lenticulostriate. " * 10
-    assert len(_row_caption({"caption": "x", "gemini_caption": long_gem})) > 320
-
-
-def test_hybrid_semantic_adds_lexically_missed_in_region_plate():
-    import numpy as np
-    from neuro_caseboard.retrieve import FigureCaptionRetriever
-    rows = [
-        {"book": "Rhoton", "page": 1, "figure_path": "/x/p1.png", "context": "",
-         "caption": "Middle cerebral artery bifurcation at the limen insulae",
-         "vector": [1.0, 0.0, 0.0]},
-        {"book": "Rhoton", "page": 2, "figure_path": "/x/p2.png", "context": "",
-         "caption": "Sylvian fissure candelabra exposure",   # no lexical overlap w/ query
-         "vector": [0.0, 1.0, 0.0]},
-    ]
-    query = "middle cerebral artery bifurcation M1 M2"
-    topic = "pterional MCA bifurcation aneurysm clipping"
-    # fake BiomedCLIP text encoder: the claim lands on row 2's axis (semantic match)
-    embed = lambda t: np.array([0.0, 1.0, 0.0], dtype="float32")
-    lex_pages = {r.metadata["page"]
-                 for r in FigureCaptionRetriever(rows).retrieve(query, topic=topic, top_n=2)}
-    hyb_pages = {r.metadata["page"]
-                 for r in FigureCaptionRetriever(rows, embed_fn=embed).retrieve(
-                     query, topic=topic, top_n=2)}
-    assert 2 not in lex_pages          # lexical lane misses the zero-overlap caption
-    assert 2 in hyb_pages              # semantic lane surfaces it
-
-
-def test_hybrid_offtarget_guard_overrides_semantic():
-    import numpy as np
-    from neuro_caseboard.retrieve import FigureCaptionRetriever
-    rows = [
-        {"book": "Benzel", "page": 10, "figure_path": "/x/p10.png",
-         "caption": "Lumbar pedicle screw trajectory and dimensions",
-         "context": "lumbar L4 L5 pedicle screw", "vector": [1.0, 0.0, 0.0]},
-        {"book": "Rhoton", "page": 11, "figure_path": "/x/p11.png", "context": "",
-         "caption": "Middle cerebral artery bifurcation M1 M2 perforators",
-         "vector": [0.0, 1.0, 0.0]},
-    ]
-    query = "middle cerebral artery bifurcation"
-    topic = "pterional MCA bifurcation aneurysm clipping"
-    # fake encoder maxes cosine on the LUMBAR plate — the region guard must still drop it
-    embed = lambda t: np.array([1.0, 0.0, 0.0], dtype="float32")
-    pages = {r.metadata["page"]
-             for r in FigureCaptionRetriever(rows, embed_fn=embed).retrieve(
-                 query, topic=topic, top_n=2)}
-    assert 10 not in pages             # lumbar plate dropped despite max cosine
-    assert 11 in pages
+    # the board pipeline / compiler reads all of these — assert the full contract
+    m = recs[0].metadata
+    for key in ("figure_path", "caption", "citation", "book", "page", "score", "retrieval_source"):
+        assert key in m, f"missing metadata key {key}"
+    assert m["figure_path"] == "/x/p538.png" and m["book"] == "Rhoton"
+    assert m["citation"] == "Rhoton, p.538" and m["retrieval_source"] == "textbook_figcap"
+    # guard via topic: the lumbar plate is excluded on a cranial case
+    assert all(x.metadata["page"] != 516 for x in recs)

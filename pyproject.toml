@@ -16,13 +16,11 @@ dependencies = [
     "pymupdf>=1.23",
 ]
 
-# caseprep and textbook-rag are consumed as editable sibling installs, not PyPI
-# packages. Install them alongside this package:
-#   pip install -e ../caseprep
-#   pip install -e ../neuro-textbook-rag        # caseprep-integration-seam branch
-# The presentation layer (model/compile/render) imports only caseprep.core.contracts;
-# the in-process textbook lane (retrieve.py) imports textbook-rag's engine lazily and
-# falls back to the subprocess CLI when it is not importable.
+# neuro_core (the retrieval/figure engine, formerly the textbook-rag repo) now lives in this
+# repo as a first-class package and is imported directly — no sys.path hack. caseprep remains an
+# external editable install:  pip install -e ../caseprep
+# (The qa/ package holds the Q&A surfaces; large index/ and assets/ dirs stay on disk, located
+# via neuro_core.config / TEXTBOOK_INDEX_DIR.)
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "pdfplumber>=0.11"]
@@ -35,7 +33,7 @@ caseboard = "neuro_caseboard.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["neuro_caseboard*"]
+include = ["neuro_caseboard*", "neuro_core*", "qa*"]
 
 [tool.setuptools.package-data]
 neuro_caseboard = ["assets/fonts/*.ttf"]
