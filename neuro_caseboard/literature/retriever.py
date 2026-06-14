@@ -18,6 +18,10 @@ _TIER = [
     (4, ("case reports", "case report", "editorial", "comment", "letter")),
 ]
 
+# Papers within the same relevance bucket are reordered by quality/recency; papers in
+# a more-relevant bucket always outrank a less-relevant one (relevance gates selection).
+_RELEVANCE_BUCKET = 5
+
 
 @dataclass
 class LiteratureRecord:
@@ -116,7 +120,7 @@ class LiteratureRetriever:
         self._k = k
         self._recency_years = recency_years
 
-    async def retrieve(self, question: str, *, candidates: int = 20,
+    async def retrieve(self, question: str, *, candidates: int = 25,
                        current_year: int | None = None,
                        query: str | None = None) -> list[LiteratureRecord]:
         current_year = current_year or _dt.date.today().year
@@ -134,6 +138,10 @@ class LiteratureRetriever:
                     seen.add(pid)
                     pmids.append(pid)
         pmids = pmids[:candidates]
+        # PubMed already returned these sorted by relevance (esearch sort=relevance);
+        # keep that as the primary signal so the metadata sort below can't bury the
+        # most on-topic paper under an older systematic review.
+        rank_of = {pid: i for i, pid in enumerate(pmids)}
         summaries = await self._client.summaries(pmids)
         sections = await self._client.structured_abstracts(pmids)
         plains = await self._client.abstracts(pmids)
@@ -141,8 +149,11 @@ class LiteratureRetriever:
         records = [r for r in records if r.abstract or r.sections]
 
         def rank_key(r: LiteratureRecord):
+            # Bucket by relevance, then prefer evidence quality + recency WITHIN a bucket:
+            # relevance gates selection; tier/recency only reorder similarly-relevant papers.
+            bucket = rank_of.get(r.pmid, len(pmids)) // _RELEVANCE_BUCKET
             recent = 0 if (r.year and current_year - r.year <= self._recency_years) else 1
-            return (pub_tier(r.pub_types), recent, -(r.year or 0))
+            return (bucket, pub_tier(r.pub_types), recent, -(r.year or 0))
 
         records.sort(key=rank_key)
         return records[:self._k]

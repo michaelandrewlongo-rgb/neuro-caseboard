@@ -117,3 +117,42 @@ def test_rewrite_pubmed_query_falls_back_to_none():
     assert rewrite_pubmed_query("q", _Synth("")) is None
     assert rewrite_pubmed_query("q", _Synth("   ")) is None
     assert rewrite_pubmed_query("q", _Synth(RuntimeError("model down"))) is None
+
+
+def test_retrieve_requests_25_candidates():
+    captured = {}
+
+    class C(_FakeClient):
+        async def search(self, query, *, max_results=20, filter_type=None):
+            captured["max_results"] = max_results
+            return await super().search(query, max_results=max_results, filter_type=filter_type)
+
+    asyncio.run(LiteratureRetriever(C(), k=8).retrieve("distal MCA occlusion"))
+    assert captured["max_results"] == 25
+
+
+def test_relevance_gates_high_tier_low_relevance():
+    # p0 is the single most relevant hit (esearch rank 0) but only a narrative review (tier 2);
+    # p5 is a systematic review (tier 0) but ranked 5th (next relevance bucket). Relevance must
+    # GATE selection: p0 outranks p5 despite lower tier. The old metadata-only sort put p5 first.
+    class C:
+        async def search(self, query, *, max_results=25, filter_type=None):
+            if filter_type == "systematic_review":
+                return ([], 0)
+            return (["p0", "p1", "p2", "p3", "p4", "p5"], 6)
+
+        async def summaries(self, pmids):
+            tiers = {"p0": ["Review"], "p5": ["Systematic Review"]}
+            return [{"pmid": p, "title": f"t {p}", "source": "J", "pubdate": "2022",
+                     "pub_types": tiers.get(p, ["Journal Article"]),
+                     "doi": "", "url": p, "authors": ""} for p in pmids]
+
+        async def structured_abstracts(self, pmids):
+            return {p: {"RESULTS": "r"} for p in pmids}
+
+        async def abstracts(self, pmids):
+            return {p: "a" for p in pmids}
+
+    recs = asyncio.run(LiteratureRetriever(C(), k=8, recency_years=7).retrieve("q", current_year=2024))
+    order = [r.pmid for r in recs]
+    assert order.index("p0") < order.index("p5")
