@@ -34,6 +34,11 @@ briefing = ["playwright>=1.40"]
 [project.scripts]
 caseboard = "neuro_caseboard.cli:main"
 
+[tool.pytest.ini_options]
+# Ensure local package source takes precedence over any editable install when
+# running tests from a git worktree.
+pythonpath = ["."]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["neuro_caseboard*", "neuro_core*"]
