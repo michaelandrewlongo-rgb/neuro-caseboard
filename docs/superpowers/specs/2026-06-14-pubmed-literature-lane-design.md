@@ -74,16 +74,19 @@ question ──┬─► Lane A: neuro_core.query.query() ─► answer + figure
 
 ## 4. Query construction & quality filters
 
-- **Query:** derive directly from the question (already focused, unlike caseprep's
-  structured-case → 5-axis fan-out). v1 = sanitized question terms + one light
-  "recent reviews/RCTs" axis. (Reuse the term-sanitizing approach from
-  `_SanitizingCorpus._clean` so punctuation doesn't break the query.)
-- **Recency:** bias to **last ~7 years** (`literature_recency_years=7`); do not
+- **Query (LLM rewrite, not the raw question):** `rewrite_pubmed_query` turns the NL
+  question into a focused entity query (disease/anatomy/intervention) via the synth
+  client, with `build_query_terms` as the deterministic fallback. *Rationale:* feeding
+  the whole question to esearch ANDs every token — the real question "subdural hematoma
+  resolution time course after MMA embolization" matched **total=1** vs **736** for the
+  entity query. Two axes: primary + a `systematic_review` filter axis.
+- **Recency:** bias to **last ~7 years** (`LITERATURE_RECENCY_YEARS=7`); do not
   hard-drop landmark older trials if they dominate relevance.
-- **Quality bias:** prefer systematic reviews / RCTs / meta-analyses / guidelines via
-  caseprep's `filter_type` → PubMed publication-type filter mapping.
-- **Counts:** fetch ~15–20 candidates (`esearch`), synthesize over top **~6–10**
-  (`literature_k`), cite only those used in the narrative.
+- **Ranking (relevance-bucketed rerank):** fetch **25** candidates (esearch
+  `sort=relevance`); bucket by relevance (size 5), then order by publication-type tier +
+  recency *within* a bucket — relevance gates selection, quality/recency reorder peers.
+  Keep top **`LITERATURE_K`=8**, cite only those used. This replaced an earlier
+  metadata-only sort that discarded esearch relevance and buried on-topic recent RCTs.
 
 ## 5. Grounding & citations
 - **Separate namespace:** textbook `[1][2]`; literature `[L1][L2]`. Never collide;
