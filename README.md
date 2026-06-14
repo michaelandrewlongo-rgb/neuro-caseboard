@@ -26,6 +26,16 @@ defects of the legacy exporter:
 Every fix is **topic-agnostic** — driven by card metadata and text structure, never
 hardcoded clinical phrases — so the dossier generalises across all of neurosurgery.
 
+## Surfaces
+
+One engine, two features, exposed through one CLI and one local web app:
+
+- **CLI** — `caseboard ask "<question>"` for a cited answer + figures, or
+  `caseboard build "<topic>" [--pdf] [-o dir]` for a pre-op dossier.
+- **Web** — `streamlit run app/streamlit_app.py` opens a single app with **Ask** and
+  **Build board** modes over the same engine. Set `APP_PASSWORD` to gate access (no gate
+  locally).
+
 ## Clinical depth — the Explorer
 
 The *presentation* fixes generalise across all of neurosurgery, but the *clinical content*
@@ -55,7 +65,8 @@ neuro_caseboard/
   dedup.py      deterministic near-duplicate claim collapse
   render_md.py  Markdown renderer
   render_pdf.py fpdf2 renderer (embedded Unicode font + ASCII fallback, inline figures)
+  board_view.py presenter: Dossier -> (markdown, figures, summary) for the web Build view
   retrieve.py   InProcessTextbookRetriever (+ subprocess fallback)
   pipeline.py   explorer -> enricher -> auditor (reused) -> compile -> render
-  cli.py        `caseboard build "<topic>" [--pdf] [-o dir]`
+  cli.py        `caseboard ask "<q>"` · `caseboard build "<topic>" [--pdf] [-o dir]`
 ```
