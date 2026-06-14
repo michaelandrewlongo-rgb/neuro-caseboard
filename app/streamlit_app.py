@@ -57,6 +57,12 @@ if mode == "Ask":
     if q:
         with st.spinner("Searching textbooks..."):
             result = query(q)
+        from neuro_core.query import Clarification
+        if isinstance(result, Clarification):
+            st.warning("This question is ambiguous. Re-ask naming one variant:")
+            for v in result.variants:
+                st.markdown(f"- **{v.label}**")
+            st.stop()
         label = f'answer: "{q}"'
         record(_store, [from_figure(f) for f in result.figures], label)
         st.markdown(result.answer)

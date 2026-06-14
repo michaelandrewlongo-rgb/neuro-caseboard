@@ -10,12 +10,18 @@ from neuro_caseboard.pipeline import generate, _slug
 
 def _run_ask(args) -> int:
     from neuro_core.gpu_guard import GpuNotReadyError
-    from neuro_core.query import query
+    from neuro_core.query import query, Clarification
     try:
         result = query(args.question, force=args.force)
     except GpuNotReadyError as e:
         print(f"GPU not ready: {e}", file=sys.stderr)
         return 1
+    if isinstance(result, Clarification):
+        print("This question is ambiguous. Did you mean one of these variants?")
+        for v in result.variants:
+            print(f"  - {v.label}")
+        print("\nRe-ask naming the variant you want.")
+        return 0
     print(result.answer)
     print("\nSources:")
     for c in result.citations:
