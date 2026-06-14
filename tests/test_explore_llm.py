@@ -132,9 +132,34 @@ def test_vertex_model_env_override(monkeypatch):
 
 
 def test_llm_available_with_vertex(monkeypatch):
+    # `llm_available()` for the vertex provider returns True iff GOOGLE_CLOUD_PROJECT is set
+    # AND `google.genai` is importable. Inject a stand-in module so this asserts the LOGIC
+    # deterministically — whether or not the optional `google-genai` SDK (the `[vertex]`
+    # extra) is installed — matching this file's "never touch the network" contract.
+    import sys
+    import types
+
+    google_mod = sys.modules.get("google") or types.ModuleType("google")
+    genai_mod = types.ModuleType("google.genai")
+    monkeypatch.setitem(sys.modules, "google", google_mod)
+    monkeypatch.setattr(google_mod, "genai", genai_mod, raising=False)
+    monkeypatch.setitem(sys.modules, "google.genai", genai_mod)
     monkeypatch.setenv("CASEBOARD_LLM_PROVIDER", "vertex")
     monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "proj-x")
     assert llm_available() is True
+
+
+def test_llm_unavailable_with_vertex_when_sdk_missing(monkeypatch):
+    # The other branch, also pinned independently of the environment: with the provider and
+    # project set but the SDK unimportable, the Explorer must report unavailable (and fall
+    # back to the deterministic path). Setting the sys.modules entry to None forces the
+    # `import google.genai` inside llm_available() to raise, regardless of what is installed.
+    import sys
+
+    monkeypatch.setitem(sys.modules, "google.genai", None)
+    monkeypatch.setenv("CASEBOARD_LLM_PROVIDER", "vertex")
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "proj-x")
+    assert llm_available() is False
 
 
 def test_default_complete_routes_to_vertex(monkeypatch):
