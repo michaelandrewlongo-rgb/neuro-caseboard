@@ -42,7 +42,8 @@ def build_literature_section(question, *, config=None, lit_config=None,
                              client=None, synth_client=None, cache=None):
     """Run Lane B end to end. Returns a LiteratureSection or None (disabled/empty/error)."""
     from neuro_caseboard.literature.config import load_literature_config
-    from neuro_caseboard.literature.retriever import LiteratureRetriever, build_query_terms
+    from neuro_caseboard.literature.retriever import (
+        LiteratureRetriever, build_query_terms, rewrite_pubmed_query)
     from neuro_caseboard.literature.synth import synthesize_literature
 
     lit_config = lit_config or load_literature_config()
@@ -52,6 +53,10 @@ def build_literature_section(question, *, config=None, lit_config=None,
         if cache is None:
             from neuro_caseboard.literature.cache import LiteratureCache
             cache = LiteratureCache(lit_config.cache_dir, ttl_days=lit_config.cache_ttl_days)
+        if synth_client is None:
+            from neuro_core.config import load_config
+            from neuro_core.synth_clients import make_synth_client
+            synth_client = make_synth_client(config or load_config())
         term = build_query_terms(question)
         key = f"{term}|{lit_config.k}|{lit_config.recency_years}"
         records = cache.get(key)
@@ -62,10 +67,13 @@ def build_literature_section(question, *, config=None, lit_config=None,
                 client = PubMedClient(api_key=lit_config.ncbi_api_key)
             retriever = LiteratureRetriever(client, k=lit_config.k,
                                             recency_years=lit_config.recency_years)
+            # Focus the PubMed query (entities, not the whole NL question) so esearch
+            # does not AND every token and collapse recall; fall back to the token-dump.
+            search_query = rewrite_pubmed_query(question, synth_client) or term
 
             async def _retrieve():
                 try:
-                    return await retriever.retrieve(question)
+                    return await retriever.retrieve(question, query=search_query)
                 finally:
                     if owns_client:
                         await client.aclose()
@@ -74,10 +82,6 @@ def build_literature_section(question, *, config=None, lit_config=None,
             cache.set(key, records)  # note: empty results are cached (records == []) to avoid re-hitting NCBI; only network ERRORS raise and skip caching
         if not records:
             return None
-        if synth_client is None:
-            from neuro_core.config import load_config
-            from neuro_core.synth_clients import make_synth_client
-            synth_client = make_synth_client(config or load_config())
         syn = synthesize_literature(question, records, synth_client)
         if syn is None:
             return None

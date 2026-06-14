@@ -43,6 +43,42 @@ def build_query_terms(question: str, *, max_terms: int = 10) -> str:
     return " ".join(terms)
 
 
+PUBMED_QUERY_SYSTEM = (
+    "Convert the clinician's question into a concise PubMed search query. Output ONLY "
+    "the query string on a single line, with no preamble, label, or explanation.\n"
+    "- Use the core clinical entities: disease/condition, anatomy, and intervention.\n"
+    "- Prefer 2-4 concepts joined with AND; use quoted phrases for multi-word terms and "
+    "OR for synonyms/abbreviations, e.g. (\"middle meningeal artery\" OR MMA).\n"
+    "- DROP narrative/process words that over-constrain recall (e.g. 'resolution', "
+    "'time course', 'rate', 'outcome', 'best', 'management') unless that word IS the "
+    "core concept of the question.\n"
+    "- Do NOT add PubMed field tags ([tiab], [pt]), date filters, or publication-type "
+    "filters; the pipeline adds those separately."
+)
+
+
+def rewrite_pubmed_query(question: str, synth_client) -> str | None:
+    """Use the LLM to turn a natural-language question into a focused PubMed query.
+
+    Returns a cleaned single-line query, or None on any failure/empty output so the
+    caller can fall back to ``build_query_terms`` (keeping already-correct behavior).
+    """
+    try:
+        out = synth_client.generate(PUBMED_QUERY_SYSTEM, f"Question: {question}", [])
+    except Exception:
+        return None
+    if not out:
+        return None
+    # Take the first non-empty line, strip surrounding quotes/whitespace.
+    for line in out.splitlines():
+        cleaned = line.strip().strip("`").strip()
+        if cleaned.lower().startswith("query:"):
+            cleaned = cleaned[6:].strip()
+        if cleaned:
+            return cleaned
+    return None
+
+
 def parse_year(pubdate: str) -> int | None:
     m = re.search(r"(19|20)\d\d", pubdate or "")
     return int(m.group(0)) if m else None
@@ -81,9 +117,13 @@ class LiteratureRetriever:
         self._recency_years = recency_years
 
     async def retrieve(self, question: str, *, candidates: int = 20,
-                       current_year: int | None = None) -> list[LiteratureRecord]:
+                       current_year: int | None = None,
+                       query: str | None = None) -> list[LiteratureRecord]:
         current_year = current_year or _dt.date.today().year
-        term = build_query_terms(question)
+        # A focused PubMed query (e.g. from rewrite_pubmed_query) wins; otherwise fall
+        # back to the token-dump of the whole question. The latter AND-conjuncts every
+        # word at PubMed, which tanks recall on natural-language questions.
+        term = query or build_query_terms(question)
         axes = [(term, None), (term, "systematic_review")]
         pmids: list[str] = []
         seen: set[str] = set()

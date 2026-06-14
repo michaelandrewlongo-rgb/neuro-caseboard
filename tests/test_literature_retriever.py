@@ -2,6 +2,7 @@ import asyncio
 
 from neuro_caseboard.literature.retriever import (
     LiteratureRecord, LiteratureRetriever, build_query_terms, parse_year, pub_tier,
+    rewrite_pubmed_query,
 )
 
 
@@ -63,3 +64,56 @@ def test_records_without_text_are_dropped():
     r = LiteratureRetriever(NoText(), k=5, recency_years=7)
     recs = asyncio.run(r.retrieve("x", current_year=2024))
     assert recs == []
+
+
+class _RecordingClient(_FakeClient):
+    """Captures the exact search term passed to esearch on each axis."""
+    def __init__(self):
+        self.terms = []
+
+    async def search(self, query, *, max_results=20, filter_type=None):
+        self.terms.append(query)
+        return await super().search(query, max_results=max_results, filter_type=filter_type)
+
+
+def test_retrieve_uses_explicit_query_override():
+    # A long natural-language question would AND every token at PubMed and tank recall.
+    # When a focused `query` is supplied, the retriever must search with THAT, not the
+    # token-dump of the whole question.
+    c = _RecordingClient()
+    question = "subdural hematoma resolution time course after MMA embolization"
+    asyncio.run(LiteratureRetriever(c, k=2).retrieve(question, query="subdural hematoma MMA embolization"))
+    assert c.terms  # esearch was called
+    assert all(t == "subdural hematoma MMA embolization" for t in c.terms)
+    # the regression we are guarding against: the raw token-dump must NOT be the search term
+    assert build_query_terms(question) not in c.terms
+
+
+def test_retrieve_falls_back_to_build_query_terms_without_override():
+    c = _RecordingClient()
+    asyncio.run(LiteratureRetriever(c, k=2).retrieve("distal MCA occlusion"))
+    assert c.terms and all(t == build_query_terms("distal MCA occlusion") for t in c.terms)
+
+
+class _Synth:
+    def __init__(self, reply):
+        self.reply = reply
+
+    def generate(self, system, user, images):
+        if isinstance(self.reply, Exception):
+            raise self.reply
+        return self.reply
+
+
+def test_rewrite_pubmed_query_extracts_focused_query():
+    out = rewrite_pubmed_query(
+        "What is the subdural hematoma resolution time course after MMA embolization?",
+        _Synth('"subdural hematoma" AND "middle meningeal artery" AND embolization'),
+    )
+    assert out == '"subdural hematoma" AND "middle meningeal artery" AND embolization'
+
+
+def test_rewrite_pubmed_query_falls_back_to_none():
+    assert rewrite_pubmed_query("q", _Synth("")) is None
+    assert rewrite_pubmed_query("q", _Synth("   ")) is None
+    assert rewrite_pubmed_query("q", _Synth(RuntimeError("model down"))) is None
