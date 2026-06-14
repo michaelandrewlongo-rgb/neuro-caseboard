@@ -56,7 +56,7 @@ class FakeVisualIndex:
         return self.hits
 
 
-def capturing_synth(question, hits, figures, images, synth_client):
+def capturing_synth(question, hits, figures, images, synth_client, variant_directive=None):
     synth_client.generate("sys", "user", images)
     return Synthesis(answer=f"ans:{len(hits)}:figs{len(figures)}",
                      citations=[Citation(1, "B", "C", 1)])
@@ -442,3 +442,15 @@ def test_select_figures_uses_resolved_query(tmp_path):
     figs = eng.select_figures("decompressive craniectomy figure?")
     assert len(figs) == 1
     assert index.called_with[0] == "uni rewrite"
+
+
+def test_gate_trip_not_ambiguous_falls_through_as_normal():
+    hits = [Hit(id="a", book="B", chapter="C", page=1, text="t1"),
+            Hit(id="b", book="B", chapter="C", page=2, text="t2")]
+    analyze = lambda q, h, sc: QueryAnalysis(ambiguous=False)
+    eng = Engine(FakeConfig(), FakeEmbedder(), FakeIndex(hits), FakeReranker(),
+                 synth_client=FakeSynthClient(), synth_fn=capturing_synth,
+                 gate_fn=_trip_gate(), analyze_fn=analyze)
+    result = eng.query("decompressive craniectomy steps?")
+    assert isinstance(result, QueryResult)
+    assert "Assuming" not in result.answer

@@ -11,7 +11,7 @@ from .visual_embed import VisualEmbedder
 from .visual_index import VisualIndex
 from .figure_retriever import build_figure_retriever
 from .figure_guards import figure_offtarget
-from .query_analyze import ambiguity_gate, query_analyze, CLARIFY_THRESHOLD
+from .query_analyze import ambiguity_gate, query_analyze, CLARIFY_THRESHOLD, VariantRewrite
 
 
 @dataclass
@@ -44,7 +44,7 @@ class _Resolved:
     """Internal: the (possibly variant-resolved) query + its retrieved passages."""
     question: str
     top: list
-    variant: object = None  # VariantRewrite | None
+    variant: VariantRewrite | None = None
 
 
 def _variant_directive(label):
