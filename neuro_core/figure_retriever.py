@@ -51,6 +51,8 @@ class FigureRetriever:
                 df[t] += 1
         self._df = df
         self._n = max(1, len(rows))
+        # interface parity with the old CaptionIndex: the Q&A engine uses this to display the
+        # richer caption for any figure, even ones surfaced by the text/visual lanes.
         self.caption_by_path = {r["figure_path"]: r["caption"] for r in rows}
 
     def _idf(self, t: str) -> float:
@@ -120,8 +122,9 @@ _ROWS_CACHE = None
 
 
 def _load_rows(index_dir=None):
-    """Load figure rows from figures.lance once. Effective caption = gemini_caption if present
-    else source caption (gemini larger cap, source tighter). Diagnostic books skipped."""
+    """Load figure rows from figures.lance once (first-call-wins, process-scoped cache; the
+    index location is fixed for a process). Effective caption = gemini_caption if present else
+    source caption (gemini larger cap, source tighter). Diagnostic books skipped."""
     global _ROWS_CACHE
     if _ROWS_CACHE is not None:
         return _ROWS_CACHE
@@ -141,7 +144,8 @@ def _load_rows(index_dir=None):
                 gem = (r.get("gemini_caption") or "").strip()
                 cap = _caption_head(gem, 700) if gem else _caption_head((r.get("caption") or "").strip())
                 if cap and fp and os.path.isfile(fp):
-                    rows_out.append({"book": book, "page": r.get("page"), "figure_path": fp,
+                    rows_out.append({"book": book, "chapter": r.get("chapter"),
+                                     "page": r.get("page"), "figure_path": fp,
                                      "caption": cap, "context": "", "vector": r.get("vector")})
             if rows_out and "chunks" in names:
                 ctx = {}

@@ -5,8 +5,6 @@ can apply region / level / domain guards without depending on the caseboard pack
 The public entry point is ``figure_offtarget``; ``_figure_offtarget`` is kept as a
 backwards-compat alias so existing callers in neuro_caseboard/retrieve.py are unaffected.
 """
-import collections
-import math
 import re
 
 _CRANIAL_SIG = ("crani", "cortex", "cortical", "cerebr", "cerebell", "ventricle", "aneurysm",
