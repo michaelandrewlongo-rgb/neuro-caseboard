@@ -84,11 +84,21 @@ ANALYZE_SYSTEM_PROMPT = (
     "You disambiguate a neurosurgical question that may conflate two named VARIANTS "
     "of one procedure. Given the question and retrieved passages, return ONLY a JSON "
     "object, no prose, with keys:\n"
-    '  "ambiguous": true|false — true ONLY if the passages describe >=2 distinct named variants;\n'
+    '  "ambiguous": true|false — true ONLY if THE QUESTION asks about a surgical procedure or '
+    "approach that has >=2 named VARIANTS and does not say which one. Set FALSE for anatomy, "
+    "physiology, diagnosis, or indication questions, EVEN IF the passages mention several "
+    "approaches (passages naming multiple approaches do NOT make an anatomy question ambiguous);\n"
     '  "axis": a short label for the variant axis, or null;\n'
     '  "variants": a list of {"label": variant name, "rewrite": the question rewritten to scope ONLY that variant};\n'
-    '  "chosen": the label of the variant most consistent with the question + passages, or null;\n'
-    '  "confidence": 0.0-1.0 — how clearly one variant dominates (low if the passages are split evenly).\n'
+    '  "chosen": your single best-guess variant label for THIS question (always provide one when ambiguous);\n'
+    '  "confidence": 0.0-1.0 — how strongly THE QUESTION ITSELF selects one variant. Use HIGH (>=0.7) '
+    'ONLY when the question explicitly names a variant (e.g. says "bifrontal" or "unilateral") OR an '
+    "unambiguous standard-of-care default makes one correct. Use LOW (<=0.4) when the question is generic "
+    "and a clinician could reasonably mean either variant — EVEN IF the passages describe one variant in "
+    "more detail. Passage emphasis is NOT evidence about the question; do not let it raise confidence.\n"
+    "Disambiguate ONLY the single primary variant axis (e.g. unilateral vs bifrontal); do NOT invent "
+    "finer sub-variants. If the question already names a variant on that axis, treat it as specified: "
+    "use HIGH confidence and answer it rather than asking about finer distinctions.\n"
 )
 
 

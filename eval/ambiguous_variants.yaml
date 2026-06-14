@@ -15,3 +15,8 @@
   expect_ambiguous: false
   expected_label: null
   forbidden: []
+# Variant-SPECIFIED case (question names the variant -> must auto-pick, NOT clarify):
+- question: "Describe the steps of a bifrontal decompressive craniectomy for traumatic brain injury."
+  expect_ambiguous: false
+  expected_label: "bifrontal"
+  forbidden: []

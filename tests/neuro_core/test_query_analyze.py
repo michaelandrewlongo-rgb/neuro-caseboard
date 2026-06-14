@@ -102,3 +102,19 @@ def test_query_analyze_not_ambiguous_when_chosen_label_missing_from_variants():
     )
     a = query_analyze("q", [], FakeSynth(reply))
     assert a.ambiguous is False
+
+
+def test_analyze_prompt_calibrates_confidence_on_question_not_passages():
+    # Root-cause guard (the bifrontal-DHC misfire): confidence must reflect what the
+    # QUESTION selects, NOT which variant the retrieved passages happen to emphasize.
+    # If this calibration is silently reverted, the engine auto-picks the corpus's
+    # dominant variant instead of clarifying an unspecified question.
+    from neuro_core.query_analyze import ANALYZE_SYSTEM_PROMPT
+    p = ANALYZE_SYSTEM_PROMPT.lower()
+    # confidence is grounded in what the QUESTION selects, not passage emphasis
+    assert "the question itself selects" in p
+    assert "passage emphasis is not evidence about the question" in p
+    # ambiguity is grounded in the QUESTION too: anatomy questions are not ambiguous
+    # just because the passages mention several surgical approaches
+    assert "the question asks about a surgical procedure" in p
+    assert "set false for anatomy" in p
