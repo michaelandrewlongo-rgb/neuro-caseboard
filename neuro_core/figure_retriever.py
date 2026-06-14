@@ -25,6 +25,10 @@ def _row_caption(row):
 
 @dataclass
 class FigureHit:
+    """One ranked figure. NOTE: ``score`` is on different scales depending on the lanes used —
+    a raw IDF-TF sum when lexical-only, or a small reciprocal-rank-fusion value (~0.01-0.02)
+    when the semantic lane is active. Use it for ordering within one query, not as an absolute
+    threshold across configurations."""
     book: str
     page: int
     figure_path: str

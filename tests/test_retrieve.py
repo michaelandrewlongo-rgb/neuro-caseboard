@@ -119,7 +119,7 @@ def test_collect_figures_dedups_pages_and_links_cards():
 
 # --- board figure retriever adapter -----------------------------------------
 
-def test_board_fig_retriever_adapts_to_evidence_and_applies_topic_guard(monkeypatch):
+def test_board_fig_retriever_adapts_to_evidence_and_applies_topic_guard():
     from neuro_caseboard.retrieve import _BoardFigRetriever
     from neuro_core.figure_retriever import FigureRetriever
     rows = [
@@ -131,6 +131,11 @@ def test_board_fig_retriever_adapts_to_evidence_and_applies_topic_guard(monkeypa
     r = _BoardFigRetriever(FigureRetriever(rows))
     recs = r.retrieve("AICA facial vestibulocochlear", topic="retrosigmoid CPA schwannoma", top_n=3)
     assert recs and recs[0].metadata["page"] == 538
-    assert recs[0].metadata["retrieval_source"] == "textbook_figcap"
+    # the board pipeline / compiler reads all of these — assert the full contract
+    m = recs[0].metadata
+    for key in ("figure_path", "caption", "citation", "book", "page", "score", "retrieval_source"):
+        assert key in m, f"missing metadata key {key}"
+    assert m["figure_path"] == "/x/p538.png" and m["book"] == "Rhoton"
+    assert m["citation"] == "Rhoton, p.538" and m["retrieval_source"] == "textbook_figcap"
     # guard via topic: the lumbar plate is excluded on a cranial case
     assert all(x.metadata["page"] != 516 for x in recs)

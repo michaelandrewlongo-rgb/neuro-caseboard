@@ -3,7 +3,7 @@
 Symbols copied verbatim from neuro_caseboard/retrieve.py so that neuro_core/figure_retriever.py
 can apply region / level / domain guards without depending on the caseboard package.
 The public entry point is ``figure_offtarget``; ``_figure_offtarget`` is kept as a
-backwards-compat alias so existing callers in neuro_caseboard/retrieve.py are unaffected.
+backwards-compat alias for any external importer of the former private name.
 """
 import re
 
