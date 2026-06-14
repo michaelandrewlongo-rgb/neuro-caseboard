@@ -13,7 +13,7 @@ from neuro_caseboard.pipeline import build_dossier
 from neuro_caseboard.render_pdf import render_pdf
 from neuro_caseboard.topic_extract import extract_board_topic
 from neuro_core.evidence import from_figure, from_figure_item, other_features, record
-from neuro_core.query import query
+from neuro_caseboard.qa import answer_question
 
 st.set_page_config(page_title="Neuro Case Prep", layout="wide")
 
@@ -55,8 +55,8 @@ if mode == "Ask":
     st.caption("Citation-grounded answers from your textbook corpus. Decision-support only.")
     q = st.text_input("Ask a clinical or anatomy question", key="ask_q")
     if q:
-        with st.spinner("Searching textbooks..."):
-            result = query(q)
+        with st.spinner("Searching textbooks + recent literature..."):
+            result = answer_question(q)
         from neuro_core.query import Clarification
         if isinstance(result, Clarification):
             st.warning("This question is ambiguous. Re-ask naming one variant:")
@@ -79,6 +79,12 @@ if mode == "Ask":
         for c in result.citations:
             loc = c.book + (f", {c.chapter}" if c.chapter else "") + f", p.{c.page}"
             st.write(f"[{c.n}] {loc}")
+        if result.literature and result.literature.narrative:
+            st.subheader("Contemporary Literature")
+            st.markdown(result.literature.narrative)
+            for lc in result.literature.citations:
+                link = f"https://doi.org/{lc.doi}" if lc.doi else lc.url
+                st.markdown(f"[L{lc.n}] {lc.title} — *{lc.journal}* {lc.year or ''} · [{link}]({link})")
         if st.button("Build a board from this"):
             try:
                 topic = extract_board_topic(q, result.answer)

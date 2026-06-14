@@ -66,6 +66,9 @@ h3{font-family:Syne,system-ui,sans-serif;font-weight:700;font-size:13pt;color:#6
 .src{font-size:9.3pt;color:#94a3b8;border-top:1px solid rgba(71,85,105,.4);padding:6px 0;}
 .src:first-child{border-top:none;padding-top:0;}
 .src .n{color:#22d3ee;font-weight:600;font-family:"JetBrains Mono",ui-monospace,monospace;}
+.src .ln{color:#67e8f9;font-weight:600;font-family:"JetBrains Mono",ui-monospace,monospace;}
+.src a{color:#22d3ee;text-decoration:none;}
+.litmeta{color:#cbd5e1;}
 figure{page-break-before:always;margin:0;}
 .figlabel{margin-bottom:10px;}
 figure img{display:block;margin:0 auto;max-width:100%;max-height:198mm;height:auto;border-radius:.6rem;
@@ -110,6 +113,31 @@ def _md_to_html(md: str) -> str:
     return "\n".join(out)
 
 
+def _literature_html(result) -> str:
+    """Render the Contemporary Literature section, or '' when absent/empty."""
+    lit = _g(result, "literature")
+    if not lit:
+        return ""
+    narrative = _g(lit, "narrative") or ""
+    cites = _g(lit, "citations") or []
+    if not narrative or not cites:
+        return ""
+    rows = []
+    for c in cites:
+        doi = _g(c, "doi") or ""
+        href = f"https://doi.org/{doi}" if doi else (_g(c, "url") or "")
+        meta = ", ".join(p for p in (html.escape(_g(c, "journal") or ""),
+                                     str(_g(c, "year") or "")) if p)
+        link = f' · <a href="{html.escape(href)}">link</a>' if href else ""
+        rows.append(
+            f'<div class="src"><span class="ln">[L{_g(c, "n")}]</span> '
+            f'{html.escape(_g(c, "title") or "")} '
+            f'<span class="litmeta">— {meta}</span>{link}</div>')
+    return ("<h2>Contemporary Literature</h2>"
+            + _md_to_html(narrative)
+            + f'<div class="sources">{"".join(rows)}</div>')
+
+
 def _img_data(path: str) -> str:
     with open(path, "rb") as f:
         return "data:image/png;base64," + base64.b64encode(f.read()).decode()
@@ -147,6 +175,7 @@ def build_briefing_html(result, *, title: str, subtitle: str = "",
         + answer
         + "<h2>Sources</h2>"
         + f'<div class="sources">{sources}</div>'
+        + _literature_html(result)
         + "\n".join(figs)
         + "</body></html>")
 

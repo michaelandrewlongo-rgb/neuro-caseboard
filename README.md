@@ -49,6 +49,15 @@ One engine, two features, exposed through one CLI and one local web app:
   teal/red signal accents, Syne display). Needs the `briefing` extra:
   `pip install -e ".[briefing]" && playwright install chromium`.
 
+### Contemporary Literature (PubMed)
+
+Every `ask` answer is augmented with a synthesized "Contemporary Literature"
+section from PubMed (separate `[L#]` / PMID-DOI citations; the textbook answer is
+unchanged). Set `NCBI_API_KEY` (or `NCBI_API_KEY_2`) for the higher rate limit.
+
+Env flags: `LITERATURE_RETRIEVAL` (default on), `LITERATURE_RECENCY_YEARS` (7),
+`LITERATURE_K` (8), `LITERATURE_CACHE_TTL_DAYS` (14), `LITERATURE_CACHE_DIR`.
+
 ## Clinical depth — the Explorer
 
 The *presentation* fixes generalise across all of neurosurgery, but the *clinical content*

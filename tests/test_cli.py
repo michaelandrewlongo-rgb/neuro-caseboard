@@ -18,7 +18,7 @@ class _Result:
 
 
 def test_cli_ask_prints_answer_sources_and_figures(capsys, monkeypatch):
-    monkeypatch.setattr("neuro_core.query.query", lambda q, force=False: _Result())
+    monkeypatch.setattr("neuro_core.query.query", lambda q, config=None, force=False: _Result())
     rc = cli.main(["ask", "facial nerve schwannoma"])
     out = capsys.readouterr().out
     assert rc == 0
@@ -30,7 +30,7 @@ def test_cli_ask_prints_answer_sources_and_figures(capsys, monkeypatch):
 def test_cli_ask_gpu_not_ready_exits_1(capsys, monkeypatch):
     from neuro_core.gpu_guard import GpuNotReadyError
 
-    def _boom(q, force=False):
+    def _boom(q, config=None, force=False):
         raise GpuNotReadyError("no cuda")
 
     monkeypatch.setattr("neuro_core.query.query", _boom)
@@ -71,10 +71,11 @@ def test_ask_prints_clarification(monkeypatch, capsys):
                          variants=[VariantRewrite("unilateral FTP hemicraniectomy", "a"),
                                    VariantRewrite("bifrontal (Kjellberg) decompression", "b")])
 
-    # _run_ask does `from neuro_core.query import query` at call time, so patching the
-    # module attribute makes it pick up our stub.
+    # _run_ask routes through qa.answer_question, whose Lane A does
+    # `from neuro_core.query import query` and calls query(question, config=..., force=...)
+    # at call time, so patching the module attribute makes it pick up our stub.
     import neuro_core.query as q
-    monkeypatch.setattr(q, "query", lambda question, force=False: clar)
+    monkeypatch.setattr(q, "query", lambda question, config=None, force=False: clar)
 
     rc = cli.main(["ask", "decompressive craniectomy steps?"])
     out = capsys.readouterr().out
