@@ -82,3 +82,36 @@ def test_ask_prints_clarification(monkeypatch, capsys):
     assert "ambiguous" in out.lower()
     assert "unilateral FTP hemicraniectomy" in out
     assert "bifrontal (Kjellberg) decompression" in out
+
+
+class _Card:
+    def __init__(self, q, a, deck, tags, imgs):
+        self.question_text, self.answer_text = q, a
+        self.deck_name, self.deck_full, self.tags, self.image_paths = deck, "", tags, imgs
+
+
+def test_cli_cards_prints_results_with_provenance_and_flag(capsys, monkeypatch):
+    class _Res:
+        cards = [
+            _Card("Normal ICP?", "5-15 mmHg", "SANS", "physiology", ["/m/icp.png"]),
+            _Card("Shaky fact?", "maybe", "SANS", "to-verify", []),
+        ]
+    monkeypatch.setattr("neuro_core.cards_query.cards_query", lambda q, k=6: _Res())
+    rc = cli.main(["cards", "icp", "-k", "2"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "not corpus-cited" in out                       # provenance disclaimer
+    assert "5-15 mmHg" in out and "/m/icp.png" in out
+    assert "flagged in your deck as unverified" in out      # low-confidence tag flag
+
+
+def test_cli_cards_unbuilt_index_exits_1(capsys, monkeypatch):
+    from neuro_core.cards_query import CardsIndexNotBuilt
+
+    def _boom(q, k=6):
+        raise CardsIndexNotBuilt("build it first")
+
+    monkeypatch.setattr("neuro_core.cards_query.cards_query", _boom)
+    rc = cli.main(["cards", "icp"])
+    assert rc == 1
+    assert "build it first" in capsys.readouterr().err
