@@ -14,6 +14,7 @@ dependencies = [
     "fpdf2>=2.8",
     "pillow>=10.0",
     "pymupdf>=1.23",
+    "httpx>=0.27",
 ]
 
 # neuro_core (the retrieval/figure engine, formerly the textbook-rag repo) now lives in this
