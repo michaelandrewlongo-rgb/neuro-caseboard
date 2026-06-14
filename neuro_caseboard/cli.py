@@ -8,11 +8,15 @@ import sys
 from neuro_caseboard.pipeline import generate, _slug
 
 
+def _answer_question(question, force=False):
+    from neuro_caseboard.qa import answer_question
+    return answer_question(question, force=force)
+
+
 def _run_ask(args) -> int:
     from neuro_core.gpu_guard import GpuNotReadyError
-    from neuro_core.query import query
     try:
-        result = query(args.question, force=args.force)
+        result = _answer_question(args.question, force=args.force)
     except GpuNotReadyError as e:
         print(f"GPU not ready: {e}", file=sys.stderr)
         return 1
@@ -21,6 +25,13 @@ def _run_ask(args) -> int:
     for c in result.citations:
         loc = c.book + (f", {c.chapter}" if c.chapter else "") + f", p.{c.page}"
         print(f"  [{c.n}] {loc}")
+    lit = getattr(result, "literature", None)
+    if lit and lit.narrative:
+        print("\nContemporary Literature:")
+        print(lit.narrative)
+        for c in lit.citations:
+            link = f"https://doi.org/{c.doi}" if c.doi else c.url
+            print(f"  [L{c.n}] {c.title} — {c.journal} {c.year or ''} · {link}")
     if result.figures:
         print("\nFigures:")
         for f in result.figures:

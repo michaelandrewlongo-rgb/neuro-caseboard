@@ -18,7 +18,7 @@ class _Result:
 
 
 def test_cli_ask_prints_answer_sources_and_figures(capsys, monkeypatch):
-    monkeypatch.setattr("neuro_core.query.query", lambda q, force=False: _Result())
+    monkeypatch.setattr("neuro_core.query.query", lambda q, config=None, force=False: _Result())
     rc = cli.main(["ask", "facial nerve schwannoma"])
     out = capsys.readouterr().out
     assert rc == 0
@@ -30,7 +30,7 @@ def test_cli_ask_prints_answer_sources_and_figures(capsys, monkeypatch):
 def test_cli_ask_gpu_not_ready_exits_1(capsys, monkeypatch):
     from neuro_core.gpu_guard import GpuNotReadyError
 
-    def _boom(q, force=False):
+    def _boom(q, config=None, force=False):
         raise GpuNotReadyError("no cuda")
 
     monkeypatch.setattr("neuro_core.query.query", _boom)
