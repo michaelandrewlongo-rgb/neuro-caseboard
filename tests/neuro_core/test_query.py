@@ -1,7 +1,7 @@
 # tests/test_query.py
 import neuro_core.query as q
 from neuro_core.query import Engine, QueryResult, Figure, Clarification
-from neuro_core.query_analyze import VariantRewrite
+from neuro_core.query_analyze import VariantRewrite, Gate, QueryAnalysis
 from neuro_core.index import Hit
 from neuro_core.synthesize import Synthesis, Citation
 
@@ -361,3 +361,84 @@ def test_answer_non_variant_has_no_assuming_line():
     result = eng._answer("q", hits)  # no variant
     assert result.answer == "Plain body [1]."
     assert "**Assuming" not in result.answer
+
+
+# ---------------------------------------------------------------------------
+# Task 5 — _plan_query() wiring tests
+# ---------------------------------------------------------------------------
+
+def _trip_gate(axis="decompressive-craniectomy"):
+    return lambda question, hits: Gate(tripped=True, axis=axis)
+
+
+def test_confident_resolves_rewrite_and_names_variant():
+    hits = [Hit(id="a", book="B", chapter="C", page=1, text="t1")]
+    vr = VariantRewrite("unilateral FTP hemicraniectomy", "unilateral FTP rewrite")
+    analyze = lambda q, h, sc: QueryAnalysis(
+        ambiguous=True, axis="x",
+        variants=[vr, VariantRewrite("bifrontal (Kjellberg) decompression", "bifrontal rewrite")],
+        chosen=vr, confidence=0.9)
+    captured = {}
+
+    def synth(question, hits, figures, images, synth_client, variant_directive=None):
+        captured["question"] = question
+        captured["directive"] = variant_directive
+        return Synthesis(answer="Body [1].", citations=[Citation(1, "B", "C", 1)])
+
+    index = FakeIndex(hits)
+    eng = Engine(FakeConfig(), FakeEmbedder(), index, FakeReranker(),
+                 synth_client=FakeSynthClient(), synth_fn=synth,
+                 gate_fn=_trip_gate(), analyze_fn=analyze)
+    result = eng.query("decompressive craniectomy steps?")
+    assert isinstance(result, QueryResult)
+    assert result.answer.startswith("**Assuming unilateral FTP hemicraniectomy")
+    assert captured["question"] == "unilateral FTP rewrite"
+    assert "never merge steps across variants" in captured["directive"]
+    assert index.called_with[0] == "unilateral FTP rewrite"
+
+
+def test_low_confidence_returns_clarification_not_briefing():
+    hits = [Hit(id="a", book="B", chapter="C", page=1, text="t1")]
+    vr1 = VariantRewrite("unilateral FTP hemicraniectomy", "uni rewrite")
+    vr2 = VariantRewrite("bifrontal (Kjellberg) decompression", "bifrontal rewrite")
+    analyze = lambda q, h, sc: QueryAnalysis(ambiguous=True, axis="x",
+                                             variants=[vr1, vr2], chosen=vr1, confidence=0.2)
+    eng = Engine(FakeConfig(), FakeEmbedder(), FakeIndex(hits), FakeReranker(),
+                 synth_client=FakeSynthClient(), synth_fn=capturing_synth,
+                 gate_fn=_trip_gate(), analyze_fn=analyze)
+    result = eng.query("decompressive craniectomy steps?")
+    assert isinstance(result, Clarification)
+    assert [v.label for v in result.variants] == [vr1.label, vr2.label]
+
+
+def test_gate_miss_is_byte_identical_to_today():
+    hits = [Hit(id="a", book="B", chapter="C", page=1, text="t1"),
+            Hit(id="b", book="B", chapter="C", page=2, text="t2")]
+
+    def boom_analyze(q, h, sc):
+        raise AssertionError("analyze must not run when the gate does not trip")
+
+    eng = Engine(FakeConfig(), FakeEmbedder(), FakeIndex(hits), FakeReranker(),
+                 synth_client=FakeSynthClient(), synth_fn=capturing_synth,
+                 gate_fn=lambda q, h: Gate(tripped=False), analyze_fn=boom_analyze)
+    result = eng.query("normal icp?")
+    assert result.answer == "ans:2:figs0"
+
+
+def test_select_figures_uses_resolved_query(tmp_path):
+    png = tmp_path / "p.png"
+    png.write_bytes(b"X")
+    hits = [Hit(id="a", book="Rhoton", chapter="C", page=1, text="t",
+                has_figure=True, caption="c", figure_path=str(png))]
+    vr = VariantRewrite("unilateral FTP hemicraniectomy", "uni rewrite")
+    analyze = lambda q, h, sc: QueryAnalysis(
+        ambiguous=True, axis="x",
+        variants=[vr, VariantRewrite("bifrontal (Kjellberg) decompression", "b rewrite")],
+        chosen=vr, confidence=0.9)
+    index = FakeIndex(hits)
+    eng = Engine(FakeConfig(), FakeEmbedder(), index, FakeReranker(),
+                 synth_client=FakeSynthClient(), synth_fn=capturing_synth,
+                 gate_fn=_trip_gate(), analyze_fn=analyze)
+    figs = eng.select_figures("decompressive craniectomy figure?")
+    assert len(figs) == 1
+    assert index.called_with[0] == "uni rewrite"
