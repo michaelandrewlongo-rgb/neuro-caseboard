@@ -1,6 +1,6 @@
 # tests/test_rerank.py
-from engine.rerank import Reranker
-from engine.index import Hit
+from neuro_core.rerank import Reranker
+from neuro_core.index import Hit
 
 
 class FakeScorer:

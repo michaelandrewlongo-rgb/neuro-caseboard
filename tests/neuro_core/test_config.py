@@ -1,4 +1,4 @@
-from engine.config import load_config
+from neuro_core.config import load_config
 
 
 def test_env_file_crlf_and_precedence(tmp_path, monkeypatch):

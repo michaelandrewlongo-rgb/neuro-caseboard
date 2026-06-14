@@ -4,7 +4,7 @@ from typing import Iterator, Optional
 
 import fitz  # PyMuPDF
 
-from engine.figures import page_figure_info, render_page_png, extract_figure_plates
+from neuro_core.figures import page_figure_info, render_page_png, extract_figure_plates
 
 
 @dataclass

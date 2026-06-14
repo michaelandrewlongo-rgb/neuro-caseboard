@@ -6,7 +6,7 @@ full, multi-line caption."""
 import fitz
 import pytest
 
-from engine.figures import (
+from neuro_core.figures import (
     figure_plate_bboxes,
     extract_figure_plates,
     extract_caption_for_bbox,

@@ -1,6 +1,6 @@
 import numpy as np
 
-from engine.visual_embed import VisualEmbedder, _l2_normalize
+from neuro_core.visual_embed import VisualEmbedder, _l2_normalize
 
 
 class FakeBackend:

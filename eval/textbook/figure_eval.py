@@ -2,7 +2,7 @@ import argparse
 
 import yaml
 
-from engine.query import get_engine
+from neuro_core.query import get_engine
 
 
 def main():

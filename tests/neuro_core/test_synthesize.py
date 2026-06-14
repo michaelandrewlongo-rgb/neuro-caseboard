@@ -1,7 +1,7 @@
 # tests/test_synthesize.py
-from engine.synthesize import (
+from neuro_core.synthesize import (
     synthesize, SYSTEM_PROMPT, REFUSAL, is_refusal, _format_passages)
-from engine.index import Hit
+from neuro_core.index import Hit
 
 
 def test_prompt_still_embeds_the_refusal_string():

@@ -24,7 +24,7 @@ from urllib.parse import quote
 
 import lancedb
 
-from engine.config import load_config
+from neuro_core.config import load_config
 
 REPO = Path(__file__).resolve().parent.parent
 CKPT = REPO / "index" / "_gemini_captions.jsonl"

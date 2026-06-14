@@ -1,6 +1,6 @@
 # tests/test_chunk.py
-from engine.chunk import chunk_page, chunk_pages
-from engine.ingest import PageRecord
+from neuro_core.chunk import chunk_page, chunk_pages
+from neuro_core.ingest import PageRecord
 
 
 def _rec(text, page=1, book="B", chapter="C"):

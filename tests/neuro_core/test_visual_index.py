@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from engine.visual_index import build_visual_index, VisualIndex
-from engine.index import Hit
+from neuro_core.visual_index import build_visual_index, VisualIndex
+from neuro_core.index import Hit
 
 
 class FakeVisualEmbedder:

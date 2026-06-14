@@ -40,8 +40,8 @@ from pathlib import Path
 
 import lancedb
 
-from engine.config import load_config
-from engine.synth_clients import VertexSynthClient
+from neuro_core.config import load_config
+from neuro_core.synth_clients import VertexSynthClient
 
 CKPT = Path(__file__).resolve().parent.parent / "index" / "_gemini_captions.jsonl"
 

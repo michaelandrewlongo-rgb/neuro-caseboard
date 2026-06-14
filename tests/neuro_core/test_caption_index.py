@@ -1,8 +1,8 @@
 from types import SimpleNamespace
 
-from engine.caption_index import rank_captions
-from engine.index import Hit
-from engine.query import Engine
+from neuro_core.caption_index import rank_captions
+from neuro_core.index import Hit
+from neuro_core.query import Engine
 
 
 def _rows():

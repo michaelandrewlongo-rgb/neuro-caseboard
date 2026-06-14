@@ -7,7 +7,7 @@ import os
 import fitz
 import pytest
 
-from engine.ingest import extract_pages, figure_records
+from neuro_core.ingest import extract_pages, figure_records
 
 
 def _gray(side=300):

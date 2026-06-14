@@ -7,8 +7,8 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from engine.config import load_config
-from engine.query import get_engine, query as engine_query
+from neuro_core.config import load_config
+from neuro_core.query import get_engine, query as engine_query
 
 from .auth import COOKIE_NAME, OPEN_PATHS, expected_token, is_authed, login_page
 from .schemas import AskRequest, AskResponse, to_response

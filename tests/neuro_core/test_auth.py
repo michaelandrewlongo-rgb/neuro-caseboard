@@ -1,5 +1,5 @@
-from engine.query import QueryResult
-from server.auth import expected_token, cookie_is_valid, login_page, COOKIE_NAME
+from neuro_core.query import QueryResult
+from qa.server.auth import expected_token, cookie_is_valid, login_page, COOKIE_NAME
 
 
 def test_expected_token_is_deterministic_and_passcode_specific():
@@ -23,7 +23,7 @@ def test_login_page_has_passcode_field():
 
 
 def _app(monkeypatch, passcode):
-    import server.main as m
+    import qa.server.main as m
     from fastapi.testclient import TestClient
     monkeypatch.setattr(m, "get_engine", lambda config=None: object())
     monkeypatch.setattr(m, "engine_query", lambda q, config=None: QueryResult(answer="ok"))

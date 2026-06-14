@@ -1,12 +1,12 @@
 import pytest
 from fastapi import HTTPException
 
-from engine.query import QueryResult, Figure
-from engine.synthesize import Citation
+from neuro_core.query import QueryResult, Figure
+from neuro_core.synthesize import Citation
 
 
 def test_to_response_maps_fields_and_builds_figure_url():
-    from server.schemas import to_response
+    from qa.server.schemas import to_response
     result = QueryResult(
         answer="Give nimodipine 60 mg q4h [1].",
         citations=[Citation(n=1, book="Greenberg", chapter="SAH", page=1290)],
@@ -27,7 +27,7 @@ def test_to_response_maps_fields_and_builds_figure_url():
 def test_to_response_nested_figure_url_is_relative_and_encoded():
     """Figure URLs keep the per-book subdir (filenames collide across books) and
     percent-encode spaces in the book name."""
-    from server.schemas import to_response
+    from qa.server.schemas import to_response
     result = QueryResult(
         answer="See the plate.",
         figures=[Figure(source_n=1, book="Rhoton Cranial Anatomy", chapter="", page=1,
@@ -41,7 +41,7 @@ def test_to_response_nested_figure_url_is_relative_and_encoded():
 def _client(monkeypatch, result):
     """A TestClient whose engine is faked (no model load) and whose query seam
     returns `result`. Used as a context manager so the lifespan warm runs."""
-    import server.main as m
+    import qa.server.main as m
     from fastapi.testclient import TestClient
     monkeypatch.setattr(m, "get_engine", lambda config=None: object())
     monkeypatch.setattr(m.CONFIG, "app_passcode", "")
@@ -57,7 +57,7 @@ def test_ask_returns_schema(monkeypatch):
                         image_path="/x/assets/figures/rhoton_p212.png",
                         caption="Circle of Willis")],
     )
-    import server.main as m
+    import qa.server.main as m
     monkeypatch.setattr(m.CONFIG, "assets_dir", "/x/assets/figures")
     with _client(monkeypatch, result) as client:
         r = client.post("/ask", json={"question": "nimodipine dosing?"})
@@ -85,7 +85,7 @@ def test_healthz_warm(monkeypatch):
 
 def test_healthz_cold(monkeypatch):
     """A warm failure must not stop the server; /healthz reports warm=False."""
-    import server.main as m
+    import qa.server.main as m
     from fastapi.testclient import TestClient
 
     def boom(config=None):
@@ -97,7 +97,7 @@ def test_healthz_cold(monkeypatch):
 
 
 def test_figures_served_and_guarded(monkeypatch, tmp_path):
-    import server.main as m
+    import qa.server.main as m
     from fastapi.testclient import TestClient
     png = tmp_path / "rhoton_p212.png"
     png.write_bytes(b"\x89PNG\r\n\x1a\nFAKE")
@@ -123,7 +123,7 @@ def test_figures_served_and_guarded(monkeypatch, tmp_path):
 def test_figure_guard_rejects_traversal():
     """A name with traversal components resolves outside assets_dir and is rejected
     by the is_relative_to containment check (call the handler directly)."""
-    import server.main as m
+    import qa.server.main as m
     with pytest.raises(HTTPException) as exc:
         m.figure("../secret.txt")
     assert exc.value.status_code == 404
@@ -131,7 +131,7 @@ def test_figure_guard_rejects_traversal():
 
 def test_figures_rejects_symlink_escape(monkeypatch, tmp_path):
     """A symlink inside assets_dir pointing outside it must not be served."""
-    import server.main as m
+    import qa.server.main as m
     from fastapi.testclient import TestClient
     outside = tmp_path / "outside.txt"
     outside.write_text("secret")
@@ -146,7 +146,7 @@ def test_figures_rejects_symlink_escape(monkeypatch, tmp_path):
 
 
 def test_minimal_page_served(monkeypatch):
-    import server.main as m
+    import qa.server.main as m
     from fastapi.testclient import TestClient
     monkeypatch.setattr(m, "get_engine", lambda config=None: object())
     monkeypatch.setattr(m.CONFIG, "app_passcode", "")

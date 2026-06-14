@@ -7,7 +7,7 @@ from urllib.parse import quote
 from pydantic import BaseModel
 
 if TYPE_CHECKING:  # avoid importing the heavy engine stack at runtime
-    from engine.query import QueryResult
+    from neuro_core.query import QueryResult
 
 
 class AskRequest(BaseModel):

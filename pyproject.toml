@@ -35,7 +35,7 @@ caseboard = "neuro_caseboard.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["neuro_caseboard*"]
+include = ["neuro_caseboard*", "neuro_core*", "qa*"]
 
 [tool.setuptools.package-data]
 neuro_caseboard = ["assets/fonts/*.ttf"]

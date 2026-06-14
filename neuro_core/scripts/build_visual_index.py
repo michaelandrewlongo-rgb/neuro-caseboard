@@ -3,10 +3,10 @@ from pathlib import Path
 
 import lancedb
 
-from engine.config import load_config, resolve_device
-from engine.ingest import extract_pages, figure_records
-from engine.visual_embed import VisualEmbedder
-from engine.visual_index import build_visual_index
+from neuro_core.config import load_config, resolve_device
+from neuro_core.ingest import extract_pages, figure_records
+from neuro_core.visual_embed import VisualEmbedder
+from neuro_core.visual_index import build_visual_index
 
 
 def figure_records_from_corpus(cfg):

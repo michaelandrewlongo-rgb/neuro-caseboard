@@ -1,5 +1,5 @@
 # tests/test_ingest.py
-from engine.ingest import extract_pages, coverage_report
+from neuro_core.ingest import extract_pages, coverage_report
 
 
 def test_extract_pages_text_and_chapters(tiny_pdf):

@@ -1,6 +1,6 @@
 import base64
 
-from engine.synth_clients import (
+from neuro_core.synth_clients import (
     LocalSynthClient,
     OpenRouterSynthClient,
     make_synth_client,

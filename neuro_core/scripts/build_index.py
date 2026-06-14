@@ -1,13 +1,13 @@
 import time
 from pathlib import Path
 
-from engine.config import load_config, resolve_device
-from engine.ingest import extract_pages, coverage_from_records, figure_records
-from engine.chunk import chunk_pages
-from engine.embed import Embedder
-from engine.index import build_index
-from engine.visual_embed import VisualEmbedder
-from engine.visual_index import build_visual_index
+from neuro_core.config import load_config, resolve_device
+from neuro_core.ingest import extract_pages, coverage_from_records, figure_records
+from neuro_core.chunk import chunk_pages
+from neuro_core.embed import Embedder
+from neuro_core.index import build_index
+from neuro_core.visual_embed import VisualEmbedder
+from neuro_core.visual_index import build_visual_index
 
 
 def main():

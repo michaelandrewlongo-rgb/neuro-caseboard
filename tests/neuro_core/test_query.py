@@ -1,8 +1,8 @@
 # tests/test_query.py
-import engine.query as q
-from engine.query import Engine, QueryResult, Figure
-from engine.index import Hit
-from engine.synthesize import Synthesis, Citation
+import neuro_core.query as q
+from neuro_core.query import Engine, QueryResult, Figure
+from neuro_core.index import Hit
+from neuro_core.synthesize import Synthesis, Citation
 
 
 class FakeConfig:

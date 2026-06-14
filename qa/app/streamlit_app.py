@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import streamlit as st
 
-from engine.query import query
+from neuro_core.query import query
 
 st.set_page_config(page_title="Neuro Textbook RAG", layout="wide")
 

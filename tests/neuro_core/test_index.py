@@ -1,8 +1,8 @@
 # tests/test_index.py
 import numpy as np
 import pytest
-from engine.index import reciprocal_rank_fusion, build_index, Index
-from engine.chunk import Chunk
+from neuro_core.index import reciprocal_rank_fusion, build_index, Index
+from neuro_core.chunk import Chunk
 
 
 def test_rrf_rewards_agreement():

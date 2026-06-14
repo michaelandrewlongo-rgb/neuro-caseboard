@@ -1,6 +1,6 @@
 import fitz
 
-from engine.figures import (
+from neuro_core.figures import (
     figure_area_fraction, detect_figure, extract_caption,
     page_figure_info, render_page_png,
 )

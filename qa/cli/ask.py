@@ -1,8 +1,8 @@
 import argparse
 import sys
 
-from engine.gpu_guard import GpuNotReadyError
-from engine.query import query
+from neuro_core.gpu_guard import GpuNotReadyError
+from neuro_core.query import query
 
 
 def main():

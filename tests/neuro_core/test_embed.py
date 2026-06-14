@@ -1,6 +1,6 @@
 # tests/test_embed.py
 import numpy as np
-from engine.embed import Embedder, QUERY_PREFIX
+from neuro_core.embed import Embedder, QUERY_PREFIX
 
 
 class FakeEncoder:

@@ -1,6 +1,6 @@
 import pytest
 
-from engine.gpu_guard import (
+from neuro_core.gpu_guard import (
     GpuNotReadyError,
     GpuProcess,
     GpuState,
