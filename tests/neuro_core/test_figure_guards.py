@@ -135,3 +135,34 @@ def test_row_caption_prefers_gemini_then_falls_back_to_source():
     # so a >320-char anatomy caption is not truncated like a source caption would be.
     long_gem = "MCA (middle cerebral artery) M1 bifurcation with lenticulostriate. " * 10
     assert len(_row_caption({"caption": "x", "gemini_caption": long_gem})) > 320
+
+
+# --- strict guard subset (Q&A path): cranial<->spine + non-op-angio only ----------------
+
+def test_strict_blocks_cranial_spine_but_not_diagnostic_or_sellar():
+    cranial_q = "middle cerebral artery aneurysm clipping"
+    # spine plate on a cranial question -> blocked in BOTH modes (cranial<->spine is in strict)
+    spine_cap = "Lumbar pedicle screw entry point and trajectory"
+    assert _figure_offtarget(spine_cap, cranial_q, book="Benzel Spine", guards="strict") is True
+    assert _figure_offtarget(spine_cap, cranial_q, book="Benzel Spine", guards="full") is True
+
+    # angiographic figure whose caption names the modality -> NOT blocked in strict
+    # (diagnostic-image is full-only); IS blocked in full. This is the key endovascular regression.
+    angio_cap = ("CT (computed tomography) angiography and DSA demonstrate the ICA "
+                 "and middle cerebral artery aneurysm")
+    assert _figure_offtarget(angio_cap, cranial_q, book="Video Atlas", guards="strict") is False
+    assert _figure_offtarget(angio_cap, cranial_q, book="Video Atlas", guards="full") is True
+
+    # sellar plate on a non-sellar cranial question -> full-only guard (kept off Q&A)
+    sellar_cap = "Transsphenoidal view of the pituitary gland and sella"
+    assert _figure_offtarget(sellar_cap, cranial_q, book="Rhoton", guards="strict") is False
+    assert _figure_offtarget(sellar_cap, cranial_q, book="Rhoton", guards="full") is True
+
+
+def test_strict_blocks_nonop_angio_positioning():
+    cap = "View positioning for the Haughton angiographic projection at 30 frames per second"
+    assert _figure_offtarget(cap, "carotid stenting", guards="strict") is True
+
+
+def test_full_is_the_default_guards():
+    assert _figure_offtarget("Lumbar pedicle screw", "mca aneurysm", book="Benzel Spine") is True

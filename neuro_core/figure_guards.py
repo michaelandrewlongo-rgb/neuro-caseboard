@@ -142,15 +142,23 @@ _CRANIAL_BOOKS = ("rhoton", "fukushima", "greenberg")  # Schmidek/NeuroICU/Neuro
 # so it is left to the per-figure caption/region guards rather than a blanket book block.
 
 
-def figure_offtarget(caption: str, topic: str, book: str = "", context: str = "") -> bool:
+def figure_offtarget(caption: str, topic: str, book: str = "", context: str = "",
+                     *, guards: str = "full") -> bool:
     """True when a figure is from a clearly different region than the case — by the
     cranial<->spine divide (caption OR source book), or a conflicting spine level. Level is
     read from the figure's PAGE CONTEXT (not just the column-truncated caption), so a lumbar
-    plate whose caption is merely "Pedicle screw placement" is still caught on a C1-C2 case."""
+    plate whose caption is merely "Pedicle screw placement" is still caught on a C1-C2 case.
+
+    ``guards="full"`` (default, boards) runs every guard. ``guards="strict"`` (Q&A free-text)
+    runs ONLY the high-precision subset — cranial<->spine + non-operative-angio — and skips the
+    guards that need a precise case sub-region a free-text question doesn't supply
+    (diagnostic-image, peripheral-nerve, sellar, anterior<->posterior-fossa, spine level/CVJ).
+    diagnostic-image is deliberately full-only: angiographic Q&A figures name their modality
+    ("computed tomography", "ct angiogram"), so applying it on Q&A would over-block them."""
     cap = (caption or "").lower()
     top = (topic or "").lower()
     bk = (book or "").lower()
-    if any(x in cap for x in _DIAGNOSTIC_IMAGE):
+    if guards == "full" and any(x in cap for x in _DIAGNOSTIC_IMAGE):
         return True                          # diagnostic scan, not operative atlas anatomy
     if any(x in cap for x in _NONOP_ANGIO):
         return True                          # angio/fluoro positioning setup, not operative anatomy
@@ -164,6 +172,8 @@ def figure_offtarget(caption: str, topic: str, book: str = "", context: str = ""
         return True
     if t_cran and not t_spine and ((c_spine and not c_cran) or b_spine):
         return True
+    if guards != "full":
+        return False                         # strict (Q&A): cranial<->spine + non-op-angio only
     # peripheral-nerve/brachial-plexus figures don't belong on a cranial or spinal board
     if any(x in cap for x in _PERIPHERAL_NERVE) and not any(x in top for x in _PERIPHERAL_NERVE):
         return True
