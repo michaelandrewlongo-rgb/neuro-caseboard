@@ -30,6 +30,10 @@ DEFAULTS = {
     "VISUAL_MODEL": "hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224",
     "VISUAL_RETRIEVE_K": "10",
     "VISUAL_RETRIEVAL": "true",
+    # Lexical figure lane over each figure's own (Gemini) caption — surfaces the plate that
+    # NAMES the queried anatomy, which the page-text and BiomedCLIP image lanes miss. No GPU.
+    "CAPTION_RETRIEVAL": "true",
+    "CAPTION_RETRIEVE_K": "10",
     "APP_PASSCODE": "",
 }
 
@@ -89,6 +93,8 @@ class Config:
     visual_model: str
     visual_retrieve_k: int
     visual_retrieval: bool
+    caption_retrieval: bool
+    caption_retrieve_k: int
     app_passcode: str
 
 
@@ -131,5 +137,8 @@ def load_config(env_file=".env"):
         visual_retrieve_k=int(get("VISUAL_RETRIEVE_K")),
         visual_retrieval=get("VISUAL_RETRIEVAL").strip().lower() in
         ("1", "true", "yes", "on"),
+        caption_retrieval=get("CAPTION_RETRIEVAL").strip().lower() in
+        ("1", "true", "yes", "on"),
+        caption_retrieve_k=int(get("CAPTION_RETRIEVE_K")),
         app_passcode=get("APP_PASSCODE"),
     )

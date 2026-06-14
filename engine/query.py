@@ -9,6 +9,7 @@ from .synth_clients import make_synth_client
 from .gpu_guard import ensure_gpu_ready
 from .visual_embed import VisualEmbedder
 from .visual_index import VisualIndex
+from .caption_index import CaptionIndex
 
 
 @dataclass
@@ -30,7 +31,8 @@ class QueryResult:
 
 class Engine:
     def __init__(self, config, embedder, index, reranker, synth_client,
-                 synth_fn=synthesize, visual_embedder=None, visual_index=None):
+                 synth_fn=synthesize, visual_embedder=None, visual_index=None,
+                 caption_index=None):
         self.config = config
         self.embedder = embedder
         self.index = index
@@ -39,6 +41,7 @@ class Engine:
         self.synth_fn = synth_fn
         self.visual_embedder = visual_embedder
         self.visual_index = visual_index
+        self.caption_index = caption_index
 
     def _visual_hits(self, question):
         if not (self.config.visual_retrieval and self.visual_embedder is not None
@@ -52,6 +55,16 @@ class Engine:
             # OOM) must never break the worded answer — fall back to text-only.
             return []
 
+    def _caption_hits(self, question):
+        # caption_index first: if no lane is wired, it's off regardless of config (and we must
+        # not touch a config that predates the caption_retrieval flag).
+        if self.caption_index is None or not getattr(self.config, "caption_retrieval", False):
+            return []
+        try:
+            return self.caption_index.caption_search(question, self.config.caption_retrieve_k)
+        except Exception:
+            return []      # enhancement lane: never break the answer
+
     def _collect_figures(self, question, top):
         """Return aligned (figures, images): RRF-fuse figure-bearing text hits with
         visual-lane hits (keyed by figure_path), dedupe, cap, assign citation source
@@ -59,12 +72,16 @@ class Engine:
         bytes (dropping unreadable PNGs from BOTH lists)."""
         text_fig = [h for h in top if h.has_figure and h.figure_path]
         visual = self._visual_hits(question)
+        caption = self._caption_hits(question)
 
         by_path = {}
-        for h in visual:        # text metadata wins on overlap
+        for h in visual:        # later lanes win metadata on overlap
             if h.figure_path:
                 by_path[h.figure_path] = h
         for h in text_fig:
+            if h.figure_path:
+                by_path[h.figure_path] = h
+        for h in caption:       # caption lane carries the richer (Gemini) caption
             if h.figure_path:
                 by_path[h.figure_path] = h
 
@@ -75,6 +92,7 @@ class Engine:
         fused = reciprocal_rank_fusion([
             list(dict.fromkeys(h.figure_path for h in text_fig if h.figure_path)),
             list(dict.fromkeys(h.figure_path for h in visual if h.figure_path)),
+            list(dict.fromkeys(h.figure_path for h in caption if h.figure_path)),
         ])
 
         passage_index = {}
@@ -96,9 +114,14 @@ class Engine:
             if src is None:
                 src = next_appended
                 next_appended += 1
+            # Prefer the richer (Gemini) caption for display when available, even for a
+            # figure surfaced by the text or visual lane.
+            cap = h.caption or ""
+            if self.caption_index is not None:
+                cap = self.caption_index.caption_by_path.get(path, cap)
             figures.append(Figure(source_n=src, book=h.book,
                                   chapter=h.chapter or "", page=h.page,
-                                  image_path=path, caption=h.caption or ""))
+                                  image_path=path, caption=cap))
             images.append(image)
         return figures, images
 
@@ -156,8 +179,15 @@ def get_engine(config=None):
         except Exception:
             visual_index = None
             visual_embedder = None
+    caption_index = None
+    if config.caption_retrieval:
+        try:
+            caption_index = CaptionIndex(config.index_dir)
+        except Exception:
+            caption_index = None
     _engine = Engine(config, embedder, index, reranker, synth_client,
-                     visual_embedder=visual_embedder, visual_index=visual_index)
+                     visual_embedder=visual_embedder, visual_index=visual_index,
+                     caption_index=caption_index)
     return _engine
 
 
