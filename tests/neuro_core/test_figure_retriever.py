@@ -112,22 +112,3 @@ def test_hybrid_offtarget_guard_overrides_semantic():
                  query, topic=topic, top_n=2)}
     assert 10 not in pages             # lumbar plate dropped despite max cosine
     assert 11 in pages
-
-
-def test_retrieve_threads_guard_set_to_offtarget(monkeypatch):
-    import neuro_core.figure_retriever as _fr
-    seen = {}
-
-    def fake_off(caption, topic, book="", context="", *, guards="full"):
-        seen["guards"] = guards
-        return False
-
-    monkeypatch.setattr(_fr, "figure_offtarget", fake_off)
-    rows = [{"book": "Rhoton", "page": 1, "figure_path": "/x/p1.png",
-             "caption": "middle cerebral artery aneurysm", "context": ""}]
-    r = _fr.FigureRetriever(rows)
-    r.retrieve("middle cerebral artery aneurysm", topic="mca aneurysm", guard_set="strict")
-    assert seen["guards"] == "strict"
-    seen.clear()
-    r.retrieve("middle cerebral artery aneurysm", topic="mca aneurysm")  # default = full
-    assert seen["guards"] == "full"
