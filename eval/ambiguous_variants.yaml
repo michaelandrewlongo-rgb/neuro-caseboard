@@ -1,0 +1,17 @@
+- question: "Describe the steps of a decompressive craniectomy for traumatic brain injury."
+  expect_ambiguous: true
+  expected_label: "unilateral FTP hemicraniectomy"
+  forbidden: ["bifrontal", "bicoronal", "kjellberg", "contralateral zygoma"]
+- question: "What is the bone work for an anterior cervical procedure at C5-6?"
+  expect_ambiguous: true
+  expected_label: "ACDF"
+  forbidden: ["corpectomy"]
+# Non-ambiguous control cases (must NOT clarify -> over-ask guard):
+- question: "What are the contents of the cavernous sinus?"
+  expect_ambiguous: false
+  expected_label: null
+  forbidden: []
+- question: "What is the normal range for intracranial pressure?"
+  expect_ambiguous: false
+  expected_label: null
+  forbidden: []

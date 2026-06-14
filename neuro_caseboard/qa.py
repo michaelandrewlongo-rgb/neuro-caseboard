@@ -112,6 +112,11 @@ def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=N
         # waits for Lane B to finish on shutdown — acceptable since Lane B catches its
         # own exceptions and Lane A failures are rare.
         qr = fa.result()
+        # An ambiguous query short-circuits: a Clarification has no answer to attach a
+        # literature section to, so pass it straight back for the caller (CLI/app) to handle.
+        from neuro_core.query import Clarification
+        if isinstance(qr, Clarification):
+            return qr
         try:
             lit = fb.result()
         except Exception:

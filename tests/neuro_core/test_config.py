@@ -91,3 +91,22 @@ def test_gpu_guard_toggle_off(tmp_path):
     cfg = load_config(env_file=str(env))
     assert cfg.gpu_guard is False
     assert cfg.gpu_min_free_mib == 8000
+
+
+def test_cards_source_defaults(tmp_path, monkeypatch):
+    for k in ("CARDS_SOURCE_DB", "CARDS_SOURCE_TABLE", "CARDS_MEDIA_TABLE",
+              "CARDS_MEDIA_DIR"):
+        monkeypatch.delenv(k, raising=False)
+    cfg = load_config(env_file=str(tmp_path / "missing.env"))
+    assert str(cfg.cards_source_db).endswith("abns-board-review-lancedb")
+    assert cfg.cards_source_table == "cards"
+    assert cfg.cards_media_table == "images"
+    assert cfg.cards_media_dir == ""
+
+
+def test_cards_source_env_override(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text("CARDS_SOURCE_TABLE=notes\nCARDS_MEDIA_TABLE=\n")
+    cfg = load_config(env_file=str(env))
+    assert cfg.cards_source_table == "notes"
+    assert cfg.cards_media_table == ""   # "" disables media resolution

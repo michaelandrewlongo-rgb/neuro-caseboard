@@ -15,11 +15,18 @@ def _answer_question(question, force=False):
 
 def _run_ask(args) -> int:
     from neuro_core.gpu_guard import GpuNotReadyError
+    from neuro_core.query import Clarification
     try:
         result = _answer_question(args.question, force=args.force)
     except GpuNotReadyError as e:
         print(f"GPU not ready: {e}", file=sys.stderr)
         return 1
+    if isinstance(result, Clarification):
+        print("This question is ambiguous. Did you mean one of these variants?")
+        for v in result.variants:
+            print(f"  - {v.label}")
+        print("\nRe-ask naming the variant you want.")
+        return 0
     print(result.answer)
     print("\nSources:")
     for c in result.citations:
@@ -54,6 +61,30 @@ def _run_build(args) -> int:
     return 0
 
 
+def _run_cards(args) -> int:
+    from neuro_core.cards_query import cards_query, flagged_tags, CardsIndexNotBuilt
+    try:
+        res = cards_query(args.question, k=args.k)
+    except CardsIndexNotBuilt as e:
+        print(e, file=sys.stderr)
+        return 1
+    print("Personal board-review deck — not corpus-cited; verify against sources.")
+    if not res.cards:
+        print("No matching cards.")
+        return 0
+    for i, c in enumerate(res.cards, 1):
+        deck = c.deck_name or c.deck_full or "cards"
+        tags = f"  ·  {c.tags}" if c.tags else ""
+        print(f"\n[{i}] ({deck}{tags})")
+        if flagged_tags(c.tags):
+            print("  ⚠ flagged in your deck as unverified")
+        print(f"  Q: {c.question_text}")
+        print(f"  A: {c.answer_text}")
+        for p in c.image_paths:
+            print(f"  img: {p}")
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="caseboard",
@@ -74,11 +105,17 @@ def main(argv=None) -> int:
     b.add_argument("--no-llm", action="store_true",
                    help="Force the deterministic Explorer (skip the LLM case-specific Explorer)")
 
+    cards = sub.add_parser("cards", help="Search the board-review card bank")
+    cards.add_argument("question", help="The question or keywords, in quotes")
+    cards.add_argument("-k", type=int, default=6, help="How many cards to return")
+
     args = parser.parse_args(argv)
     if args.cmd == "ask":
         return _run_ask(args)
     if args.cmd == "build":
         return _run_build(args)
+    if args.cmd == "cards":
+        return _run_cards(args)
     return 1
 
 
