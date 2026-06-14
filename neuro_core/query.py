@@ -11,6 +11,7 @@ from .visual_embed import VisualEmbedder
 from .visual_index import VisualIndex
 from .figure_retriever import build_figure_retriever
 from .figure_guards import figure_offtarget
+from .query_analyze import ambiguity_gate, query_analyze, CLARIFY_THRESHOLD, VariantRewrite
 
 
 @dataclass
@@ -30,16 +31,39 @@ class QueryResult:
     figures: list = field(default_factory=list)
 
 
+@dataclass
+class Clarification:
+    """Returned instead of a briefing when variants are genuinely tied: the engine
+    asks which variant rather than guessing. No PDF is produced for this case."""
+    question: str
+    variants: list = field(default_factory=list)
+
+
+@dataclass
+class _Resolved:
+    """Internal: the (possibly variant-resolved) query + its retrieved passages."""
+    question: str
+    top: list
+    variant: VariantRewrite | None = None
+
+
+def _variant_directive(label):
+    return (f"Answer for the variant '{label}' ONLY. If the passages blend variants, "
+            "separate them — never merge steps across variants.")
+
+
 class Engine:
     def __init__(self, config, embedder, index, reranker, synth_client,
                  synth_fn=synthesize, visual_embedder=None, visual_index=None,
-                 caption_index=None):
+                 caption_index=None, gate_fn=ambiguity_gate, analyze_fn=query_analyze):
         self.config = config
         self.embedder = embedder
         self.index = index
         self.reranker = reranker
         self.synth_client = synth_client
         self.synth_fn = synth_fn
+        self.gate_fn = gate_fn
+        self.analyze_fn = analyze_fn
         self.visual_embedder = visual_embedder
         self.visual_index = visual_index
         self.caption_index = caption_index
@@ -150,23 +174,53 @@ class Engine:
         hits = self.index.hybrid_search(question, qv, self.config.retrieve_k)
         return self.reranker.rerank(question, hits, self.config.rerank_k)
 
+    def _plan_query(self, question):
+        """Shared disambiguation seam. Returns a Clarification (ask, no briefing) or
+        a _Resolved (the question + passages to answer, possibly variant-resolved).
+        Keeps prose (query) and figures (select_figures) on the SAME chosen variant."""
+        top = self._retrieve(question)
+        gate = self.gate_fn(question, top)
+        if not gate.tripped:
+            return _Resolved(question, top, None)
+        analysis = self.analyze_fn(question, top, self.synth_client)
+        if not analysis.ambiguous:
+            return _Resolved(question, top, None)
+        if analysis.confidence < CLARIFY_THRESHOLD:
+            return Clarification(question=question, variants=analysis.variants)
+        resolved = analysis.chosen.rewrite
+        return _Resolved(resolved, self._retrieve(resolved), analysis.chosen)
+
     def select_figures(self, question):
-        """Figures the system would attach, without calling synthesis (for eval)."""
-        figures, _ = self._collect_figures(question, self._retrieve(question))
+        """Figures the system would attach, without calling SYNTHESIS (for eval).
+        Note: runs the disambiguation gate, so on a gate-tripping question it may make
+        one LLM `analyze` call and select figures on the resolved query (parity with
+        query()); on a clarify outcome there is no briefing, so it returns no figures."""
+        plan = self._plan_query(question)
+        if isinstance(plan, Clarification):
+            return []
+        figures, _ = self._collect_figures(plan.question, plan.top)
         return figures
 
-    def query(self, question):
-        top = self._retrieve(question)
+    def _answer(self, question, top, variant=None):
         figures, images = self._collect_figures(question, top)
-        syn = self.synth_fn(question, top, figures, images, self.synth_client)
+        extra = ({"variant_directive": _variant_directive(variant.label)}
+                 if variant else {})
+        syn = self.synth_fn(question, top, figures, images, self.synth_client, **extra)
         if is_refusal(syn.answer):
-            # Synthesis found nothing relevant. The figures and citations were
-            # collected from retrieval independently of the answer, so on a refusal
-            # they are spurious — drop both rather than show sources/plates that
-            # don't support a "Not found" answer.
+            # Synthesis abstained: figures/citations collected from retrieval are
+            # spurious on a refusal — drop both (no Assuming line either).
             return QueryResult(answer=syn.answer, citations=[], figures=[])
-        return QueryResult(answer=syn.answer, citations=syn.citations,
-                           figures=figures)
+        answer = syn.answer
+        if variant:
+            answer = (f"**Assuming {variant.label} (most consistent with retrieved "
+                      "sources).**\n\n" + answer)
+        return QueryResult(answer=answer, citations=syn.citations, figures=figures)
+
+    def query(self, question):
+        plan = self._plan_query(question)
+        if isinstance(plan, Clarification):
+            return plan
+        return self._answer(plan.question, plan.top, plan.variant)
 
 
 _engine = None

@@ -62,6 +62,28 @@ def test_cli_build_dispatches_to_generate(capsys, monkeypatch):
     assert "Wrote out/case-board.md" in out
 
 
+def test_ask_prints_clarification(monkeypatch, capsys):
+    import neuro_caseboard.cli as cli
+    from neuro_core.query import Clarification
+    from neuro_core.query_analyze import VariantRewrite
+
+    clar = Clarification(question="decompressive craniectomy steps?",
+                         variants=[VariantRewrite("unilateral FTP hemicraniectomy", "a"),
+                                   VariantRewrite("bifrontal (Kjellberg) decompression", "b")])
+
+    # _run_ask does `from neuro_core.query import query` at call time, so patching the
+    # module attribute makes it pick up our stub.
+    import neuro_core.query as q
+    monkeypatch.setattr(q, "query", lambda question, force=False: clar)
+
+    rc = cli.main(["ask", "decompressive craniectomy steps?"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "ambiguous" in out.lower()
+    assert "unilateral FTP hemicraniectomy" in out
+    assert "bifrontal (Kjellberg) decompression" in out
+
+
 class _Card:
     def __init__(self, q, a, deck, tags, imgs):
         self.question_text, self.answer_text = q, a

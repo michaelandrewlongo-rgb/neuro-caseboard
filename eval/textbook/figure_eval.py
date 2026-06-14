@@ -2,7 +2,7 @@ import argparse
 
 import yaml
 
-from neuro_core.query import get_engine
+from neuro_core.query import get_engine, Clarification
 
 
 def main():
@@ -21,7 +21,18 @@ def main():
     passed = 0
     for case in cases:
         q = case["question"]
-        figs = engine.select_figures(q)
+        clarified = False
+        if args.synthesize:
+            # Full multimodal path: resolve ONCE; use its figures so the answer
+            # and the figures shown share the same (possibly variant-resolved) query.
+            result = engine.query(q)
+            if isinstance(result, Clarification):
+                clarified = True
+                figs = []
+            else:
+                figs = result.figures
+        else:
+            figs = engine.select_figures(q)
         want_book = case["expect_book_contains"].lower()
         want_page = case.get("expect_page")
         matches = [f for f in figs
@@ -32,10 +43,13 @@ def main():
         print(f"[{'PASS' if ok else 'FAIL'}] {q}")
         print(f"    figures attached: {[(f.book, f.page) for f in figs]}")
         if args.synthesize:
-            result = engine.query(q)
-            print(f"    answer: {result.answer[:600]}")
-            print(f"    figures shown: "
-                  f"{[(fg.book, fg.page) for fg in result.figures]}\n")
+            if clarified:
+                print(f"    answer: [clarification requested] variants: "
+                      f"{[v.label for v in result.variants]}\n")
+            else:
+                print(f"    answer: {result.answer[:600]}")
+                print(f"    figures shown: "
+                      f"{[(fg.book, fg.page) for fg in result.figures]}\n")
     print(f"\nFigure-retrieval gate: {passed}/{len(cases)} passed")
 
 

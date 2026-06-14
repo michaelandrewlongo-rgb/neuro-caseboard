@@ -104,3 +104,39 @@ def test_synthesize_appends_visual_only_figure_source():
     assert ns == [1, 2]
     assert out.citations[1].book == "Rhoton"
     assert out.citations[1].page == 531
+
+
+def test_synthesize_appends_variant_directive_to_user_message():
+    from neuro_core.synthesize import synthesize
+    from neuro_core.index import Hit
+
+    class CapSynth:
+        def __init__(self):
+            self.user = None
+
+        def generate(self, system, user, images):
+            self.user = user
+            return "ok"
+
+    sc = CapSynth()
+    hits = [Hit(id="a", book="B", chapter="C", page=1, text="t1")]
+    synthesize("q", hits, [], [], sc, variant_directive="DO NOT MERGE VARIANTS")
+    assert "DO NOT MERGE VARIANTS" in sc.user
+
+
+def test_synthesize_without_directive_is_unchanged():
+    from neuro_core.synthesize import synthesize
+    from neuro_core.index import Hit
+
+    class CapSynth:
+        def __init__(self):
+            self.user = None
+
+        def generate(self, system, user, images):
+            self.user = user
+            return "ok"
+
+    sc = CapSynth()
+    hits = [Hit(id="a", book="B", chapter="C", page=1, text="t1")]
+    synthesize("q", hits, [], [], sc)
+    assert "never merge" not in sc.user.lower()  # no directive injected

@@ -85,11 +85,13 @@ def _format_appended(appended):
     return "\n\nAdditional figure sources:\n" + "\n".join(lines)
 
 
-def synthesize(question, hits, figures, images, synth_client):
+def synthesize(question, hits, figures, images, synth_client, variant_directive=None):
     appended = _appended_figures(hits, figures)
     user = f"Question: {question}\n\nPassages:\n{_format_passages(hits)}"
     user += _format_appended(appended)
     user += _figure_note(figures)
+    if variant_directive:
+        user += "\n\n" + variant_directive
     answer = synth_client.generate(SYSTEM_PROMPT, user, images)
     citations = [
         Citation(n=i, book=h.book, chapter=h.chapter or "", page=h.page)

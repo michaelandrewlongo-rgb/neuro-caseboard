@@ -48,3 +48,14 @@ def test_build_briefing_html_accepts_dict_shaped_result():
     }
     doc = build_briefing_html(result, title="Dict Title")
     assert "Dict Title" in doc and "Rhoton, p.538" in doc
+
+
+def test_assuming_line_renders_as_bold_strong():
+    from neuro_caseboard.briefing_pdf import build_briefing_html
+    from neuro_core.query import QueryResult
+
+    answer = ("**Assuming unilateral FTP hemicraniectomy (most consistent with retrieved "
+              "sources).**\n\nThe flap is 12x15 cm [1].")
+    html = build_briefing_html(QueryResult(answer=answer), title="DHC")
+    assert "<strong>Assuming unilateral FTP hemicraniectomy" in html
+    assert "&gt; Assuming" not in html  # never a literal blockquote marker
