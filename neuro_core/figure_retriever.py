@@ -14,6 +14,15 @@ from neuro_core.figure_guards import (
 )
 
 
+def _row_caption(row):
+    """Effective caption for a figure row: the Gemini caption (larger cap, pure signal) when
+    present, else the source caption (tighter cap to fight legend bloat)."""
+    gem = (row.get("gemini_caption") or "").strip()
+    if gem:
+        return _caption_head(gem, 700)
+    return _caption_head((row.get("caption") or "").strip())
+
+
 @dataclass
 class FigureHit:
     book: str
@@ -141,8 +150,7 @@ def _load_rows(index_dir=None):
                 book = r.get("book") or ""
                 if any(d in book.lower() for d in _DIAGNOSTIC_BOOKS):
                     continue
-                gem = (r.get("gemini_caption") or "").strip()
-                cap = _caption_head(gem, 700) if gem else _caption_head((r.get("caption") or "").strip())
+                cap = _row_caption(r)
                 if cap and fp and os.path.isfile(fp):
                     rows_out.append({"book": book, "chapter": r.get("chapter"),
                                      "page": r.get("page"), "figure_path": fp,
