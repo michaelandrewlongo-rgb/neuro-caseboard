@@ -30,6 +30,27 @@ class QueryResult:
     figures: list = field(default_factory=list)
 
 
+@dataclass
+class Clarification:
+    """Returned instead of a briefing when variants are genuinely tied: the engine
+    asks which variant rather than guessing. No PDF is produced for this case."""
+    question: str
+    variants: list = field(default_factory=list)
+
+
+@dataclass
+class _Resolved:
+    """Internal: the (possibly variant-resolved) query + its retrieved passages."""
+    question: str
+    top: list
+    variant: object = None  # VariantRewrite | None
+
+
+def _variant_directive(label):
+    return (f"Answer for the variant '{label}' ONLY. If the passages blend variants, "
+            "separate them — never merge steps across variants.")
+
+
 class Engine:
     def __init__(self, config, embedder, index, reranker, synth_client,
                  synth_fn=synthesize, visual_embedder=None, visual_index=None,
@@ -155,18 +176,23 @@ class Engine:
         figures, _ = self._collect_figures(question, self._retrieve(question))
         return figures
 
-    def query(self, question):
-        top = self._retrieve(question)
+    def _answer(self, question, top, variant=None):
         figures, images = self._collect_figures(question, top)
-        syn = self.synth_fn(question, top, figures, images, self.synth_client)
+        extra = ({"variant_directive": _variant_directive(variant.label)}
+                 if variant else {})
+        syn = self.synth_fn(question, top, figures, images, self.synth_client, **extra)
         if is_refusal(syn.answer):
-            # Synthesis found nothing relevant. The figures and citations were
-            # collected from retrieval independently of the answer, so on a refusal
-            # they are spurious — drop both rather than show sources/plates that
-            # don't support a "Not found" answer.
+            # Synthesis abstained: figures/citations collected from retrieval are
+            # spurious on a refusal — drop both (no Assuming line either).
             return QueryResult(answer=syn.answer, citations=[], figures=[])
-        return QueryResult(answer=syn.answer, citations=syn.citations,
-                           figures=figures)
+        answer = syn.answer
+        if variant:
+            answer = (f"**Assuming {variant.label} (most consistent with retrieved "
+                      f"sources).**\n\n" + answer)
+        return QueryResult(answer=answer, citations=syn.citations, figures=figures)
+
+    def query(self, question):
+        return self._answer(question, self._retrieve(question))
 
 
 _engine = None

@@ -312,3 +312,41 @@ def test_query_skips_guard_when_disabled(monkeypatch):
     monkeypatch.setattr(q, "get_engine", _stub_engine)
     q.query("hi", config=Cfg())
     assert "ran" not in calls
+
+
+from neuro_core.query import Clarification
+from neuro_core.query_analyze import VariantRewrite
+
+
+def test_answer_prepends_bold_assuming_line_when_variant_set(tmp_path):
+    hits = [Hit(id="a", book="B", chapter="C", page=1, text="t1")]
+
+    def synth(question, hits, figures, images, synth_client, variant_directive=None):
+        synth_client.generate("s", "u", images)
+        return Synthesis(answer="Body of the answer [1].",
+                         citations=[Citation(1, "B", "C", 1)])
+
+    eng = Engine(FakeConfig(), FakeEmbedder(), FakeIndex(hits), FakeReranker(),
+                 synth_client=FakeSynthClient(), synth_fn=synth)
+    vr = VariantRewrite("unilateral FTP hemicraniectomy", "unilateral FTP rewrite")
+    result = eng._answer("unilateral FTP rewrite", hits, variant=vr)
+    assert result.answer.startswith(
+        "**Assuming unilateral FTP hemicraniectomy (most consistent with retrieved sources).**")
+    assert "Body of the answer [1]." in result.answer
+
+
+def test_answer_refusal_gets_no_assuming_line(tmp_path):
+    hits = [Hit(id="a", book="B", chapter="C", page=1, text="t1")]
+
+    def refusal(question, hits, figures, images, synth_client, variant_directive=None):
+        synth_client.generate("s", "u", images)
+        return Synthesis(answer="Not found in the provided sources.",
+                         citations=[Citation(1, "B", "C", 1)])
+
+    eng = Engine(FakeConfig(), FakeEmbedder(), FakeIndex(hits), FakeReranker(),
+                 synth_client=FakeSynthClient(), synth_fn=refusal)
+    vr = VariantRewrite("unilateral FTP hemicraniectomy", "x")
+    result = eng._answer("x", hits, variant=vr)
+    assert result.answer == "Not found in the provided sources."
+    assert result.citations == []
+    assert result.figures == []
