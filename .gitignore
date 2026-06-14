@@ -7,6 +7,10 @@ dist/
 .pytest_cache/
 .venv/
 venv/
+# throwaway venvs created by ci/local-ci.sh and the package job
+.local-ci-venv/
+.local-ci-pkgvenv/
+.ci-venv/
 *.pdf
 !tests/**/*.pdf
 out/

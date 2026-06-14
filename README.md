@@ -1,5 +1,7 @@
 # neuro-caseboard
 
+[![CI](https://github.com/michaelandrewlongo-rgb/neuro-caseboard/actions/workflows/ci.yml/badge.svg)](https://github.com/michaelandrewlongo-rgb/neuro-caseboard/actions/workflows/ci.yml)
+
 A unified neurosurgical **case-prep dossier** that combines the best of two existing
 projects:
 
@@ -81,3 +83,16 @@ neuro_caseboard/
   pipeline.py   explorer -> enricher -> auditor (reused) -> compile -> render
   cli.py        `caseboard ask "<q>"` · `caseboard build "<topic>" [--pdf] [-o dir]`
 ```
+
+## Continuous integration
+
+Required per-PR CI (`.github/workflows/ci.yml`) is **offline and deterministic** — no API
+keys, GPU, corpus, or external service at test time. It runs three jobs: `sanity` (syntax +
+hygiene), `test` (the full offline suite on Python 3.10 + 3.12, including the
+`caseboard build --no-llm --pdf` artifact smoke), and `package` (build the wheel, then prove
+a clean install + the `caseboard` entry point work). Heavier checks (Playwright briefing PDF,
+real CPU embeddings) live in a manual `optional-integration` workflow.
+
+`caseprep` is the one external dependency; CI installs it from a pinned commit and it is not
+in `pyproject` core deps, so local dev keeps using `pip install -e ../caseprep`. Reproduce
+the whole required pipeline locally with `ci/local-ci.sh`. Full details: **[docs/ci.md](docs/ci.md)**.
