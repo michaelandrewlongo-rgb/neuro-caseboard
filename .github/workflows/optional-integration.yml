@@ -1,0 +1,91 @@
+name: optional-integration
+
+# NOT a required gate. Manual (workflow_dispatch) + a weekly heartbeat. Exercises the heavy
+# optional surfaces that CAN run on a hosted runner — the Playwright briefing PDF and the
+# real (non-injected) embedding backend. These are slow and/or download large artifacts, so
+# they are deliberately kept out of the per-PR required CI.
+#
+# Surfaces that CANNOT run here (documented local-only; see docs/ci.md):
+#   - `caseboard ask` (GPU readiness guard + real synthesis)
+#   - real LanceDB corpus build / BiomedCLIP visual lane (needs the textbook corpus)
+#   - the Vertex/Anthropic LLM Explorer (needs billed API keys)
+#   - eval/ corpus scorers (need the private textbook PDFs)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC
+
+permissions:
+  contents: read
+
+env:
+  CASEPREP_REF: 8b1d8fd0488c16ff68721c6dc29041862517b392
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  # PROVES: the `briefing` extra installs and Playwright/Chromium renders the Signal-styled
+  # PDF end to end from a Q&A-shaped result.
+  briefing-pdf:
+    name: briefing PDF (playwright + chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install caseprep (pinned) + package[dev,briefing]
+        run: ./ci/install.sh ".[dev,briefing]"
+      - name: Install Chromium for Playwright
+        run: python -m playwright install --with-deps chromium
+      - name: Render a briefing PDF and assert it is a real PDF
+        run: |
+          python - <<'PY'
+          import pathlib
+          from neuro_caseboard.briefing_pdf import render_briefing_pdf
+          result = {
+              "answer": "### Indications\nDecompressive craniectomy relieves **refractory** ICP [1].",
+              "citations": [{"n": 1, "book": "Greenberg", "chapter": "Trauma", "page": 1102}],
+              "figures": [],
+          }
+          out = pathlib.Path("briefing.pdf")
+          render_briefing_pdf(result, out, title="CI Smoke Briefing", subtitle="optional-integration")
+          data = out.read_bytes()
+          assert data[:5].startswith(b"%PDF"), data[:16]
+          assert len(data) > 10_000, f"PDF too small: {len(data)} bytes"
+          print(f"rendered {len(data)} byte PDF")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: briefing-pdf
+          path: briefing.pdf
+          if-no-files-found: error
+
+  # PROVES: the `models` extra installs and the lazy embedding seam works against a REAL
+  # backend (not the injected fake) — i.e. Embedder actually loads a model and embeds.
+  # Downloads a small model from Hugging Face, so it needs network and takes minutes.
+  models-smoke:
+    name: real embeddings (CPU)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install caseprep (pinned) + package[dev,models]
+        run: ./ci/install.sh ".[dev,models]"
+      - name: Embed a string with a small real model
+        env:
+          # Override the heavyweight default (BAAI/bge-large-en-v1.5) with a tiny model.
+          TINY_MODEL: sentence-transformers/all-MiniLM-L6-v2
+        run: |
+          python - <<'PY'
+          import os
+          from neuro_core.embed import Embedder
+          emb = Embedder(os.environ["TINY_MODEL"], device="cpu")
+          vec = emb.embed_query("vestibular schwannoma facial nerve course")
+          assert vec.ndim == 1 and vec.shape[0] > 0, vec.shape
+          print("embedded -> vector dim", vec.shape[0])
+          PY
