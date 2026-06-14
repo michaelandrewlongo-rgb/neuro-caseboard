@@ -72,3 +72,72 @@ def ambiguity_gate(question, hits):
         if trigger or named >= 2:
             return Gate(tripped=True, axis=axis)
     return Gate(tripped=False)
+
+
+# ---------------------------------------------------------------------------
+# Task 2 — LLM-backed query_analyze() with fail-open JSON parse
+# ---------------------------------------------------------------------------
+
+CLARIFY_THRESHOLD = 0.6
+
+ANALYZE_SYSTEM_PROMPT = (
+    "You disambiguate a neurosurgical question that may conflate two named VARIANTS "
+    "of one procedure. Given the question and retrieved passages, return ONLY a JSON "
+    "object, no prose, with keys:\n"
+    '  "ambiguous": true|false — true ONLY if the passages describe >=2 distinct named variants;\n'
+    '  "axis": a short label for the variant axis, or null;\n'
+    '  "variants": a list of {"label": variant name, "rewrite": the question rewritten to scope ONLY that variant};\n'
+    '  "chosen": the label of the variant most consistent with the question + passages, or null;\n'
+    '  "confidence": 0.0-1.0 — how clearly one variant dominates (low if the passages are split evenly).\n'
+)
+
+
+@dataclass
+class VariantRewrite:
+    label: str
+    rewrite: str
+
+
+@dataclass
+class QueryAnalysis:
+    ambiguous: bool
+    axis: str | None = None
+    variants: list = field(default_factory=list)
+    chosen: VariantRewrite | None = None
+    confidence: float = 0.0
+
+
+def _parse_analysis(text):
+    """Parse the model reply into a QueryAnalysis, or raise ValueError."""
+    cleaned = re.sub(r"^```(?:json)?|```$", "", (text or "").strip(), flags=re.MULTILINE)
+    start, end = cleaned.find("{"), cleaned.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        raise ValueError("no JSON object in analyze reply")
+    obj = json.loads(cleaned[start:end + 1])
+    if not obj.get("ambiguous"):
+        return QueryAnalysis(ambiguous=False)
+    variants = [VariantRewrite(label=str(v.get("label", "")).strip(),
+                               rewrite=str(v.get("rewrite", "")).strip())
+                for v in (obj.get("variants") or [])
+                if v.get("label") and v.get("rewrite")]
+    chosen = next((v for v in variants if v.label == obj.get("chosen")), None)
+    try:
+        conf = float(obj.get("confidence", 0.0))
+    except (TypeError, ValueError):
+        conf = 0.0
+    if len(variants) < 2 or chosen is None:
+        return QueryAnalysis(ambiguous=False)
+    return QueryAnalysis(ambiguous=True, axis=obj.get("axis"),
+                         variants=variants, chosen=chosen, confidence=conf)
+
+
+def query_analyze(question, hits, synth_client):
+    """One LLM pass: detect the variant axis, rewrite per variant, pick + score.
+    NEVER raises: any failure -> QueryAnalysis(ambiguous=False)."""
+    try:
+        passages = "\n\n".join(getattr(h, "text", "") for h in hits)
+        user = f"Question: {question}\n\nPassages:\n{passages}"
+        reply = synth_client.generate(ANALYZE_SYSTEM_PROMPT, user, [])
+        return _parse_analysis(reply)
+    except Exception:
+        return QueryAnalysis(ambiguous=False)
