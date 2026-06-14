@@ -1,6 +1,7 @@
 # tests/test_query.py
 import neuro_core.query as q
-from neuro_core.query import Engine, QueryResult, Figure
+from neuro_core.query import Engine, QueryResult, Figure, Clarification
+from neuro_core.query_analyze import VariantRewrite
 from neuro_core.index import Hit
 from neuro_core.synthesize import Synthesis, Citation
 
@@ -314,11 +315,7 @@ def test_query_skips_guard_when_disabled(monkeypatch):
     assert "ran" not in calls
 
 
-from neuro_core.query import Clarification
-from neuro_core.query_analyze import VariantRewrite
-
-
-def test_answer_prepends_bold_assuming_line_when_variant_set(tmp_path):
+def test_answer_prepends_bold_assuming_line_when_variant_set():
     hits = [Hit(id="a", book="B", chapter="C", page=1, text="t1")]
 
     def synth(question, hits, figures, images, synth_client, variant_directive=None):
@@ -335,7 +332,7 @@ def test_answer_prepends_bold_assuming_line_when_variant_set(tmp_path):
     assert "Body of the answer [1]." in result.answer
 
 
-def test_answer_refusal_gets_no_assuming_line(tmp_path):
+def test_answer_refusal_gets_no_assuming_line():
     hits = [Hit(id="a", book="B", chapter="C", page=1, text="t1")]
 
     def refusal(question, hits, figures, images, synth_client, variant_directive=None):
@@ -350,3 +347,17 @@ def test_answer_refusal_gets_no_assuming_line(tmp_path):
     assert result.answer == "Not found in the provided sources."
     assert result.citations == []
     assert result.figures == []
+
+
+def test_answer_non_variant_has_no_assuming_line():
+    hits = [Hit(id="a", book="B", chapter="C", page=1, text="t1")]
+
+    def synth(question, hits, figures, images, synth_client, variant_directive=None):
+        synth_client.generate("s", "u", images)
+        return Synthesis(answer="Plain body [1].", citations=[Citation(1, "B", "C", 1)])
+
+    eng = Engine(FakeConfig(), FakeEmbedder(), FakeIndex(hits), FakeReranker(),
+                 synth_client=FakeSynthClient(), synth_fn=synth)
+    result = eng._answer("q", hits)  # no variant
+    assert result.answer == "Plain body [1]."
+    assert "**Assuming" not in result.answer

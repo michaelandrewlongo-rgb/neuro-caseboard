@@ -188,7 +188,7 @@ class Engine:
         answer = syn.answer
         if variant:
             answer = (f"**Assuming {variant.label} (most consistent with retrieved "
-                      f"sources).**\n\n" + answer)
+                      "sources).**\n\n" + answer)
         return QueryResult(answer=answer, citations=syn.citations, figures=figures)
 
     def query(self, question):
