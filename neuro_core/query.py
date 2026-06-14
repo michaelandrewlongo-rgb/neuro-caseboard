@@ -10,6 +10,7 @@ from .gpu_guard import ensure_gpu_ready
 from .visual_embed import VisualEmbedder
 from .visual_index import VisualIndex
 from .figure_retriever import build_figure_retriever
+from .figure_guards import figure_offtarget
 
 
 @dataclass
@@ -111,6 +112,18 @@ class Engine:
             h = by_path.get(path)
             if h is None:
                 continue
+            # Prefer the richer (Gemini) caption for both the guard decision and display.
+            cap = h.caption or ""
+            if self.caption_index is not None:
+                cap = self.caption_index.caption_by_path.get(path, cap)
+            # STRICT region guard at the figure-fusion output, so EVERY lane (text / visual /
+            # caption) is filtered. A caption-lane-only guard was inert: off-domain plates
+            # (e.g. a spine laminoplasty figure on a thrombectomy question) enter via the
+            # text/visual lanes. Strict = cranial<->spine + non-op-angio (book-aware); the
+            # diagnostic-image and sub-region guards stay board-only so angiographic figures
+            # (CT/CTA/DSA captions) are not over-blocked. The question is the region signal.
+            if figure_offtarget(cap, question, h.book or "", guards="strict"):
+                continue
             image = self._read_image(path)
             if image is None:
                 continue
@@ -118,11 +131,6 @@ class Engine:
             if src is None:
                 src = next_appended
                 next_appended += 1
-            # Prefer the richer (Gemini) caption for display when available, even for a
-            # figure surfaced by the text or visual lane.
-            cap = h.caption or ""
-            if self.caption_index is not None:
-                cap = self.caption_index.caption_by_path.get(path, cap)
             figures.append(Figure(source_n=src, book=h.book,
                                   chapter=h.chapter or "", page=h.page,
                                   image_path=path, caption=cap))
