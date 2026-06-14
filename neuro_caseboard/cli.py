@@ -44,8 +44,13 @@ def _run_build(args) -> int:
 
 
 def _run_cards(args) -> int:
-    from neuro_core.cards_query import cards_query
-    res = cards_query(args.question, k=args.k)
+    from neuro_core.cards_query import cards_query, flagged_tags, CardsIndexNotBuilt
+    try:
+        res = cards_query(args.question, k=args.k)
+    except CardsIndexNotBuilt as e:
+        print(e, file=sys.stderr)
+        return 1
+    print("Personal board-review deck — not corpus-cited; verify against sources.")
     if not res.cards:
         print("No matching cards.")
         return 0
@@ -53,6 +58,8 @@ def _run_cards(args) -> int:
         deck = c.deck_name or c.deck_full or "cards"
         tags = f"  ·  {c.tags}" if c.tags else ""
         print(f"\n[{i}] ({deck}{tags})")
+        if flagged_tags(c.tags):
+            print("  ⚠ flagged in your deck as unverified")
         print(f"  Q: {c.question_text}")
         print(f"  A: {c.answer_text}")
         for p in c.image_paths:

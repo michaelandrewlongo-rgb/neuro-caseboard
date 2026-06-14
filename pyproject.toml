@@ -40,3 +40,8 @@ include = ["neuro_caseboard*", "neuro_core*"]
 
 [tool.setuptools.package-data]
 neuro_caseboard = ["assets/fonts/*.ttf"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: builds a real LanceDB index or loads models (deselect with -m 'not integration')",
+]

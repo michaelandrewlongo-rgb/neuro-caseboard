@@ -134,20 +134,31 @@ elif mode == "Build board":
             st.rerun()
 
 elif mode == "Cards":
-    from neuro_core.cards_query import cards_query
+    from neuro_core.cards_query import cards_query, flagged_tags, CardsIndexNotBuilt
 
     st.title("Board-review card bank")
     st.caption("Hybrid search over your SANS / ABNS deck. Decision-support only.")
+    st.info("Personal study notes — **not** corpus-cited or source-verified, "
+            "unlike the Ask / Build lanes.")
     q = st.text_input("Search the cards", key="cards_q")
     k = st.sidebar.slider("Cards to show", 3, 20, 6)
     if q:
-        with st.spinner("Searching cards..."):
-            res = cards_query(q, k=k)
-        if not res.cards:
+        res = None
+        try:
+            with st.spinner("Searching cards..."):
+                res = cards_query(q, k=k)
+        except CardsIndexNotBuilt as e:
+            st.warning(str(e))
+        if res is not None and not res.cards:
             st.info("No matching cards.")
-        for i, c in enumerate(res.cards, 1):
+        for i, c in enumerate(res.cards if res else [], 1):
             deck = c.deck_name or c.deck_full or "cards"
-            with st.expander(f"[{i}] {c.question_text}  —  {deck}", expanded=(i == 1)):
+            flags = flagged_tags(c.tags)
+            label = ("⚠ " if flags else "") + f"[{i}] {c.question_text}  —  {deck}"
+            with st.expander(label, expanded=(i == 1)):
+                if flags:
+                    st.warning(f"Flagged in your deck as unverified "
+                               f"({', '.join(flags)}) — not source-checked.")
                 st.markdown(f"**Q.** {c.question_text}")
                 st.markdown(f"**A.** {c.answer_text}")
                 if c.tags:

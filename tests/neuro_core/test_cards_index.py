@@ -53,3 +53,53 @@ def test_text_lane_finds_keyword(tmp_path):
     idx = CardsIndex(tmp_path / "idx")
     hits = idx.text_search("pedicle screw", k=2)
     assert hits and hits[0].id == "c2"
+
+
+class RecordingReranker:
+    """Records the top_k it was asked for; returns the top_k hits unchanged."""
+    def __init__(self):
+        self.last_top_k = None
+
+    def rerank(self, query, hits, top_k):
+        self.last_top_k = top_k
+        return list(hits)[:top_k]
+
+
+@pytest.mark.integration
+def test_engine_k_is_display_count_not_rerank_k(tmp_path):
+    # Regression: the user's k (CLI -k / Streamlit slider) must drive how many
+    # cards return — it was previously capped at config.rerank_k.
+    from types import SimpleNamespace
+    from neuro_core.cards_query import CardsEngine
+    emb = FakeEmbedder()
+    build_cards_index(_cards(), emb, tmp_path / "idx")
+    idx = CardsIndex(tmp_path / "idx")
+    cfg = SimpleNamespace(retrieve_k=20, rerank_k=6)
+    rr = RecordingReranker()
+    eng = CardsEngine(cfg, emb, idx, rr)
+
+    res = eng.query("what is normal icp", k=1)
+    assert rr.last_top_k == 1            # explicit k wins
+    assert len(res.cards) == 1
+    eng.query("what is normal icp")      # default k -> rerank_k (not retrieve_k)
+    assert rr.last_top_k == cfg.rerank_k
+
+
+@pytest.mark.integration
+def test_engine_without_reranker_caps_at_k(tmp_path):
+    from types import SimpleNamespace
+    from neuro_core.cards_query import CardsEngine
+    emb = FakeEmbedder()
+    build_cards_index(_cards(), emb, tmp_path / "idx")
+    idx = CardsIndex(tmp_path / "idx")
+    cfg = SimpleNamespace(retrieve_k=20, rerank_k=6)
+    eng = CardsEngine(cfg, emb, idx, reranker=None)
+    assert len(eng.query("icp", k=1).cards) == 1
+
+
+def test_flagged_tags_detects_low_confidence_labels():
+    from neuro_core.cards_query import flagged_tags
+    assert flagged_tags("spine questionable") == ["questionable"]
+    assert flagged_tags("anatomy, to-verify") == ["to-verify"]
+    assert flagged_tags("physiology high-yield") == []
+    assert flagged_tags("") == []

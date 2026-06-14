@@ -55,6 +55,10 @@ class _Stripper(HTMLParser):
             for k, v in attrs:
                 if k == "src" and v:
                     self.imgs.append(v)
+                elif k == "alt" and v:
+                    # strip_html only runs on a text-empty side, so folding alt
+                    # text in here rescues cards whose content lives in the image.
+                    self.parts.append(f" {v} ")
 
 
 def strip_html(html):
@@ -101,11 +105,16 @@ def _as_list(v):
     return [s] if s and s != "[]" else []
 
 
-def _stable_id(row, q, a):
+def _stable_id(row, q, a, imgs=()):
     for key in ("id", "guid", "note_id", "nid"):
         if row.get(key):
             return str(row[key])
-    h = hashlib.sha1((q + "␟" + a).encode("utf-8", "ignore")).hexdigest()
+    basis = q + "␟" + a
+    if not (q or a):
+        # Image-only cards share the empty q+a; key them by their images so they
+        # stay distinct instead of all collapsing to one id.
+        basis += "␟" + "|".join(sorted(imgs))
+    h = hashlib.sha1(basis.encode("utf-8", "ignore")).hexdigest()
     return f"card-{h[:16]}"
 
 
@@ -206,32 +215,59 @@ def main():
             a, extra = strip_html(row.get("back_html") or "")
             a_imgs += extra
 
-        if not (q or a):
+        # Resolve media BEFORE the empty-text skip so image-only cards (and their
+        # unique images) aren't silently dropped.
+        img_paths = resolve_images(q_imgs + a_imgs, media_map, cfg.cards_media_dir,
+                                   out_media, img_cache)
+        if not (q or a or img_paths):
             skipped += 1
             continue
 
-        img_paths = resolve_images(q_imgs + a_imgs, media_map, cfg.cards_media_dir,
-                                   out_media, img_cache)
+        deck_name = (row.get("deck_name") or "").strip()
+        deck_full = (row.get("deck_full") or "").strip()
+        tags = (row.get("tags") or "").strip()
+        text = f"Q: {q}\nA: {a}".strip()
+        if not (q or a):
+            # Image-only card: give retrieval something textual to match on.
+            text = " ".join(t for t in (tags, deck_name) if t) or "image card"
         cards.append({
-            "id": _stable_id(row, q, a),
+            "id": _stable_id(row, q, a, img_paths),
             "question_text": q,
             "answer_text": a,
-            "deck_name": (row.get("deck_name") or "").strip(),
-            "deck_full": (row.get("deck_full") or "").strip(),
-            "tags": (row.get("tags") or "").strip(),
+            "deck_name": deck_name,
+            "deck_full": deck_full,
+            "tags": tags,
             "model_name": (row.get("model_name") or "").strip(),
             "question_html": row.get("front_html") or "",
             "answer_html": row.get("back_html") or "",
             "image_paths": img_paths,
-            "text": f"Q: {q}\nA: {a}".strip(),
+            "text": text,
         })
 
-    # De-dup on id (Anki exports can repeat a note across decks/cards).
-    by_id = {c["id"]: c for c in cards}
-    cards = list(by_id.values())
+    # De-dup on id (Anki exports can repeat a note across decks/cards). When two
+    # rows collapse to the same id, union their images and tags rather than
+    # letting the last one win — otherwise a card's unique image variants are lost.
+    merged = {}
+    for c in cards:
+        prev = merged.get(c["id"])
+        if prev is None:
+            merged[c["id"]] = c
+            continue
+        seen = set(prev["image_paths"])
+        for p in c["image_paths"]:
+            if p not in seen:
+                prev["image_paths"].append(p)
+                seen.add(p)
+        prev["tags"] = " ".join(dict.fromkeys((prev["tags"] + " " + c["tags"]).split()))
+    cards = list(merged.values())
+
     resolved = sum(1 for v in img_cache.values() if v)
+    unresolved = [b for b, v in img_cache.items() if not v]
     print(f"  prepared {len(cards)} unique cards ({skipped} empty rows skipped); "
           f"{resolved} distinct images resolved", flush=True)
+    if unresolved:
+        print(f"  WARNING: {len(unresolved)} referenced image(s) had no bytes and "
+              f"were skipped (e.g. {', '.join(unresolved[:5])})", flush=True)
 
     device = resolve_device(cfg.embed_device)
     print(f"Loading embedding model '{cfg.embed_model}' on '{device}' "

@@ -32,9 +32,16 @@ One engine, two features, exposed through one CLI and one local web app:
 
 - **CLI** — `caseboard ask "<question>"` for a cited answer + figures, or
   `caseboard build "<topic>" [--pdf] [-o dir]` for a pre-op dossier.
-- **Web** — `streamlit run app/streamlit_app.py` opens a single app with **Ask** and
-  **Build board** modes over the same engine. Set `APP_PASSWORD` to gate access (no gate
-  locally).
+- **Web** — `streamlit run app/streamlit_app.py` opens a single app with **Ask**,
+  **Build board**, and **Cards** modes over the same engine. Set `APP_PASSWORD` to gate
+  access (no gate locally).
+- **Board-review cards** — `caseboard cards "<question>"` (or the **Cards** web tab)
+  hybrid-searches a standalone board-review card bank (your SANS / ABNS deck) held in a
+  `cards` table beside `chunks`/`figures`. It reuses the same BGE embedder + reranker and
+  returns matched cards (no LLM synthesis); the lane is isolated from Ask/Build and is
+  **not** corpus-cited. Build it once:
+  `python -m neuro_core.scripts.build_cards_index` (config: `CARDS_SOURCE_DB`,
+  `CARDS_SOURCE_TABLE`, `CARDS_MEDIA_TABLE`, `CARDS_MEDIA_DIR`; GPU via `EMBED_DEVICE`).
 - **Briefing PDF** — `neuro_caseboard.briefing_pdf.render_briefing_pdf(result, out, title=...)`
   exports a Q&A result as a PDF styled to the **Neurosurgery Signal** design (dark navy +
   teal/red signal accents, Syne display). Needs the `briefing` extra:
