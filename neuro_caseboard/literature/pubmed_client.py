@@ -41,6 +41,13 @@ def apply_filter(query: str, filter_type: str | None) -> str:
     return query + CLINICAL_FILTERS[ft] if ft in CLINICAL_FILTERS else query
 
 
+def _parse_doi(elocationid: str) -> str:
+    s = (elocationid or "").strip()
+    if s.lower().startswith("doi:"):
+        s = s[4:].strip()
+    return s if s.startswith("10.") else ""
+
+
 def _fmt_authors(authors) -> str:
     names = [a.get("name", "") for a in (authors or [])
              if isinstance(a, dict) and a.get("name")]
@@ -120,7 +127,7 @@ class PubMedClient:
                 "source": a.get("source", ""),
                 "pubdate": a.get("pubdate", ""),
                 "pub_types": pub_types,
-                "doi": eloc.replace("doi: ", "") if eloc else "",
+                "doi": _parse_doi(eloc),
                 "url": f"https://pubmed.ncbi.nlm.nih.gov/{a.get('uid', '')}/",
             })
         return out
@@ -153,6 +160,13 @@ class PubMedClient:
             if sections:
                 results[pmid] = {k: v.strip() for k, v in sections.items()}
         return results
+
+    async def aclose(self):
+        """Close the underlying transport if this client created one."""
+        if self._http is not None:
+            aclose = getattr(self._http, "aclose", None)
+            if aclose is not None:
+                await aclose()
 
     async def abstracts(self, pmids: list[str]) -> dict[str, str]:
         if not pmids:

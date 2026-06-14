@@ -92,3 +92,30 @@ def test_api_key_injected_into_params():
     c = PubMedClient(api_key="secret", http=http, delay=0)
     asyncio.run(c.search("q"))
     assert http.calls[0][1]["api_key"] == "secret"
+
+
+def test_summaries_rejects_non_doi_elocationid():
+    import asyncio
+    class _Http(_FakeHttp):
+        async def get(self, url, params=None):
+            self.calls.append((url, params))
+            if "esummary" in url:
+                return _FakeResp(json_data={"result": {"111": {
+                    "uid": "111", "title": "T", "authors": [], "source": "J",
+                    "pubdate": "2024", "pubtype": ["Review"],
+                    "elocationid": "pii: S0140-6736(23)01234-5"}}})
+            return await super().get(url, params)
+    rows = asyncio.run(PubMedClient(http=_Http(), delay=0).summaries(["111"]))
+    assert rows[0]["doi"] == ""   # non-DOI elocationid is not stored as a DOI
+
+
+def test_aclose_closes_transport():
+    import asyncio
+    class _Closeable(_FakeHttp):
+        closed = False
+        async def aclose(self):
+            self.closed = True
+    h = _Closeable()
+    c = PubMedClient(http=h, delay=0)
+    asyncio.run(c.aclose())
+    assert h.closed is True

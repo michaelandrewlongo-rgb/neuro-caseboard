@@ -6,8 +6,11 @@ alters Lane A's grounded answer.
 from __future__ import annotations
 
 import asyncio
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+
+_log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -53,13 +56,22 @@ def build_literature_section(question, *, config=None, lit_config=None,
         key = f"{term}|{lit_config.k}|{lit_config.recency_years}"
         records = cache.get(key)
         if records is None:
+            owns_client = client is None
             if client is None:
                 from neuro_caseboard.literature.pubmed_client import PubMedClient
                 client = PubMedClient(api_key=lit_config.ncbi_api_key)
             retriever = LiteratureRetriever(client, k=lit_config.k,
                                             recency_years=lit_config.recency_years)
-            records = asyncio.run(retriever.retrieve(question))
-            cache.set(key, records)
+
+            async def _retrieve():
+                try:
+                    return await retriever.retrieve(question)
+                finally:
+                    if owns_client:
+                        await client.aclose()
+
+            records = asyncio.run(_retrieve())
+            cache.set(key, records)  # note: empty results are cached (records == []) to avoid re-hitting NCBI; only network ERRORS raise and skip caching
         if not records:
             return None
         if synth_client is None:
@@ -74,6 +86,7 @@ def build_literature_section(question, *, config=None, lit_config=None,
                  for i, r in enumerate(syn.records, 1)]
         return LiteratureSection(narrative=syn.narrative, citations=cites)
     except Exception:
+        _log.debug("literature lane failed", exc_info=True)
         return None
 
 
@@ -91,10 +104,14 @@ def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=N
     with ThreadPoolExecutor(max_workers=2) as ex:
         fa = ex.submit(lane_a)
         fb = ex.submit(lane_b)
-        qr = fa.result()  # propagate Lane A errors (e.g. GpuNotReadyError)
+        # Lane A errors propagate (e.g. GpuNotReadyError); the executor __exit__ then
+        # waits for Lane B to finish on shutdown — acceptable since Lane B catches its
+        # own exceptions and Lane A failures are rare.
+        qr = fa.result()
         try:
             lit = fb.result()
         except Exception:
+            _log.debug("literature lane raised in executor", exc_info=True)
             lit = None
     return QAResult(answer=qr.answer, citations=qr.citations,
                     figures=qr.figures, literature=lit)
