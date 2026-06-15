@@ -203,11 +203,14 @@ def _slug(topic: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (topic or "").lower()).strip("-")[:40] or "case"
 
 
-def _render_pdf(dossier, topic, path):
-    """Render the case-board PDF. Default is the Executive-Navy design that matches the web
-    console (``caseboard_pdf``, HTML->PDF via Playwright/Chromium). Falls back to the offline
-    fpdf2 renderer when the exec renderer is unavailable (e.g. no Chromium in CI) or when
-    ``CASEBOARD_PDF_STYLE=clinical`` is set. Returns the written path."""
+def render_case_pdf(dossier, topic, path):
+    """Render the case-board PDF — the single source of truth for every ``build`` pathway
+    (CLI ``caseboard build --pdf`` and the Streamlit Build lane).
+
+    Default is the Executive-Navy design that matches the web console (``caseboard_pdf``,
+    HTML->PDF via Playwright/Chromium). Falls back to the offline fpdf2 renderer when the exec
+    renderer is unavailable (e.g. no Chromium in CI) or when ``CASEBOARD_PDF_STYLE=clinical`` is
+    set. Returns the written path."""
     style = os.environ.get("CASEBOARD_PDF_STYLE", "exec").strip().lower()
     if style != "clinical":
         try:
@@ -232,5 +235,5 @@ def generate(topic: str, *, output_dir, pdf: bool = False, enrich: bool = True, 
     md_path.write_text(render_markdown(dossier), encoding="utf-8")
     artifacts["markdown"] = md_path
     if pdf:
-        artifacts["pdf"] = _render_pdf(dossier, topic, out / "case-board.pdf")
+        artifacts["pdf"] = render_case_pdf(dossier, topic, out / "case-board.pdf")
     return dossier, artifacts

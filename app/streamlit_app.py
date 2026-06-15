@@ -2,9 +2,10 @@
 over one shared engine, with cross-feature flows (answer -> build a board; board card -> ask a
 follow-up) and inline cross-link badges backed by neuro_core.evidence.
 
-The presentation layer is the "Neurosurgery Signal" design system (app/signal_theme.py): a dark
-navy console with teal/red signal accents, Syne display + JetBrains Mono eyebrows. It is the
-on-screen sibling of the briefing PDF (neuro_caseboard/briefing_pdf.py) so every surface of the
+The presentation layer is the "Executive Navy" design system (app/signal_theme.py): a deep-navy
+nav rail over a bright report plane, a three-font role split (Archivo UI / Source Serif 4 reading
+column / IBM Plex Mono micro-labels) and a single deep-teal accent. The case-board PDF
+(neuro_caseboard/caseboard_pdf.py) renders the same identity for print, so every surface of the
 product reads as one brand.
 
 Run: `streamlit run app/streamlit_app.py`. Set APP_PASSWORD to gate access (no gate locally)."""
@@ -17,8 +18,7 @@ import streamlit as st
 
 import signal_theme as sig
 from neuro_caseboard.board_view import board_view
-from neuro_caseboard.pipeline import build_dossier
-from neuro_caseboard.render_pdf import render_pdf
+from neuro_caseboard.pipeline import build_dossier, render_case_pdf
 from neuro_caseboard.topic_extract import extract_board_topic
 from neuro_core.evidence import from_figure, from_figure_item, other_features, record
 from neuro_caseboard.qa import answer_question
@@ -147,8 +147,8 @@ elif mode == "Build board":
         sig.legend()
         if want_pdf:
             with tempfile.TemporaryDirectory() as td:
-                art = render_pdf(dossier, Path(td) / "case-board.pdf")
-                pdf_bytes = Path(art.path).read_bytes()
+                pdf_path = render_case_pdf(dossier, topic, Path(td) / "case-board.pdf")
+                pdf_bytes = Path(pdf_path).read_bytes()
             st.download_button("Download PDF", pdf_bytes, file_name="case-board.pdf",
                                mime="application/pdf")
         if view.figures:
