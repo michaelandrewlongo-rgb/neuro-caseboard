@@ -34,7 +34,11 @@ def test_phase2_defaults_present(tmp_path, monkeypatch):
     assert str(cfg.assets_dir).endswith("assets/figures")
 
 
-def test_env_overrides_synth_provider(tmp_path):
+def test_env_overrides_synth_provider(tmp_path, monkeypatch):
+    # Process env beats the file (see precedence test), so clear it to prove the
+    # .env file path itself works — a dev shell defaulting to Vertex must not leak in.
+    monkeypatch.delenv("SYNTH_PROVIDER", raising=False)
+    monkeypatch.delenv("MAX_FIGURE_IMAGES", raising=False)
     env = tmp_path / ".env"
     env.write_text("SYNTH_PROVIDER=openrouter\nMAX_FIGURE_IMAGES=1\n")
     cfg = load_config(env_file=str(env))
