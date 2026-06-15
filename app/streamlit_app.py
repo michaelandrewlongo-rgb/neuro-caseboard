@@ -8,6 +8,7 @@ on-screen sibling of the briefing PDF (neuro_caseboard/briefing_pdf.py) so every
 product reads as one brand.
 
 Run: `streamlit run app/streamlit_app.py`. Set APP_PASSWORD to gate access (no gate locally)."""
+import html
 import os
 import tempfile
 from pathlib import Path
@@ -72,6 +73,9 @@ if mode == "Ask":
              disclaimer="Decision-support only · not a substitute for clinical judgement")
     q = st.text_input("Ask a clinical or anatomy question", key="ask_q",
                       placeholder='e.g. "blood supply of the lateral medulla"')
+    if not q:
+        sig.example_hints(["blood supply of the lateral medulla", "Wallenberg syndrome findings",
+                           "borders of the cavernous sinus", "watershed infarct territories"])
     if q:
         with st.spinner("Searching textbooks + recent literature…"):
             result = answer_question(q)
@@ -82,9 +86,9 @@ if mode == "Ask":
             st.stop()
         label = f'answer: "{q}"'
         record(_store, [from_figure(f) for f in result.figures], label)
-        st.markdown(result.answer)
+        st.markdown(sig.citation_chips(result.answer), unsafe_allow_html=True)
         if result.figures:
-            sig.section("Figures")
+            sig.section("Figures", "FIG")
             cols = st.columns(min(3, len(result.figures)))
             for col, f in zip(cols, result.figures):
                 with col:
@@ -92,13 +96,13 @@ if mode == "Ask":
                              caption=f"[{f.source_n}] {f.book}, p.{f.page} — {f.caption}",
                              use_container_width=True)
                     _badge(from_figure(f).key, label)
-        sig.section("Sources")
+        sig.section("Sources", "SRC")
         sig.sources_panel(result.citations)
         if result.literature and result.literature.narrative:
-            sig.section("Contemporary Literature")
-            st.markdown(result.literature.narrative)
+            sig.section("Contemporary Literature", "LIT")
+            st.markdown(sig.citation_chips(result.literature.narrative), unsafe_allow_html=True)
             sig.literature_panel(result.literature.citations)
-        if st.button("Build a board from this"):
+        if st.button("Build a board from this", type="primary"):
             try:
                 topic = extract_board_topic(q, result.answer)
             except Exception:
@@ -115,11 +119,14 @@ elif mode == "Build board":
     topic = st.text_input('Case, e.g. "C5-6 ACDF" or "left retrosigmoid vestibular schwannoma"',
                           key="build_topic",
                           placeholder='e.g. "right carotid endarterectomy"')
+    if not topic:
+        sig.example_hints(["C5–6 ACDF", "left retrosigmoid vestibular schwannoma",
+                           "right carotid endarterectomy", "awake left temporal glioma"], label="Cases")
     c1, c2, c3 = st.columns(3)
     want_pdf = c1.checkbox("PDF download", value=True)
     enrich = c2.checkbox("Corpus enrichment", value=True)
     use_llm = c3.checkbox("LLM explorer", value=True)
-    if topic and st.button("Build board"):
+    if topic and st.button("Build board", type="primary"):
         with st.spinner("Building board…"):
             dossier = build_dossier(topic, enrich=enrich, use_llm=None if use_llm else False)
             view = board_view(dossier)
@@ -131,11 +138,12 @@ elif mode == "Build board":
         record(_store, [from_figure_item(fi) for fi in view.figures], label)
         s = view.summary
         sig.metrics([
-            (len(dossier.sections), "sections", "ink"),
-            (s.supported, "corpus-supported", "teal"),
-            (s.to_verify, "to verify", "amber"),
-            (s.quarantined, "quarantined", "red"),
+            (len(dossier.sections), "sections", ""),
+            (s.supported, "corpus-supported", "supported"),
+            (s.to_verify, "to verify", "verify"),
+            (s.quarantined, "quarantined", "quarantined"),
         ])
+        sig.legend()
         if want_pdf:
             with tempfile.TemporaryDirectory() as td:
                 art = render_pdf(dossier, Path(td) / "case-board.pdf")
@@ -143,7 +151,7 @@ elif mode == "Build board":
             st.download_button("Download PDF", pdf_bytes, file_name="case-board.pdf",
                                mime="application/pdf")
         if view.figures:
-            sig.section("Figures")
+            sig.section("Figures", "FIG")
             cols = st.columns(min(3, len(view.figures)))
             for col, fig in zip(cols, view.figures):
                 with col:
@@ -151,16 +159,16 @@ elif mode == "Build board":
                              caption=f"[{fig.fig_id}] {fig.caption} — {fig.citation}",
                              use_container_width=True)
                     _badge(from_figure_item(fig).key, label)
-        st.markdown(view.markdown)
+        st.markdown(sig.citation_chips(view.markdown), unsafe_allow_html=True)
 
     # Board card -> ask a follow-up (uses the most recently built board this session).
     last = st.session_state.get("last_board")
     if last and last["claims"]:
-        sig.section("Follow up")
-        sig.note(f'Drill into any card from "{last["topic"]}" as a fresh cited question.')
+        sig.section("Follow up", "NEXT")
+        sig.note(f'Drill into any card from "{html.escape(last["topic"])}" as a fresh cited question.')
         choice = st.selectbox("Pick a card", last["claims"], key="followup_choice",
                               label_visibility="collapsed")
-        if st.button("Ask this"):
+        if st.button("Ask this", type="primary"):
             st.session_state["seed_question"] = choice
             st.session_state["_pending_mode"] = "Ask"
             st.rerun()
@@ -178,6 +186,9 @@ elif mode == "Cards":
     k = st.sidebar.slider("Cards to show", 3, 20, 6)
     q = st.text_input("Search the cards", key="cards_q",
                       placeholder='e.g. "cavernous sinus contents"')
+    if not q:
+        sig.example_hints(["cavernous sinus contents", "Meckel cave", "spinal cord tracts",
+                           "circle of Willis"])
     if q:
         res = None
         try:

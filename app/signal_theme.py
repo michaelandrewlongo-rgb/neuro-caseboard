@@ -1,241 +1,214 @@
-"""Neurosurgery Signal — screen design system for the Streamlit case-prep console.
+"""Neuro·Caseboard — "Executive Navy" design system for the Streamlit console.
 
-This is the on-screen sibling of ``neuro_caseboard/briefing_pdf.py``: the same brand tokens
-(teal ``#22d3ee`` / ``#67e8f9``, red signal ``#ef4444``, navy ``#080d16``, Syne display, Inter
-body, JetBrains Mono eyebrows) adapted from print to a live dark canvas. Streamlit can't run
-arbitrary React, so the look is delivered in two ways:
+An editorial, clinical-grade reskin: a bright report content plane on a deep-navy navigation
+rail, with a disciplined three-font system by role —
 
-* ``.streamlit/config.toml`` sets the base dark tokens (robust across versions).
-* ``SIGNAL_CSS`` (injected once via :func:`apply_theme`) restyles Streamlit's own DOM using
-  stable ``data-testid`` selectors, then a handful of pure HTML helpers render the
-  brand-defining surfaces (hero, section rules, evidence panels, metric chips).
+* **Archivo** (sans) ........ UI chrome: headings, nav, labels, metric numbers, buttons
+* **Source Serif 4** (serif)  the reading column: answers, claims, the standfirst subtitle
+* **IBM Plex Mono** ......... micro-labels: eyebrows, section keys, citations, tags
 
-Every helper escapes its inputs and emits self-contained HTML so the caller stays declarative.
+Grounded in how the best clinical answer engines and editorial/consulting surfaces read
+(OpenEvidence/Perplexity citation patterns, FT/McKinsey serif gravitas, Stripe/Linear UI
+restraint, UpToDate evidence grading). It deliberately drops the old neon glow, engineering
+grid, and pulsing accent for calm authority. Still the on-screen sibling of the briefing PDF
+(`neuro_caseboard/briefing_pdf.py`) — same navy/teal DNA, grown up.
+
+Streamlit can't run React, so the look is delivered via `.streamlit/config.toml` (light base
+tokens) + one injected stylesheet (`SIGNAL_CSS`) targeting stable `data-testid` nodes, plus pure
+HTML helpers for the brand surfaces. Every helper escapes its inputs.
 """
 from __future__ import annotations
 
 import html
+import re
 
 import streamlit as st
 
-# --- The design system -------------------------------------------------------------------------
-# Tokens mirror briefing_pdf.SIGNAL_CSS. Selectors target Streamlit 1.5x test-ids / base-web
-# nodes; anything missed still lands on the dark config base, so the app never falls back to
-# stock white.
 SIGNAL_CSS = """
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=IBM+Plex+Mono:wght@500;600&display=swap');
 
 :root{
-  --bg:#080d16; --ink:#f8fafc; --muted:#94a3b8; --faint:#64748b;
-  --teal:#22d3ee; --teal-2:#67e8f9; --teal-deep:#0e7490; --red:#ef4444;
-  --border:rgba(71,85,105,.5); --border-teal:rgba(34,211,238,.34);
-  --panel:linear-gradient(165deg,rgba(17,24,39,.86),rgba(10,15,26,.94));
-  --display:'Syne',system-ui,sans-serif;
-  --body:'Inter',system-ui,sans-serif;
-  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --page:#f6f7f9; --surface:#ffffff; --ink:#16202c; --muted:#586676; --faint:#8a96a2;
+  --line:#e7e9ee; --line-soft:#eef0f3;
+  --accent:#0e7490; --accent-2:#0891a5; --accent-soft:rgba(14,116,144,.38);
+  --supported:#0f766e; --verify:#a9781b; --quar:#b4493b;
+  --supported-bg:rgba(15,118,110,.09); --verify-bg:rgba(169,120,27,.10); --quar-bg:rgba(180,73,59,.09);
+  --rail-bg:linear-gradient(180deg,#0c1626 0%,#0a1320 100%);
+  --rail-ink:#eef3f8; --rail-muted:#8a98ab; --rail-line:rgba(148,163,184,.14); --rail-accent:#2bc4d4;
+  --ui:'Archivo',system-ui,sans-serif;
+  --read:'Source Serif 4',Georgia,'Times New Roman',serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --shadow:0 1px 2px rgba(16,32,48,.05),0 10px 26px rgba(16,32,48,.05);
+  --shadow-sm:0 1px 2px rgba(16,32,48,.05);
 }
 
-/* ---- Canvas: navy gradient + faint engineering grid + signal glows -------------------------- */
-.stApp{
-  background:
-    radial-gradient(circle at 12% 2%, rgba(34,211,238,.16), transparent 40%),
-    radial-gradient(circle at 86% 10%, rgba(239,68,68,.10), transparent 36%),
-    linear-gradient(rgba(148,163,184,.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148,163,184,.05) 1px, transparent 1px),
-    linear-gradient(165deg,#05070d 0%,#0a111b 48%,#0b1220 100%);
-  background-size:auto,auto,56px 56px,56px 56px,auto;
-  background-attachment:fixed;
-}
-[data-testid="stHeader"]{background:transparent;}
-#MainMenu, footer{visibility:hidden;}
+/* ---- Canvas ---------------------------------------------------------------------------------- */
+.stApp{ background:var(--page); }
+[data-testid="stHeader"]{ background:transparent; }
+#MainMenu, footer{ visibility:hidden; }
 .stApp .block-container, [data-testid="stMainBlockContainer"]{
-  max-width:1080px; padding-top:2.2rem; padding-bottom:5rem;
+  max-width:1010px; padding-top:2.2rem; padding-bottom:5rem;
 }
+html, body, .stApp{ font-family:var(--ui); color:var(--ink); -webkit-font-smoothing:antialiased; }
 
-/* ---- Typography ----------------------------------------------------------------------------- */
-html, body, .stApp, .stMarkdown, [data-testid="stMarkdownContainer"]{
-  font-family:var(--body); color:var(--ink);
+/* ---- Reading column = serif; UI chrome = sans ----------------------------------------------- */
+.stMarkdown p, .stMarkdown li{
+  font-family:var(--read); font-size:1.05rem; line-height:1.66; color:#1e2a36; max-width:74ch;
 }
-.stApp h1, .stApp h2, .stApp h3, .stApp h4{ font-family:var(--display); letter-spacing:-.02em; }
+.stMarkdown strong{ color:#0c2233; font-weight:600; }
+.stMarkdown a{ color:var(--accent); text-decoration:none; border-bottom:1px solid rgba(14,116,144,.28); }
+.stMarkdown a:hover{ color:var(--accent-2); }
 .stMarkdown h2{
-  font-family:var(--display); font-weight:700; font-size:1.35rem; color:var(--ink);
-  margin:1.8rem 0 .6rem; padding-top:.9rem; border-top:1px solid var(--border);
+  font-family:var(--ui); font-weight:700; font-size:1.3rem; color:var(--ink); letter-spacing:-.01em;
+  margin:1.9rem 0 .6rem; padding-top:.9rem; border-top:1px solid var(--line);
 }
 .stMarkdown h2::before{
-  content:""; display:inline-block; width:8px; height:8px; border-radius:2px; background:var(--red);
-  box-shadow:0 0 9px rgba(239,68,68,.65); margin-right:11px; vertical-align:middle;
+  content:""; display:inline-block; width:7px; height:7px; border-radius:2px; background:var(--accent);
+  margin-right:11px; vertical-align:middle;
 }
-.stMarkdown h3{ font-family:var(--display); color:var(--teal-2); font-weight:700; font-size:1.05rem; }
-.stMarkdown p, .stMarkdown li{ max-width:760px; }
-.stMarkdown a{ color:var(--teal); text-decoration:none; border-bottom:1px solid rgba(34,211,238,.3); }
-.stMarkdown a:hover{ color:var(--teal-2); border-color:var(--teal-2); }
-.stMarkdown strong{ color:#fff; font-weight:600; }
+.stMarkdown h3{ font-family:var(--ui); color:var(--accent); font-weight:700; font-size:1.04rem; }
+/* Inline citation chips (post-processed into the answer markdown) */
+.cc{ display:inline-flex; align-items:center; justify-content:center; font-family:var(--mono);
+  font-size:.62rem; font-weight:600; color:var(--accent); background:rgba(14,116,144,.09);
+  border:1px solid rgba(14,116,144,.22); border-radius:5px; padding:0 5px; margin:0 2px;
+  transform:translateY(-1px); }
 
-/* ---- Sidebar: branded console rail ---------------------------------------------------------- */
-section[data-testid="stSidebar"]{
-  background:linear-gradient(180deg,#070c15,#0a1120); border-right:1px solid var(--border);
-}
-section[data-testid="stSidebar"] .block-container{ padding-top:1.4rem; }
-section[data-testid="stSidebar"] div[role="radiogroup"]{ gap:.25rem; }
+/* ---- Sidebar: deep-navy nav rail ------------------------------------------------------------ */
+section[data-testid="stSidebar"]{ background:var(--rail-bg); border-right:1px solid var(--rail-line); }
+section[data-testid="stSidebar"] .block-container{ padding-top:1.5rem; }
+section[data-testid="stSidebar"] *{ color:var(--rail-ink); }
+section[data-testid="stSidebar"] div[role="radiogroup"]{ gap:.25rem; margin-top:.2rem; }
 section[data-testid="stSidebar"] div[role="radiogroup"] label{
-  width:100%; padding:.5rem .7rem; border-radius:10px; border:1px solid transparent;
-  font-family:var(--mono); font-size:.82rem; letter-spacing:.02em; color:var(--muted);
+  width:100%; padding:.55rem .75rem; border-radius:9px; border:1px solid transparent;
+  font-family:var(--mono); font-size:.82rem; letter-spacing:.02em; color:var(--rail-muted);
   transition:all .15s ease;
 }
-section[data-testid="stSidebar"] div[role="radiogroup"] label:hover{
-  background:rgba(34,211,238,.06); color:var(--teal-2);
-}
+section[data-testid="stSidebar"] div[role="radiogroup"] label:hover{ background:rgba(255,255,255,.05); color:#fff; }
 section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked){
-  background:linear-gradient(90deg,rgba(34,211,238,.14),transparent);
-  border-color:var(--border-teal); color:var(--ink); box-shadow:inset 2px 0 0 var(--teal);
+  background:rgba(43,196,212,.14); color:#fff; box-shadow:inset 2px 0 0 var(--rail-accent);
 }
-section[data-testid="stSidebar"] input[type="radio"]{ accent-color:var(--teal); }
+section[data-testid="stSidebar"] input[type="radio"]{ accent-color:var(--rail-accent); }
+section[data-testid="stSidebar"] [data-baseweb="slider"] [role="slider"]{ background:var(--rail-accent); }
 
-/* ---- Buttons: teal signal ------------------------------------------------------------------- */
-.stButton>button, .stDownloadButton>button{
-  font-family:var(--mono); font-weight:600; letter-spacing:.05em; text-transform:uppercase;
-  font-size:.76rem; color:#04141a;
-  background:linear-gradient(180deg,var(--teal-2),var(--teal));
-  border:1px solid rgba(34,211,238,.6); border-radius:9px; padding:.5rem 1.1rem;
-  box-shadow:0 8px 22px rgba(34,211,238,.12); transition:all .18s ease;
+/* ---- Buttons: primary teal / secondary ghost ------------------------------------------------ */
+.stButton>button, .stDownloadButton>button,
+[data-testid="stBaseButton-primary"], [data-testid="stBaseButton-secondary"]{
+  font-family:var(--ui); font-weight:600; letter-spacing:.01em; font-size:.86rem;
+  border-radius:9px; padding:.55rem 1.2rem; transition:all .16s ease; box-shadow:var(--shadow-sm);
 }
-.stButton>button:hover, .stDownloadButton>button:hover{
-  transform:translateY(-1px); border-color:var(--teal-2); color:#04141a;
-  box-shadow:0 0 18px rgba(34,211,238,.45), 0 10px 26px rgba(34,211,238,.2);
+.stButton>button, [data-testid="stBaseButton-primary"], .stDownloadButton>button{
+  color:#ffffff !important; background:var(--accent); border:1px solid var(--accent);
 }
-.stButton>button:focus, .stDownloadButton>button:focus{ color:#04141a; }
+.stButton>button:hover, [data-testid="stBaseButton-primary"]:hover, .stDownloadButton>button:hover{
+  background:#0b6379; border-color:#0b6379; transform:translateY(-1px);
+  box-shadow:0 8px 20px rgba(14,116,144,.22);
+}
+[data-testid="stBaseButton-secondary"]{
+  color:var(--accent) !important; background:#ffffff; border:1px solid var(--line);
+}
+[data-testid="stBaseButton-secondary"]:hover{ border-color:var(--accent-soft); background:#f9fbfc; }
 
-/* ---- Inputs / select ------------------------------------------------------------------------ */
+/* ---- Inputs / select: command-bar feel ------------------------------------------------------ */
 .stTextInput div[data-baseweb="input"], .stSelectbox div[data-baseweb="select"]>div{
-  background:rgba(8,13,22,.7)!important; border:1px solid var(--border)!important;
-  border-radius:10px!important;
+  background:var(--surface) !important; border:1px solid var(--line) !important; border-radius:10px !important;
+  box-shadow:var(--shadow-sm);
 }
 .stTextInput div[data-baseweb="input"]:focus-within{
-  border-color:var(--teal)!important; box-shadow:0 0 0 3px rgba(34,211,238,.14)!important;
+  border-color:var(--accent) !important; box-shadow:0 0 0 3px rgba(14,116,144,.12) !important;
 }
-.stTextInput input{ background:transparent!important; color:var(--ink)!important; font-family:var(--body); }
-.stTextInput label, .stCheckbox label span, .stSelectbox label, .stSlider label{
-  color:var(--muted)!important;
+.stTextInput input{ background:transparent !important; color:var(--ink) !important; font-family:var(--ui); font-size:.98rem; }
+.stTextInput input::placeholder{ color:var(--faint) !important; }
+.stTextInput label, .stSelectbox label, .stSlider label, .stCheckbox label span{ color:var(--muted) !important; }
+.stTextInput label, .stSelectbox label{
+  font-family:var(--mono); font-size:.7rem; letter-spacing:.08em; text-transform:uppercase;
 }
-.stTextInput label, .stSelectbox label, .stSlider label{
-  font-family:var(--mono); font-size:.72rem; letter-spacing:.05em; text-transform:uppercase;
-}
+section[data-testid="stSidebar"] .stSlider label{ font-family:var(--mono); font-size:.66rem;
+  letter-spacing:.08em; text-transform:uppercase; color:var(--rail-muted) !important; }
 
 /* ---- Surfaces: alerts, expanders, images ---------------------------------------------------- */
-[data-testid="stAlert"]{ border-radius:12px; border:1px solid var(--border); font-family:var(--body); }
+[data-testid="stAlert"]{ border-radius:11px; border:1px solid var(--line); font-family:var(--ui); box-shadow:var(--shadow-sm); }
 [data-testid="stExpander"]{
-  border:1px solid var(--border); border-radius:12px; overflow:hidden;
-  background:var(--panel); margin-bottom:.55rem;
+  border:1px solid var(--line); border-left:3px solid var(--accent-soft); border-radius:12px;
+  overflow:hidden; background:var(--surface); margin-bottom:.6rem; box-shadow:var(--shadow-sm);
 }
-[data-testid="stExpander"] summary{ font-family:var(--mono); font-size:.84rem; color:var(--ink); }
-[data-testid="stExpander"] summary:hover{ color:var(--teal-2); }
-[data-testid="stImage"] img, .stImage img{
-  border-radius:.6rem; border:1px solid rgba(34,211,238,.28); box-shadow:0 0 22px rgba(34,211,238,.06);
-}
-[data-testid="stImageCaption"], .stImage figcaption{
-  color:var(--muted); font-size:.78rem; font-family:var(--body);
-}
-[data-testid="stSpinner"] *{ color:var(--teal-2)!important; }
+[data-testid="stExpander"] summary{ font-family:var(--ui); font-weight:600; font-size:.92rem; color:var(--ink); }
+[data-testid="stExpander"] summary:hover{ color:var(--accent); }
+[data-testid="stImage"] img, .stImage img{ border-radius:10px; border:1px solid var(--line); box-shadow:var(--shadow); }
+[data-testid="stImageCaption"], .stImage figcaption{ color:var(--muted); font-size:.78rem; font-family:var(--ui); }
+[data-testid="stSpinner"] *{ color:var(--accent) !important; }
 
-/* ---- Scrollbar ------------------------------------------------------------------------------ */
-::-webkit-scrollbar{ width:10px; height:10px; }
-::-webkit-scrollbar-thumb{ background:rgba(34,211,238,.25); border-radius:8px; }
-::-webkit-scrollbar-thumb:hover{ background:rgba(34,211,238,.4); }
-::-webkit-scrollbar-track{ background:transparent; }
+::-webkit-scrollbar{ width:11px; height:11px; }
+::-webkit-scrollbar-thumb{ background:#cdd5dd; border-radius:8px; border:3px solid var(--page); }
+::-webkit-scrollbar-thumb:hover{ background:#b6c0c9; }
 
-/* ---- Brand fragments (rendered by the helpers below) ---------------------------------------- */
-.sig-hero{ animation:sig-rise .5s cubic-bezier(.2,.7,.2,1) both; margin-bottom:.6rem; }
-@keyframes sig-rise{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:none;} }
+/* ---- Brand fragments ------------------------------------------------------------------------ */
 .sig-eyebrow{
-  display:inline-flex; align-items:center; border:1px solid var(--border-teal);
-  background:rgba(15,23,42,.68); border-radius:9999px; padding:.32rem .85rem;
-  font-family:var(--mono); font-size:.66rem; font-weight:600; letter-spacing:.18em;
-  text-transform:uppercase; color:var(--teal-2);
+  display:inline-flex; align-items:center; border:1px solid rgba(14,116,144,.26);
+  background:rgba(14,116,144,.06); border-radius:6px; padding:.3rem .7rem;
+  font-family:var(--mono); font-size:.62rem; font-weight:600; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--accent);
 }
-.sig-eyebrow .dot{
-  width:6px; height:6px; border-radius:50%; background:var(--red); margin-right:8px;
-  box-shadow:0 0 8px rgba(239,68,68,.85); animation:sig-pulse 2.4s ease-in-out infinite;
-}
-@keyframes sig-pulse{ 0%,100%{opacity:1;} 50%{opacity:.5;} }
+.sig-eyebrow .dot{ width:6px; height:6px; border-radius:2px; background:var(--accent); margin-right:8px; }
 .sig-title{
-  font-family:var(--display); font-weight:800; font-size:2.55rem; line-height:1.02;
-  letter-spacing:-.035em; margin:.7rem 0 .35rem;
-  background:linear-gradient(180deg,#f8fafc 0%,#cbd5e1 100%);
-  -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+  font-family:var(--ui); font-weight:700; font-size:2rem; line-height:1.12; letter-spacing:-.02em;
+  color:var(--ink); margin:1.1rem 0 .55rem; max-width:24ch;
 }
-.sig-subtitle{ color:var(--muted); font-size:1.02rem; max-width:700px; margin:0; }
-.sig-rule{
-  height:2px; width:128px; border-radius:2px; margin:1rem 0 .9rem;
-  background:linear-gradient(90deg,#67e8f9,#22d3ee,#0e7490); box-shadow:0 0 14px rgba(34,211,238,.45);
-}
-.sig-disclaimer{
-  color:var(--faint); font-size:.72rem; font-family:var(--mono); letter-spacing:.04em;
-}
+.sig-subtitle{ font-family:var(--read); font-size:1.08rem; line-height:1.5; color:var(--muted); max-width:62ch; }
+.sig-rule{ height:1px; background:var(--line); margin:1.3rem 0; }
+.sig-disclaimer{ font-family:var(--mono); font-size:.68rem; letter-spacing:.04em; color:var(--faint); }
 .sig-section{
-  display:flex; align-items:center; gap:.6rem; font-family:var(--display); font-weight:700;
-  font-size:1.25rem; color:var(--ink); margin:1.9rem 0 .7rem; padding-top:.9rem;
-  border-top:1px solid var(--border);
+  display:flex; align-items:center; gap:.85rem; margin:2.1rem 0 1rem;
 }
-.sig-section::before{
-  content:""; width:8px; height:8px; border-radius:2px; background:var(--red);
-  box-shadow:0 0 9px rgba(239,68,68,.65);
-}
+.sig-section .k{ font-family:var(--mono); font-size:.68rem; font-weight:600; letter-spacing:.12em; color:var(--accent); }
+.sig-section .t{ font-family:var(--ui); font-weight:700; font-size:1.22rem; letter-spacing:-.01em; color:var(--ink); }
+.sig-section .ln{ flex:1; height:1px; background:var(--line); }
 .sig-panel{
-  border:1px solid var(--border); border-radius:14px; background:var(--panel); padding:.3rem 1.1rem;
-  box-shadow:0 18px 44px rgba(2,6,23,.4), inset 0 1px 0 rgba(148,163,184,.12);
+  background:var(--surface); border:1px solid var(--line); border-radius:13px; padding:.35rem 1.2rem;
+  box-shadow:var(--shadow);
 }
-.sig-row{ font-size:.86rem; color:var(--muted); border-top:1px solid rgba(71,85,105,.4); padding:.55rem 0; }
+.sig-row{ font-family:var(--ui); font-size:.88rem; color:var(--muted); border-top:1px solid var(--line); padding:.7rem 0; }
 .sig-row:first-child{ border-top:none; }
-.sig-row .n{ color:var(--teal); font-weight:600; font-family:var(--mono); }
-.sig-row .ln{ color:var(--teal-2); font-weight:600; font-family:var(--mono); }
-.sig-row a{ color:var(--teal); text-decoration:none; }
-.sig-row a:hover{ color:var(--teal-2); }
-.sig-metrics{ display:flex; flex-wrap:wrap; gap:.6rem; margin:.2rem 0 1.1rem; }
+.sig-row .n{ font-family:var(--mono); color:var(--accent); font-weight:600; margin-right:7px; }
+.sig-row .ln{ font-family:var(--mono); color:var(--accent-2); font-weight:600; margin-right:7px; }
+.sig-row a{ color:var(--accent); text-decoration:none; }
+.sig-metrics{ display:flex; flex-wrap:wrap; gap:.8rem; margin:.3rem 0 .7rem; }
 .sig-metric{
-  border:1px solid var(--border); border-radius:12px; background:rgba(8,13,22,.5);
-  padding:.6rem .95rem; min-width:118px;
+  flex:1; min-width:140px; background:var(--surface); border:1px solid var(--line); border-radius:12px;
+  padding:.95rem 1.1rem; box-shadow:var(--shadow-sm);
 }
-.sig-metric .v{ font-family:var(--display); font-weight:800; font-size:1.5rem; line-height:1; }
-.sig-metric .k{
-  font-family:var(--mono); font-size:.62rem; letter-spacing:.12em; text-transform:uppercase;
-  color:var(--muted); margin-top:.3rem;
-}
-.sig-metric.ink .v{ color:var(--ink); }
-.sig-metric.teal .v{ color:var(--teal-2); }
-.sig-metric.amber .v{ color:#fbbf24; }
-.sig-metric.red .v{ color:#f87171; }
-.sig-xref{
-  display:inline-block; font-family:var(--mono); font-size:.66rem; letter-spacing:.04em;
-  color:var(--teal-2); background:rgba(34,211,238,.08); border:1px solid var(--border-teal);
-  border-radius:9999px; padding:.12rem .5rem; margin-top:.35rem;
-}
-.sig-variant{
-  display:inline-block; font-family:var(--mono); font-size:.78rem; color:var(--ink);
-  background:rgba(34,211,238,.06); border:1px solid var(--border-teal); border-radius:9px;
-  padding:.35rem .7rem; margin:.25rem .4rem .25rem 0;
-}
-.sig-wordmark{
-  font-family:var(--display); font-weight:800; font-size:1.18rem; letter-spacing:-.01em;
-  color:var(--ink); display:flex; align-items:center; gap:.55rem;
-}
+.sig-metric .v{ font-family:var(--ui); font-weight:700; font-size:1.7rem; line-height:1; color:var(--ink); }
+.sig-metric .k{ font-family:var(--mono); font-size:.6rem; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--muted); margin-top:.55rem; }
+.sig-metric.supported .v{ color:var(--supported); }
+.sig-metric.verify .v{ color:var(--verify); }
+.sig-metric.quarantined .v{ color:var(--quar); }
+.sig-legend{ display:flex; flex-wrap:wrap; gap:1.3rem; margin:.1rem 0 .4rem; }
+.sig-legend .item{ display:flex; align-items:center; gap:.5rem; font-family:var(--ui); font-size:.8rem; color:var(--muted); }
+.sig-legend .sw{ width:9px; height:9px; border-radius:50%; }
+.sig-hint{ display:flex; align-items:center; flex-wrap:wrap; gap:.5rem; margin:.9rem 0 0; }
+.sig-hint .k{ font-family:var(--mono); font-size:.64rem; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); margin-right:.2rem; }
+.sig-chip{ font-family:var(--read); font-size:.88rem; color:#33424f; background:var(--surface);
+  border:1px solid var(--line); border-radius:999px; padding:.35rem .8rem; box-shadow:var(--shadow-sm); }
+.sig-xref{ display:inline-block; font-family:var(--mono); font-size:.66rem; letter-spacing:.03em;
+  color:var(--accent); background:rgba(14,116,144,.08); border:1px solid rgba(14,116,144,.22);
+  border-radius:999px; padding:.12rem .55rem; margin-top:.35rem; }
+.sig-variant{ display:inline-block; font-family:var(--read); font-size:.92rem; color:var(--ink);
+  background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--accent-soft);
+  border-radius:9px; padding:.45rem .8rem; margin:.25rem .45rem .25rem 0; box-shadow:var(--shadow-sm); }
+.sig-note{ font-family:var(--read); border-left:2px solid var(--accent-soft); padding:.15rem 0 .15rem .85rem;
+  margin:.7rem 0 .2rem; color:var(--muted); font-size:.92rem; }
+.sig-note b{ color:var(--ink); }
+.sig-wordmark{ font-family:var(--ui); font-weight:800; font-size:1.18rem; letter-spacing:-.01em;
+  color:var(--rail-ink); display:flex; align-items:center; gap:.6rem; }
 .sig-wordmark .wm{ line-height:1.0; }
-.sig-wordmark .sq{
-  flex:0 0 auto; width:14px; height:14px; border-radius:3px; box-shadow:0 0 12px rgba(34,211,238,.5);
-  background:linear-gradient(135deg,var(--teal-2),var(--teal-deep));
-}
-.sig-tag{
-  font-family:var(--mono); font-size:.6rem; letter-spacing:.14em; text-transform:uppercase;
-  color:var(--faint); margin:.4rem 0 1rem;
-}
-.sig-rail-label{
-  font-family:var(--mono); font-size:.6rem; letter-spacing:.16em; text-transform:uppercase;
-  color:var(--faint); margin:.4rem 0 .4rem;
-}
-.sig-note{
-  border-left:2px solid var(--teal-deep); padding:.1rem 0 .1rem .8rem; margin:.6rem 0 1rem;
-  color:var(--muted); font-size:.82rem;
-}
+.sig-wordmark .sq{ flex:0 0 auto; width:14px; height:14px; border-radius:3px; background:var(--rail-accent); }
+.sig-tag{ font-family:var(--mono); font-size:.58rem; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--rail-muted); margin:.45rem 0 1.1rem; }
+.sig-rail-label{ font-family:var(--mono); font-size:.58rem; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--rail-muted); margin:.5rem 0 .35rem; }
 """
+
+_MARKER_TONES = {"supported": "var(--supported)", "verify": "var(--verify)", "quarantined": "var(--quar)"}
 
 
 def _md(content: str) -> None:
@@ -243,48 +216,46 @@ def _md(content: str) -> None:
 
 
 def apply_theme() -> None:
-    """Inject the Signal design system. Call once, right after ``st.set_page_config``."""
+    """Inject the Executive Navy stylesheet. Call once, right after ``st.set_page_config``."""
     _md(f"<style>{SIGNAL_CSS}</style>")
 
 
-def eyebrow_html(text: str) -> str:
-    """The monospace pill chip with a pulsing red signal dot (returns raw HTML)."""
-    return f'<span class="sig-eyebrow"><span class="dot"></span>{html.escape(text)}</span>'
+def citation_chips(md: str) -> str:
+    """Wrap bare ``[n]`` / ``[L1]`` citation tokens in the answer markdown as inline chips, while
+    leaving markdown links ``[text](url)`` untouched."""
+    return re.sub(r"\[(L?\d{1,3})\](?!\()", r'<span class="cc">\1</span>', md or "")
 
 
 def hero(title: str, subtitle: str, *, eyebrow: str, disclaimer: str | None = None) -> None:
-    """The brand-defining page header: eyebrow chip, gradient Syne title, subtitle, signal rule."""
+    """Kicker chip · sans headline · serif standfirst · hairline rule (the editorial page header)."""
     parts = [
-        '<div class="sig-hero">',
-        eyebrow_html(eyebrow),
+        f'<span class="sig-eyebrow"><span class="dot"></span>{html.escape(eyebrow)}</span>',
         f'<div class="sig-title">{html.escape(title)}</div>',
         f'<div class="sig-subtitle">{html.escape(subtitle)}</div>',
         '<div class="sig-rule"></div>',
     ]
     if disclaimer:
         parts.append(f'<div class="sig-disclaimer">{html.escape(disclaimer)}</div>')
-    parts.append("</div>")
     _md("".join(parts))
 
 
-def section(label: str) -> None:
-    """A Syne section header with the red square marker + hairline rule (matches the briefing PDF)."""
-    _md(f'<div class="sig-section">{html.escape(label)}</div>')
+def section(label: str, key: str = "") -> None:
+    """A section header: optional mono key, sans title, hairline rule extending to the margin."""
+    k = f'<span class="k">{html.escape(key)}</span>' if key else ""
+    _md(f'<div class="sig-section">{k}<span class="t">{html.escape(label)}</span><span class="ln"></span></div>')
 
 
-def note(text: str) -> None:
-    """A quiet teal-ruled aside for secondary guidance."""
-    _md(f'<div class="sig-note">{html.escape(text)}</div>')
+def note(text_html: str) -> None:
+    """A quiet serif aside (accepts a small amount of inline HTML, e.g. <b>)."""
+    _md(f'<div class="sig-note">{text_html}</div>')
 
 
 def xref(text: str) -> None:
-    """The small teal cross-reference chip used under cross-linked figures."""
     _md(f'<span class="sig-xref">{html.escape(text)}</span>')
 
 
 def metrics(items: list[tuple[object, str, str]]) -> None:
-    """Render a row of stat chips. ``items`` = ``(value, label, tone)`` with tone in
-    ``ink|teal|amber|red``."""
+    """Stat cards. ``items`` = ``(value, label, tone)`` with tone in ``''|supported|verify|quarantined``."""
     cells = "".join(
         f'<div class="sig-metric {tone}"><div class="v">{html.escape(str(value))}</div>'
         f'<div class="k">{html.escape(label)}</div></div>'
@@ -293,41 +264,50 @@ def metrics(items: list[tuple[object, str, str]]) -> None:
     _md(f'<div class="sig-metrics">{cells}</div>')
 
 
+def legend() -> None:
+    """The evidence-axis legend (UpToDate-style) so the marker colours are self-explanatory."""
+    items = [("Corpus-supported", "supported"), ("To verify", "verify"), ("Quarantined", "quarantined")]
+    body = "".join(
+        f'<div class="item"><span class="sw" style="background:{_MARKER_TONES[t]}"></span>{html.escape(lbl)}</div>'
+        for lbl, t in items
+    )
+    _md(f'<div class="sig-legend">{body}</div>')
+
+
+def example_hints(items: list[str], *, label: str = "Try") -> None:
+    """Non-interactive example-prompt chips so an empty lane never reads as a blank void."""
+    chips = "".join(f'<span class="sig-chip">{html.escape(s)}</span>' for s in items)
+    _md(f'<div class="sig-hint"><span class="k">{html.escape(label)}</span>{chips}</div>')
+
+
 def variants(labels: list[str]) -> None:
-    """Render disambiguation variants as selectable-looking chips."""
     chips = "".join(f'<span class="sig-variant">{html.escape(v)}</span>' for v in labels)
     _md(f"<div>{chips}</div>")
 
 
 def sidebar_brand() -> None:
-    """The console wordmark + tagline at the top of the rail."""
     st.sidebar.markdown(
         '<div class="sig-wordmark"><span class="sq"></span>'
         '<span class="wm">NEURO<br>CASEBOARD</span></div>'
-        '<div class="sig-tag">Neurosurgery Signal · case-prep console</div>',
+        '<div class="sig-tag">Neurosurgery Signal · case-prep</div>',
         unsafe_allow_html=True,
     )
 
 
 def sidebar_label(text: str) -> None:
-    """A small monospace eyebrow used to title a sidebar group."""
-    st.sidebar.markdown(f'<div class="sig-rail-label">{html.escape(text)}</div>',
-                        unsafe_allow_html=True)
+    st.sidebar.markdown(f'<div class="sig-rail-label">{html.escape(text)}</div>', unsafe_allow_html=True)
 
 
 def sources_panel(citations) -> None:
-    """A bordered surface listing textbook citations: ``[n] Book, Chapter, p.N``."""
     rows = []
     for c in citations:
         chapter = getattr(c, "chapter", None)
         loc = getattr(c, "book", "") + (f", {chapter}" if chapter else "") + f", p.{getattr(c, 'page', '')}"
-        rows.append(f'<div class="sig-row"><span class="n">[{getattr(c, "n", "?")}]</span> '
-                    f'{html.escape(loc)}</div>')
+        rows.append(f'<div class="sig-row"><span class="n">[{getattr(c, "n", "?")}]</span> {html.escape(loc)}</div>')
     _md(f'<div class="sig-panel">{"".join(rows)}</div>')
 
 
 def literature_panel(citations) -> None:
-    """A bordered surface listing PubMed literature: ``[L#] Title — Journal · Year · link``."""
     rows = []
     for c in citations:
         doi = getattr(c, "doi", None)
@@ -338,5 +318,5 @@ def literature_panel(citations) -> None:
         rows.append(
             f'<div class="sig-row"><span class="ln">[L{getattr(c, "n", "?")}]</span> '
             f'{html.escape(getattr(c, "title", "") or "")} '
-            f'<span style="color:#cbd5e1">— {meta}</span>{link}</div>')
+            f'<span style="color:#8a96a2">— {meta}</span>{link}</div>')
     _md(f'<div class="sig-panel">{"".join(rows)}</div>')
