@@ -203,6 +203,25 @@ def _slug(topic: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (topic or "").lower()).strip("-")[:40] or "case"
 
 
+def _render_pdf(dossier, topic, path):
+    """Render the case-board PDF. Default is the Executive-Navy design that matches the web
+    console (``caseboard_pdf``, HTML->PDF via Playwright/Chromium). Falls back to the offline
+    fpdf2 renderer when the exec renderer is unavailable (e.g. no Chromium in CI) or when
+    ``CASEBOARD_PDF_STYLE=clinical`` is set. Returns the written path."""
+    style = os.environ.get("CASEBOARD_PDF_STYLE", "exec").strip().lower()
+    if style != "clinical":
+        try:
+            from neuro_caseboard.caseboard_pdf import render_caseboard_pdf
+            render_caseboard_pdf(dossier, path, subtitle=topic)
+            return Path(path)
+        except Exception as e:  # missing Playwright/Chromium, render failure, etc.
+            import sys
+            print(f"[caseboard] Executive-Navy PDF renderer unavailable ({e!r}); "
+                  "falling back to the clinical fpdf2 renderer.", file=sys.stderr)
+    art = render_pdf(dossier, path)
+    return Path(art.path)
+
+
 def generate(topic: str, *, output_dir, pdf: bool = False, enrich: bool = True, use_llm=None):
     """Build a dossier and write case-board.md (+ case-board.pdf) to output_dir."""
     dossier = build_dossier(topic, enrich=enrich, use_llm=use_llm)
@@ -213,6 +232,5 @@ def generate(topic: str, *, output_dir, pdf: bool = False, enrich: bool = True, 
     md_path.write_text(render_markdown(dossier), encoding="utf-8")
     artifacts["markdown"] = md_path
     if pdf:
-        art = render_pdf(dossier, out / "case-board.pdf")
-        artifacts["pdf"] = Path(art.path)
+        artifacts["pdf"] = _render_pdf(dossier, topic, out / "case-board.pdf")
     return dossier, artifacts
