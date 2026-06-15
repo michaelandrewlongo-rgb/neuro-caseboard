@@ -137,6 +137,7 @@ elif mode == "Build board":
         label = f'board: "{topic}"'
         record(_store, [from_figure_item(fi) for fi in view.figures], label)
         s = view.summary
+        sig.evidence_bar(s.supported, s.to_verify, s.quarantined)
         sig.metrics([
             (len(dossier.sections), "sections", ""),
             (s.supported, "corpus-supported", "supported"),

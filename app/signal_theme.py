@@ -38,8 +38,9 @@ SIGNAL_CSS = """
   --ui:'Archivo',system-ui,sans-serif;
   --read:'Source Serif 4',Georgia,'Times New Roman',serif;
   --mono:'IBM Plex Mono',ui-monospace,monospace;
-  --shadow:0 1px 2px rgba(16,32,48,.05),0 10px 26px rgba(16,32,48,.05);
-  --shadow-sm:0 1px 2px rgba(16,32,48,.05);
+  --surface-2:#fbfcfd; --ease:cubic-bezier(.32,.72,0,1);
+  --shadow-sm:0 0 0 1px rgba(16,32,48,.04),0 1px 2px rgba(16,32,48,.05);
+  --shadow:0 0 0 1px rgba(16,32,48,.04),0 1px 2px rgba(16,32,48,.05),0 12px 26px rgba(16,32,48,.06);
 }
 
 /* ---- Canvas ---------------------------------------------------------------------------------- */
@@ -49,11 +50,14 @@ SIGNAL_CSS = """
 .stApp .block-container, [data-testid="stMainBlockContainer"]{
   max-width:1010px; padding-top:2.2rem; padding-bottom:5rem;
 }
-html, body, .stApp{ font-family:var(--ui); color:var(--ink); -webkit-font-smoothing:antialiased; }
+html, body, .stApp{ font-family:var(--ui); color:var(--ink); -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility; }
+::selection{ background:rgba(14,116,144,.16); color:var(--ink); }
 
 /* ---- Reading column = serif; UI chrome = sans ----------------------------------------------- */
 .stMarkdown p, .stMarkdown li{
   font-family:var(--read); font-size:1.05rem; line-height:1.66; color:#1e2a36; max-width:74ch;
+  font-optical-sizing:auto;
 }
 .stMarkdown strong{ color:#0c2233; font-weight:600; }
 .stMarkdown a{ color:var(--accent); text-decoration:none; border-bottom:1px solid rgba(14,116,144,.28); }
@@ -67,11 +71,13 @@ html, body, .stApp{ font-family:var(--ui); color:var(--ink); -webkit-font-smooth
   margin-right:11px; vertical-align:middle;
 }
 .stMarkdown h3{ font-family:var(--ui); color:var(--accent); font-weight:700; font-size:1.04rem; }
-/* Inline citation chips (post-processed into the answer markdown) */
-.cc{ display:inline-flex; align-items:center; justify-content:center; font-family:var(--mono);
+/* Inline citation chips — anchor-links that scroll to + flash their source row */
+.cc, a.cc{ display:inline-flex; align-items:center; justify-content:center; font-family:var(--mono);
   font-size:.62rem; font-weight:600; color:var(--accent); background:rgba(14,116,144,.09);
   border:1px solid rgba(14,116,144,.22); border-radius:5px; padding:0 5px; margin:0 2px;
-  transform:translateY(-1px); }
+  transform:translateY(-1px); font-variant-numeric:tabular-nums; }
+a.cc{ text-decoration:none; cursor:pointer; transition:background .14s var(--ease), border-color .14s var(--ease); }
+@media (hover:hover){ a.cc:hover{ background:rgba(14,116,144,.16); border-color:var(--accent); } }
 
 /* ---- Sidebar: deep-navy nav rail ------------------------------------------------------------ */
 section[data-testid="stSidebar"]{ background:var(--rail-bg); border-right:1px solid var(--rail-line); }
@@ -83,7 +89,10 @@ section[data-testid="stSidebar"] div[role="radiogroup"] label{
   font-family:var(--mono); font-size:.82rem; letter-spacing:.02em; color:var(--rail-muted);
   transition:all .15s ease;
 }
-section[data-testid="stSidebar"] div[role="radiogroup"] label:hover{ background:rgba(255,255,255,.05); color:#fff; }
+@media (hover:hover){
+  section[data-testid="stSidebar"] div[role="radiogroup"] label:hover{ background:rgba(255,255,255,.05); color:#fff; }
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] label:focus-within{ box-shadow:0 0 0 3px rgba(43,196,212,.3); }
 section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked){
   background:rgba(43,196,212,.14); color:#fff; box-shadow:inset 2px 0 0 var(--rail-accent);
 }
@@ -94,19 +103,30 @@ section[data-testid="stSidebar"] [data-baseweb="slider"] [role="slider"]{ backgr
 .stButton>button, .stDownloadButton>button,
 [data-testid="stBaseButton-primary"], [data-testid="stBaseButton-secondary"]{
   font-family:var(--ui); font-weight:600; letter-spacing:.01em; font-size:.86rem;
-  border-radius:9px; padding:.55rem 1.2rem; transition:all .16s ease; box-shadow:var(--shadow-sm);
+  border-radius:9px; padding:.55rem 1.2rem; box-shadow:var(--shadow-sm);
+  transition:background .16s var(--ease), border-color .16s var(--ease),
+             box-shadow .16s var(--ease), transform .12s var(--ease);
 }
 .stButton>button, [data-testid="stBaseButton-primary"], .stDownloadButton>button{
   color:#ffffff !important; background:var(--accent); border:1px solid var(--accent);
 }
-.stButton>button:hover, [data-testid="stBaseButton-primary"]:hover, .stDownloadButton>button:hover{
-  background:#0b6379; border-color:#0b6379; transform:translateY(-1px);
-  box-shadow:0 8px 20px rgba(14,116,144,.22);
-}
 [data-testid="stBaseButton-secondary"]{
   color:var(--accent) !important; background:#ffffff; border:1px solid var(--line);
 }
-[data-testid="stBaseButton-secondary"]:hover{ border-color:var(--accent-soft); background:#f9fbfc; }
+@media (hover:hover){
+  .stButton>button:hover, [data-testid="stBaseButton-primary"]:hover, .stDownloadButton>button:hover{
+    background:#0b6379; border-color:#0b6379; transform:translateY(-1px);
+    box-shadow:0 8px 20px rgba(14,116,144,.22);
+  }
+  [data-testid="stBaseButton-secondary"]:hover{ border-color:var(--accent-soft); background:#f9fbfc; }
+}
+.stButton>button:active, .stDownloadButton>button:active,
+[data-testid="stBaseButton-primary"]:active, [data-testid="stBaseButton-secondary"]:active{ transform:scale(.97); }
+.stButton>button:focus-visible, .stDownloadButton>button:focus-visible,
+[data-testid="stBaseButton-primary"]:focus-visible, [data-testid="stBaseButton-secondary"]:focus-visible,
+[data-testid="stExpander"] summary:focus-visible{
+  outline:none; box-shadow:0 0 0 3px rgba(14,116,144,.30);
+}
 
 /* ---- Inputs / select: command-bar feel ------------------------------------------------------ */
 .stTextInput div[data-baseweb="input"], .stSelectbox div[data-baseweb="select"]>div{
@@ -116,7 +136,7 @@ section[data-testid="stSidebar"] [data-baseweb="slider"] [role="slider"]{ backgr
 .stTextInput div[data-baseweb="input"]:focus-within{
   border-color:var(--accent) !important; box-shadow:0 0 0 3px rgba(14,116,144,.12) !important;
 }
-.stTextInput input{ background:transparent !important; color:var(--ink) !important; font-family:var(--ui); font-size:.98rem; }
+.stTextInput input{ background:transparent !important; color:var(--ink) !important; font-family:var(--ui); font-size:1rem; }
 .stTextInput input::placeholder{ color:var(--faint) !important; }
 .stTextInput label, .stSelectbox label, .stSlider label, .stCheckbox label span{ color:var(--muted) !important; }
 .stTextInput label, .stSelectbox label{
@@ -129,10 +149,10 @@ section[data-testid="stSidebar"] .stSlider label{ font-family:var(--mono); font-
 [data-testid="stAlert"]{ border-radius:11px; border:1px solid var(--line); font-family:var(--ui); box-shadow:var(--shadow-sm); }
 [data-testid="stExpander"]{
   border:1px solid var(--line); border-left:3px solid var(--accent-soft); border-radius:12px;
-  overflow:hidden; background:var(--surface); margin-bottom:.6rem; box-shadow:var(--shadow-sm);
+  overflow:hidden; background:var(--surface-2); margin-bottom:.6rem; box-shadow:var(--shadow-sm);
 }
 [data-testid="stExpander"] summary{ font-family:var(--ui); font-weight:600; font-size:.92rem; color:var(--ink); }
-[data-testid="stExpander"] summary:hover{ color:var(--accent); }
+@media (hover:hover){ [data-testid="stExpander"] summary:hover{ color:var(--accent); } }
 [data-testid="stImage"] img, .stImage img{ border-radius:10px; border:1px solid var(--line); box-shadow:var(--shadow); }
 [data-testid="stImageCaption"], .stImage figcaption{ color:var(--muted); font-size:.78rem; font-family:var(--ui); }
 [data-testid="stSpinner"] *{ color:var(--accent) !important; }
@@ -153,7 +173,8 @@ section[data-testid="stSidebar"] .stSlider label{ font-family:var(--mono); font-
   font-family:var(--ui); font-weight:700; font-size:2rem; line-height:1.12; letter-spacing:-.02em;
   color:var(--ink); margin:1.1rem 0 .55rem; max-width:24ch;
 }
-.sig-subtitle{ font-family:var(--read); font-size:1.08rem; line-height:1.5; color:var(--muted); max-width:62ch; }
+.sig-subtitle{ font-family:var(--read); font-size:1.08rem; line-height:1.5; color:var(--muted); max-width:62ch;
+  font-optical-sizing:auto; }
 .sig-rule{ height:1px; background:var(--line); margin:1.3rem 0; }
 .sig-disclaimer{ font-family:var(--mono); font-size:.68rem; letter-spacing:.04em; color:var(--faint); }
 .sig-section{
@@ -166,17 +187,21 @@ section[data-testid="stSidebar"] .stSlider label{ font-family:var(--mono); font-
   background:var(--surface); border:1px solid var(--line); border-radius:13px; padding:.35rem 1.2rem;
   box-shadow:var(--shadow);
 }
-.sig-row{ font-family:var(--ui); font-size:.88rem; color:var(--muted); border-top:1px solid var(--line); padding:.7rem 0; }
+.sig-row{ font-family:var(--ui); font-size:.88rem; color:var(--muted); border-top:1px solid var(--line);
+  padding:.7rem 0; scroll-margin-top:90px; }
 .sig-row:first-child{ border-top:none; }
-.sig-row .n{ font-family:var(--mono); color:var(--accent); font-weight:600; margin-right:7px; }
-.sig-row .ln{ font-family:var(--mono); color:var(--accent-2); font-weight:600; margin-right:7px; }
+.sig-row:target{ animation:cc-flash 1.2s ease-out; }
+@keyframes cc-flash{ 0%{ background:rgba(14,116,144,.14); } 100%{ background:transparent; } }
+.sig-row .n{ font-family:var(--mono); color:var(--accent); font-weight:600; margin-right:7px; font-variant-numeric:tabular-nums; }
+.sig-row .ln{ font-family:var(--mono); color:var(--accent-2); font-weight:600; margin-right:7px; font-variant-numeric:tabular-nums; }
 .sig-row a{ color:var(--accent); text-decoration:none; }
 .sig-metrics{ display:flex; flex-wrap:wrap; gap:.8rem; margin:.3rem 0 .7rem; }
 .sig-metric{
   flex:1; min-width:140px; background:var(--surface); border:1px solid var(--line); border-radius:12px;
   padding:.95rem 1.1rem; box-shadow:var(--shadow-sm);
 }
-.sig-metric .v{ font-family:var(--ui); font-weight:700; font-size:1.7rem; line-height:1; color:var(--ink); }
+.sig-metric .v{ font-family:var(--ui); font-weight:700; font-size:1.7rem; line-height:1; color:var(--ink);
+  font-variant-numeric:tabular-nums; }
 .sig-metric .k{ font-family:var(--mono); font-size:.6rem; letter-spacing:.12em; text-transform:uppercase;
   color:var(--muted); margin-top:.55rem; }
 .sig-metric.supported .v{ color:var(--supported); }
@@ -185,6 +210,10 @@ section[data-testid="stSidebar"] .stSlider label{ font-family:var(--mono); font-
 .sig-legend{ display:flex; flex-wrap:wrap; gap:1.3rem; margin:.1rem 0 .4rem; }
 .sig-legend .item{ display:flex; align-items:center; gap:.5rem; font-family:var(--ui); font-size:.8rem; color:var(--muted); }
 .sig-legend .sw{ width:9px; height:9px; border-radius:50%; }
+.sig-evbar{ display:flex; height:8px; border-radius:999px; overflow:hidden; background:var(--line-soft);
+  box-shadow:inset 0 0 0 1px rgba(16,32,48,.05); margin:.1rem 0 1rem; }
+.sig-evbar > span{ display:block; height:100%; }
+.sig-evbar > span + span{ box-shadow:inset 1px 0 0 rgba(255,255,255,.65); }
 .sig-hint{ display:flex; align-items:center; flex-wrap:wrap; gap:.5rem; margin:.9rem 0 0; }
 .sig-hint .k{ font-family:var(--mono); font-size:.64rem; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); margin-right:.2rem; }
 .sig-chip{ font-family:var(--read); font-size:.88rem; color:#33424f; background:var(--surface);
@@ -221,9 +250,14 @@ def apply_theme() -> None:
 
 
 def citation_chips(md: str) -> str:
-    """Wrap bare ``[n]`` / ``[L1]`` citation tokens in the answer markdown as inline chips, while
-    leaving markdown links ``[text](url)`` untouched."""
-    return re.sub(r"\[(L?\d{1,3})\](?!\()", r'<span class="cc">\1</span>', md or "")
+    """Turn bare ``[n]`` / ``[L1]`` citation tokens in the answer markdown into inline anchor chips
+    that scroll to (and flash) the matching Sources/Literature row, while leaving markdown links
+    ``[text](url)`` untouched."""
+    def _sub(m):
+        tok = m.group(1)
+        anchor = f"lit-{tok}" if tok.startswith("L") else f"src-{tok}"
+        return f'<a class="cc" href="#{anchor}">{tok}</a>'
+    return re.sub(r"\[(L?\d{1,3})\](?!\()", _sub, md or "")
 
 
 def hero(title: str, subtitle: str, *, eyebrow: str, disclaimer: str | None = None) -> None:
@@ -252,6 +286,19 @@ def note(text_html: str) -> None:
 
 def xref(text: str) -> None:
     _md(f'<span class="sig-xref">{html.escape(text)}</span>')
+
+
+def evidence_bar(supported: int, verify: int, quarantined: int) -> None:
+    """A compact stacked proportion bar (Consensus-meter style) of the board's evidence mix — the
+    glance above the per-axis stat cards."""
+    total = max(supported + verify + quarantined, 1)
+
+    def seg(n, var):
+        return f'<span style="width:{n / total * 100:.1f}%;background:{var}"></span>' if n else ""
+
+    bar = (seg(supported, "var(--supported)") + seg(verify, "var(--verify)")
+           + seg(quarantined, "var(--quar)"))
+    _md(f'<div class="sig-evbar">{bar}</div>')
 
 
 def metrics(items: list[tuple[object, str, str]]) -> None:
@@ -303,7 +350,9 @@ def sources_panel(citations) -> None:
     for c in citations:
         chapter = getattr(c, "chapter", None)
         loc = getattr(c, "book", "") + (f", {chapter}" if chapter else "") + f", p.{getattr(c, 'page', '')}"
-        rows.append(f'<div class="sig-row"><span class="n">[{getattr(c, "n", "?")}]</span> {html.escape(loc)}</div>')
+        n = getattr(c, "n", "?")
+        rows.append(f'<div class="sig-row" id="src-{html.escape(str(n))}">'
+                    f'<span class="n">[{n}]</span> {html.escape(loc)}</div>')
     _md(f'<div class="sig-panel">{"".join(rows)}</div>')
 
 
@@ -315,8 +364,9 @@ def literature_panel(citations) -> None:
         meta = " · ".join(p for p in [html.escape(getattr(c, "journal", "") or ""),
                                       str(getattr(c, "year", "") or "")] if p)
         link = f' · <a href="{html.escape(href)}" target="_blank" rel="noopener">link</a>' if href else ""
+        n = getattr(c, "n", "?")
         rows.append(
-            f'<div class="sig-row"><span class="ln">[L{getattr(c, "n", "?")}]</span> '
+            f'<div class="sig-row" id="lit-L{html.escape(str(n))}"><span class="ln">[L{n}]</span> '
             f'{html.escape(getattr(c, "title", "") or "")} '
             f'<span style="color:#8a96a2">— {meta}</span>{link}</div>')
     _md(f'<div class="sig-panel">{"".join(rows)}</div>')
