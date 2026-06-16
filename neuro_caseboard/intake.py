@@ -12,6 +12,7 @@ This is WS-1 of the case-dossier engine: it produces the object every later stag
 
 from __future__ import annotations
 
+import collections
 import json
 import os
 import re
@@ -94,9 +95,20 @@ def _extract_sex(text: str) -> str:
 
 
 def _extract_laterality(text: str) -> str:
+    """The case's laterality from directional tokens (left/right/bilateral/midline).
+
+    WS-5: a dictation often names a non-operative side first (a SYMPTOM side — "right-sided
+    weakness") before the lesion/operative side ("left MCA"). Take the MOST FREQUENTLY mentioned
+    directional (ties broken by first occurrence, the lead the dictation sets) rather than the bare
+    first token, so the dominant — operative — side wins. Pure token frequency, topic-agnostic (no
+    clinical vocabulary). Handedness ("right-handed") is stripped first."""
     cleaned = _HANDED_RE.sub(" ", text or "")
-    m = _LAT_RE.search(cleaned)
-    return m.group(1).lower() if m else ""
+    matches = [m.group(1).lower() for m in _LAT_RE.finditer(cleaned)]
+    if not matches:
+        return ""
+    counts = collections.Counter(matches)
+    # most frequent; on a tie, the earliest-mentioned token (smallest first index) wins.
+    return max(matches, key=lambda tok: (counts[tok], -matches.index(tok)))
 
 
 def _norm_level(tok: str) -> str:

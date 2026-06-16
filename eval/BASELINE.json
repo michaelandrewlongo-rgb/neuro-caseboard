@@ -12,7 +12,7 @@
     "direction": "min"
   },
   "intake_side_acc": {
-    "value": 0.777778,
+    "value": 1.0,
     "direction": "min"
   },
   "intake_level_acc": {

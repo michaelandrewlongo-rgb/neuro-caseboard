@@ -124,6 +124,27 @@ def test_deterministic_laterality_ignores_handedness():
     assert cc.laterality == "left"
 
 
+def test_deterministic_laterality_prefers_lesion_over_symptom_side():
+    # WS-5: a stroke dictation names the SYMPTOM side first ("right-sided weakness") but the lesion /
+    # operative side is the other one ("left MCA M1"); the dominant (most-mentioned) side wins,
+    # topic-agnostically — no clinical lexicon, just token frequency.
+    cc = deterministic_parse(
+        "A 72 year old man with sudden right-sided weakness and aphasia; CTA shows a left middle "
+        "cerebral artery M1 occlusion. We plan thrombectomy of the left M1.")
+    assert cc.laterality == "left"
+
+
+def test_deterministic_laterality_frequency_ties_break_to_first():
+    # A single mention each: the first directional (the one the dictation leads with) wins.
+    cc = deterministic_parse("A left pterional craniotomy; the right A1 is dominant.")
+    assert cc.laterality == "left"
+
+
+def test_deterministic_laterality_extracts_midline():
+    cc = deterministic_parse("A midline suprasellar craniopharyngioma elevating the chiasm.")
+    assert cc.laterality == "midline"
+
+
 def test_deterministic_is_topic_agnostic_no_clinical_vocab():
     # The fallback must NOT invent semantics from a hardcoded clinical lexicon.
     cc = deterministic_parse(SPINE_DICTATION)

@@ -88,7 +88,7 @@
     {
       "id": "skullbase_pituitary_endonasal",
       "subspecialty": "Skull base",
-      "dictation": "A 49 year old man presents with bitemporal hemianopia and headaches. MRI shows a sellar mass with suprasellar extension elevating the optic chiasm, consistent with a nonfunctioning pituitary macroadenoma; endocrine workup shows mild hypopituitarism. He has type 2 diabetes. We plan an endoscopic endonasal transsphenoidal resection to decompress the chiasm.",
+      "dictation": "A 49 year old man presents with bitemporal hemianopia and headaches. MRI shows a midline sellar mass with suprasellar extension elevating the optic chiasm, consistent with a nonfunctioning pituitary macroadenoma; endocrine workup shows mild hypopituitarism. He has type 2 diabetes. We plan an endoscopic endonasal transsphenoidal resection to decompress the chiasm.",
       "ground_truth": {
         "laterality": "midline",
         "level": "",
@@ -172,7 +172,7 @@
     {
       "id": "endovascular_acom_coiling",
       "subspecialty": "Vascular",
-      "dictation": "A 61 year old woman presented with a thunderclap headache and a Hunt-Hess 2 subarachnoid hemorrhage. CT angiography shows a ruptured anterior communicating artery aneurysm with a favorable neck for coiling. She has hypertension. We plan endovascular coil embolization of the aneurysm via a transfemoral approach.",
+      "dictation": "A 61 year old woman presented with a thunderclap headache and a Hunt-Hess 2 subarachnoid hemorrhage. CT angiography shows a ruptured midline anterior communicating artery aneurysm with a favorable neck for coiling. She has hypertension. We plan endovascular coil embolization of the aneurysm via a transfemoral approach.",
       "ground_truth": {
         "laterality": "midline",
         "level": "",
@@ -186,7 +186,7 @@
     {
       "id": "endovascular_basilar_coiling",
       "subspecialty": "Vascular",
-      "dictation": "This is a 57 year old man with an incidental 8 mm basilar apex aneurysm found on imaging for headaches. The aneurysm has a wide neck incorporating both P1 origins. He has hypertension and hyperlipidemia. We plan stent-assisted coil embolization of the basilar apex aneurysm with dual antiplatelet therapy.",
+      "dictation": "This is a 57 year old man with an incidental 8 mm midline basilar apex aneurysm found on imaging for headaches. The aneurysm has a wide neck incorporating both P1 origins. He has hypertension and hyperlipidemia. We plan stent-assisted coil embolization of the basilar apex aneurysm with dual antiplatelet therapy.",
       "ground_truth": {
         "laterality": "midline",
         "level": "",
@@ -354,7 +354,7 @@
     {
       "id": "pediatric_craniopharyngioma",
       "subspecialty": "Pediatric",
-      "dictation": "An 8 year old boy presents with short stature, headaches, and bitemporal visual-field loss. MRI shows a suprasellar cystic and solid mass with calcification elevating the optic chiasm, consistent with a craniopharyngioma; he has central hypothyroidism and growth-hormone deficiency. We plan resection of the suprasellar craniopharyngioma with attention to the hypothalamus and optic apparatus.",
+      "dictation": "An 8 year old boy presents with short stature, headaches, and bitemporal visual-field loss. MRI shows a midline suprasellar cystic and solid mass with calcification elevating the optic chiasm, consistent with a craniopharyngioma; he has central hypothyroidism and growth-hormone deficiency. We plan resection of the suprasellar craniopharyngioma with attention to the hypothalamus and optic apparatus.",
       "ground_truth": {
         "laterality": "midline",
         "level": "",
@@ -368,7 +368,7 @@
     {
       "id": "pediatric_myelomeningocele_closure",
       "subspecialty": "Pediatric",
-      "dictation": "A newborn boy is delivered with an open lumbosacral myelomeningocele and lower-extremity weakness, with head ultrasound showing mild ventriculomegaly and a Chiari II malformation. He is otherwise stable in the neonatal unit. We plan early operative closure of the myelomeningocele with neural placode reconstruction and watertight dural closure, with a plan to monitor for hydrocephalus.",
+      "dictation": "A newborn boy is delivered with an open midline lumbosacral myelomeningocele and lower-extremity weakness, with head ultrasound showing mild ventriculomegaly and a Chiari II malformation. He is otherwise stable in the neonatal unit. We plan early operative closure of the myelomeningocele with neural placode reconstruction and watertight dural closure, with a plan to monitor for hydrocephalus.",
       "ground_truth": {
         "laterality": "midline",
         "level": "",
