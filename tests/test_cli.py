@@ -116,3 +116,27 @@ def test_cli_cards_unbuilt_index_exits_1(capsys, monkeypatch):
     rc = cli.main(["cards", "icp"])
     assert rc == 1
     assert "build it first" in capsys.readouterr().err
+
+
+def test_cli_ask_pdf_writes_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("CASEBOARD_PDF_STYLE", "clinical")  # offline fpdf2 path, no Chromium
+    monkeypatch.setattr("neuro_core.query.query", lambda q, config=None, force=False: _Result())
+    out = tmp_path / "ask.pdf"
+    rc = cli.main(["ask", "facial nerve schwannoma", "--pdf", "-o", str(out)])
+    assert rc == 0
+    assert out.read_bytes()[:5].startswith(b"%PDF")
+
+
+def test_cli_ask_clarification_writes_no_pdf(tmp_path, monkeypatch, capsys):
+    from neuro_core.query import Clarification
+    from neuro_core.query_analyze import VariantRewrite
+    clar = Clarification(question="decompressive craniectomy steps?",
+                         variants=[VariantRewrite("unilateral FTP hemicraniectomy", "a"),
+                                   VariantRewrite("bifrontal (Kjellberg) decompression", "b")])
+    import neuro_core.query as q
+    monkeypatch.setattr(q, "query", lambda question, config=None, force=False: clar)
+    out = tmp_path / "nope.pdf"
+    rc = cli.main(["ask", "decompressive craniectomy steps?", "--pdf", "-o", str(out)])
+    assert rc == 0
+    assert not out.exists()                     # no answer -> no PDF
+    assert "ambiguous" in capsys.readouterr().out.lower()

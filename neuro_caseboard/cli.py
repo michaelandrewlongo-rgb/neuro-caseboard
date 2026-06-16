@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from neuro_caseboard.pipeline import generate, _slug
+from neuro_caseboard.pipeline import generate, render_ask_pdf, _slug
 
 
 def _answer_question(question, force=False):
@@ -43,6 +43,10 @@ def _run_ask(args) -> int:
         print("\nFigures:")
         for f in result.figures:
             print(f"  [{f.source_n}] {f.book}, p.{f.page} -> {f.image_path}")
+    if getattr(args, "pdf", False):
+        out_path = args.output or f"ask-{_slug(args.question)}.pdf"
+        render_ask_pdf(result, args.question, out_path)
+        print(f"\nWrote {out_path}")
     return 0
 
 
@@ -95,6 +99,10 @@ def main(argv=None) -> int:
     a.add_argument("question", help="The clinical question, in quotes")
     a.add_argument("--force", action="store_true",
                    help="Run even if the GPU readiness guard fails.")
+    a.add_argument("--pdf", action="store_true",
+                   help="Also export the answer as a PDF briefing")
+    a.add_argument("-o", "--output", default=None,
+                   help="PDF output path (default ask-<slug>.pdf)")
 
     b = sub.add_parser("build", help="Build a dossier from a free-text case")
     b.add_argument("topic", help='Free-text case, e.g. "C5-6 corpectomy"')
