@@ -9,6 +9,7 @@ checklist); with the FTS5 corpus lane, cards earn corpus-supported / quarantined
 from __future__ import annotations
 
 from pathlib import Path
+import logging
 import os
 import re
 
@@ -203,6 +204,41 @@ def _slug(topic: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (topic or "").lower()).strip("-")[:40] or "case"
 
 
+def _exec_renderer_unavailable(exc: Exception) -> bool:
+    """True only for the *expected* "can't render here" cases — Playwright not installed
+    (``ImportError``) or its Chromium binary missing / failing to launch (a ``playwright.*``
+    error) — so we fall back to fpdf2. Genuine bugs in the exec renderer (``AttributeError``,
+    ``KeyError``, …) return False and are re-raised instead of being masked behind a silently
+    degraded PDF."""
+    if isinstance(exc, ImportError):
+        return True
+    return (type(exc).__module__ or "").startswith("playwright")
+
+
+def render_case_pdf(dossier, topic, path):
+    """Render the case-board PDF — the single source of truth for every ``build`` pathway
+    (CLI ``caseboard build --pdf`` and the Streamlit Build lane).
+
+    Default is the Executive-Navy design that matches the web console (``caseboard_pdf``,
+    HTML->PDF via Playwright/Chromium). Falls back to the offline fpdf2 renderer when the exec
+    renderer is unavailable (e.g. no Chromium in CI) or when ``CASEBOARD_PDF_STYLE=clinical`` is
+    set. Returns the written path."""
+    style = os.environ.get("CASEBOARD_PDF_STYLE", "exec").strip().lower()
+    if style != "clinical":
+        try:
+            from neuro_caseboard.caseboard_pdf import render_caseboard_pdf
+            render_caseboard_pdf(dossier, path, subtitle=topic)
+            return Path(path)
+        except Exception as e:
+            if not _exec_renderer_unavailable(e):
+                raise  # a real bug in the exec renderer — surface it, don't mask it
+            logging.getLogger(__name__).warning(
+                "Executive-Navy PDF renderer unavailable (%r); using the clinical fpdf2 "
+                "fallback.", e)
+    art = render_pdf(dossier, path)
+    return Path(art.path)
+
+
 def generate(topic: str, *, output_dir, pdf: bool = False, enrich: bool = True, use_llm=None):
     """Build a dossier and write case-board.md (+ case-board.pdf) to output_dir."""
     dossier = build_dossier(topic, enrich=enrich, use_llm=use_llm)
@@ -213,6 +249,5 @@ def generate(topic: str, *, output_dir, pdf: bool = False, enrich: bool = True, 
     md_path.write_text(render_markdown(dossier), encoding="utf-8")
     artifacts["markdown"] = md_path
     if pdf:
-        art = render_pdf(dossier, out / "case-board.pdf")
-        artifacts["pdf"] = Path(art.path)
+        artifacts["pdf"] = render_case_pdf(dossier, topic, out / "case-board.pdf")
     return dossier, artifacts

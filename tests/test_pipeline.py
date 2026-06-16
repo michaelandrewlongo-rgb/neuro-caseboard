@@ -51,7 +51,9 @@ def test_build_manifest_uses_llm_when_enabled(monkeypatch):
     "right carotid endarterectomy",
 ])
 def test_build_dossier_offline_produces_clean_board(topic):
-    d = build_dossier(topic, enrich=False)
+    # Explicitly offline — must not depend on the ambient env lacking an LLM
+    # provider (a dev shell that defaults to Vertex would otherwise make a real call).
+    d = build_dossier(topic, enrich=False, use_llm=False)
     headings = [s.heading for s in d.sections]
     assert "Anatomy at Risk" in headings
     assert "Operative Plan" in headings

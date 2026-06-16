@@ -1,25 +1,37 @@
-"""Single local app: ask cited questions OR build a pre-op board, over the shared engine, with
-cross-feature flows (answer -> build a board; board card -> ask a follow-up) and inline
-cross-link badges backed by neuro_core.evidence.
+"""Neuro·Caseboard — single local console for citation-grounded Q&A and pre-op board building,
+over one shared engine, with cross-feature flows (answer -> build a board; board card -> ask a
+follow-up) and inline cross-link badges backed by neuro_core.evidence.
+
+The presentation layer is the "Executive Navy" design system (app/signal_theme.py): a deep-navy
+nav rail over a bright report plane, a three-font role split (Archivo UI / Source Serif 4 reading
+column / IBM Plex Mono micro-labels) and a single deep-teal accent. The case-board PDF
+(neuro_caseboard/caseboard_pdf.py) renders the same identity for print, so every surface of the
+product reads as one brand.
+
 Run: `streamlit run app/streamlit_app.py`. Set APP_PASSWORD to gate access (no gate locally)."""
+import html
 import os
 import tempfile
 from pathlib import Path
 
 import streamlit as st
 
+import signal_theme as sig
 from neuro_caseboard.board_view import board_view
-from neuro_caseboard.pipeline import build_dossier
-from neuro_caseboard.render_pdf import render_pdf
+from neuro_caseboard.pipeline import build_dossier, render_case_pdf
 from neuro_caseboard.topic_extract import extract_board_topic
 from neuro_core.evidence import from_figure, from_figure_item, other_features, record
 from neuro_caseboard.qa import answer_question
 
-st.set_page_config(page_title="Neuro Case Prep", layout="wide")
+st.set_page_config(page_title="Neuro·Caseboard — Signal", page_icon="◈", layout="wide",
+                   initial_sidebar_state="expanded")
+sig.apply_theme()
 
 # Optional passcode gate: set APP_PASSWORD in the deployment env. No gate locally.
 _pw = os.environ.get("APP_PASSWORD", "")
 if _pw and not st.session_state.get("authed"):
+    sig.hero("Restricted console", "Enter the access passcode to continue.",
+             eyebrow="Neurosurgery Signal · Locked")
     _entered = st.text_input("Passcode", type="password")
     if _entered == _pw:
         st.session_state["authed"] = True
@@ -41,33 +53,42 @@ if "seed_topic" in st.session_state:
 # Session-scoped cross-feature evidence store: EvidenceRef.key -> set of feature labels.
 _store = st.session_state.setdefault("session_evidence", {})
 
-mode = st.sidebar.radio("Mode", ["Ask", "Build board", "Cards"], key="mode")
+# --- Sidebar: branded console rail -------------------------------------------------------------
+sig.sidebar_brand()
+sig.sidebar_label("Lane")
+mode = st.sidebar.radio("Mode", ["Ask", "Build board", "Cards"], key="mode",
+                        label_visibility="collapsed")
 
 
 def _badge(key, current_label):
     notes = other_features(_store, key, current_label)
     if notes:
-        st.caption(f"→ also in {notes[0]}")
+        sig.xref(f"also in {notes[0]}")
 
 
 if mode == "Ask":
-    st.title("Ask the neurosurgery corpus")
-    st.caption("Citation-grounded answers from your textbook corpus. Decision-support only.")
-    q = st.text_input("Ask a clinical or anatomy question", key="ask_q")
+    sig.hero("Ask the corpus", "Citation-grounded answers from your neurosurgery textbooks, "
+             "augmented with contemporary PubMed literature.",
+             eyebrow="Ask · Citation-grounded",
+             disclaimer="Decision-support only · not a substitute for clinical judgement")
+    q = st.text_input("Ask a clinical or anatomy question", key="ask_q",
+                      placeholder='e.g. "blood supply of the lateral medulla"')
+    if not q:
+        sig.example_hints(["blood supply of the lateral medulla", "Wallenberg syndrome findings",
+                           "borders of the cavernous sinus", "watershed infarct territories"])
     if q:
-        with st.spinner("Searching textbooks + recent literature..."):
+        with st.spinner("Searching textbooks + recent literature…"):
             result = answer_question(q)
         from neuro_core.query import Clarification
         if isinstance(result, Clarification):
-            st.warning("This question is ambiguous. Re-ask naming one variant:")
-            for v in result.variants:
-                st.markdown(f"- **{v.label}**")
+            st.warning("This question maps to several distinct topics. Re-ask naming one variant:")
+            sig.variants([v.label for v in result.variants])
             st.stop()
         label = f'answer: "{q}"'
         record(_store, [from_figure(f) for f in result.figures], label)
-        st.markdown(result.answer)
+        st.markdown(sig.citation_chips(result.answer), unsafe_allow_html=True)
         if result.figures:
-            st.subheader("Figures")
+            sig.section("Figures", "FIG")
             cols = st.columns(min(3, len(result.figures)))
             for col, f in zip(cols, result.figures):
                 with col:
@@ -75,17 +96,13 @@ if mode == "Ask":
                              caption=f"[{f.source_n}] {f.book}, p.{f.page} — {f.caption}",
                              use_container_width=True)
                     _badge(from_figure(f).key, label)
-        st.subheader("Sources")
-        for c in result.citations:
-            loc = c.book + (f", {c.chapter}" if c.chapter else "") + f", p.{c.page}"
-            st.write(f"[{c.n}] {loc}")
+        sig.section("Sources", "SRC")
+        sig.sources_panel(result.citations)
         if result.literature and result.literature.narrative:
-            st.subheader("Contemporary Literature")
-            st.markdown(result.literature.narrative)
-            for lc in result.literature.citations:
-                link = f"https://doi.org/{lc.doi}" if lc.doi else lc.url
-                st.markdown(f"[L{lc.n}] {lc.title} — *{lc.journal}* {lc.year or ''} · [{link}]({link})")
-        if st.button("Build a board from this"):
+            sig.section("Contemporary Literature", "LIT")
+            st.markdown(sig.citation_chips(result.literature.narrative), unsafe_allow_html=True)
+            sig.literature_panel(result.literature.citations)
+        if st.button("Build a board from this", type="primary"):
             try:
                 topic = extract_board_topic(q, result.answer)
             except Exception:
@@ -95,15 +112,21 @@ if mode == "Ask":
             st.rerun()
 
 elif mode == "Build board":
-    st.title("Build a pre-op case board")
-    st.caption("Structured, corpus-grounded pre-operative dossier. Decision-support only.")
+    sig.hero("Build a pre-op board", "A structured, corpus-grounded pre-operative dossier for the "
+             "exact procedure — anatomy, operative steps, and risks.",
+             eyebrow="Build · Pre-op dossier",
+             disclaimer="Decision-support only · verify against primary sources before use")
     topic = st.text_input('Case, e.g. "C5-6 ACDF" or "left retrosigmoid vestibular schwannoma"',
-                          key="build_topic")
+                          key="build_topic",
+                          placeholder='e.g. "right carotid endarterectomy"')
+    if not topic:
+        sig.example_hints(["C5–6 ACDF", "left retrosigmoid vestibular schwannoma",
+                           "right carotid endarterectomy", "awake left temporal glioma"], label="Cases")
     c1, c2, c3 = st.columns(3)
     want_pdf = c1.checkbox("PDF download", value=True)
     enrich = c2.checkbox("Corpus enrichment", value=True)
     use_llm = c3.checkbox("LLM explorer", value=True)
-    if topic and st.button("Build board"):
+    if topic and st.button("Build board", type="primary"):
         with st.spinner("Building board…"):
             dossier = build_dossier(topic, enrich=enrich, use_llm=None if use_llm else False)
             view = board_view(dossier)
@@ -114,16 +137,22 @@ elif mode == "Build board":
         label = f'board: "{topic}"'
         record(_store, [from_figure_item(fi) for fi in view.figures], label)
         s = view.summary
-        st.success(f"{len(dossier.sections)} sections · {s.supported} corpus-supported · "
-                   f"{s.to_verify} to verify · {s.quarantined} quarantined")
+        sig.evidence_bar(s.supported, s.to_verify, s.quarantined)
+        sig.metrics([
+            (len(dossier.sections), "sections", ""),
+            (s.supported, "corpus-supported", "supported"),
+            (s.to_verify, "to verify", "verify"),
+            (s.quarantined, "quarantined", "quarantined"),
+        ])
+        sig.legend()
         if want_pdf:
             with tempfile.TemporaryDirectory() as td:
-                art = render_pdf(dossier, Path(td) / "case-board.pdf")
-                pdf_bytes = Path(art.path).read_bytes()
+                pdf_path = render_case_pdf(dossier, topic, Path(td) / "case-board.pdf")
+                pdf_bytes = Path(pdf_path).read_bytes()
             st.download_button("Download PDF", pdf_bytes, file_name="case-board.pdf",
                                mime="application/pdf")
         if view.figures:
-            st.subheader("Figures")
+            sig.section("Figures", "FIG")
             cols = st.columns(min(3, len(view.figures)))
             for col, fig in zip(cols, view.figures):
                 with col:
@@ -131,16 +160,16 @@ elif mode == "Build board":
                              caption=f"[{fig.fig_id}] {fig.caption} — {fig.citation}",
                              use_container_width=True)
                     _badge(from_figure_item(fig).key, label)
-        st.markdown(view.markdown)
+        st.markdown(sig.citation_chips(view.markdown), unsafe_allow_html=True)
 
     # Board card -> ask a follow-up (uses the most recently built board this session).
     last = st.session_state.get("last_board")
     if last and last["claims"]:
-        st.divider()
-        st.subheader("Follow up")
-        choice = st.selectbox(f'Ask a follow-up about a card from "{last["topic"]}"',
-                              last["claims"], key="followup_choice")
-        if st.button("Ask this"):
+        sig.section("Follow up", "NEXT")
+        sig.note(f'Drill into any card from "{html.escape(last["topic"])}" as a fresh cited question.')
+        choice = st.selectbox("Pick a card", last["claims"], key="followup_choice",
+                              label_visibility="collapsed")
+        if st.button("Ask this", type="primary"):
             st.session_state["seed_question"] = choice
             st.session_state["_pending_mode"] = "Ask"
             st.rerun()
@@ -148,16 +177,23 @@ elif mode == "Build board":
 elif mode == "Cards":
     from neuro_core.cards_query import cards_query, flagged_tags, CardsIndexNotBuilt
 
-    st.title("Board-review card bank")
-    st.caption("Hybrid search over your SANS / ABNS deck. Decision-support only.")
-    st.info("Personal study notes — **not** corpus-cited or source-verified, "
-            "unlike the Ask / Build lanes.")
-    q = st.text_input("Search the cards", key="cards_q")
+    sig.hero("Board-review card bank", "Hybrid search over your SANS / ABNS deck — your personal "
+             "study notes, matched but not synthesized.",
+             eyebrow="Cards · Study deck",
+             disclaimer="Personal notes · NOT corpus-cited or source-verified")
+    sig.note("This lane is isolated from Ask / Build: results are your own flashcards, not "
+             "grounded textbook answers.")
+    sig.sidebar_label("Cards")
     k = st.sidebar.slider("Cards to show", 3, 20, 6)
+    q = st.text_input("Search the cards", key="cards_q",
+                      placeholder='e.g. "cavernous sinus contents"')
+    if not q:
+        sig.example_hints(["cavernous sinus contents", "Meckel cave", "spinal cord tracts",
+                           "circle of Willis"])
     if q:
         res = None
         try:
-            with st.spinner("Searching cards..."):
+            with st.spinner("Searching cards…"):
                 res = cards_query(q, k=k)
         except CardsIndexNotBuilt as e:
             st.warning(str(e))

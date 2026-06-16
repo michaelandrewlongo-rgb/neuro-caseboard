@@ -81,6 +81,10 @@ def test_returns_none_when_too_few_valid_cards():
 
 
 def test_llm_unavailable_without_api_key(monkeypatch):
+    # Hermetic: clear every provider selector so a dev shell that defaults to
+    # Vertex (CASEBOARD_LLM_PROVIDER / GOOGLE_CLOUD_PROJECT) can't leak in.
+    monkeypatch.delenv("CASEBOARD_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)

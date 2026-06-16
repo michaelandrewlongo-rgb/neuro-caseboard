@@ -1,0 +1,14 @@
+# Neuro·Caseboard — "Executive Navy" base theme tokens.
+# Bright report content plane; the deep-navy nav rail is applied to the sidebar in
+# app/signal_theme.py (CSS), since secondaryBackgroundColor can't do navy-rail + light-widgets
+# at once. Tokens stay in the navy/teal family shared with the briefing PDF.
+[theme]
+base = "light"
+primaryColor = "#0e7490"            # deep teal — buttons, sliders, focus, links
+backgroundColor = "#f6f7f9"         # cool light content canvas
+secondaryBackgroundColor = "#ffffff" # widget fills (sidebar is overridden to navy in CSS)
+textColor = "#16202c"
+font = "sans-serif"
+
+[client]
+toolbarMode = "minimal"
