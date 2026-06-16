@@ -24,7 +24,7 @@
     "direction": "min"
   },
   "corpus_n_coverage": {
-    "value": 0.0,
+    "value": 1.0,
     "direction": "min"
   },
   "figure_archetype_acc": {

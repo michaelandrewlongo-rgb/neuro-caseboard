@@ -25,8 +25,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as dt
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass
@@ -50,8 +52,41 @@ import dataclasses                                                        # noqa
 # gate's [L#] check is identical to eval/case_eval's. Fabrication is impossible: only these PMIDs
 # can be cited.
 from eval.case_eval import _CannedCache, _CannedSynth, _LIT_PMIDS        # noqa: E402
+from caseprep.core.contracts import EvidenceRecord                       # noqa: E402
 
 DEFAULT_BASELINE = HERE / "BASELINE.json"
+
+
+class _FakeCorpus:
+    """A deterministic, offline stand-in for the textbook corpus (none in required CI). Returns
+    fixed records for any query so case operative/technique/structures claims earn inline ``[n]``
+    that resolve to retrieved records (WS-2) — fabrication is impossible (only these can be cited)."""
+
+    def retrieve(self, query, *, top_n=5, subdomain=None):
+        k = min(top_n, 3)
+        return [EvidenceRecord(id=f"corpus{i}", source="corpus",
+                               title=f"Reference corpus record {i}",
+                               text=f"Operative anatomy/technique passage {i}.",
+                               metadata={"citation": f"Reference corpus record {i}"})
+                for i in range(1, k + 1)]
+
+
+_FAKE_CORPUS = _FakeCorpus()
+
+
+@contextlib.contextmanager
+def _figures_off():
+    """Disable the textbook-figure lane around a build (the [n] text signal does not need it, and
+    building the real figure retriever is slow + environment-dependent). Leak-free."""
+    prev = os.environ.get("CASEBOARD_TEXTBOOK_FIGURES")
+    os.environ["CASEBOARD_TEXTBOOK_FIGURES"] = "0"
+    try:
+        yield
+    finally:
+        if prev is None:
+            os.environ.pop("CASEBOARD_TEXTBOOK_FIGURES", None)
+        else:
+            os.environ["CASEBOARD_TEXTBOOK_FIGURES"] = prev
 
 # A literature config with the lane forced ON (offline; the canned cache/synth keep it off the
 # network). Built from the ambient defaults so cache_dir/k/recency stay realistic, then `enabled`
@@ -159,9 +194,14 @@ def compute_metrics(data: EvalData) -> dict:
         goal_ok += bool(full.surgical_goal) and gt["surgical_goal"].lower() in full.surgical_goal.lower()
 
         # --- dossiers (offline, no model): deterministic-context + ground-truth-context ---
+        # The gt dossier is built with the injected fake corpus (figures off) so the corpus [n]
+        # axis (WS-2) is exercised deterministically; section coverage / dedup / red-flag signals
+        # are unaffected by enrichment.
         det_dossier = build_case_dossier(det, enrich=False, use_llm=False, literature=False)
         gt_case = CaseContext.from_dict({**gt, "presentation": d["dictation"]})
-        gt_dossier = build_case_dossier(gt_case, enrich=False, use_llm=False, literature=False)
+        with _figures_off():
+            gt_dossier = build_case_dossier(gt_case, enrich=True, retriever=_FAKE_CORPUS,
+                                            use_llm=False, literature=False)
         # Drive the [L#] lane EXPLICITLY with a forced-enabled offline config + the canned PubMed
         # lane, so the signal is deterministic regardless of the ambient LITERATURE_RETRIEVAL flag
         # (the unit-test conftest turns it off; we never touch the network either way).
@@ -182,12 +222,14 @@ def compute_metrics(data: EvalData) -> dict:
                      for cit in s.literature.citations}
         lit_ok += (lit_cov == len(LIT_SECTIONS) and all_pmids <= _LIT_PMIDS)
 
-        # --- corpus [n] presence on corpus-eligible sections (0 until WS-2 wires enrichment) ---
-        has_n = any(
-            _CORPUS_CITE.search(_LIT_CITE.sub("", c.text + " " + (c.why or "")))
-            for s in gt_dossier.sections if s.heading in CORPUS_ELIGIBLE for c in s.claims
+        # --- corpus [n] presence: every corpus-eligible section carries >=1 inline [n] (WS-2) ---
+        elig = {s.heading: s for s in gt_dossier.sections}
+        n_elig = sum(
+            1 for h in CORPUS_ELIGIBLE
+            if any(_CORPUS_CITE.search(_LIT_CITE.sub("", c.text))
+                   for c in getattr(elig.get(h), "claims", []) or [])
         )
-        corpus_n_ok += bool(has_n)
+        corpus_n_ok += (n_elig == len(CORPUS_ELIGIBLE))
 
         # --- near-dup residual (both contexts share the same dedup pass) ---
         near_dup_total += _residual_near_dup_pairs(gt_dossier)

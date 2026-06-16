@@ -71,6 +71,18 @@ CASE_SECTIONS: list[CaseSection] = [
 CASE_ORDER = [s.target_file for s in CASE_SECTIONS]
 CASE_HEADINGS = {s.target_file: s.heading for s in CASE_SECTIONS}
 CASE_INTROS = {s.target_file: s.intro for s in CASE_SECTIONS}
+
+# WS-2: the operative/technique/structures surfaces whose claims should carry inline corpus `[n]`
+# citations (the differentiator restored on the case path). Driven by the taxonomy, not a clinical
+# literal, so it generalizes across all of neurosurgery.
+CORPUS_ELIGIBLE_FILES = frozenset({
+    "04-operative-plan.md",      # Operative Plan
+    "05-risk-and-rescue.md",     # Risks (structures at risk)
+    "08-surgical-technique.md",  # Surgical Technique
+})
+# WS-2: the surfaces eligible to collect retrieved textbook figure plates on the case path
+# (the build path keeps its own anatomy-at-risk file; see pipeline._collect_figures).
+CASE_FIGURE_FILES = frozenset(CORPUS_ELIGIBLE_FILES | {"09-case-figures.md"})
 # section_key -> legal section file (validation, mirrors explore_llm._SLOTS_BY_FILE)
 SLOTS_BY_FILE = {s.target_file: s.slots for s in CASE_SECTIONS}
 # section_key -> Title Case compiler_slot label

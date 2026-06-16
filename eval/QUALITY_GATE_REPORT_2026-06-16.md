@@ -11,7 +11,7 @@ held-out **eval** split. Fails CI if any metric regresses below `eval/BASELINE.j
 | intake_level_acc | 1.0 | 1.0 | min | PASS |
 | intake_goal_acc | 1.0 | 1.0 | min | PASS |
 | lit_coverage | 1.0 | 1.0 | min | PASS |
-| corpus_n_coverage | 0.0 | 0.0 | min | PASS |
+| corpus_n_coverage | 1.0 | 1.0 | min | PASS |
 | figure_archetype_acc | 1.0 | 1.0 | min | PASS |
 | figure_side_acc | 1.0 | 1.0 | min | PASS |
 | figure_byte_stable | 1.0 | 1.0 | min | PASS |
