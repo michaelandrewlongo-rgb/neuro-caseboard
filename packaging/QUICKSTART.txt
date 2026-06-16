@@ -1,0 +1,25 @@
+NEURO-CASEBOARD  —  QUICK START (Mac)
+=====================================
+
+1) Plug this drive into your MacBook Air.
+
+2) Open this folder and double-click:   Install Caseboard.command
+      • If macOS says "unidentified developer":
+           right-click the file  ->  Open  ->  Open   (one time only)
+      • Wait ~10–15 minutes, until it shows:   ✅ INSTALLED
+      • It needs Wi-Fi while installing.
+
+3) On your Desktop, double-click:       Caseboard
+      • It opens in your web browser like a normal website.
+      • The FIRST question is slow (it downloads the AI models once). Normal.
+      • Keep the small black window open while using it; close it to stop.
+
+You can unplug the drive after step 2 — everything is copied onto the Mac.
+
+----------------------------------------------------------------------
+Optional — smarter answers (it still works fine without these):
+   Open this file:   ~/projects/neuro-caseboard/.env
+   Paste in any keys you have (ANTHROPIC_API_KEY, GOOGLE_CLOUD_PROJECT).
+
+Stuck? Send back whatever text the black window shows.
+----------------------------------------------------------------------
