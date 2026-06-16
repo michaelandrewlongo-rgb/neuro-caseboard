@@ -66,3 +66,39 @@ def test_build_dossier_offline_produces_clean_board(topic):
     md = render_markdown(d)
     assert "[low]" not in md and "🟢" not in md
     assert "✓" in md and "⚠" in md
+
+
+def test_render_ask_pdf_clinical_style_uses_fpdf(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASEBOARD_PDF_STYLE", "clinical")
+    from neuro_caseboard.pipeline import render_ask_pdf
+    result = {"answer": "Answer [1].",
+              "citations": [{"n": 1, "book": "Bk", "chapter": "", "page": 3}], "figures": []}
+    out = render_ask_pdf(result, "Q?", tmp_path / "a.pdf")
+    assert out.read_bytes()[:5].startswith(b"%PDF")
+
+
+def test_render_ask_pdf_falls_back_when_chromium_missing(monkeypatch, tmp_path):
+    monkeypatch.delenv("CASEBOARD_PDF_STYLE", raising=False)
+    import neuro_caseboard.briefing_pdf as bp
+
+    def _boom(*a, **k):
+        raise ImportError("no playwright")
+
+    monkeypatch.setattr(bp, "render_briefing_pdf", _boom)
+    from neuro_caseboard.pipeline import render_ask_pdf
+    out = render_ask_pdf({"answer": "A.", "citations": [], "figures": []}, "Q?", tmp_path / "b.pdf")
+    assert out.read_bytes()[:5].startswith(b"%PDF")  # fell back to fpdf2
+
+
+def test_render_ask_pdf_reraises_real_bug(monkeypatch, tmp_path):
+    import pytest
+    monkeypatch.delenv("CASEBOARD_PDF_STYLE", raising=False)
+    import neuro_caseboard.briefing_pdf as bp
+
+    def _boom(*a, **k):
+        raise AttributeError("genuine bug in the exec renderer")
+
+    monkeypatch.setattr(bp, "render_briefing_pdf", _boom)
+    from neuro_caseboard.pipeline import render_ask_pdf
+    with pytest.raises(AttributeError):
+        render_ask_pdf({"answer": "A.", "citations": [], "figures": []}, "Q?", tmp_path / "c.pdf")

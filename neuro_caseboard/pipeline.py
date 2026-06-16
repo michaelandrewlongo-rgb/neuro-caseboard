@@ -239,6 +239,31 @@ def render_case_pdf(dossier, topic, path):
     return Path(art.path)
 
 
+def render_ask_pdf(result, question, path):
+    """Render the ask (Q&A) PDF — the single source of truth for every ``ask`` pathway
+    (CLI ``caseboard ask --pdf`` and the Streamlit Ask lane).
+
+    Default is the Executive-Navy briefing that matches the web console (``briefing_pdf``,
+    HTML->PDF via Playwright/Chromium). Falls back to the offline fpdf2 renderer when the exec
+    renderer is unavailable (e.g. no Chromium in CI) or when ``CASEBOARD_PDF_STYLE=clinical`` is
+    set. Returns the written path."""
+    style = os.environ.get("CASEBOARD_PDF_STYLE", "exec").strip().lower()
+    if style != "clinical":
+        try:
+            from neuro_caseboard.briefing_pdf import render_briefing_pdf
+            render_briefing_pdf(result, path, title=question)
+            return Path(path)
+        except Exception as e:
+            if not _exec_renderer_unavailable(e):
+                raise  # a real bug in the exec renderer — surface it, don't mask it
+            logging.getLogger(__name__).warning(
+                "Executive-Navy ask PDF renderer unavailable (%r); using the clinical fpdf2 "
+                "fallback.", e)
+    from neuro_caseboard.briefing_pdf import render_briefing_clinical_pdf
+    render_briefing_clinical_pdf(result, path, title=question)
+    return Path(path)
+
+
 def generate(topic: str, *, output_dir, pdf: bool = False, enrich: bool = True, use_llm=None):
     """Build a dossier and write case-board.md (+ case-board.pdf) to output_dir."""
     dossier = build_dossier(topic, enrich=enrich, use_llm=use_llm)
