@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import datetime as dt
 import html
+import os
 import re
 
 from neuro_caseboard.model import Dossier
@@ -125,8 +126,11 @@ def _inline(text: str) -> str:
 
 
 def _img_data_uri(path: str) -> str:
-    ext = (path.rsplit(".", 1)[-1] or "png").lower()
-    mime = "image/jpeg" if ext in ("jpg", "jpeg") else f"image/{ext}"
+    # Derive the extension from the basename only — a dot in a parent dir (e.g. /data/v1.2/figA)
+    # or a missing extension must not corrupt the MIME type.
+    name = os.path.basename(path)
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else "png"
+    mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "svg": "image/svg+xml"}.get(ext, f"image/{ext}")
     with open(path, "rb") as f:
         return f"data:{mime};base64," + base64.b64encode(f.read()).decode()
 

@@ -252,12 +252,22 @@ def apply_theme() -> None:
 def citation_chips(md: str) -> str:
     """Turn bare ``[n]`` / ``[L1]`` citation tokens in the answer markdown into inline anchor chips
     that scroll to (and flash) the matching Sources/Literature row, while leaving markdown links
-    ``[text](url)`` untouched."""
+    ``[text](url)`` untouched.
+
+    The result is rendered with ``unsafe_allow_html=True``, so the surrounding text MUST be made
+    inert first. A tag can only start with ``<``, so escaping ``&`` and ``<`` neutralises both
+    HTML injection (a malicious ``<img onerror=...>`` topic) and silent content loss (clinical
+    text like ``lesion <1 cm`` was being parsed as a tag and dropped). ``>`` is left intact on
+    purpose so Markdown blockquotes (``> ...`` cross-refs in the board body) and ``>2 cm`` text
+    still render; ``[`` and digits are untouched, so the citation regex still matches."""
+    safe = (md or "").replace("&", "&amp;").replace("<", "&lt;")
+
     def _sub(m):
         tok = m.group(1)
         anchor = f"lit-{tok}" if tok.startswith("L") else f"src-{tok}"
         return f'<a class="cc" href="#{anchor}">{tok}</a>'
-    return re.sub(r"\[(L?\d{1,3})\](?!\()", _sub, md or "")
+
+    return re.sub(r"\[(L?\d{1,3})\](?!\()", _sub, safe)
 
 
 def hero(title: str, subtitle: str, *, eyebrow: str, disclaimer: str | None = None) -> None:

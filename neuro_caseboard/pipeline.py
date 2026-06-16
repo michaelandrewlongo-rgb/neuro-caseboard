@@ -9,6 +9,7 @@ checklist); with the FTS5 corpus lane, cards earn corpus-supported / quarantined
 from __future__ import annotations
 
 from pathlib import Path
+import logging
 import os
 import re
 
@@ -203,6 +204,17 @@ def _slug(topic: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (topic or "").lower()).strip("-")[:40] or "case"
 
 
+def _exec_renderer_unavailable(exc: Exception) -> bool:
+    """True only for the *expected* "can't render here" cases — Playwright not installed
+    (``ImportError``) or its Chromium binary missing / failing to launch (a ``playwright.*``
+    error) — so we fall back to fpdf2. Genuine bugs in the exec renderer (``AttributeError``,
+    ``KeyError``, …) return False and are re-raised instead of being masked behind a silently
+    degraded PDF."""
+    if isinstance(exc, ImportError):
+        return True
+    return (type(exc).__module__ or "").startswith("playwright")
+
+
 def render_case_pdf(dossier, topic, path):
     """Render the case-board PDF — the single source of truth for every ``build`` pathway
     (CLI ``caseboard build --pdf`` and the Streamlit Build lane).
@@ -217,10 +229,12 @@ def render_case_pdf(dossier, topic, path):
             from neuro_caseboard.caseboard_pdf import render_caseboard_pdf
             render_caseboard_pdf(dossier, path, subtitle=topic)
             return Path(path)
-        except Exception as e:  # missing Playwright/Chromium, render failure, etc.
-            import sys
-            print(f"[caseboard] Executive-Navy PDF renderer unavailable ({e!r}); "
-                  "falling back to the clinical fpdf2 renderer.", file=sys.stderr)
+        except Exception as e:
+            if not _exec_renderer_unavailable(e):
+                raise  # a real bug in the exec renderer — surface it, don't mask it
+            logging.getLogger(__name__).warning(
+                "Executive-Navy PDF renderer unavailable (%r); using the clinical fpdf2 "
+                "fallback.", e)
     art = render_pdf(dossier, path)
     return Path(art.path)
 
