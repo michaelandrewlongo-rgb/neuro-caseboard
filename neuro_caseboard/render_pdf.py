@@ -14,54 +14,27 @@ Owns defects #1 (broken glyphs) and #4 (legend), and lays out the structured fix
 from __future__ import annotations
 
 import os
-import unicodedata
 from pathlib import Path
 
 from fpdf import FPDF
 
 from caseprep.core.contracts import ArtifactRef
+from neuro_caseboard.fpdf_base import register_fonts, ascii_fallback
 from neuro_caseboard.model import Dossier, MARK, ASCII_MARK
 
-_FONT_DIR = Path(__file__).parent / "assets" / "fonts"
 _COLORS = {"supported": (0, 128, 0), "verify": (180, 95, 0)}
 _BLACK = (0, 0, 0)
 _GRAY = (90, 90, 90)
-
-# Deterministic ASCII fallback, used only when the Unicode font can't be embedded.
-_REPL = {
-    "≥": ">=", "≤": "<=", "×": "x", "→": "->", "—": "-", "–": "-",
-    "“": '"', "”": '"', "‘": "'", "’": "'", "•": "-", "·": "-",
-    "✓": "[OK]", "⚠": "[!]", "…": "...",
-}
-
-
-def _ascii(s: str) -> str:
-    for k, v in _REPL.items():
-        s = s.replace(k, v)
-    # strip any remaining non-ascii without ever producing '?'
-    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
-
-
-def _register(pdf: FPDF):
-    reg = _FONT_DIR / "DejaVuSans.ttf"
-    bold = _FONT_DIR / "DejaVuSans-Bold.ttf"
-    obl = _FONT_DIR / "DejaVuSans-Oblique.ttf"
-    if reg.exists() and bold.exists() and obl.exists():
-        pdf.add_font("DejaVu", "", str(reg))
-        pdf.add_font("DejaVu", "B", str(bold))
-        pdf.add_font("DejaVu", "I", str(obl))
-        return "DejaVu", True
-    return "Helvetica", False
 
 
 def render_pdf(dossier: Dossier, out_path) -> ArtifactRef:
     pdf = FPDF(format="A4")
     pdf.set_auto_page_break(True, margin=16)
     pdf.add_page()
-    fam, uni = _register(pdf)
+    fam, uni = register_fonts(pdf)
 
     def t(s: str) -> str:
-        return s if uni else _ascii(s)
+        return s if uni else ascii_fallback(s)
 
     def glyph(status: str) -> str:
         return (MARK if uni else ASCII_MARK).get(status, "")
