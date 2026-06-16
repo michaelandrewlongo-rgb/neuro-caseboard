@@ -90,6 +90,53 @@ def _figures_off():
         else:
             os.environ["CASEBOARD_TEXTBOOK_FIGURES"] = prev
 
+
+@contextlib.contextmanager
+def _deterministic_author():
+    """Force the offline deterministic figure author (no provider/network)."""
+    prev = os.environ.get("CASEBOARD_LLM")
+    os.environ["CASEBOARD_LLM"] = "0"
+    try:
+        yield
+    finally:
+        if prev is None:
+            os.environ.pop("CASEBOARD_LLM", None)
+        else:
+            os.environ["CASEBOARD_LLM"] = prev
+
+
+class _FakeFigret:
+    """Returns one on-region cranial plate record pointing at *png_path* (for the WS-4 gate check)."""
+
+    def __init__(self, png_path):
+        self._fp = png_path
+
+    def retrieve(self, query, *, topic="", subdomain=None, top_n=3):
+        cap = "Circle of Willis: middle cerebral artery and branches at the skull base"
+        return [EvidenceRecord(id="figp", source="textbook", title=cap[:50], text=cap,
+                               metadata={"figure_path": self._fp, "caption": cap,
+                                         "citation": "Reference atlas, p.1", "book": "Reference atlas",
+                                         "page": 1})]
+
+
+def _plate_preference_ok() -> float:
+    """WS-4: a retrieved plate is preferred for the structures-at-risk map when a figure corpus is
+    available, and we fall back to the deterministic schematic offline. Deterministic, offline."""
+    import tempfile
+    from PIL import Image
+    from neuro_caseboard.figures_gen import generate_case_figures
+    case = CaseContext(laterality="left", location="MCA bifurcation", pathology="aneurysm",
+                       procedure="pterional clipping", surgical_goal="clip ligation")
+    ref = "Reference plate (not this patient's imaging)"
+    with tempfile.TemporaryDirectory() as td, _deterministic_author():
+        png = os.path.join(td, "plate.png")
+        Image.new("RGB", (200, 150), (180, 180, 180)).save(png)
+        with_figret = generate_case_figures(case, os.path.join(td, "a"), figret=_FakeFigret(png))
+        offline = generate_case_figures(case, os.path.join(td, "b"))
+    used_plate = any(it.caption.startswith(ref) for it in with_figret)
+    offline_schematic = bool(offline) and not any(it.caption.startswith(ref) for it in offline)
+    return 1.0 if (used_plate and offline_schematic) else 0.0
+
 # A literature config with the lane forced ON (offline; the canned cache/synth keep it off the
 # network). Built from the ambient defaults so cache_dir/k/recency stay realistic, then `enabled`
 # is pinned True so the gate's [L#] signal does not depend on the LITERATURE_RETRIEVAL env flag.
@@ -115,6 +162,7 @@ DIRECTIONS = {
     "figure_side_acc": "min",
     "figure_byte_stable": "min",
     "figure_guard_reject": "min",
+    "figure_plate_preferred": "min",
     "near_dup_rate": "max",
     "red_flag_contamination": "max",
 }
@@ -277,6 +325,7 @@ def compute_metrics(data: EvalData) -> dict:
         "figure_side_acc": _frac(fs, nf),
         "figure_byte_stable": _frac(fb, nf),
         "figure_guard_reject": _frac(fg, nf),
+        "figure_plate_preferred": _plate_preference_ok(),
         "near_dup_rate": _frac(near_dup_total, n),
         "red_flag_contamination": float(contamination),
     }

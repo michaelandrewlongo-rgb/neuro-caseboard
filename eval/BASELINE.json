@@ -47,6 +47,10 @@
     "value": 1.0,
     "direction": "min"
   },
+  "figure_plate_preferred": {
+    "value": 1.0,
+    "direction": "min"
+  },
   "near_dup_rate": {
     "value": 0.0,
     "direction": "max"

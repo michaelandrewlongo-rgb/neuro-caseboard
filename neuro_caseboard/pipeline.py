@@ -205,7 +205,8 @@ def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
 
 def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=None,
                        lit_client=None, lit_synth_client=None, lit_cache=None,
-                       figures_dir=None, fig_complete_fn=None, retriever=None):
+                       figures_dir=None, fig_complete_fn=None, retriever=None,
+                       fig_retriever=None):
     """Case path: a CaseContext -> the 8-section case Dossier.
 
     Mirrors build_dossier but authors over the eight case surfaces (build_case_manifest) and
@@ -253,7 +254,13 @@ def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=No
     # "Case Figures" section as FigureItems alongside any retrieved plates.
     if figures_dir is not None:
         from neuro_caseboard.figures_gen import generate_case_figures
-        items = generate_case_figures(case, figures_dir, complete_fn=fig_complete_fn)
+        # WS-4: pass a figure retriever so the structures-at-risk map can use a retrieved real plate;
+        # None offline (no figure corpus) -> deterministic schematics (corridor byte-identical).
+        figret = fig_retriever
+        if figret is None and enrich and _figures_enabled():
+            from neuro_caseboard.retrieve import build_figure_retriever
+            figret = build_figure_retriever()
+        items = generate_case_figures(case, figures_dir, complete_fn=fig_complete_fn, figret=figret)
         if items:
             fig_sec = next((s for s in dossier.sections if s.heading == "Case Figures"), None)
             if fig_sec is None:

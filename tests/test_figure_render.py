@@ -47,3 +47,19 @@ def test_render_all_archetypes_without_error():
 def test_render_handles_empty_nodes():
     data = render_spec(FigureSpec.from_dict({"archetype": "anatomy_map", "title": "bare"}))
     assert data[:8] == _PNG
+
+
+def test_render_plate_writes_valid_png_deterministically(tmp_path):
+    """WS-4: render_plate overlays a retrieved plate with a reference banner + citation, writes a
+    valid PNG, and is deterministic given the same source + args."""
+    from PIL import Image
+    from neuro_caseboard.figures_gen.render import render_plate
+    src = tmp_path / "src.png"
+    Image.new("RGB", (320, 240), (180, 180, 180)).save(src)
+    out1, out2 = tmp_path / "a.png", tmp_path / "b.png"
+    render_plate(src, out1, citation="Netter Atlas, p.130")
+    render_plate(src, out2, citation="Netter Atlas, p.130")
+    a, b = out1.read_bytes(), out2.read_bytes()
+    assert a[:8] == _PNG
+    assert a == b, "render_plate must be deterministic for the same source + arguments"
+    Image.open(out1).verify()
