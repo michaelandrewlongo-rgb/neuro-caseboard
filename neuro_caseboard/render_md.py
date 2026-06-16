@@ -53,6 +53,18 @@ def render_markdown(dossier: Dossier) -> str:
                     L.append(f'  - supports: "{fig.claim_ref}"')
                 L.append(f"  - ![{fig.fig_id}]({fig.image_path})")
             L.append("")
+        # Contemporary literature (case dossier, WS-3): a separate [L#] axis, never merged with
+        # the corpus markers/appendix. Duck-typed (narrative + citations).
+        lit = getattr(sec, "literature", None)
+        if lit and getattr(lit, "narrative", ""):
+            L.append("**Contemporary Literature**")
+            L.append(lit.narrative)
+            for c in getattr(lit, "citations", []) or []:
+                link = f"https://doi.org/{c.doi}" if getattr(c, "doi", "") else getattr(c, "url", "")
+                meta = " ".join(p for p in (c.journal, str(c.year or "")) if p)
+                tail = (f" — {meta}" if meta else "") + (f" · {link}" if link else "")
+                L.append(f"- [L{c.n}] {c.title}{tail}")
+            L.append("")
         for ref in sec.cross_refs:
             L.append(f"> {ref}")
         if sec.cross_refs:

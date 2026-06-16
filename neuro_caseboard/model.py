@@ -51,6 +51,10 @@ class Section:
     claims: list[Claim] = field(default_factory=list)
     figures: list[FigureItem] = field(default_factory=list)
     cross_refs: list[str] = field(default_factory=list)   # populated by dedup (#9)
+    # Optional contemporary-literature block (case dossier, WS-3): a LiteratureSection-shaped
+    # object with `.narrative` + `.citations` ([L#], PMID/DOI). Kept on a SEPARATE axis from the
+    # corpus evidence ([n]); duck-typed so model.py stays decoupled from the qa lane.
+    literature: object | None = None
 
 
 @dataclass

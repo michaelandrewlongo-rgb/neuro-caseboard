@@ -7,6 +7,7 @@ eval/judge score before→after, next bottleneck.
 |---|---|---|---|---|
 | 1 | WS-1 `CaseContext` + dictation intake (`case_context.py`, `intake.py`) | 400 passed, 1 skipped (was 383; +17 new, 0 regressions) | intake eval 6/6 side · 6/6 level · 6/6 goal · 6/6 comorbid · `missing_critical` ≤3 all / ==0 on complete (was n/a → MET) | WS-2: expand section taxonomy to the 8 case surfaces (model.py + compile.py + Explorer), topic-agnostic, single evidence axis |
 | 2 | WS-2 8-surface case taxonomy (`case_sections.py`, `case_author.py`, `compile_case_dossier`, `build_case_dossier`) | 416 passed, 1 skipped (was 400; +16 new, 0 regressions) | case-dossier eval 6/6 cases render 8/8 sections (det + ground-truth); zero hardcoded clinical literals; build path byte-identical → MET | WS-3: wire PubMed `[L#]` into the case build (Reasoning/Alternatives/Risks) on a separate axis |
+| 3 | WS-3 PubMed in the case build (`case_literature.py`, `Section.literature`, render_md, `build_case_dossier` lit args) | 421 passed, 1 skipped (was 416; +5 new, 0 regressions) | case eval 6/6 cases: 3/3 reasoning sections carry `[L#]`, zero fabrication (`[L#]`⊆injected PMIDs); `[n]`/`[L#]` separate → MET | WS-4: generated schematic figures (the headline) — figure-spec author + deterministic renderer + guard + image judge |
 
 ## Notes
 
@@ -31,3 +32,14 @@ eval/judge score before→after, next bottleneck.
   render 8/8 sections (deterministic + ground-truth context). Guardrails verified: no hardcoded
   clinical literals in source (grep), build path byte-identical, single evidence axis preserved. Live
   blind text-judge of section quality deferred — no provider key.
+- **Pass 3 (2026-06-16, WS-3).** Wired the existing PubMed lane into the case build on a separate
+  `[L#]` axis: `Section.literature` (duck-typed, optional — model stays decoupled);
+  `case_literature.attach_case_literature` calls `qa.build_literature_section` once per
+  reasoning-bearing section (Clinical Reasoning / Alternatives / Risks) with a topic-agnostic
+  case-tuned query; `render_md` renders the narrative + `[L#]` rows; `build_case_dossier` gains
+  `literature`/`lit_client`/`lit_synth_client`/`lit_cache` args (None → `LITERATURE_RETRIEVAL`).
+  Never fabricates — synth cites only the records it is given, citations enumerate those records, and
+  tests assert `[L#] ⊆ injected PMIDs`. Offline tests inject a canned cache + synth (no network):
+  `test_case_literature.py` ×3, `test_render_md.py` +1, `test_pipeline.py` +1. Eval `case_eval.py`
+  extended: 6/6 cases carry `[L#]` on all three sections, no fabrication. Live PubMed recency/relevance
+  grade deferred — no `NCBI_API_KEY`. `ask` literature path unchanged.

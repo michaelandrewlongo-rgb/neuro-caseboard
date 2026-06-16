@@ -200,13 +200,19 @@ def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
                            card_evidence=card_evidence, page_texts=page_texts)
 
 
-def build_case_dossier(case, *, enrich: bool = True, use_llm=None):
+def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=None,
+                       lit_client=None, lit_synth_client=None, lit_cache=None):
     """Case path: a CaseContext -> the 8-section case Dossier.
 
     Mirrors build_dossier but authors over the eight case surfaces (build_case_manifest) and
     compiles with compile_case_dossier. Reuses the same anti-bleed guard, enricher, auditor, and
     retriever as build — degrades to a clinician-verify checklist offline. ``case.to_topic()`` is
     the bridge that keeps classify_profile / retrieval working off the structured context.
+
+    When ``literature`` (None -> the LITERATURE_RETRIEVAL config flag), the Reasoning / Alternatives
+    / Risks sections are augmented with a contemporary-PubMed paragraph on a separate ``[L#]`` axis
+    (WS-3); the lit client/synth/cache are injectable for offline tests. The lane is additive — any
+    failure leaves those sections without a literature block and never affects the rest.
     """
     from neuro_caseboard.case_author import build_case_manifest, deterministic_case_manifest
     from neuro_caseboard.compile import compile_case_dossier
@@ -224,8 +230,17 @@ def build_case_dossier(case, *, enrich: bool = True, use_llm=None):
     card_evidence, page_texts = ({}, {})
     if retriever is not None and _figures_enabled():
         card_evidence, page_texts = _collect_figures(manifest, topic, retriever)
-    return compile_case_dossier(audited, case=case, evidence=evidence,
-                                card_evidence=card_evidence, page_texts=page_texts)
+    dossier = compile_case_dossier(audited, case=case, evidence=evidence,
+                                   card_evidence=card_evidence, page_texts=page_texts)
+
+    if literature is None:
+        from neuro_caseboard.literature.config import load_literature_config
+        literature = load_literature_config().enabled
+    if literature:
+        from neuro_caseboard.case_literature import attach_case_literature
+        attach_case_literature(dossier, case, client=lit_client,
+                               synth_client=lit_synth_client, cache=lit_cache)
+    return dossier
 
 
 def _slug(topic: str) -> str:
