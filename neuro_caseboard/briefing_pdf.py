@@ -176,3 +176,111 @@ def render_briefing_pdf(result, out_path, *, title: str, subtitle: str = "",
                  margin={"top": "0", "bottom": "0", "left": "0", "right": "0"})
         browser.close()
     return str(out_path)
+
+
+def _plain(s: str) -> str:
+    """Flatten inline **bold** to plain text -- the degraded offline path favours legibility."""
+    return re.sub(r"\*\*(.+?)\*\*", r"\1", s or "")
+
+
+def _md_lines(md: str):
+    """Yield (kind, text) for the minimal markdown the answer/narrative use."""
+    for raw in (md or "").split("\n"):
+        s = raw.strip()
+        if not s:
+            continue
+        if s.startswith("### "):
+            yield ("h3", s[4:]); continue
+        if s.startswith("## "):
+            yield ("h2", s[3:]); continue
+        if s[:2] in ("* ", "- ") or s.startswith("*\t"):
+            yield ("li", s[1:].strip()); continue
+        yield ("p", s)
+
+
+def render_briefing_clinical_pdf(result, out_path, *, title: str, subtitle: str = "") -> str:
+    """Offline fpdf2 fallback (no Chromium): a clean clinical briefing for the Q&A result. Used
+    when CASEBOARD_PDF_STYLE=clinical or when Chromium is unavailable."""
+    import os
+    from pathlib import Path
+    from fpdf import FPDF
+    from neuro_caseboard.fpdf_base import register_fonts, ascii_fallback
+
+    pdf = FPDF(format="A4")
+    pdf.set_auto_page_break(True, margin=16)
+    pdf.add_page()
+    fam, uni = register_fonts(pdf)
+
+    def t(s) -> str:
+        s = _plain(str(s if s is not None else ""))
+        return s if uni else ascii_fallback(s)
+
+    pdf.set_font(fam, "B", 18)
+    pdf.multi_cell(0, 9, t(title), new_x="LMARGIN", new_y="NEXT")
+    if subtitle:
+        pdf.set_font(fam, "I", 10)
+        pdf.set_text_color(90, 90, 90)
+        pdf.multi_cell(0, 5, t(subtitle), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(0, 0, 0)
+    pdf.ln(2)
+
+    for kind, text in _md_lines(_g(result, "answer") or ""):
+        if kind == "h2":
+            pdf.ln(1); pdf.set_font(fam, "B", 13)
+            pdf.multi_cell(0, 7, t(text), new_x="LMARGIN", new_y="NEXT")
+        elif kind == "h3":
+            pdf.set_font(fam, "B", 11)
+            pdf.multi_cell(0, 6, t(text), new_x="LMARGIN", new_y="NEXT")
+        elif kind == "li":
+            pdf.set_font(fam, "", 10); pdf.set_x(pdf.l_margin + 6)
+            pdf.multi_cell(0, 5, t("- " + text), new_x="LMARGIN", new_y="NEXT")
+        else:
+            pdf.set_font(fam, "", 10)
+            pdf.multi_cell(0, 5, t(text), new_x="LMARGIN", new_y="NEXT")
+
+    cites = _g(result, "citations") or []
+    if cites:
+        pdf.ln(2); pdf.set_font(fam, "B", 13)
+        pdf.multi_cell(0, 7, t("Sources"), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font(fam, "", 9)
+        for c in cites:
+            loc = _g(c, "book") or ""
+            if _g(c, "chapter"):
+                loc += f", {_g(c, 'chapter')}"
+            loc += f", p.{_g(c, 'page')}"
+            pdf.multi_cell(0, 4.6, t(f"[{_g(c, 'n')}] {loc}"), new_x="LMARGIN", new_y="NEXT")
+
+    lit = _g(result, "literature")
+    if lit and _g(lit, "narrative") and (_g(lit, "citations") or []):
+        pdf.ln(2); pdf.set_font(fam, "B", 13)
+        pdf.multi_cell(0, 7, t("Contemporary Literature"), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font(fam, "", 10)
+        for kind, text in _md_lines(_g(lit, "narrative")):
+            pdf.multi_cell(0, 5, t(("- " + text) if kind == "li" else text),
+                           new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font(fam, "", 9)
+        for c in (_g(lit, "citations") or []):
+            doi = _g(c, "doi") or ""
+            href = f"https://doi.org/{doi}" if doi else (_g(c, "url") or "")
+            meta = ", ".join(p for p in (_g(c, "journal") or "", str(_g(c, "year") or "")) if p)
+            pdf.multi_cell(0, 4.6, t(f"[L{_g(c, 'n')}] {_g(c, 'title') or ''} -- {meta} {href}"),
+                           new_x="LMARGIN", new_y="NEXT")
+
+    for f in (_g(result, "figures") or []):
+        path = _g(f, "image_path")
+        if path and os.path.exists(path):
+            if pdf.get_y() + 70 > pdf.h - pdf.b_margin:
+                pdf.add_page()
+            try:
+                pdf.image(path, w=min(pdf.epw, 110))
+            except Exception:
+                pass
+        pdf.set_font(fam, "I", 8); pdf.set_text_color(90, 90, 90)
+        pdf.multi_cell(0, 4, t(f"Fig [{_g(f, 'source_n')}] -- {_g(f, 'caption') or ''} "
+                               f"({_g(f, 'book') or ''}, p.{_g(f, 'page')})"),
+                       new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(0, 0, 0)
+
+    out_path = Path(out_path)
+    pdf.output(str(out_path))
+    return str(out_path)

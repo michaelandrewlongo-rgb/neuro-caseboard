@@ -59,3 +59,20 @@ def test_assuming_line_renders_as_bold_strong():
     html = build_briefing_html(QueryResult(answer=answer), title="DHC")
     assert "<strong>Assuming unilateral FTP hemicraniectomy" in html
     assert "&gt; Assuming" not in html  # never a literal blockquote marker
+
+
+def test_render_briefing_clinical_pdf_is_real_offline_pdf(tmp_path):
+    from neuro_caseboard.briefing_pdf import render_briefing_clinical_pdf
+    out = tmp_path / "ask.pdf"
+    render_briefing_clinical_pdf(_Result(), out, title="Offline Q", subtitle="sub")
+    data = out.read_bytes()
+    assert data[:5].startswith(b"%PDF")
+    assert len(data) > 1000
+
+
+def test_render_briefing_clinical_pdf_handles_no_citations(tmp_path):
+    from neuro_caseboard.briefing_pdf import render_briefing_clinical_pdf
+    out = tmp_path / "ask2.pdf"
+    render_briefing_clinical_pdf({"answer": "Plain answer only.", "citations": [], "figures": []},
+                                 out, title="No sources")
+    assert out.read_bytes()[:5].startswith(b"%PDF")
