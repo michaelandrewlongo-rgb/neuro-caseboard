@@ -25,6 +25,25 @@ short callouts. Keep every element specific to THIS case; never depict a differe
 Archetypes: "corridor" (approach trajectory), "spine_level" (vertebral level + approach), \
 "vessel_config" (parent vessel + lesion), "anatomy_map" (structures at risk).
 
+These are ABSTRACT RELATIONSHIP DIAGRAMS, not slices. Do NOT call a schematic an "axial", \
+"coronal", "sagittal", or other radiographic "view", and do not imply a tomographic plane — the \
+title/caption should describe the corridor or the spatial relationships among the labeled \
+structures. Lay the nodes out to reflect TRUE relative anatomy (the approach/corridor enters from \
+the side matching the case laterality; place each structure on the side of the target where it \
+actually sits) and SPREAD them out — keep any two nodes at least 0.15 apart in x or y and never \
+stack them in a single line or ring, so the diagram reads as a plausible map and labels do not \
+collide. Keep every node label to 1-4 words. Use the case's own region/location wording for \
+"region"; do not substitute a near-synonym.
+
+Prefer the archetype the format renders well: an approach "corridor" (or "spine_level"/"vessel_config" \
+when applicable) is almost always the clearest schematic. Use "anatomy_map" ONLY when you can place \
+four or more REAL named structures in their correct relative positions; do not emit a map of vague \
+placeholders ("structure at risk (medial)") or center it on a space rather than the lesion. It is \
+better to return ONE anatomically correct schematic than two where one is wrong or generic. Always \
+depict the pathology/target itself as a labeled node. Respect real ordering — e.g. for a spinal \
+level, the more superior level is drawn ABOVE the more inferior one; left/right of the target match \
+the case laterality.
+
 Output ONLY JSON:
 {"figures":[{"archetype":"...","title":"...","side":"left|right|bilateral|midline|","level":"...",
 "region":"...","nodes":[{"id":"n1","label":"...","x":0.2,"y":0.5,"kind":"target|corridor|vessel|structure"}],
@@ -110,16 +129,19 @@ def _provider_complete():
     return lambda system, user: _default_complete(system, user, temperature=0.2)
 
 
-def build_figure_specs(case: CaseContext, *, complete_fn=None, max_specs: int = _MAX_SPECS):
+def build_figure_specs(case: CaseContext, *, complete_fn=None, max_specs: int = _MAX_SPECS,
+                       retries: int = 1):
     """Author up to `max_specs` figure specs. LLM-first (injected `complete_fn` or a configured
-    provider); on no-provider / underproduction / any failure, the deterministic fallback."""
+    provider); a transient failure is retried before degrading, then on no-provider / repeated
+    underproduction / repeated failure, the deterministic fallback."""
     fn = complete_fn or _provider_complete()
     if fn is None:
         return deterministic_figure_specs(case)[:max_specs]
-    try:
-        specs = _coerce_specs(json.loads(_extract_json(fn(FIGSPEC_SYSTEM, _figspec_user(case)))))
-        if not specs:
-            return deterministic_figure_specs(case)[:max_specs]
-        return specs[:max_specs]
-    except Exception:
-        return deterministic_figure_specs(case)[:max_specs]
+    for _ in range(retries + 1):
+        try:
+            specs = _coerce_specs(json.loads(_extract_json(fn(FIGSPEC_SYSTEM, _figspec_user(case)))))
+            if specs:
+                return specs[:max_specs]
+        except Exception:
+            pass            # transient: try again, then degrade
+    return deterministic_figure_specs(case)[:max_specs]

@@ -46,6 +46,30 @@ are unsure of — hedge to a correct general statement instead (a wrong named ve
 general one). Do NOT include content from a different operation or subspecialty. Cover EVERY \
 section with at least one card.
 
+COMPLETENESS — be exhaustive; a sparse dossier fails. Emit MULTIPLE cards per section (aim for \
+20-30 cards total, weighted toward Operative Plan, Risks, and Surgical Technique); never collapse \
+several distinct facts into one card. Without fabricating (the anti-invention rule above still \
+binds — when unsure of a specific, state the correct general structure/category), make sure the \
+dossier covers, for THIS operation:
+- Structures at risk: walk the WHOLE approach corridor and the target and name EVERY neural, \
+vascular, and visceral structure the exposure or the resection/decompression endangers — one card \
+per structure, each paired with the specific step or maneuver that puts it at risk. Include the \
+structures at the periphery/poles of the lesion and along the approach, not only the obvious \
+central one.
+- Recognized deficits: name the specific, named post-operative neurological deficits THIS exact \
+operation is known to cause (not a generic "neurological injury").
+- Early postoperative emergency: identify the dominant time-critical postoperative emergency for \
+this operation that threatens the airway, perfusion, or neurological status, with its concrete \
+bedside / return-to-OR rescue.
+- Rescue maneuvers: for each catastrophic intra-operative complication, name the specific rescue \
+maneuver, adjunct, or drug used to control it.
+- Reconstruction/closure: state the closure and any reconstruction / implant / graft / construct, \
+including the structural goal of the reconstruction.
+- Readiness & protocol: state the concrete team readiness this case needs (blood-product and \
+vascular-access readiness if blood loss is expected, positioning-specific physiologic precautions, \
+proactive — not reactive — medication plans, any pre-operative adjunct) and the planned \
+postoperative imaging / surveillance / staging.
+
 Output ONLY JSON: {"cards":[{"target_file":"...","section_key":"...","question":"...","why_it_matters":"..."}]}"""
 
 
@@ -214,7 +238,16 @@ def deterministic_case_manifest(case: CaseContext) -> QuestionManifest:
     try:
         from neuro_caseboard.pipeline import _deterministic_manifest, classify_profile
         base = _deterministic_manifest(topic, classify_profile(topic))
-        cards += [c for c in base.cards if c.target_file in (_OPERATIVE, _RISK)]
+        # Reuse caseprep's topic-driven Operative-Plan/Risks cards, but skip any (file, key) we
+        # already authored above with a topic-agnostic card. caseprep's GENERIC templates can carry
+        # hardcoded cross-subspecialty enumerations (e.g. a catch-all "abort: VA/carotid bleeding…"
+        # stop-points line) that bleed into an off-axis case and that the posterior-only anti-bleed
+        # guard does not catch; our own cards for those keys are topic-agnostic by construction.
+        have = {(c.target_file, c.section_key) for c in cards}
+        for c in base.cards:
+            if c.target_file in (_OPERATIVE, _RISK) and (c.target_file, c.section_key) not in have:
+                cards.append(c)
+                have.add((c.target_file, c.section_key))
     except Exception:
         pass
 
@@ -230,18 +263,22 @@ def _provider_complete():
     return lambda system, user: _default_complete(system, user, temperature=0.2)
 
 
-def build_case_manifest(case: CaseContext, *, complete_fn=None) -> QuestionManifest:
+def build_case_manifest(case: CaseContext, *, complete_fn=None, retries: int = 1) -> QuestionManifest:
     """Author a case manifest across the 8 surfaces. LLM-first (injected ``complete_fn`` or a
-    configured provider); on no-provider, underproduction, or any failure, the deterministic
-    scaffold. Always returns a manifest covering every section."""
+    configured provider); on no-provider, repeated underproduction, or repeated failure, the
+    deterministic scaffold. Always returns a manifest covering every section.
+
+    A single transient model hiccup (a parse error or a short reply) should NOT silently degrade
+    the dossier to the generic deterministic scaffold, so the live call is retried ``retries`` times
+    before falling back — the live grade showed one such transient failure tanking a case."""
     fn = complete_fn or _provider_complete()
     if fn is None:
         return deterministic_case_manifest(case)
-    try:
-        raw = json.loads(_extract_json(fn(CASE_SYSTEM, _case_user(case))))
-        cards = _coerce_case_cards(raw)
-        if len(cards) < _MIN_CASE_CARDS:
-            return deterministic_case_manifest(case)
-        return QuestionManifest(procedure_family="case_llm", cards=cards)
-    except Exception:
-        return deterministic_case_manifest(case)
+    for _ in range(retries + 1):
+        try:
+            cards = _coerce_case_cards(json.loads(_extract_json(fn(CASE_SYSTEM, _case_user(case)))))
+            if len(cards) >= _MIN_CASE_CARDS:
+                return QuestionManifest(procedure_family="case_llm", cards=cards)
+        except Exception:
+            pass            # transient: try again, then degrade
+    return deterministic_case_manifest(case)

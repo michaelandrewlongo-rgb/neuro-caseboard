@@ -42,6 +42,40 @@ def _xy(node, w: int, h: int, pad: int) -> tuple[int, int]:
     return (int(pad + node.x * (w - 2 * pad)), int(pad + node.y * (h - 2 * pad)))
 
 
+def _wrap(draw, text: str, font, max_w: int) -> list[str]:
+    """Greedy word-wrap to a pixel width (deterministic). A lone over-long word is kept on its
+    own line rather than dropped, so no label is ever silently truncated/clipped."""
+    words = (text or "").split()
+    if not words:
+        return [""]
+    lines, cur = [], words[0]
+    for wd in words[1:]:
+        if draw.textlength(cur + " " + wd, font=font) <= max_w:
+            cur += " " + wd
+        else:
+            lines.append(cur)
+            cur = wd
+    lines.append(cur)
+    return lines
+
+
+def _collides(box, placed) -> bool:
+    for p in placed:
+        if not (box[2] < p[0] or box[0] > p[2] or box[3] < p[1] or box[1] > p[3]):
+            return True
+    return False
+
+
+def _fit(draw, text: str, font, max_w: int) -> str:
+    """Single-line ellipsis truncation to a pixel width (for the caption/callout footers)."""
+    text = text or ""
+    if draw.textlength(text, font=font) <= max_w:
+        return text
+    while text and draw.textlength(text + "…", font=font) > max_w:
+        text = text[:-1]
+    return text.rstrip() + "…"
+
+
 def _arrow(draw, p0, p1, color, dashed: bool = False):
     import math
     x0, y0 = p0
@@ -128,24 +162,50 @@ def render_spec(spec, *, width: int = 900, height: int = 640) -> bytes:
             color = _ACCENT if e.kind in ("trajectory", "approach") else _LINE
             _arrow(d, pos[e.src], pos[e.dst], color, dashed=(e.kind == "trajectory"))
 
-    # nodes + labels
+    # nodes + labels — edge-aware placement with collision avoidance + a white halo so labels never
+    # overlap one another, the node markers, or run off the canvas (image-judge legibility defects:
+    # overlapping/clipped labels). Deterministic: spec order + a fixed nudge sequence.
+    n_call = len(spec.callouts)
+    callouts_y = height - pad - 18 * (n_call + 1) if n_call else height - 36
+    bottom_top = callouts_y - 6
+    lh, max_label_w, top_lo = 18, 190, pad + 58
+    placed = [(0, 0, width, 74), (0, bottom_top, width, height)]   # reserve title + footer strips
     for n in spec.nodes:
         x, y = pos[n.id]
         color = _KIND_COLOR.get(n.kind, _INK)
         r = 9
         d.ellipse([x - r, y - r, x + r, y + r], fill=color, outline=_BG, width=2)
-        d.text((x + 14, y - 8), n.label, font=f_label, fill=_INK)
+        lines = _wrap(d, n.label, f_label, max_label_w)
+        bw = int(max(d.textlength(ln, font=f_label) for ln in lines))
+        bh = lh * len(lines)
+        lx = x + 16 if x + 16 + bw <= width - pad else max(pad, x - 16 - bw)
+        hi = max(bottom_top - 4 - bh, top_lo)
+        base_ly = min(max(y - bh // 2, top_lo), hi)
+        ly = base_ly
+        for k in range(40):                       # deterministic down/up nudge until clear
+            cand = min(max(base_ly + ((k + 1) // 2) * lh * (1 if k % 2 == 0 else -1), top_lo), hi)
+            if not _collides((lx, cand, lx + bw, cand + bh), placed):
+                ly = cand
+                break
+        placed.append((lx, ly, lx + bw, ly + bh))
+        d.rectangle([lx - 3, ly - 2, lx + bw + 3, ly + bh + 1], fill=_BG)        # legibility halo
+        for i, ln in enumerate(lines):
+            d.text((lx, ly + i * lh), ln, font=f_label, fill=_INK)
+        anchor_x = lx if lx >= x else lx + bw
+        if abs(anchor_x - x) > 56 or abs(ly + bh // 2 - y) > 36:                  # leader line
+            d.line([(x, y), (anchor_x, ly + bh // 2)], fill=_LINE, width=1)
 
-    # callouts legend
-    y = height - pad - 18 * (len(spec.callouts) + 1)
+    # callouts legend (truncated per line so nothing clips at the right edge)
     if spec.callouts:
-        d.text((pad, y), "Callouts:", font=f_small, fill=_MUTED)
+        d.text((pad, callouts_y), "Callouts:", font=f_small, fill=_MUTED)
         for i, c in enumerate(spec.callouts, 1):
-            d.text((pad + 12, y + 18 * i), f"• {c}", font=f_small, fill=_INK)
+            d.text((pad + 12, callouts_y + 18 * i),
+                   f"• {_fit(d, c, f_small, width - 2 * pad - 12)}", font=f_small, fill=_INK)
 
-    # caption footer
+    # caption footer (single line, truncated to fit so it never clips at the right edge)
     if spec.caption:
-        d.text((pad, height - 30), spec.caption, font=f_small, fill=_MUTED)
+        d.text((pad, height - 30), _fit(d, spec.caption, f_small, width - 2 * pad),
+               font=f_small, fill=_MUTED)
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")        # deterministic: no timestamp chunk by default

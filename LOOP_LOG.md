@@ -25,7 +25,41 @@ blind text-judge of section quality vs `cases.json` must_cover; live PubMed rece
 blind image-opening judge (≥8/10 conceptual + case-specificity) over the rendered schematics. The
 offline harnesses (`eval/intake_eval.py`, `eval/case_eval.py`, `eval/figure_spec_eval.py`) render
 real artifacts a keyed/visual judge can grade. Per §5 the loop's final subspecialty judge scores
-remain to be filled in on a keyed run.
+were filled in on a keyed Google Vertex pass — see **LIVE BLIND-JUDGE PASS** below.
+
+## LIVE BLIND-JUDGE PASS (2026-06-16) — the deferred judges, run on Vertex
+
+Ran both deferred live blind judges with the user's **Google Vertex** credentials (Gemini 2.5 Pro,
+GCP free credit; **$0 OpenRouter** — that account had no balance, so it was dropped). Both are
+MANUAL, credentialed steps kept out of required offline CI. Harnesses: `eval/live_text_judge.py`,
+`eval/live_image_judge.py --backend vertex`. Reports: `eval/CASE_TEXT_JUDGE_REPORT_2026-06-16_*.md`,
+`eval/CASE_IMAGE_JUDGE_REPORT_2026-06-16_*.md`.
+
+- **Text** (attending-examiner judge vs `cases.json` must_cover/red_flags, 6 cases): mean must-cover
+  coverage **65.2% -> 80.7%**, mean overall **6.3 -> 8.2/10**, red-flag bleed **0 -> 0**. Fix: a
+  topic-agnostic COMPLETENESS block in `case_author.CASE_SYSTEM` (enumerate every structure-at-risk
+  along the corridor + at the target; recognized named post-op deficits; the early postoperative
+  emergency + bedside rescue; named rescue maneuvers/adjuncts; closure/reconstruction; team readiness
+  + postoperative protocol). A one-off transient model failure on the pediatric case exposed two real
+  bugs, both fixed: (1) `build_case_manifest` now RETRIES before degrading to the deterministic
+  scaffold; (2) the deterministic fallback no longer reuses caseprep's generic `stop_points` card
+  (it hardcodes a cross-subspecialty "abort: VA/carotid..." enumeration the posterior-only guard
+  misses) — de-duped against the topic-agnostic cards we author. Pediatric recovered
+  31%/overall 1/bleed 1 -> **87.5%/overall 9/bleed 0**.
+- **Image** (vision judge opening each rendered PNG; conceptual + case-specificity, target >=8/10,
+  6 cases x2): side/level correct **12/12**; mean overall **7.5 -> 7.8/10**, pass **8/12 -> 9/12**.
+  Fix 1 (renderer, durable): edge-aware label placement — word-wrap + collision avoidance + white
+  halo + leader lines + footer truncation — eliminated the overlap/clipping defects (pediatric
+  structures map **2->10**, skull-base corridor **6->9**, convexity-meningioma map **8->10**). Fix 2
+  (figure author, topic-agnostic): captions no longer claim a radiographic plane the abstract diagram
+  can't deliver; nodes spread >=0.15 by true relative anatomy; depict the pathology; correct spinal
+  level ordering; case-matched region; +retry. The approach/**corridor** schematic is reliably 9-10
+  across subspecialties. **Known limitation:** the second free-form "structures-at-risk" map stays
+  variable under a strict anatomical judge — an inherent ceiling of an abstract node-scatter (and the
+  topic-agnostic deterministic floor cannot name real structures). Documented, not over-fit to a
+  stochastic judge.
+
+No new runtime dependency; full offline suite **449 passed, 1 skipped, 0 regressions** after the fixes.
 
 ## Notes
 
