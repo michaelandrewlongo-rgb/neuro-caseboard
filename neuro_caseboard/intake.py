@@ -61,9 +61,11 @@ _SEX_M_PRON_RE = re.compile(r"\b(he|him|his)\b", re.IGNORECASE)
 # phrase about the patient, not the lesion side, so it is stripped before the search.
 _LAT_RE = re.compile(r"\b(bilateral|midline|left|right)\b", re.IGNORECASE)
 _HANDED_RE = re.compile(r"\b(?:left|right)[\s-]?handed\b", re.IGNORECASE)
-# Spine level: C5-6, L4-5, C5 - 6, C5/6, or a single body like T10.
+# Spine level: C5-6, L4-5, L5-S1, C5 - 6, C5/6, or a single body like T10 / S1. The sacral letter
+# S is a first-class vertebral prefix alongside C/T/L — lumbosacral inputs (L5-S1 TLIF) are common,
+# and dropping the S would silently build the no-LLM dossier around the wrong level.
 _LEVEL_RE = re.compile(
-    r"\b([CTL]\d{1,2}\s*[-–/]\s*[CTL]?\d{1,2}|[CTL]\d{1,2})\b", re.IGNORECASE)
+    r"\b([CTLS]\d{1,2}\s*[-–/]\s*[CTLS]?\d{1,2}|[CTLS]\d{1,2})\b", re.IGNORECASE)
 
 
 def _extract_age(text: str):

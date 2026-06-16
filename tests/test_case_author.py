@@ -78,6 +78,29 @@ def test_llm_author_falls_back_on_error_and_unparseable():
         assert {c.target_file for c in m.cards} >= set(CASE_ORDER)
 
 
+def test_llm_author_backfills_missing_sections_when_cards_cluster():
+    # Six valid cards, but clustered in only Operative Plan + Risks. The compiler drops empty
+    # sections, so a count-only acceptance gate would ship a dossier missing Clinical Summary,
+    # Reasoning, Alternatives, Pre-op, and Technique. The author must guarantee every author-owned
+    # section is covered — backfilling the gaps from the deterministic scaffold, NOT discarding the
+    # good LLM cards via a blunt full fallback.
+    clustered = {"cards": [
+        _c("04-operative-plan.md", "critical_steps"),
+        _c("04-operative-plan.md", "decision_points"),
+        _c("04-operative-plan.md", "stop_points"),
+        _c("05-risk-and-rescue.md", "likely_complications"),
+        _c("05-risk-and-rescue.md", "catastrophic_complications"),
+        _c("05-risk-and-rescue.md", "mitigation"),
+    ]}
+    m = build_case_manifest(SPINE, complete_fn=_fake(json.dumps(clustered)))
+    files = {c.target_file for c in m.cards}
+    required = set(CASE_ORDER) - {"09-case-figures.md"}   # figures come from figures_gen, not here
+    assert required <= files, f"missing: {required - files}"
+    assert m.procedure_family == "case_llm"               # kept the LLM cards, did not fully fall back
+    # the three authored Operative-Plan cards survive untouched
+    assert sum(1 for c in m.cards if c.target_file == "04-operative-plan.md") >= 3
+
+
 def test_llm_author_underproduction_falls_back():
     thin = {"cards": [_c("01-clinical-summary.md", "presentation")]}
     m = build_case_manifest(SPINE, complete_fn=_fake(json.dumps(thin)))

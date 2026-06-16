@@ -263,6 +263,30 @@ def _provider_complete():
     return lambda system, user: _default_complete(system, user, temperature=0.2)
 
 
+# Sections the author itself must populate. The Case-Figures band (09) is filled by figures_gen
+# downstream, not by the manifest, so it is excluded; the literature lane only attaches to sections
+# that already exist, never creates one.
+_AUTHORED_SECTIONS = tuple(tf for tf in CASE_ORDER if tf != "09-case-figures.md")
+
+
+def _ensure_section_coverage(cards: list[QuestionCard], case: CaseContext) -> list[QuestionCard]:
+    """Guarantee every author-owned section has at least one card. `compile._compile` drops any
+    section with no claims/figures, so a live author that returns enough cards but clusters them in
+    a few files (e.g. only Operative Plan + Risks) would silently ship an incomplete dossier. Rather
+    than discard the good LLM cards via a blunt full fallback, backfill only the *missing* sections
+    from the grounded, topic-agnostic deterministic scaffold."""
+    covered = {c.target_file for c in cards}
+    missing = [tf for tf in _AUTHORED_SECTIONS if tf not in covered]
+    if not missing:
+        return cards
+    by_file: dict[str, list[QuestionCard]] = {}
+    for c in deterministic_case_manifest(case).cards:
+        by_file.setdefault(c.target_file, []).append(c)
+    for tf in missing:
+        cards.extend(by_file.get(tf, []))
+    return cards
+
+
 def build_case_manifest(case: CaseContext, *, complete_fn=None, retries: int = 1) -> QuestionManifest:
     """Author a case manifest across the 8 surfaces. LLM-first (injected ``complete_fn`` or a
     configured provider); on no-provider, repeated underproduction, or repeated failure, the
@@ -278,6 +302,7 @@ def build_case_manifest(case: CaseContext, *, complete_fn=None, retries: int = 1
         try:
             cards = _coerce_case_cards(json.loads(_extract_json(fn(CASE_SYSTEM, _case_user(case)))))
             if len(cards) >= _MIN_CASE_CARDS:
+                cards = _ensure_section_coverage(cards, case)
                 return QuestionManifest(procedure_family="case_llm", cards=cards)
         except Exception:
             pass            # transient: try again, then degrade

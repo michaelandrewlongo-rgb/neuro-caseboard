@@ -108,6 +108,15 @@ def test_deterministic_level_prefers_disc_range_over_single_root():
     assert cc.level == "C5-6"
 
 
+def test_deterministic_preserves_sacral_level():
+    # "L5-S1" is a common lumbosacral operative level. Dropping the sacral segment would build the
+    # no-LLM dossier (topic, title, schematics) around the wrong level ("L5"), so S must be a
+    # first-class vertebral letter alongside C/T/L — range form, slash form, and a bare sacral body.
+    assert deterministic_parse("L5-S1 spondylolisthesis for TLIF.").level == "L5-S1"
+    assert deterministic_parse("L5/S1 stenosis with neurogenic claudication.").level == "L5-S1"
+    assert deterministic_parse("S1 radiculopathy from a paracentral disc.").level == "S1"
+
+
 def test_deterministic_laterality_ignores_handedness():
     # "right-handed" is about the patient, not the lesion — the lesion side ("left") must win.
     cc = deterministic_parse(
