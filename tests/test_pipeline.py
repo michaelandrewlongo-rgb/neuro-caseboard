@@ -68,6 +68,30 @@ def test_build_dossier_offline_produces_clean_board(topic):
     assert "✓" in md and "⚠" in md
 
 
+@pytest.mark.parametrize("case_kwargs", [
+    dict(laterality="right", level="C5-6", pathology="cervical spondylotic myelopathy",
+         procedure="ACDF", surgical_goal="decompression"),
+    dict(laterality="left", location="left frontal", pathology="diffuse glioma",
+         procedure="awake craniotomy", surgical_goal="maximal safe resection"),
+    dict(laterality="left", location="MCA bifurcation", pathology="ruptured MCA aneurysm",
+         procedure="pterional clipping", surgical_goal="clip ligation"),
+])
+def test_build_case_dossier_offline_renders_eight_sections(case_kwargs):
+    # Explicitly offline + deterministic (no provider, no retriever) across the three subspecialties.
+    from neuro_caseboard.case_context import CaseContext
+    from neuro_caseboard.pipeline import build_case_dossier
+    d = build_case_dossier(CaseContext(**case_kwargs), enrich=False, use_llm=False)
+    headings = [s.heading for s in d.sections]
+    for h in ["Clinical Summary", "Clinical Reasoning", "Operative Plan", "Alternatives",
+              "Risks", "Pre-op Optimization", "Surgical Technique", "Case Figures"]:
+        assert h in headings, f"missing section: {h}"
+    assert "Case Dossier" in d.title
+    # offline: single evidence axis, nothing corpus-supported / quarantined, everything to verify
+    assert d.summary.supported == 0 and d.summary.quarantined == 0 and d.summary.to_verify > 0
+    claims = [c for s in d.sections for c in s.claims]
+    assert claims and all(c.status == "verify" and c.why for c in claims)
+
+
 def test_render_ask_pdf_clinical_style_uses_fpdf(monkeypatch, tmp_path):
     monkeypatch.setenv("CASEBOARD_PDF_STYLE", "clinical")
     from neuro_caseboard.pipeline import render_ask_pdf

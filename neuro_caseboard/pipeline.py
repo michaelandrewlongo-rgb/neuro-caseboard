@@ -200,6 +200,34 @@ def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
                            card_evidence=card_evidence, page_texts=page_texts)
 
 
+def build_case_dossier(case, *, enrich: bool = True, use_llm=None):
+    """Case path: a CaseContext -> the 8-section case Dossier.
+
+    Mirrors build_dossier but authors over the eight case surfaces (build_case_manifest) and
+    compiles with compile_case_dossier. Reuses the same anti-bleed guard, enricher, auditor, and
+    retriever as build — degrades to a clinician-verify checklist offline. ``case.to_topic()`` is
+    the bridge that keeps classify_profile / retrieval working off the structured context.
+    """
+    from neuro_caseboard.case_author import build_case_manifest, deterministic_case_manifest
+    from neuro_caseboard.compile import compile_case_dossier
+
+    if use_llm is None:
+        use_llm = llm_enabled()
+    manifest = build_case_manifest(case) if use_llm else deterministic_case_manifest(case)
+    topic = case.to_topic()
+    manifest = prune_offtarget(manifest, topic)        # anti-bleed (LOOP_PROMPT §6)
+
+    retriever = build_retriever() if enrich else None
+    enriched = enrich_manifest(manifest, topic=topic, retriever=retriever, top_n=3)
+    audited = audit_manifest(enriched, topic=topic)
+    evidence = _sources_from_audited(audited)
+    card_evidence, page_texts = ({}, {})
+    if retriever is not None and _figures_enabled():
+        card_evidence, page_texts = _collect_figures(manifest, topic, retriever)
+    return compile_case_dossier(audited, case=case, evidence=evidence,
+                                card_evidence=card_evidence, page_texts=page_texts)
+
+
 def _slug(topic: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (topic or "").lower()).strip("-")[:40] or "case"
 
