@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from neuro_caseboard.pipeline import generate, render_ask_pdf, _slug
+from neuro_caseboard.pipeline import generate, generate_case, render_ask_pdf, _slug
 
 
 def _answer_question(question, force=False):
@@ -65,6 +65,27 @@ def _run_build(args) -> int:
     return 0
 
 
+def _run_case(args) -> int:
+    out = args.output or f"{_slug(args.dictation)}-case"
+    case, dossier, artifacts = generate_case(
+        args.dictation, output_dir=out, pdf=args.pdf, enrich=not args.no_enrich,
+        use_llm=False if args.no_llm else None,
+        literature=False if args.no_literature else None)
+    missing = case.missing_critical()
+    if missing:
+        print("Note — for a sharper dossier, the dictation did not state: "
+              + "; ".join(missing))
+    print(f"Wrote {artifacts['markdown']}")
+    if "pdf" in artifacts:
+        print(f"Wrote {artifacts['pdf']}")
+    s = dossier.summary
+    figs = sum(len(sec.figures) for sec in dossier.sections)
+    print(f"  {len(dossier.sections)} sections · {figs} figures · "
+          f"{s.supported} corpus-supported · {s.to_verify} to verify · "
+          f"{s.quarantined} quarantined")
+    return 0
+
+
 def _run_cards(args) -> int:
     from neuro_core.cards_query import cards_query, flagged_tags, CardsIndexNotBuilt
     try:
@@ -113,6 +134,17 @@ def main(argv=None) -> int:
     b.add_argument("--no-llm", action="store_true",
                    help="Force the deterministic Explorer (skip the LLM case-specific Explorer)")
 
+    cs = sub.add_parser("case", help="Build a patient-specific case dossier from a free-text dictation")
+    cs.add_argument("dictation", help='Free-text clinical dictation for one patient, in quotes')
+    cs.add_argument("-o", "--output", default=None, help="Output directory")
+    cs.add_argument("--pdf", action="store_true", help="Also export case-dossier.pdf")
+    cs.add_argument("--no-enrich", action="store_true",
+                    help="Skip corpus enrichment (offline verify-only checklist)")
+    cs.add_argument("--no-llm", action="store_true",
+                    help="Force the deterministic intake + authors (no LLM)")
+    cs.add_argument("--no-literature", action="store_true",
+                    help="Skip the PubMed contemporary-literature lane")
+
     cards = sub.add_parser("cards", help="Search the board-review card bank")
     cards.add_argument("question", help="The question or keywords, in quotes")
     cards.add_argument("-k", type=int, default=6, help="How many cards to return")
@@ -122,6 +154,8 @@ def main(argv=None) -> int:
         return _run_ask(args)
     if args.cmd == "build":
         return _run_build(args)
+    if args.cmd == "case":
+        return _run_case(args)
     if args.cmd == "cards":
         return _run_cards(args)
     return 1

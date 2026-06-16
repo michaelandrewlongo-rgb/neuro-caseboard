@@ -9,6 +9,23 @@ eval/judge score before→after, next bottleneck.
 | 2 | WS-2 8-surface case taxonomy (`case_sections.py`, `case_author.py`, `compile_case_dossier`, `build_case_dossier`) | 416 passed, 1 skipped (was 400; +16 new, 0 regressions) | case-dossier eval 6/6 cases render 8/8 sections (det + ground-truth); zero hardcoded clinical literals; build path byte-identical → MET | WS-3: wire PubMed `[L#]` into the case build (Reasoning/Alternatives/Risks) on a separate axis |
 | 3 | WS-3 PubMed in the case build (`case_literature.py`, `Section.literature`, render_md, `build_case_dossier` lit args) | 421 passed, 1 skipped (was 416; +5 new, 0 regressions) | case eval 6/6 cases: 3/3 reasoning sections carry `[L#]`, zero fabrication (`[L#]`⊆injected PMIDs); `[n]`/`[L#]` separate → MET | WS-4: generated schematic figures (the headline) — figure-spec author + deterministic renderer + guard + image judge |
 | 4 | WS-4 generated schematic figures (`figures_gen/`: spec, guard, render, author; `build_case_dossier` figures_dir) | 441 passed, 1 skipped (was 421; +20 new, 0 regressions) | figure eval 3/3: archetype + side + level grounded, byte-stable PNG, guard rejects side-flip; no new dep (PIL core); image-judge ≥8/10 DEFERRED (no visual judge) | WS-5: PDF surface + `caseboard case` CLI + Streamlit Case lane |
+| 5 | WS-5 PDF surface + `caseboard case` CLI + Streamlit Case lane (`generate_case`, per-page verify banner, section `[L#]` in both renderers) | 449 passed, 1 skipped (was 441; +8 new, 0 regressions) | offline smoke: dictation→PDF, 8 sections + 2 schematics, verify banner on 5/5 pages, no broken glyphs; entry point imports on core deps; syntax gate green → MET | — loop complete |
+
+## LOOP COMPLETE (2026-06-16)
+
+WS-1…WS-5 are all green on tests + eval. `caseboard case "<dictation>"` turns a free-text clinical
+dictation into a print-grade 8-section case dossier (Clinical Summary · Clinical Reasoning ·
+Operative Plan · Alternatives · Risks · Pre-op Optimization · Surgical Technique · Case Figures) with
+contemporary PubMed `[L#]` on a separate axis and generated, guard-checked schematics — offline and
+deterministic, single evidence axis, topic-agnostic, with `ask`/`build`/`cards` unchanged.
+**449 passed, 1 skipped, 0 regressions** across the five passes (baseline was 383).
+
+**Deferred (need a configured provider/visual judge, absent in this environment):** the live
+blind text-judge of section quality vs `cases.json` must_cover; live PubMed recency/relevance; the
+blind image-opening judge (≥8/10 conceptual + case-specificity) over the rendered schematics. The
+offline harnesses (`eval/intake_eval.py`, `eval/case_eval.py`, `eval/figure_spec_eval.py`) render
+real artifacts a keyed/visual judge can grade. Per §5 the loop's final subspecialty judge scores
+remain to be filled in on a keyed run.
 
 ## Notes
 
@@ -55,3 +72,13 @@ eval/judge score before→after, next bottleneck.
   attaches them to the Case Figures section. Tests +20. Eval `eval/figure_spec_eval.py` → 3/3
   archetype + side/level grounding + byte-stability + guard-rejects-flip; artifacts in
   `eval/_fig_specs/`. Blind image-opening judge ≥8/10 deferred — no visual judge in this environment.
+- **Pass 5 (2026-06-16, WS-5).** Shipped the case surface. `pipeline.generate_case` (dictation →
+  `case-dossier.md` + `.pdf`, schematics rendered into the output dir); `caseboard case "<dictation>"
+  [--pdf] [--no-llm] [--no-enrich] [--no-literature] -o dir`; a "Case" Streamlit lane (dictation →
+  dossier + schematics + PDF download). Both PDF renderers gained the per-page confidentiality/verify
+  banner (`render_pdf` via an `FPDF.footer()` subclass; `caseboard_pdf` via a `position:fixed`
+  banner) and the per-section `[L#]` literature block; the offline fpdf2 fallback keeps the CI smoke
+  green without Chromium, Unicode font + ASCII fallback preserved. Verified offline: dictation → a
+  5-page PDF with all 8 sections, 2 generated schematics, and the verify banner on every page; no new
+  runtime dependency; entry point imports on core deps. Tests +8 (`test_caseboard_pdf.py` +2,
+  `test_render_pdf.py` +2, `test_cli.py` +1, plus pipeline/figure coverage). 449 passed, 0 regressions.

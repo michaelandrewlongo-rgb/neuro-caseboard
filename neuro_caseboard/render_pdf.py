@@ -26,12 +26,35 @@ _COLORS = {"supported": (0, 128, 0), "verify": (180, 95, 0)}
 _BLACK = (0, 0, 0)
 _GRAY = (90, 90, 90)
 
+# Standing confidentiality / clinician-verify banner on every page (LOOP_PROMPT §6).
+VERIFY_BANNER = ("Confidential — clinical decision support only; "
+                 "the surgeon verifies every recommendation.")
+
+
+class _CaseboardPDF(FPDF):
+    """fpdf2 with a standing per-page confidentiality/verify footer banner."""
+
+    fam = "Helvetica"
+    uni = False
+
+    def footer(self):
+        self.set_y(-12)
+        self.set_draw_color(200, 200, 200)
+        self.set_line_width(0.2)
+        self.line(self.l_margin, self.get_y(), self.w - self.r_margin, self.get_y())
+        self.set_font(self.fam, "I", 7)
+        self.set_text_color(120, 120, 120)
+        msg = VERIFY_BANNER if self.uni else ascii_fallback(VERIFY_BANNER)
+        self.cell(0, 8, msg, align="C")
+        self.set_text_color(*_BLACK)
+
 
 def render_pdf(dossier: Dossier, out_path) -> ArtifactRef:
-    pdf = FPDF(format="A4")
-    pdf.set_auto_page_break(True, margin=16)
+    pdf = _CaseboardPDF(format="A4")
+    pdf.set_auto_page_break(True, margin=20)   # room for the footer banner
     pdf.add_page()
     fam, uni = register_fonts(pdf)
+    pdf.fam, pdf.uni = fam, uni                 # the footer uses these
 
     def t(s: str) -> str:
         return s if uni else ascii_fallback(s)
@@ -115,6 +138,8 @@ def _render_section(pdf, fam, t, glyph, sec) -> None:
         if fig.fig_id not in linked_ids:
             _render_figure(pdf, fam, t, fig)
 
+    _render_literature(pdf, fam, t, getattr(sec, "literature", None))
+
     for ref in sec.cross_refs:
         pdf.set_font(fam, "I", 9)
         pdf.set_text_color(*_GRAY)
@@ -164,6 +189,28 @@ def _render_figure(pdf, fam, t, fig) -> None:
         pdf.multi_cell(0, 4, t(f'supports: "{fig.claim_ref}"'), new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(*_BLACK)
     pdf.ln(2)
+
+
+def _render_literature(pdf, fam, t, lit) -> None:
+    """Contemporary-literature block ([L#] axis), separate from corpus markers (WS-3)."""
+    if not lit or not getattr(lit, "narrative", ""):
+        return
+    if pdf.get_y() > pdf.h - 40:
+        pdf.add_page()
+    pdf.set_font(fam, "B", 10)
+    pdf.set_text_color(*_BLACK)
+    pdf.multi_cell(0, 5.5, t("Contemporary Literature"), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font(fam, "", 9)
+    pdf.multi_cell(0, 4.6, t(lit.narrative), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(*_GRAY)
+    pdf.set_font(fam, "", 8)
+    for c in getattr(lit, "citations", []) or []:
+        link = f"https://doi.org/{c.doi}" if getattr(c, "doi", "") else getattr(c, "url", "")
+        meta = " ".join(p for p in (c.journal, str(c.year or "")) if p)
+        tail = (f" — {meta}" if meta else "") + (f" · {link}" if link else "")
+        pdf.multi_cell(0, 4.2, t(f"[L{c.n}] {c.title}{tail}"), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(*_BLACK)
+    pdf.ln(1.5)
 
 
 def _render_appendix(pdf, fam, t, appendix) -> None:

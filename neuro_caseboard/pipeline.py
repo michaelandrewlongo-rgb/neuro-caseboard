@@ -334,3 +334,26 @@ def generate(topic: str, *, output_dir, pdf: bool = False, enrich: bool = True, 
     if pdf:
         artifacts["pdf"] = render_case_pdf(dossier, topic, out / "case-board.pdf")
     return dossier, artifacts
+
+
+def generate_case(dictation: str, *, output_dir, pdf: bool = False, enrich: bool = True,
+                  use_llm=None, literature=None):
+    """Build the case dossier from a free-text dictation and write case-dossier.md
+    (+ case-dossier.pdf) to output_dir, with generated schematics rendered into the same dir.
+
+    The PDF reuses ``render_case_pdf`` (Executive-Navy, fpdf2 fallback), so it carries the standing
+    confidentiality/verify banner on every page. ``use_llm=False`` forces the deterministic intake +
+    authors (offline). Returns ``(case, dossier, artifacts)``."""
+    from neuro_caseboard.intake import parse_dictation, deterministic_parse
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    case = deterministic_parse(dictation) if use_llm is False else parse_dictation(dictation)
+    dossier = build_case_dossier(case, enrich=enrich, use_llm=use_llm, literature=literature,
+                                 figures_dir=out)
+    artifacts = {}
+    md_path = out / "case-dossier.md"
+    md_path.write_text(render_markdown(dossier), encoding="utf-8")
+    artifacts["markdown"] = md_path
+    if pdf:
+        artifacts["pdf"] = render_case_pdf(dossier, case.to_topic(), out / "case-dossier.pdf")
+    return case, dossier, artifacts
