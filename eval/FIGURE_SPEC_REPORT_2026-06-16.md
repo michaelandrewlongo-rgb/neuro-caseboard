@@ -12,12 +12,16 @@ case-specificity) is DEFERRED** to a keyed/visual run — no visual judge in thi
 | spine_acdf_c56 | Spine | spine_level | 1 | 1 | 1 | 1 | 1 | 2 |
 | functional_awake_glioma | Functional | corridor | 1 | 1 | 1 | 1 | 1 | 2 |
 | vascular_mca_clip | Vascular | vessel_config | 1 | 1 | 1 | 1 | 1 | 2 |
+| spine_lumbar_microdisc_l5s1 | Spine | spine_level | 1 | 1 | 1 | 1 | 1 | 2 |
+| spine_thoracic_meningioma_t6 | Spine | spine_level | 1 | 1 | 1 | 1 | 1 | 2 |
+| endovascular_mca_thrombectomy | Vascular | vessel_config | 1 | 1 | 1 | 1 | 1 | 2 |
+| neurooncology_gbm_temporal | Neuro-oncology | corridor | 1 | 1 | 1 | 1 | 1 | 2 |
 
 ## Scores
-- Archetype matches expected: **3/3**
-- Side encoded correctly (case-specificity): **3/3**
-- Level encoded correctly: **3/3**
-- Render byte-stable (same spec → identical PNG): **3/3**
-- Guard rejects a side-flipped spec: **3/3**
+- Archetype matches expected: **7/7**
+- Side encoded correctly (case-specificity): **7/7**
+- Level encoded correctly: **7/7**
+- Render byte-stable (same spec → identical PNG): **7/7**
+- Guard rejects a side-flipped spec: **7/7**
 
 **WS-4 deterministic acceptance (archetype + side/level grounding, byte-stable renders, contradiction rejected): MET**. Image-judge ≥8/10 deferred.

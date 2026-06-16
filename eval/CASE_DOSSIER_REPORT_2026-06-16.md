@@ -14,16 +14,37 @@ sections carry `[L#]` PubMed citations — offline, across the three subspecialt
 
 | case | subspecialty | det sections | gt sections | gt claims | lit [L#] |
 |---|---|---|---|---|---|
-| spine_acdf_c56 | Spine | 8/8 | 8/8 | 38 | 3/3 |
-| skullbase_vs_retrosigmoid | Skull base | 8/8 | 8/8 | 37 | 3/3 |
-| functional_awake_glioma | Functional | 8/8 | 8/8 | 37 | 3/3 |
-| vascular_mca_clip | Vascular | 8/8 | 8/8 | 38 | 3/3 |
-| neurooncology_convexity_meningioma | Neuro-oncology | 8/8 | 8/8 | 37 | 3/3 |
-| pediatric_posterior_fossa_medulloblastoma | Pediatric | 8/8 | 8/8 | 37 | 3/3 |
+| spine_acdf_c56 | Spine | 8/8 | 8/8 | 32 | 3/3 |
+| spine_l4l5_tlif | Spine | 8/8 | 8/8 | 31 | 3/3 |
+| spine_lumbar_microdisc_l5s1 | Spine | 8/8 | 8/8 | 31 | 3/3 |
+| spine_thoracic_intradural_meningioma_t6 | Spine | 8/8 | 8/8 | 31 | 3/3 |
+| skullbase_vs_retrosigmoid | Skull base | 8/8 | 8/8 | 31 | 3/3 |
+| skullbase_petroclival_meningioma | Skull base | 8/8 | 8/8 | 31 | 3/3 |
+| skullbase_pituitary_endonasal | Skull base | 8/8 | 8/8 | 31 | 3/3 |
+| skullbase_cpa_epidermoid | Skull base | 8/8 | 8/8 | 31 | 3/3 |
+| vascular_mca_clip | Vascular | 8/8 | 8/8 | 32 | 3/3 |
+| vascular_acom_clip | Vascular | 8/8 | 8/8 | 32 | 3/3 |
+| vascular_pcom_clip | Vascular | 8/8 | 8/8 | 31 | 3/3 |
+| vascular_avm_resection | Vascular | 8/8 | 8/8 | 31 | 3/3 |
+| endovascular_acom_coiling | Vascular | 8/8 | 8/8 | 31 | 3/3 |
+| endovascular_basilar_coiling | Vascular | 8/8 | 8/8 | 32 | 3/3 |
+| endovascular_ica_flow_diverter | Vascular | 8/8 | 8/8 | 31 | 3/3 |
+| endovascular_mca_thrombectomy | Vascular | 8/8 | 8/8 | 32 | 3/3 |
+| functional_awake_glioma | Functional | 8/8 | 8/8 | 31 | 3/3 |
+| functional_dbs_stn_parkinsons | Functional | 8/8 | 8/8 | 31 | 3/3 |
+| functional_temporal_lobectomy_epilepsy | Functional | 8/8 | 8/8 | 31 | 3/3 |
+| neurooncology_convexity_meningioma | Neuro-oncology | 8/8 | 8/8 | 31 | 3/3 |
+| neurooncology_gbm_temporal | Neuro-oncology | 8/8 | 8/8 | 31 | 3/3 |
+| neurooncology_cerebellar_metastasis | Neuro-oncology | 8/8 | 8/8 | 32 | 3/3 |
+| neurooncology_intraventricular_tumor | Neuro-oncology | 8/8 | 8/8 | 31 | 3/3 |
+| pediatric_posterior_fossa_medulloblastoma | Pediatric | 8/8 | 8/8 | 31 | 3/3 |
+| pediatric_cerebellar_pilocytic_astrocytoma | Pediatric | 8/8 | 8/8 | 31 | 3/3 |
+| pediatric_craniopharyngioma | Pediatric | 8/8 | 8/8 | 31 | 3/3 |
+| pediatric_myelomeningocele_closure | Pediatric | 8/8 | 8/8 | 31 | 3/3 |
 
 ## Scores
-- Deterministic-context all-8-sections: **6/6**
-- Full-context all-8-sections: **6/6**
-- Literature `[L#]` on all 3 reasoning sections, no fabrication: **6/6**
+- Deterministic-context all-8-sections: **27/27**
+- Full-context all-8-sections: **27/27**
+- Literature `[L#]` on all 3 reasoning sections, no fabrication: **27/27**
 
 **WS-2/WS-3 acceptance (8 sections render, single evidence axis, `[L#]` separate from `[n]`, zero fabrication, no regressions): MET**.

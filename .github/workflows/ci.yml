@@ -85,6 +85,13 @@ jobs:
           PY
       - name: Run full offline test suite (incl. integration + smoke)
         run: python -m pytest -p no:cacheprovider --durations=10
+      # The held-out quality-regression gate (offline, deterministic): aggregates section coverage,
+      # intake accuracy, [L#] grounding, figure guard/byte-stability, near-dup rate, and red-flag
+      # non-contamination on the eval split and fails if any metric drops below eval/BASELINE.json.
+      # Runs once (3.12 leg) — it is deterministic, so the 3.10 leg would be redundant.
+      - name: Quality-regression gate (eval split)
+        if: matrix.python-version == '3.12'
+        run: python eval/quality_gate.py
 
   # ---------------------------------------------------------------------------
   # PROVES: packaging metadata is valid, the wheel builds, and a CLEAN install of just the

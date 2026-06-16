@@ -116,3 +116,15 @@ No new runtime dependency; full offline suite **449 passed, 1 skipped, 0 regress
   5-page PDF with all 8 sections, 2 generated schematics, and the verify banner on every page; no new
   runtime dependency; entry point imports on core deps. Tests +8 (`test_caseboard_pdf.py` +2,
   `test_render_pdf.py` +2, `test_cli.py` +1, plus pipeline/figure coverage). 449 passed, 0 regressions.
+
+---
+
+# OUTPUT-QUALITY LOOP (`caseboard case` — content & figure quality)
+
+Second loop (see the current `LOOP_PROMPT.md`). One job: make the dossier's content and figures
+**measurably** better, behind a held-out eval set + an automated quality-regression gate. Baseline
+entering this loop: **451 passed, 1 skipped, 0 regressions**.
+
+| pass | increment (files) | tests | eval (before→after) | next bottleneck |
+|---|---|---|---|---|
+| 1 | WS-1 held-out eval set + offline quality-regression gate (`eval/cases.json` 6→27, `eval/case_dictations.json`, `eval/figure_spec_cases.json` +split, new `eval/quality_gate.py` + `eval/BASELINE.json`, `tests/test_quality_gate.py`, `ci.yml`/`local-ci.sh` gate step) | 460 passed, 1 skipped (was 451; +9 new, 0 regressions) | gate GREEN on the 18-case eval split: section cov 8/8 det+gt, intake side **0.78**/level 1.0/goal 1.0, `[L#]` 1.0 (no fab), figures archetype/side/byte/guard 4×1.0, near-dup 0, red-flag contamination 0; `corpus_n_coverage` hooked at 0.0 (WS-2 raises) — BASELINE committed | WS-2: ground the case dossier in the textbook corpus (`[n]`) — fix the `_collect_figures` build-only filter so operative/technique/structures sections earn corpus citations; raises `corpus_n_coverage` |

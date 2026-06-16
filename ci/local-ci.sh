@@ -35,6 +35,8 @@ else
   ./ci/install.sh ".[dev]"
 fi
 python -m pytest -p no:cacheprovider --durations=10
+echo "==> [2b/3] quality-regression gate (eval split, offline/deterministic)"
+python eval/quality_gate.py
 
 echo "==> [3/3] package: build + clean wheel install + import + entry point"
 python -m pip install --upgrade build twine >/dev/null

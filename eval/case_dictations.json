@@ -1,5 +1,5 @@
 {
-  "_about": "WS-1 intake eval. Each item is a 4-6 sentence free-text dictation plus the ground-truth structured fields a correct CaseContext should capture. ids mirror eval/cases.json. Scored by eval/intake_eval.py: side/level via the offline deterministic parser (real); goal/comorbidities + missing_critical==0 via the full parse path fed the ground-truth JSON (validates capture, not model quality — live model grade deferred to a keyed run).",
+  "_about": "WS-1 intake eval. Each item is a 4-6 sentence free-text dictation plus the ground-truth structured fields a correct CaseContext should capture. ids mirror eval/cases.json. Scored by eval/intake_eval.py and eval/quality_gate.py: side/level via the offline deterministic parser (real); goal/comorbidities + missing_critical==0 via the full parse path fed the ground-truth JSON (validates capture, not model quality — live model grade deferred to a keyed run).",
   "dictations": [
     {
       "id": "spine_acdf_c56",
@@ -13,6 +13,48 @@
         "procedure": "anterior cervical discectomy and fusion",
         "surgical_goal": "decompression",
         "comorbidities": ["hypertension", "type 2 diabetes"]
+      }
+    },
+    {
+      "id": "spine_l4l5_tlif",
+      "subspecialty": "Spine",
+      "dictation": "This is a 58 year old man with a year of mechanical low back pain and right L5 radiculopathy that worsens with walking. Imaging shows a grade I degenerative spondylolisthesis at L4-5 with foraminal stenosis on the right. He has hypertension and a remote smoking history. We plan an L4-5 transforaminal lumbar interbody fusion with pedicle screw instrumentation to decompress the right L5 root and stabilize the segment.",
+      "ground_truth": {
+        "laterality": "right",
+        "level": "L4-5",
+        "location": "",
+        "pathology": "degenerative spondylolisthesis",
+        "procedure": "transforaminal lumbar interbody fusion",
+        "surgical_goal": "decompression and fusion",
+        "comorbidities": ["hypertension"]
+      }
+    },
+    {
+      "id": "spine_lumbar_microdisc_l5s1",
+      "subspecialty": "Spine",
+      "dictation": "A 41 year old man presents with six weeks of severe left leg pain in an S1 distribution with a positive straight leg raise, failing conservative care. MRI shows a left paracentral L5-S1 disc herniation compressing the traversing S1 nerve root. He is otherwise healthy and on no anticoagulation. We plan a left L5-S1 microdiscectomy to decompress the S1 root.",
+      "ground_truth": {
+        "laterality": "left",
+        "level": "L5-S1",
+        "location": "",
+        "pathology": "lumbar disc herniation",
+        "procedure": "microdiscectomy",
+        "surgical_goal": "decompression",
+        "comorbidities": []
+      }
+    },
+    {
+      "id": "spine_thoracic_intradural_meningioma_t6",
+      "subspecialty": "Spine",
+      "dictation": "This is a 64 year old woman with progressive lower-extremity weakness, a spastic gait, and a T6 sensory level. MRI demonstrates a left-sided intradural extramedullary mass at T6 consistent with a meningioma, compressing the spinal cord. She has well-controlled hypertension. We plan a T6 laminectomy with intradural resection of the tumor and watertight dural closure.",
+      "ground_truth": {
+        "laterality": "left",
+        "level": "T6",
+        "location": "thoracic spinal cord",
+        "pathology": "intradural extramedullary meningioma",
+        "procedure": "laminectomy and intradural tumor resection",
+        "surgical_goal": "resection",
+        "comorbidities": ["hypertension"]
       }
     },
     {
@@ -30,16 +72,44 @@
       }
     },
     {
-      "id": "functional_awake_glioma",
-      "subspecialty": "Functional",
-      "dictation": "This is a 38 year old right-handed woman with new word-finding difficulty and focal seizures. MRI shows a non-enhancing left dominant frontal lesion involving the inferior frontal gyrus, suspicious for a diffuse glioma. She is on levetiracetam and is otherwise well. We plan an awake craniotomy with cortical and subcortical language and motor mapping for maximal safe resection.",
+      "id": "skullbase_petroclival_meningioma",
+      "subspecialty": "Skull base",
+      "dictation": "This is a 52 year old woman with progressive right facial numbness, gait ataxia, and headaches. MRI shows a right petroclival meningioma abutting the brainstem and encasing the trigeminal nerve, with mild displacement of the basilar artery. She has hypertension. We plan a right retrosigmoid approach for resection with cranial nerve and brainstem monitoring.",
+      "ground_truth": {
+        "laterality": "right",
+        "level": "",
+        "location": "petroclival region",
+        "pathology": "petroclival meningioma",
+        "procedure": "retrosigmoid resection",
+        "surgical_goal": "resection",
+        "comorbidities": ["hypertension"]
+      }
+    },
+    {
+      "id": "skullbase_pituitary_endonasal",
+      "subspecialty": "Skull base",
+      "dictation": "A 49 year old man presents with bitemporal hemianopia and headaches. MRI shows a sellar mass with suprasellar extension elevating the optic chiasm, consistent with a nonfunctioning pituitary macroadenoma; endocrine workup shows mild hypopituitarism. He has type 2 diabetes. We plan an endoscopic endonasal transsphenoidal resection to decompress the chiasm.",
+      "ground_truth": {
+        "laterality": "midline",
+        "level": "",
+        "location": "sella with suprasellar extension",
+        "pathology": "nonfunctioning pituitary macroadenoma",
+        "procedure": "endoscopic endonasal transsphenoidal resection",
+        "surgical_goal": "resection and chiasmal decompression",
+        "comorbidities": ["type 2 diabetes"]
+      }
+    },
+    {
+      "id": "skullbase_cpa_epidermoid",
+      "subspecialty": "Skull base",
+      "dictation": "This is a 38 year old woman with left trigeminal neuralgia and mild left facial weakness. MRI with diffusion shows a left cerebellopontine angle epidermoid cyst insinuating around the cranial nerves and brainstem. She is otherwise healthy. We plan a left retrosigmoid craniotomy for microsurgical resection of the cyst with cranial nerve monitoring.",
       "ground_truth": {
         "laterality": "left",
         "level": "",
-        "location": "left frontal",
-        "pathology": "diffuse glioma",
-        "procedure": "awake craniotomy",
-        "surgical_goal": "maximal safe resection",
+        "location": "cerebellopontine angle",
+        "pathology": "epidermoid cyst",
+        "procedure": "retrosigmoid microsurgical resection",
+        "surgical_goal": "resection",
         "comorbidities": []
       }
     },
@@ -58,6 +128,146 @@
       }
     },
     {
+      "id": "vascular_acom_clip",
+      "subspecialty": "Vascular",
+      "dictation": "A 54 year old man presented with a severe headache and a Hunt-Hess 3 subarachnoid hemorrhage. CT angiography reveals a ruptured anterior communicating artery aneurysm projecting superiorly. He has hypertension and hyperlipidemia. We plan a right pterional craniotomy for microsurgical clip ligation with bilateral A1 proximal control.",
+      "ground_truth": {
+        "laterality": "right",
+        "level": "",
+        "location": "anterior communicating artery",
+        "pathology": "ruptured anterior communicating artery aneurysm",
+        "procedure": "pterional craniotomy for clipping",
+        "surgical_goal": "clip ligation",
+        "comorbidities": ["hypertension", "hyperlipidemia"]
+      }
+    },
+    {
+      "id": "vascular_pcom_clip",
+      "subspecialty": "Vascular",
+      "dictation": "A 59 year old woman presents with a new left pupil-involving third nerve palsy and headache. CT angiography shows a left posterior communicating artery aneurysm arising from the internal carotid artery; there is no subarachnoid hemorrhage. She has hypertension. We plan a left pterional craniotomy for microsurgical clip ligation with carotid proximal control.",
+      "ground_truth": {
+        "laterality": "left",
+        "level": "",
+        "location": "posterior communicating artery",
+        "pathology": "posterior communicating artery aneurysm",
+        "procedure": "pterional craniotomy for clipping",
+        "surgical_goal": "clip ligation",
+        "comorbidities": ["hypertension"]
+      }
+    },
+    {
+      "id": "vascular_avm_resection",
+      "subspecialty": "Vascular",
+      "dictation": "This is a 28 year old man with a seizure and a small right parietal hemorrhage. Angiography shows a right parietal arteriovenous malformation, Spetzler-Martin grade II, with superficial feeders and a single superficial draining vein. He is otherwise healthy. We plan staged preoperative embolization followed by microsurgical resection of the AVM.",
+      "ground_truth": {
+        "laterality": "right",
+        "level": "",
+        "location": "right parietal lobe",
+        "pathology": "arteriovenous malformation",
+        "procedure": "microsurgical AVM resection",
+        "surgical_goal": "resection",
+        "comorbidities": []
+      }
+    },
+    {
+      "id": "endovascular_acom_coiling",
+      "subspecialty": "Vascular",
+      "dictation": "A 61 year old woman presented with a thunderclap headache and a Hunt-Hess 2 subarachnoid hemorrhage. CT angiography shows a ruptured anterior communicating artery aneurysm with a favorable neck for coiling. She has hypertension. We plan endovascular coil embolization of the aneurysm via a transfemoral approach.",
+      "ground_truth": {
+        "laterality": "midline",
+        "level": "",
+        "location": "anterior communicating artery",
+        "pathology": "ruptured anterior communicating artery aneurysm",
+        "procedure": "endovascular coil embolization",
+        "surgical_goal": "coil embolization",
+        "comorbidities": ["hypertension"]
+      }
+    },
+    {
+      "id": "endovascular_basilar_coiling",
+      "subspecialty": "Vascular",
+      "dictation": "This is a 57 year old man with an incidental 8 mm basilar apex aneurysm found on imaging for headaches. The aneurysm has a wide neck incorporating both P1 origins. He has hypertension and hyperlipidemia. We plan stent-assisted coil embolization of the basilar apex aneurysm with dual antiplatelet therapy.",
+      "ground_truth": {
+        "laterality": "midline",
+        "level": "",
+        "location": "basilar apex",
+        "pathology": "basilar apex aneurysm",
+        "procedure": "stent-assisted coil embolization",
+        "surgical_goal": "coil embolization",
+        "comorbidities": ["hypertension", "hyperlipidemia"]
+      }
+    },
+    {
+      "id": "endovascular_ica_flow_diverter",
+      "subspecialty": "Vascular",
+      "dictation": "A 63 year old woman has a large unruptured right cavernous/paraophthalmic internal carotid artery aneurysm causing headaches and mild visual symptoms. The aneurysm is broad-necked and not ideal for primary coiling. She has hypertension. After dual antiplatelet preparation we plan placement of a flow-diverter stent across the aneurysm neck.",
+      "ground_truth": {
+        "laterality": "right",
+        "level": "",
+        "location": "paraophthalmic internal carotid artery",
+        "pathology": "large unruptured ICA aneurysm",
+        "procedure": "flow-diverter stent placement",
+        "surgical_goal": "flow diversion",
+        "comorbidities": ["hypertension"]
+      }
+    },
+    {
+      "id": "endovascular_mca_thrombectomy",
+      "subspecialty": "Vascular",
+      "dictation": "A 72 year old man presents two hours after sudden right-sided weakness and aphasia with an NIHSS of 16. CT angiography shows a left middle cerebral artery M1 occlusion with a small core and a large salvageable penumbra on perfusion imaging. He has atrial fibrillation and hypertension. We plan emergent mechanical thrombectomy of the left M1 occlusion.",
+      "ground_truth": {
+        "laterality": "left",
+        "level": "",
+        "location": "MCA M1 segment",
+        "pathology": "acute large vessel occlusion stroke",
+        "procedure": "mechanical thrombectomy",
+        "surgical_goal": "recanalization",
+        "comorbidities": ["atrial fibrillation", "hypertension"]
+      }
+    },
+    {
+      "id": "functional_awake_glioma",
+      "subspecialty": "Functional",
+      "dictation": "This is a 38 year old right-handed woman with new word-finding difficulty and focal seizures. MRI shows a non-enhancing left dominant frontal lesion involving the inferior frontal gyrus, suspicious for a diffuse glioma. She is on levetiracetam and is otherwise well. We plan an awake craniotomy with cortical and subcortical language and motor mapping for maximal safe resection.",
+      "ground_truth": {
+        "laterality": "left",
+        "level": "",
+        "location": "left frontal",
+        "pathology": "diffuse glioma",
+        "procedure": "awake craniotomy",
+        "surgical_goal": "maximal safe resection",
+        "comorbidities": []
+      }
+    },
+    {
+      "id": "functional_dbs_stn_parkinsons",
+      "subspecialty": "Functional",
+      "dictation": "This is a 66 year old man with a fifteen-year history of Parkinson's disease, now with motor fluctuations and medication-refractory tremor but a good levodopa response. He is on carbidopa-levodopa and has hypertension. We plan bilateral subthalamic nucleus deep brain stimulation with microelectrode recording and awake intraoperative testing.",
+      "ground_truth": {
+        "laterality": "bilateral",
+        "level": "",
+        "location": "subthalamic nucleus",
+        "pathology": "Parkinson's disease",
+        "procedure": "deep brain stimulation",
+        "surgical_goal": "neuromodulation",
+        "comorbidities": ["hypertension"]
+      }
+    },
+    {
+      "id": "functional_temporal_lobectomy_epilepsy",
+      "subspecialty": "Functional",
+      "dictation": "A 31 year old right-handed woman has drug-resistant focal epilepsy with left mesial temporal sclerosis on MRI and concordant left temporal seizure onset on video-EEG. Neuropsychological testing and Wada confirm left language dominance with adequate contralateral memory. She takes two antiseizure medications. We plan a left anterior temporal lobectomy with amygdalohippocampectomy.",
+      "ground_truth": {
+        "laterality": "left",
+        "level": "",
+        "location": "mesial temporal lobe",
+        "pathology": "mesial temporal lobe epilepsy",
+        "procedure": "anterior temporal lobectomy with amygdalohippocampectomy",
+        "surgical_goal": "seizure freedom",
+        "comorbidities": []
+      }
+    },
+    {
       "id": "neurooncology_convexity_meningioma",
       "subspecialty": "Neuro-oncology",
       "dictation": "This is a 56 year old man with headaches and an incidental right frontal extra-axial mass. MRI shows a 4 cm right frontal convexity meningioma with a dural tail and surrounding edema, away from eloquent cortex. He is on no anticoagulation and has well-controlled hypertension. The plan is a right frontal craniotomy for a Simpson grade I resection with circumferential dural devascularization.",
@@ -72,6 +282,48 @@
       }
     },
     {
+      "id": "neurooncology_gbm_temporal",
+      "subspecialty": "Neuro-oncology",
+      "dictation": "A 60 year old man presents with two weeks of headaches and mild word-finding difficulty. MRI shows a right temporal heterogeneously enhancing mass with central necrosis and surrounding edema, consistent with a high-grade glioma. He has hypertension and is on dexamethasone. We plan a right temporal craniotomy for maximal safe resection with 5-ALA fluorescence guidance and neuronavigation.",
+      "ground_truth": {
+        "laterality": "right",
+        "level": "",
+        "location": "right temporal lobe",
+        "pathology": "glioblastoma",
+        "procedure": "craniotomy for tumor resection",
+        "surgical_goal": "maximal safe resection",
+        "comorbidities": ["hypertension"]
+      }
+    },
+    {
+      "id": "neurooncology_cerebellar_metastasis",
+      "subspecialty": "Neuro-oncology",
+      "dictation": "This is a 67 year old woman with known lung adenocarcinoma presenting with headache, nausea, and right-sided dysmetria. MRI shows a right cerebellar hemispheric metastasis with surrounding edema and early fourth-ventricle effacement. She has hypertension and COPD. We plan a suboccipital craniotomy for resection of the cerebellar metastasis with a perioperative CSF diversion plan.",
+      "ground_truth": {
+        "laterality": "right",
+        "level": "",
+        "location": "right cerebellar hemisphere",
+        "pathology": "cerebellar metastasis",
+        "procedure": "suboccipital craniotomy for resection",
+        "surgical_goal": "resection",
+        "comorbidities": ["hypertension", "COPD"]
+      }
+    },
+    {
+      "id": "neurooncology_intraventricular_tumor",
+      "subspecialty": "Neuro-oncology",
+      "dictation": "A 44 year old woman presents with headaches and a mild right visual-field deficit. MRI shows a vascular tumor in the left lateral ventricle trigone with mild ventricular enlargement. She is otherwise healthy. We plan a left transcortical approach for resection of the intraventricular tumor with neuronavigation.",
+      "ground_truth": {
+        "laterality": "left",
+        "level": "",
+        "location": "left lateral ventricle trigone",
+        "pathology": "intraventricular tumor",
+        "procedure": "transcortical resection",
+        "surgical_goal": "resection",
+        "comorbidities": []
+      }
+    },
+    {
       "id": "pediatric_posterior_fossa_medulloblastoma",
       "subspecialty": "Pediatric",
       "dictation": "A 7 year old boy presents with morning headaches, vomiting, and truncal ataxia. MRI shows a midline fourth-ventricle mass with obstructive hydrocephalus, most consistent with a medulloblastoma. He is otherwise healthy. We plan a suboccipital craniotomy with a telovelar approach for resection, with a perioperative CSF diversion plan for the hydrocephalus.",
@@ -83,6 +335,48 @@
         "procedure": "suboccipital craniotomy, telovelar approach",
         "surgical_goal": "resection",
         "comorbidities": []
+      }
+    },
+    {
+      "id": "pediatric_cerebellar_pilocytic_astrocytoma",
+      "subspecialty": "Pediatric",
+      "dictation": "A 9 year old girl presents with several weeks of headaches, morning vomiting, and left limb clumsiness. MRI shows a left cerebellar hemispheric cystic mass with an enhancing mural nodule, consistent with a pilocytic astrocytoma, and mild hydrocephalus. She is otherwise healthy. We plan a suboccipital craniotomy for gross-total resection of the tumor.",
+      "ground_truth": {
+        "laterality": "left",
+        "level": "",
+        "location": "left cerebellar hemisphere",
+        "pathology": "pilocytic astrocytoma",
+        "procedure": "suboccipital craniotomy for resection",
+        "surgical_goal": "gross-total resection",
+        "comorbidities": []
+      }
+    },
+    {
+      "id": "pediatric_craniopharyngioma",
+      "subspecialty": "Pediatric",
+      "dictation": "An 8 year old boy presents with short stature, headaches, and bitemporal visual-field loss. MRI shows a suprasellar cystic and solid mass with calcification elevating the optic chiasm, consistent with a craniopharyngioma; he has central hypothyroidism and growth-hormone deficiency. We plan resection of the suprasellar craniopharyngioma with attention to the hypothalamus and optic apparatus.",
+      "ground_truth": {
+        "laterality": "midline",
+        "level": "",
+        "location": "suprasellar region",
+        "pathology": "craniopharyngioma",
+        "procedure": "craniopharyngioma resection",
+        "surgical_goal": "resection",
+        "comorbidities": ["central hypothyroidism"]
+      }
+    },
+    {
+      "id": "pediatric_myelomeningocele_closure",
+      "subspecialty": "Pediatric",
+      "dictation": "A newborn boy is delivered with an open lumbosacral myelomeningocele and lower-extremity weakness, with head ultrasound showing mild ventriculomegaly and a Chiari II malformation. He is otherwise stable in the neonatal unit. We plan early operative closure of the myelomeningocele with neural placode reconstruction and watertight dural closure, with a plan to monitor for hydrocephalus.",
+      "ground_truth": {
+        "laterality": "midline",
+        "level": "",
+        "location": "lumbosacral spine",
+        "pathology": "myelomeningocele",
+        "procedure": "myelomeningocele closure",
+        "surgical_goal": "closure and untethering",
+        "comorbidities": ["Chiari II malformation"]
       }
     }
   ]
