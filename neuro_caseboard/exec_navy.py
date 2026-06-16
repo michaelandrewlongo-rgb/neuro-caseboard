@@ -105,12 +105,14 @@ figcaption .cite{ color:var(--faint); }
   font-family:var(--mono); font-size:7pt; letter-spacing:.04em; color:var(--faint); }
 """
 
+
 def inline(text: str) -> str:
     """Escape, then promote ``**bold**`` to <b> (the only inline markup claims/why use)."""
     return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", html.escape(text or ""))
 
 
 def img_data_uri(path: str) -> str:
+    """Return a ``data:`` URI for the image at ``path`` (MIME derived from the filename)."""
     # Derive the extension from the basename only — a dot in a parent dir (e.g. /data/v1.2/figA)
     # or a missing extension must not corrupt the MIME type.
     name = os.path.basename(path)

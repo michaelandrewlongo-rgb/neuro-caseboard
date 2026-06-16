@@ -1,5 +1,5 @@
-"""The Signal briefing HTML builder is pure (no Playwright/Chromium needed) and must carry the
-Neurosurgery Signal design tokens, the content, and robustly skip unreadable figures."""
+"""The Executive-Navy briefing HTML builder is pure (no Playwright/Chromium needed) and must
+carry the Executive-Navy design tokens, the content, and robustly skip unreadable figures."""
 from neuro_caseboard.briefing_pdf import build_briefing_html
 
 

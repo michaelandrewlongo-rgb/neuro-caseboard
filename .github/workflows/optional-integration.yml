@@ -24,10 +24,10 @@ env:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
 
 jobs:
-  # PROVES: the `briefing` extra installs and Playwright/Chromium renders the Signal-styled
+  # PROVES: the `briefing` extra installs and Playwright/Chromium renders the Executive-Navy
   # PDF end to end from a Q&A-shaped result.
   briefing-pdf:
-    name: briefing PDF (playwright + chromium)
+    name: ask briefing PDF (playwright + chromium)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
