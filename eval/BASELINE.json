@@ -7,6 +7,10 @@
     "value": 1.0,
     "direction": "min"
   },
+  "facet_coverage": {
+    "value": 1.0,
+    "direction": "min"
+  },
   "intake_side_acc": {
     "value": 0.777778,
     "direction": "min"

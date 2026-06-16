@@ -39,6 +39,8 @@ sys.path.insert(0, str(HERE.parent))   # worktree source wins over any global in
 
 from neuro_caseboard.intake import parse_dictation, deterministic_parse   # noqa: E402
 from neuro_caseboard.case_context import CaseContext                      # noqa: E402
+from neuro_caseboard.case_author import deterministic_case_manifest       # noqa: E402
+from neuro_caseboard.case_sections import CASE_SECTIONS                   # noqa: E402
 from neuro_caseboard.pipeline import build_case_dossier                   # noqa: E402
 from neuro_caseboard.case_literature import attach_case_literature        # noqa: E402
 from neuro_caseboard.literature.config import load_literature_config      # noqa: E402
@@ -103,6 +105,7 @@ LIT_SECTIONS = ("Clinical Reasoning", "Alternatives", "Risks")
 DIRECTIONS = {
     "section_coverage_det": "min",
     "section_coverage_gt": "min",
+    "facet_coverage": "min",
     "intake_side_acc": "min",
     "intake_level_acc": "min",
     "intake_goal_acc": "min",
@@ -180,7 +183,7 @@ def compute_metrics(data: EvalData) -> dict:
     n = len(data.dictations)
 
     det_cov = gt_cov = side_ok = level_ok = goal_ok = 0
-    lit_ok = corpus_n_ok = 0
+    lit_ok = corpus_n_ok = facet_ok = 0
     near_dup_total = 0
     contamination = 0
 
@@ -212,6 +215,12 @@ def compute_metrics(data: EvalData) -> dict:
         gt_h = [s.heading for s in gt_dossier.sections]
         det_cov += all(h in det_h for h in EIGHT)
         gt_cov += all(h in gt_h for h in EIGHT)
+
+        # --- WS-3: deterministic scaffold covers every section's facet (slot) checklist ---
+        got = {}
+        for cc in deterministic_case_manifest(gt_case).cards:
+            got.setdefault(cc.target_file, set()).add(cc.section_key)
+        facet_ok += all(set(s.slots) <= got.get(s.target_file, set()) for s in CASE_SECTIONS)
 
         # --- literature [L#] on the reasoning-bearing sections, no fabrication ---
         secs = {s.heading: s for s in gt_dossier.sections}
@@ -258,6 +267,7 @@ def compute_metrics(data: EvalData) -> dict:
     return {
         "section_coverage_det": _frac(det_cov, n),
         "section_coverage_gt": _frac(gt_cov, n),
+        "facet_coverage": _frac(facet_ok, n),
         "intake_side_acc": _frac(side_ok, n),
         "intake_level_acc": _frac(level_ok, n),
         "intake_goal_acc": _frac(goal_ok, n),

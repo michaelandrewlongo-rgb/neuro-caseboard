@@ -62,6 +62,19 @@ def test_section_query_only_for_the_three_lit_sections():
     assert section_query("Clinical Summary", CASE) is None
 
 
+def test_section_query_is_case_specific_not_generic():
+    """WS-3: the PubMed query must stay grounded in THIS case (its own topic), not a bare per-section
+    focus token — relevance/recency quality starts with an on-topic query."""
+    topic = CASE.to_topic()
+    for h in LIT_SECTIONS:
+        q = section_query(h, CASE)
+        # the case topic is embedded, and a generic per-section focus is appended (not the whole query)
+        assert topic in q
+        assert q != topic and len(q) > len(topic)
+        # case-specific anchors are present
+        assert "cervical spondylotic myelopathy" in q or "ACDF" in q
+
+
 def test_attach_literature_to_three_sections_no_fabrication():
     recs = _records()
     d = attach_case_literature(_dossier(), CASE, cache=_Cache(recs),

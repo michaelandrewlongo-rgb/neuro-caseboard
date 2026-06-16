@@ -7,6 +7,7 @@ held-out **eval** split. Fails CI if any metric regresses below `eval/BASELINE.j
 |---|---|---|---|---|
 | section_coverage_det | 1.0 | 1.0 | min | PASS |
 | section_coverage_gt | 1.0 | 1.0 | min | PASS |
+| facet_coverage | 1.0 | 1.0 | min | PASS |
 | intake_side_acc | 0.777778 | 0.777778 | min | PASS |
 | intake_level_acc | 1.0 | 1.0 | min | PASS |
 | intake_goal_acc | 1.0 | 1.0 | min | PASS |

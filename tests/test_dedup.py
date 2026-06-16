@@ -57,3 +57,27 @@ def test_similar_claims_within_one_section_are_not_collapsed():
     ]
     out = dedup_sections(secs)
     assert len(out[0].claims) == 2
+
+
+def test_mixed_near_dup_and_distinct_facts_regression():
+    """WS-3: depth must not become repetition — two near-identical cross-section claims collapse to
+    one while two genuinely-distinct facts both survive (a single mixed pass)."""
+    repeated = "Achieve a watertight dural closure with a graft to prevent a CSF leak"
+    secs = [
+        Section(heading="Operative Plan", claims=[
+            _claim(repeated),
+            _claim("Preserve the recurrent laryngeal nerve during tracheoesophageal retraction"),
+        ]),
+        Section(heading="Risk and Rescue", claims=[
+            _claim("Achieve a watertight dural closure with a graft to avoid a CSF leak"),  # near-dup
+            _claim("Have a plan for an expanding postoperative neck hematoma"),             # distinct
+        ]),
+    ]
+    op, risk = dedup_sections(secs)
+    # the near-duplicate is collapsed (kept once, in the first section) with a cross-reference back
+    assert sum("watertight dural closure" in c.text for c in op.claims) == 1
+    assert all("watertight dural closure" not in c.text for c in risk.claims)
+    assert any("Operative Plan" in ref for ref in risk.cross_refs)
+    # both genuinely-distinct facts survive
+    assert any("recurrent laryngeal nerve" in c.text for c in op.claims)
+    assert any("neck hematoma" in c.text for c in risk.claims)
