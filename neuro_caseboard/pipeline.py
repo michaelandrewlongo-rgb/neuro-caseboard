@@ -200,6 +200,64 @@ def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
                            card_evidence=card_evidence, page_texts=page_texts)
 
 
+def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=None,
+                       lit_client=None, lit_synth_client=None, lit_cache=None,
+                       figures_dir=None, fig_complete_fn=None):
+    """Case path: a CaseContext -> the 8-section case Dossier.
+
+    Mirrors build_dossier but authors over the eight case surfaces (build_case_manifest) and
+    compiles with compile_case_dossier. Reuses the same anti-bleed guard, enricher, auditor, and
+    retriever as build — degrades to a clinician-verify checklist offline. ``case.to_topic()`` is
+    the bridge that keeps classify_profile / retrieval working off the structured context.
+
+    When ``literature`` (None -> the LITERATURE_RETRIEVAL config flag), the Reasoning / Alternatives
+    / Risks sections are augmented with a contemporary-PubMed paragraph on a separate ``[L#]`` axis
+    (WS-3); the lit client/synth/cache are injectable for offline tests. The lane is additive — any
+    failure leaves those sections without a literature block and never affects the rest.
+    """
+    from neuro_caseboard.case_author import build_case_manifest, deterministic_case_manifest
+    from neuro_caseboard.compile import compile_case_dossier
+
+    if use_llm is None:
+        use_llm = llm_enabled()
+    manifest = build_case_manifest(case) if use_llm else deterministic_case_manifest(case)
+    topic = case.to_topic()
+    manifest = prune_offtarget(manifest, topic)        # anti-bleed (LOOP_PROMPT §6)
+
+    retriever = build_retriever() if enrich else None
+    enriched = enrich_manifest(manifest, topic=topic, retriever=retriever, top_n=3)
+    audited = audit_manifest(enriched, topic=topic)
+    evidence = _sources_from_audited(audited)
+    card_evidence, page_texts = ({}, {})
+    if retriever is not None and _figures_enabled():
+        card_evidence, page_texts = _collect_figures(manifest, topic, retriever)
+    dossier = compile_case_dossier(audited, case=case, evidence=evidence,
+                                   card_evidence=card_evidence, page_texts=page_texts)
+
+    if literature is None:
+        from neuro_caseboard.literature.config import load_literature_config
+        literature = load_literature_config().enabled
+    if literature:
+        from neuro_caseboard.case_literature import attach_case_literature
+        attach_case_literature(dossier, case, client=lit_client,
+                               synth_client=lit_synth_client, cache=lit_cache)
+
+    # WS-4: generated case schematics (deterministic PIL renderer; offline-safe). Attached to the
+    # "Case Figures" section as FigureItems alongside any retrieved plates.
+    if figures_dir is not None:
+        from neuro_caseboard.figures_gen import generate_case_figures
+        items = generate_case_figures(case, figures_dir, complete_fn=fig_complete_fn)
+        if items:
+            fig_sec = next((s for s in dossier.sections if s.heading == "Case Figures"), None)
+            if fig_sec is None:
+                from neuro_caseboard.model import Section
+                fig_sec = Section(heading="Case Figures",
+                                  intro="Generated schematics for this case.")
+                dossier.sections.append(fig_sec)
+            fig_sec.figures.extend(items)
+    return dossier
+
+
 def _slug(topic: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (topic or "").lower()).strip("-")[:40] or "case"
 
@@ -276,3 +334,26 @@ def generate(topic: str, *, output_dir, pdf: bool = False, enrich: bool = True, 
     if pdf:
         artifacts["pdf"] = render_case_pdf(dossier, topic, out / "case-board.pdf")
     return dossier, artifacts
+
+
+def generate_case(dictation: str, *, output_dir, pdf: bool = False, enrich: bool = True,
+                  use_llm=None, literature=None):
+    """Build the case dossier from a free-text dictation and write case-dossier.md
+    (+ case-dossier.pdf) to output_dir, with generated schematics rendered into the same dir.
+
+    The PDF reuses ``render_case_pdf`` (Executive-Navy, fpdf2 fallback), so it carries the standing
+    confidentiality/verify banner on every page. ``use_llm=False`` forces the deterministic intake +
+    authors (offline). Returns ``(case, dossier, artifacts)``."""
+    from neuro_caseboard.intake import parse_dictation, deterministic_parse
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    case = deterministic_parse(dictation) if use_llm is False else parse_dictation(dictation)
+    dossier = build_case_dossier(case, enrich=enrich, use_llm=use_llm, literature=literature,
+                                 figures_dir=out)
+    artifacts = {}
+    md_path = out / "case-dossier.md"
+    md_path.write_text(render_markdown(dossier), encoding="utf-8")
+    artifacts["markdown"] = md_path
+    if pdf:
+        artifacts["pdf"] = render_case_pdf(dossier, case.to_topic(), out / "case-dossier.pdf")
+    return case, dossier, artifacts

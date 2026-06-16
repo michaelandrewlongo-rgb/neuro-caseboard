@@ -62,3 +62,31 @@ def test_legend_and_crosslink_in_pdf(rendered):
 def test_appendix_in_pdf(rendered):
     _, _, text = rendered
     assert "Appendix" in text
+
+
+def test_verify_banner_on_every_page(rendered):
+    # WS-5: the standing confidentiality/verify banner appears on every page.
+    _, out, _ = rendered
+    doc = fitz.open(out)
+    assert doc.page_count >= 1
+    for page in doc:
+        assert "verifies every recommendation" in page.get_text()
+
+
+def test_section_literature_renders_L_axis_in_pdf(tmp_path):
+    # WS-5/WS-3: a section's contemporary-literature block renders with [L#] in the fpdf2 PDF.
+    from types import SimpleNamespace
+    from neuro_caseboard.model import Dossier, EvidenceSummary, Section, Claim
+    lit = SimpleNamespace(
+        narrative="Recent RCTs support decompression [L1].",
+        citations=[SimpleNamespace(n=1, title="ACDF RCT", journal="Spine", year=2024,
+                                   doi="10.1/abc", url="")])
+    d = Dossier(title="Case Dossier — C5-6 ACDF", summary=EvidenceSummary(to_verify=1),
+                sections=[Section(heading="Clinical Reasoning",
+                                  claims=[Claim(text="Indicated", why="progressive")],
+                                  literature=lit)])
+    out = tmp_path / "case.pdf"
+    render_pdf(d, out)
+    text = "\n".join(page.get_text() for page in fitz.open(out))
+    assert "Contemporary Literature" in text
+    assert "[L1]" in text and "ACDF RCT" in text

@@ -21,6 +21,39 @@ from neuro_caseboard.model import Dossier
 
 _STATUS_LABEL = {"supported": "Corpus-supported", "verify": "To verify"}
 
+# Standing confidentiality / clinician-verify banner (LOOP_PROMPT §6). position:fixed repeats it on
+# every printed page in Chromium; the bottom padding on .content keeps body text clear of it.
+VERIFY_BANNER = ("Confidential — clinical decision support only; "
+                 "the surgeon verifies every recommendation.")
+_CASE_EXTRA_CSS = """
+.verify-banner{ position:fixed; bottom:0; left:0; right:0; padding:3px 14mm;
+  font-family:var(--mono); font-size:7pt; letter-spacing:.02em; color:#7a5a14;
+  background:rgba(169,120,27,.10); border-top:1px solid rgba(169,120,27,.35); text-align:center; }
+.content{ padding-bottom:14mm; }
+.litblock{ margin:3mm 0 1mm; }
+.litblock .lh{ font-family:var(--ui); font-weight:700; font-size:9.5pt; color:var(--accent);
+  letter-spacing:.02em; text-transform:uppercase; }
+.litblock .ln{ font-family:var(--read); font-size:9.6pt; color:#33424f; margin:1mm 0; }
+.litblock .lc{ font-family:var(--read); font-size:8.6pt; color:#56616c; padding:.6mm 0; }
+.litblock .lc .k{ font-family:var(--mono); font-size:7pt; color:var(--accent); margin-right:2mm; }
+.litblock a{ color:var(--accent); text-decoration:none; }
+"""
+
+
+def _literature_html(lit) -> str:
+    """The contemporary-literature block ([L#] axis), separate from the corpus markers (WS-3)."""
+    if not lit or not getattr(lit, "narrative", ""):
+        return ""
+    rows = []
+    for c in getattr(lit, "citations", []) or []:
+        link = f"https://doi.org/{c.doi}" if getattr(c, "doi", "") else getattr(c, "url", "")
+        meta = ", ".join(p for p in (html.escape(c.journal or ""), str(c.year or "")) if p)
+        a = f' · <a href="{html.escape(link)}">link</a>' if link else ""
+        rows.append(f'<div class="lc"><span class="k">[L{c.n}]</span>{html.escape(c.title or "")}'
+                    f'{(" — " + meta) if meta else ""}{a}</div>')
+    return ('<div class="litblock"><div class="lh">Contemporary Literature</div>'
+            f'<div class="ln">{inline(lit.narrative)}</div>{"".join(rows)}</div>')
+
 
 def _evidence_bar(s) -> str:
     total = max(s.supported + s.to_verify + s.quarantined, 1)
@@ -64,7 +97,9 @@ def build_caseboard_html(dossier: Dossier, *, subtitle: str = "", today: str | N
     keys = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
 
     out = [
-        "<!doctype html><html><head><meta charset='utf-8'><style>", EXEC_NAVY_CSS, "</style></head><body>",
+        "<!doctype html><html><head><meta charset='utf-8'><style>",
+        EXEC_NAVY_CSS, _CASE_EXTRA_CSS, "</style></head><body>",
+        f'<div class="verify-banner">{html.escape(VERIFY_BANNER)}</div>',
         '<div class="masthead"><div class="mh-brand"><span class="sq"></span>NEURO·CASEBOARD</div>',
         '<div class="mh-eyebrow">Neurosurgery Signal · pre-operative dossier</div></div>',
         '<div class="content">',
@@ -104,6 +139,7 @@ def build_caseboard_html(dossier: Dossier, *, subtitle: str = "", today: str | N
                 continue
             seen.add(fig.image_path)
             out.append(_figure_html(fig))
+        out.append(_literature_html(getattr(sec, "literature", None)))
         for ref in sec.cross_refs:
             out.append(f'<div class="xnote">{inline(ref)}</div>')
         out.append("</div>")

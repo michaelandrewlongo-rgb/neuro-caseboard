@@ -68,6 +68,87 @@ def test_build_dossier_offline_produces_clean_board(topic):
     assert "✓" in md and "⚠" in md
 
 
+@pytest.mark.parametrize("case_kwargs", [
+    dict(laterality="right", level="C5-6", pathology="cervical spondylotic myelopathy",
+         procedure="ACDF", surgical_goal="decompression"),
+    dict(laterality="left", location="left frontal", pathology="diffuse glioma",
+         procedure="awake craniotomy", surgical_goal="maximal safe resection"),
+    dict(laterality="left", location="MCA bifurcation", pathology="ruptured MCA aneurysm",
+         procedure="pterional clipping", surgical_goal="clip ligation"),
+])
+def test_build_case_dossier_offline_renders_eight_sections(case_kwargs):
+    # Explicitly offline + deterministic (no provider, no retriever) across the three subspecialties.
+    from neuro_caseboard.case_context import CaseContext
+    from neuro_caseboard.pipeline import build_case_dossier
+    d = build_case_dossier(CaseContext(**case_kwargs), enrich=False, use_llm=False,
+                           literature=False)   # offline: no PubMed network
+    headings = [s.heading for s in d.sections]
+    for h in ["Clinical Summary", "Clinical Reasoning", "Operative Plan", "Alternatives",
+              "Risks", "Pre-op Optimization", "Surgical Technique", "Case Figures"]:
+        assert h in headings, f"missing section: {h}"
+    assert "Case Dossier" in d.title
+    # offline: single evidence axis, nothing corpus-supported / quarantined, everything to verify
+    assert d.summary.supported == 0 and d.summary.quarantined == 0 and d.summary.to_verify > 0
+    claims = [c for s in d.sections for c in s.claims]
+    assert claims and all(c.status == "verify" and c.why for c in claims)
+
+
+def test_build_case_dossier_attaches_literature_offline(monkeypatch):
+    # WS-3: with literature on + an injected canned cache/synth (no network), the three
+    # reasoning-bearing sections gain a [L#] block; literature=False attaches none.
+    from neuro_caseboard.case_context import CaseContext
+    from neuro_caseboard.pipeline import build_case_dossier
+    from neuro_caseboard.literature.retriever import LiteratureRecord
+
+    recs = [LiteratureRecord(pmid="111", title="ACDF RCT", journal="Spine", year=2024,
+                             doi="10.1/x", url="", abstract="data")]
+
+    class _Cache:
+        def get(self, key):
+            return recs
+        def set(self, key, r):
+            pass
+
+    class _Synth:
+        def generate(self, system, user, images):
+            return "Recent evidence [L1]."
+
+    # force the config flag on regardless of ambient env
+    monkeypatch.setenv("LITERATURE_RETRIEVAL", "true")
+    case = CaseContext(level="C5-6", pathology="cervical spondylotic myelopathy",
+                       procedure="ACDF", surgical_goal="decompression")
+    d = build_case_dossier(case, enrich=False, use_llm=False, literature=True,
+                           lit_cache=_Cache(), lit_synth_client=_Synth())
+    by = {s.heading: s for s in d.sections}
+    for h in ("Clinical Reasoning", "Alternatives", "Risks"):
+        assert by[h].literature is not None and by[h].literature.citations
+        assert {c.pmid for c in by[h].literature.citations} <= {"111"}   # no fabrication
+    assert by["Operative Plan"].literature is None
+
+    d2 = build_case_dossier(case, enrich=False, use_llm=False, literature=False)
+    assert all(s.literature is None for s in d2.sections)
+
+
+def test_build_case_dossier_attaches_generated_schematics(tmp_path, monkeypatch):
+    # WS-4: with figures_dir set, generated schematics attach to the Case Figures section
+    # (deterministic, offline). Without it, no figures are generated.
+    monkeypatch.setenv("CASEBOARD_LLM", "0")     # hermetic: deterministic figure author
+    from neuro_caseboard.case_context import CaseContext
+    from neuro_caseboard.pipeline import build_case_dossier
+    case = CaseContext(laterality="left", level="C5-6",
+                       pathology="cervical spondylotic myelopathy", procedure="ACDF",
+                       surgical_goal="decompression")
+    d = build_case_dossier(case, enrich=False, use_llm=False, literature=False,
+                           figures_dir=tmp_path)
+    fig_sec = next(s for s in d.sections if s.heading == "Case Figures")
+    assert fig_sec.figures, "expected generated schematics in the Case Figures section"
+    assert all(f.caption.startswith("Schematic (not a radiograph)") for f in fig_sec.figures)
+
+    d2 = build_case_dossier(case, enrich=False, use_llm=False, literature=False)
+    fig_sec2 = next(s for s in d2.sections if s.heading == "Case Figures")
+    assert fig_sec2.figures == []        # no figures_dir -> none generated
+
+
 def test_render_ask_pdf_clinical_style_uses_fpdf(monkeypatch, tmp_path):
     monkeypatch.setenv("CASEBOARD_PDF_STYLE", "clinical")
     from neuro_caseboard.pipeline import render_ask_pdf

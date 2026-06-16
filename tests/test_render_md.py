@@ -66,3 +66,26 @@ def test_appendix_rendered_and_pointer_not_dangling(md):
 def test_dedup_crossref_rendered(md):
     # #9
     assert "Also relevant — see Operative Plan" in md
+
+
+def test_section_literature_block_renders_with_L_axis():
+    # WS-3: a section's contemporary-literature block renders narrative + [L#] rows on a
+    # separate axis; a section without literature is unchanged.
+    from types import SimpleNamespace
+    from neuro_caseboard.model import Dossier, EvidenceSummary, Section, Claim
+    lit = SimpleNamespace(
+        narrative="Recent RCTs support decompression [L1].",
+        citations=[SimpleNamespace(n=1, title="ACDF RCT", journal="Spine", year=2024,
+                                   doi="10.1/abc", url="")])
+    d = Dossier(title="Case Dossier — C5-6 ACDF", summary=EvidenceSummary(),
+                sections=[Section(heading="Clinical Reasoning",
+                                  claims=[Claim(text="Indicated", why="progressive")],
+                                  literature=lit),
+                          Section(heading="Operative Plan",
+                                  claims=[Claim(text="Decompress", why="cord")])])
+    md = render_markdown(d)
+    assert "**Contemporary Literature**" in md
+    assert "Recent RCTs support decompression [L1]." in md
+    assert "[L1] ACDF RCT — Spine 2024 · https://doi.org/10.1/abc" in md
+    # the [L#] axis appears once (only under the section that has literature)
+    assert md.count("**Contemporary Literature**") == 1

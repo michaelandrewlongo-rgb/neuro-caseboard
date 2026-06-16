@@ -17,3 +17,5 @@ out/
 /tmp/
 .DS_Store
 eval/_outputs/
+# regenerable generated-schematic render artifacts (WS-4 eval)
+eval/_fig_specs/

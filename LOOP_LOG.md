@@ -1,0 +1,118 @@
+# LOOP_LOG — Case Dossier engine (`caseboard case`)
+
+Self-driving build log (see `LOOP_PROMPT.md`). One line per pass: pass #, increment, test result,
+eval/judge score before→after, next bottleneck.
+
+| pass | increment | tests | eval (before→after) | next bottleneck |
+|---|---|---|---|---|
+| 1 | WS-1 `CaseContext` + dictation intake (`case_context.py`, `intake.py`) | 400 passed, 1 skipped (was 383; +17 new, 0 regressions) | intake eval 6/6 side · 6/6 level · 6/6 goal · 6/6 comorbid · `missing_critical` ≤3 all / ==0 on complete (was n/a → MET) | WS-2: expand section taxonomy to the 8 case surfaces (model.py + compile.py + Explorer), topic-agnostic, single evidence axis |
+| 2 | WS-2 8-surface case taxonomy (`case_sections.py`, `case_author.py`, `compile_case_dossier`, `build_case_dossier`) | 416 passed, 1 skipped (was 400; +16 new, 0 regressions) | case-dossier eval 6/6 cases render 8/8 sections (det + ground-truth); zero hardcoded clinical literals; build path byte-identical → MET | WS-3: wire PubMed `[L#]` into the case build (Reasoning/Alternatives/Risks) on a separate axis |
+| 3 | WS-3 PubMed in the case build (`case_literature.py`, `Section.literature`, render_md, `build_case_dossier` lit args) | 421 passed, 1 skipped (was 416; +5 new, 0 regressions) | case eval 6/6 cases: 3/3 reasoning sections carry `[L#]`, zero fabrication (`[L#]`⊆injected PMIDs); `[n]`/`[L#]` separate → MET | WS-4: generated schematic figures (the headline) — figure-spec author + deterministic renderer + guard + image judge |
+| 4 | WS-4 generated schematic figures (`figures_gen/`: spec, guard, render, author; `build_case_dossier` figures_dir) | 441 passed, 1 skipped (was 421; +20 new, 0 regressions) | figure eval 3/3: archetype + side + level grounded, byte-stable PNG, guard rejects side-flip; no new dep (PIL core); image-judge ≥8/10 DEFERRED (no visual judge) | WS-5: PDF surface + `caseboard case` CLI + Streamlit Case lane |
+| 5 | WS-5 PDF surface + `caseboard case` CLI + Streamlit Case lane (`generate_case`, per-page verify banner, section `[L#]` in both renderers) | 449 passed, 1 skipped (was 441; +8 new, 0 regressions) | offline smoke: dictation→PDF, 8 sections + 2 schematics, verify banner on 5/5 pages, no broken glyphs; entry point imports on core deps; syntax gate green → MET | — loop complete |
+
+## LOOP COMPLETE (2026-06-16)
+
+WS-1…WS-5 are all green on tests + eval. `caseboard case "<dictation>"` turns a free-text clinical
+dictation into a print-grade 8-section case dossier (Clinical Summary · Clinical Reasoning ·
+Operative Plan · Alternatives · Risks · Pre-op Optimization · Surgical Technique · Case Figures) with
+contemporary PubMed `[L#]` on a separate axis and generated, guard-checked schematics — offline and
+deterministic, single evidence axis, topic-agnostic, with `ask`/`build`/`cards` unchanged.
+**449 passed, 1 skipped, 0 regressions** across the five passes (baseline was 383).
+
+**Deferred (need a configured provider/visual judge, absent in this environment):** the live
+blind text-judge of section quality vs `cases.json` must_cover; live PubMed recency/relevance; the
+blind image-opening judge (≥8/10 conceptual + case-specificity) over the rendered schematics. The
+offline harnesses (`eval/intake_eval.py`, `eval/case_eval.py`, `eval/figure_spec_eval.py`) render
+real artifacts a keyed/visual judge can grade. Per §5 the loop's final subspecialty judge scores
+were filled in on a keyed Google Vertex pass — see **LIVE BLIND-JUDGE PASS** below.
+
+## LIVE BLIND-JUDGE PASS (2026-06-16) — the deferred judges, run on Vertex
+
+Ran both deferred live blind judges with the user's **Google Vertex** credentials (Gemini 2.5 Pro,
+GCP free credit; **$0 OpenRouter** — that account had no balance, so it was dropped). Both are
+MANUAL, credentialed steps kept out of required offline CI. Harnesses: `eval/live_text_judge.py`,
+`eval/live_image_judge.py --backend vertex`. Reports: `eval/CASE_TEXT_JUDGE_REPORT_2026-06-16_*.md`,
+`eval/CASE_IMAGE_JUDGE_REPORT_2026-06-16_*.md`.
+
+- **Text** (attending-examiner judge vs `cases.json` must_cover/red_flags, 6 cases): mean must-cover
+  coverage **65.2% -> 80.7%**, mean overall **6.3 -> 8.2/10**, red-flag bleed **0 -> 0**. Fix: a
+  topic-agnostic COMPLETENESS block in `case_author.CASE_SYSTEM` (enumerate every structure-at-risk
+  along the corridor + at the target; recognized named post-op deficits; the early postoperative
+  emergency + bedside rescue; named rescue maneuvers/adjuncts; closure/reconstruction; team readiness
+  + postoperative protocol). A one-off transient model failure on the pediatric case exposed two real
+  bugs, both fixed: (1) `build_case_manifest` now RETRIES before degrading to the deterministic
+  scaffold; (2) the deterministic fallback no longer reuses caseprep's generic `stop_points` card
+  (it hardcodes a cross-subspecialty "abort: VA/carotid..." enumeration the posterior-only guard
+  misses) — de-duped against the topic-agnostic cards we author. Pediatric recovered
+  31%/overall 1/bleed 1 -> **87.5%/overall 9/bleed 0**.
+- **Image** (vision judge opening each rendered PNG; conceptual + case-specificity, target >=8/10,
+  6 cases x2): side/level correct **12/12**; mean overall **7.5 -> 7.8/10**, pass **8/12 -> 9/12**.
+  Fix 1 (renderer, durable): edge-aware label placement — word-wrap + collision avoidance + white
+  halo + leader lines + footer truncation — eliminated the overlap/clipping defects (pediatric
+  structures map **2->10**, skull-base corridor **6->9**, convexity-meningioma map **8->10**). Fix 2
+  (figure author, topic-agnostic): captions no longer claim a radiographic plane the abstract diagram
+  can't deliver; nodes spread >=0.15 by true relative anatomy; depict the pathology; correct spinal
+  level ordering; case-matched region; +retry. The approach/**corridor** schematic is reliably 9-10
+  across subspecialties. **Known limitation:** the second free-form "structures-at-risk" map stays
+  variable under a strict anatomical judge — an inherent ceiling of an abstract node-scatter (and the
+  topic-agnostic deterministic floor cannot name real structures). Documented, not over-fit to a
+  stochastic judge.
+
+No new runtime dependency; full offline suite **449 passed, 1 skipped, 0 regressions** after the fixes.
+
+## Notes
+
+- **Pass 1 (2026-06-16, WS-1).** Built the structured intake foundation: `CaseContext` dataclass
+  (geometry/history/plan + `to_topic()` bridge to the existing pipeline, `missing_critical()` capped
+  at 3) and an LLM-first `intake.parse_dictation` (injected `complete_fn`, graceful fallback) with a
+  topic-agnostic `deterministic_parse` (age/sex/laterality/level — handedness-aware, disc-range
+  preferred over single root level). Offline tests (`test_case_context.py` ×6, `test_intake.py` ×11)
+  + a reproducible offline eval (`eval/case_dictations.json`, `eval/intake_eval.py` →
+  `eval/CASE_INTAKE_REPORT_2026-06-16.md`). Two bugs the eval caught and fixed in-loop: handedness
+  ("right-handed") polluting lesion laterality; single root level ("C6") winning over the disc range
+  ("C5-6"). Live model-quality blind grade deferred — no provider key in this environment.
+  No new runtime dependency; `caseboard` entry point still imports on core deps.
+- **Pass 2 (2026-06-16, WS-2).** Added the eight-surface case taxonomy and an additive case path
+  (build untouched): `case_sections.py` (the 8 §0 surfaces with generalizable slot vocab; Operative
+  Plan + Risks reuse the build files verbatim), a `compile_case_dossier` built by extracting a
+  parameterized `_compile` core from `compile_dossier` (behavior-preserving), a `case_author.py`
+  (LLM-first injected author + grounded topic-agnostic deterministic scaffold covering all 8
+  sections), and `pipeline.build_case_dossier` (anti-bleed guard → enrich → audit → compile_case).
+  Tests: `test_case_sections.py` ×4, `test_case_author.py` ×8, `test_compile.py` +1, `test_pipeline.py`
+  +1 (parametrized ×3). Eval `eval/case_eval.py` → `eval/CASE_DOSSIER_REPORT_2026-06-16.md`: 6/6 cases
+  render 8/8 sections (deterministic + ground-truth context). Guardrails verified: no hardcoded
+  clinical literals in source (grep), build path byte-identical, single evidence axis preserved. Live
+  blind text-judge of section quality deferred — no provider key.
+- **Pass 3 (2026-06-16, WS-3).** Wired the existing PubMed lane into the case build on a separate
+  `[L#]` axis: `Section.literature` (duck-typed, optional — model stays decoupled);
+  `case_literature.attach_case_literature` calls `qa.build_literature_section` once per
+  reasoning-bearing section (Clinical Reasoning / Alternatives / Risks) with a topic-agnostic
+  case-tuned query; `render_md` renders the narrative + `[L#]` rows; `build_case_dossier` gains
+  `literature`/`lit_client`/`lit_synth_client`/`lit_cache` args (None → `LITERATURE_RETRIEVAL`).
+  Never fabricates — synth cites only the records it is given, citations enumerate those records, and
+  tests assert `[L#] ⊆ injected PMIDs`. Offline tests inject a canned cache + synth (no network):
+  `test_case_literature.py` ×3, `test_render_md.py` +1, `test_pipeline.py` +1. Eval `case_eval.py`
+  extended: 6/6 cases carry `[L#]` on all three sections, no fabrication. Live PubMed recency/relevance
+  grade deferred — no `NCBI_API_KEY`. `ask` literature path unchanged.
+- **Pass 4 (2026-06-16, WS-4).** The headline: generated **schematic** figures, code-drawn from a
+  structured spec (LOOP_PROMPT §2). New `neuro_caseboard/figures_gen/`: `spec.py` (`FigureSpec` +
+  tolerant `from_dict`), `author.py` (LLM-first injected author + topic-agnostic deterministic
+  fallback; archetype from `classify_profile`, nodes from case geometry), `render.py` (deterministic
+  **PIL** renderer — `pillow` is a core dep, so **no new dependency** — byte-stable PNG, mandatory
+  "SCHEMATIC — NOT A RADIOGRAPH" banner, per-archetype backdrop), `guard.py` (rejects a spec whose
+  side/level/region contradicts the case, reusing `figure_guards`). `generate_case_figures` →
+  `FigureItem`s captioned "Schematic (not a radiograph): …"; `build_case_dossier(figures_dir=…)`
+  attaches them to the Case Figures section. Tests +20. Eval `eval/figure_spec_eval.py` → 3/3
+  archetype + side/level grounding + byte-stability + guard-rejects-flip; artifacts in
+  `eval/_fig_specs/`. Blind image-opening judge ≥8/10 deferred — no visual judge in this environment.
+- **Pass 5 (2026-06-16, WS-5).** Shipped the case surface. `pipeline.generate_case` (dictation →
+  `case-dossier.md` + `.pdf`, schematics rendered into the output dir); `caseboard case "<dictation>"
+  [--pdf] [--no-llm] [--no-enrich] [--no-literature] -o dir`; a "Case" Streamlit lane (dictation →
+  dossier + schematics + PDF download). Both PDF renderers gained the per-page confidentiality/verify
+  banner (`render_pdf` via an `FPDF.footer()` subclass; `caseboard_pdf` via a `position:fixed`
+  banner) and the per-section `[L#]` literature block; the offline fpdf2 fallback keeps the CI smoke
+  green without Chromium, Unicode font + ASCII fallback preserved. Verified offline: dictation → a
+  5-page PDF with all 8 sections, 2 generated schematics, and the verify banner on every page; no new
+  runtime dependency; entry point imports on core deps. Tests +8 (`test_caseboard_pdf.py` +2,
+  `test_render_pdf.py` +2, `test_cli.py` +1, plus pipeline/figure coverage). 449 passed, 0 regressions.

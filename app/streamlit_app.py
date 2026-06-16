@@ -18,7 +18,8 @@ import streamlit as st
 
 import signal_theme as sig
 from neuro_caseboard.board_view import board_view
-from neuro_caseboard.pipeline import build_dossier, render_case_pdf, render_ask_pdf, _slug
+from neuro_caseboard.pipeline import (
+    build_dossier, build_case_dossier, render_case_pdf, render_ask_pdf, _slug)
 from neuro_caseboard.topic_extract import extract_board_topic
 from neuro_core.evidence import from_figure, from_figure_item, other_features, record
 from neuro_caseboard.qa import answer_question
@@ -56,7 +57,7 @@ _store = st.session_state.setdefault("session_evidence", {})
 # --- Sidebar: branded console rail -------------------------------------------------------------
 sig.sidebar_brand()
 sig.sidebar_label("Lane")
-mode = st.sidebar.radio("Mode", ["Ask", "Build board", "Cards"], key="mode",
+mode = st.sidebar.radio("Mode", ["Ask", "Build board", "Case", "Cards"], key="mode",
                         label_visibility="collapsed")
 
 
@@ -180,6 +181,56 @@ elif mode == "Build board":
             st.session_state["seed_question"] = choice
             st.session_state["_pending_mode"] = "Ask"
             st.rerun()
+
+elif mode == "Case":
+    from neuro_caseboard.intake import parse_dictation, deterministic_parse
+    sig.hero("Build a case dossier", "Dictate the clinical context for a specific patient; the engine "
+             "synthesizes an eight-section pre-op dossier with generated case schematics.",
+             eyebrow="Case · Patient-specific dossier",
+             disclaimer="Decision-support only · the surgeon verifies every recommendation")
+    dictation = st.text_area(
+        "Dictate the case (free text)", key="case_dictation", height=160,
+        placeholder="e.g. 62yo woman with progressive cervical myelopathy and right C6 "
+                    "radiculopathy; MRI shows C5-6 cord compression; plan ACDF for decompression.")
+    c1, c2, c3, c4 = st.columns(4)
+    want_pdf = c1.checkbox("PDF download", value=True, key="case_pdf")
+    enrich = c2.checkbox("Corpus enrichment", value=True, key="case_enrich")
+    use_llm = c3.checkbox("LLM authors", value=True, key="case_llm")
+    want_lit = c4.checkbox("PubMed literature", value=True, key="case_lit")
+    if dictation and st.button("Build case dossier", type="primary"):
+        with st.spinner("Parsing the dictation…"):
+            case = parse_dictation(dictation) if use_llm else deterministic_parse(dictation)
+        missing = case.missing_critical()
+        if missing:
+            sig.note("For a sharper dossier, the dictation did not state: " + "; ".join(missing))
+        with tempfile.TemporaryDirectory() as td:
+            with st.spinner("Building the case dossier + schematics…"):
+                dossier = build_case_dossier(
+                    case, enrich=enrich, use_llm=None if use_llm else False,
+                    literature=None if want_lit else False, figures_dir=Path(td))
+                view = board_view(dossier)
+            s = view.summary
+            figs = sum(len(sec.figures) for sec in dossier.sections)
+            sig.evidence_bar(s.supported, s.to_verify, s.quarantined)
+            sig.metrics([
+                (len(dossier.sections), "sections", ""),
+                (figs, "schematics", ""),
+                (s.supported, "corpus-supported", "supported"),
+                (s.to_verify, "to verify", "verify"),
+            ])
+            sig.legend()
+            if want_pdf:
+                pdf_path = render_case_pdf(dossier, case.to_topic(), Path(td) / "case-dossier.pdf")
+                st.download_button("Download PDF", Path(pdf_path).read_bytes(),
+                                   file_name=f"case-{_slug(case.to_topic())}.pdf",
+                                   mime="application/pdf")
+            if view.figures:
+                sig.section("Case schematics", "FIG")
+                cols = st.columns(min(2, len(view.figures)))
+                for col, fig in zip(cols, view.figures):
+                    with col:
+                        st.image(fig.image_path, caption=fig.caption, use_container_width=True)
+            st.markdown(sig.citation_chips(view.markdown), unsafe_allow_html=True)
 
 elif mode == "Cards":
     from neuro_core.cards_query import cards_query, flagged_tags, CardsIndexNotBuilt

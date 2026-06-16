@@ -35,6 +35,8 @@ _INTRO = {
     "Operative Plan": "Critical steps, decision points, and stop criteria.",
     "Risk and Rescue": "Expected and catastrophic complications with rescue sequences.",
 }
+# intro keyed by target_file (the shape `_compile` consumes), derived from the heading-keyed map.
+_INTRO_BY_TF = {tf: _INTRO.get(h, "") for tf, h in _HEADINGS.items()}
 # no_evidence cards are still surgeon-facing VERIFY prompts (the Explorer designs them
 # as such); only genuinely off-target retrievals are quarantined to the appendix.
 _PRIMARY = {"supported", "needs_review", "no_evidence"}
@@ -58,14 +60,20 @@ def _short(text: str, limit: int = 60) -> str:
     return t if len(t) <= limit else t[: limit - 1].rsplit(" ", 1)[0] + "…"
 
 
-def compile_dossier(
+def _compile(
     audited_manifest,
     *,
-    topic: str = "",
+    title: str,
+    headings: dict,
+    order: list,
+    intros_by_tf: dict,
     evidence=None,
     card_evidence=None,
     page_texts=None,
 ) -> Dossier:
+    """Core compiler shared by the build (3-section) and case (8-section) paths. The section
+    set is data, not branches: `headings`/`order`/`intros_by_tf` parameterize the taxonomy;
+    everything else (evidence axis, markers, dedup, appendix, figure linkage) is identical."""
     evidence = list(evidence or [])
     card_evidence = card_evidence or {}
     page_texts = page_texts or {}
@@ -75,15 +83,15 @@ def compile_dossier(
     for c in cards:
         if c.target_file not in seen_tf:
             seen_tf.append(c.target_file)
-    ordered_tf = [tf for tf in _ORDER if tf in seen_tf] + \
-                 [tf for tf in seen_tf if tf not in _ORDER]
+    ordered_tf = [tf for tf in order if tf in seen_tf] + \
+                 [tf for tf in seen_tf if tf not in order]
 
     fig_counter = 0
     sections: list[Section] = []
     appendix_entries: list[AppendixEntry] = []
 
     for tf in ordered_tf:
-        heading = _heading_for(tf)
+        heading = headings.get(tf) or _humanize(tf)
         tf_cards = [c for c in cards if c.target_file == tf]
         primary = [c for c in tf_cards if c.audit_status in _PRIMARY]
         quarantined = [c for c in tf_cards if c.audit_status not in _PRIMARY]
@@ -120,7 +128,7 @@ def compile_dossier(
             claims.append(claim)
 
         if claims or figures:
-            sections.append(Section(heading=heading, intro=_INTRO.get(heading, ""),
+            sections.append(Section(heading=heading, intro=intros_by_tf.get(tf, ""),
                                     claims=claims, figures=figures))
         if quarantined:
             items = [
@@ -149,6 +157,39 @@ def compile_dossier(
         quarantined=sum(1 for c in cards if c.audit_status == "off_target"),
     )
 
-    title = f"Case Board — {topic}" if topic else "Case Board"
     return Dossier(title=title, summary=summary, sections=sections,
                    appendix=Appendix(entries=appendix_entries))
+
+
+def compile_dossier(
+    audited_manifest,
+    *,
+    topic: str = "",
+    evidence=None,
+    card_evidence=None,
+    page_texts=None,
+) -> Dossier:
+    """Build (3-section) compiler — unchanged behavior. Anatomy at Risk / Operative Plan /
+    Risk and Rescue, titled "Case Board — <topic>"."""
+    title = f"Case Board — {topic}" if topic else "Case Board"
+    return _compile(audited_manifest, title=title, headings=_HEADINGS, order=_ORDER,
+                    intros_by_tf=_INTRO_BY_TF, evidence=evidence,
+                    card_evidence=card_evidence, page_texts=page_texts)
+
+
+def compile_case_dossier(
+    audited_manifest,
+    *,
+    case,
+    evidence=None,
+    card_evidence=None,
+    page_texts=None,
+) -> Dossier:
+    """Case (8-section) compiler — the eight surfaces of LOOP_PROMPT §0 in order, titled
+    "Case Dossier — <case.to_topic()>". Same evidence axis, markers, dedup, and appendix as
+    the build path; only the section taxonomy differs (driven by case_sections)."""
+    from neuro_caseboard.case_sections import CASE_HEADINGS, CASE_ORDER, CASE_INTROS
+    title = f"Case Dossier — {case.to_topic()}"
+    return _compile(audited_manifest, title=title, headings=CASE_HEADINGS, order=CASE_ORDER,
+                    intros_by_tf=CASE_INTROS, evidence=evidence,
+                    card_evidence=card_evidence, page_texts=page_texts)

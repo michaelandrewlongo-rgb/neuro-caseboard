@@ -7,7 +7,7 @@ import dataclasses
 
 import pytest
 
-from neuro_caseboard.compile import compile_dossier
+from neuro_caseboard.compile import compile_dossier, compile_case_dossier
 from neuro_caseboard.model import Claim, EvidenceSummary
 import tests.fixtures as fx
 
@@ -86,6 +86,52 @@ def test_appendix_has_quarantined_claims_and_sources(built):
     sources = " ".join(s for e in d.appendix.entries for s in e.sources)
     assert any(k in items for k in ("lumbar", "endonasal", "radiosurgery", "thrombectomy"))
     assert f.evidence[0].metadata["citation"] in sources
+
+
+def _case_card(tf, key, slot, q, status="no_evidence"):
+    from caseprep.audit.card_auditor import AuditedCard
+    return AuditedCard(question=q, why_it_matters="why " + key, target_file=tf,
+                       section_key=key, compiler_slot=slot,
+                       answerability="needs_patient_fact", audit_status=status)
+
+
+def test_compile_case_dossier_renders_eight_sections_in_order():
+    """The case path renders the eight §0 surfaces in order, on the single evidence axis,
+    reusing the same compiler core as build (only the taxonomy differs)."""
+    from caseprep.audit.card_auditor import AuditedManifest
+    from neuro_caseboard.compile import compile_case_dossier
+    from neuro_caseboard.case_context import CaseContext
+    cards = [
+        _case_card("01-clinical-summary.md", "presentation", "Presentation",
+                   "62F with progressive cervical myelopathy"),
+        _case_card("02-clinical-reasoning.md", "indication", "Indication",
+                   "Operative decompression indicated for progressive cord signal change"),
+        _case_card("04-operative-plan.md", "critical_steps", "Critical Steps",
+                   "Decompress the canal then reconstruct the segment", status="supported"),
+        _case_card("06-alternatives.md", "alternative_approach", "Alternative Approach",
+                   "Posterior approach is the alternative if multilevel"),
+        _case_card("05-risk-and-rescue.md", "catastrophic_complications",
+                   "Catastrophic Complications", "Airway compromise from expanding hematoma"),
+        _case_card("07-preop-optimization.md", "medical_optimization", "Medical Optimization",
+                   "Optimize glycemic control before surgery"),
+        _case_card("08-surgical-technique.md", "approach_corridor", "Approach Corridor",
+                   "Develop the corridor along the avascular plane"),
+        _case_card("09-case-figures.md", "schematic", "Schematic",
+                   "Schematic of the operative corridor and target level"),
+    ]
+    manifest = AuditedManifest(procedure_family="case", cards=cards)
+    case = CaseContext(level="C5-6", pathology="cervical spondylotic myelopathy",
+                       procedure="ACDF", surgical_goal="decompression")
+    d = compile_case_dossier(manifest, case=case)
+    headings = [s.heading for s in d.sections]
+    assert headings == [
+        "Clinical Summary", "Clinical Reasoning", "Operative Plan", "Alternatives",
+        "Risks", "Pre-op Optimization", "Surgical Technique", "Case Figures",
+    ]
+    assert "Case Dossier" in d.title and "C5-6" in d.title
+    # single evidence axis preserved (1 supported, 7 no_evidence -> to_verify)
+    assert (d.summary.supported, d.summary.quarantined) == (1, 0)
+    assert d.summary.to_verify == 7
 
 
 def test_model_has_no_confidence_axis(built):

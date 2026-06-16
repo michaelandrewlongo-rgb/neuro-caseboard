@@ -140,3 +140,21 @@ def test_cli_ask_clarification_writes_no_pdf(tmp_path, monkeypatch, capsys):
     assert rc == 0
     assert not out.exists()                     # no answer -> no PDF
     assert "ambiguous" in capsys.readouterr().out.lower()
+
+
+def test_cli_case_writes_dossier_md_and_pdf(tmp_path, monkeypatch):
+    # WS-5: `caseboard case` builds an 8-section dossier + PDF from a dictation, offline.
+    monkeypatch.setenv("CASEBOARD_PDF_STYLE", "clinical")   # offline fpdf2 path, no Chromium
+    monkeypatch.setenv("CASEBOARD_LLM", "0")                # deterministic intake + authors
+    out = tmp_path / "case"
+    rc = cli.main([
+        "case",
+        "62yo woman, progressive cervical myelopathy, right C6 radiculopathy; "
+        "MRI shows C5-6 cord compression; plan ACDF for decompression.",
+        "--pdf", "--no-llm", "--no-literature", "-o", str(out)])
+    assert rc == 0
+    md = (out / "case-dossier.md").read_text()
+    for h in ("Clinical Summary", "Clinical Reasoning", "Operative Plan", "Alternatives",
+              "Risks", "Pre-op Optimization", "Surgical Technique", "Case Figures"):
+        assert f"## {h}" in md
+    assert (out / "case-dossier.pdf").read_bytes()[:5].startswith(b"%PDF")
