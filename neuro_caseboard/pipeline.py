@@ -201,7 +201,8 @@ def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
 
 
 def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=None,
-                       lit_client=None, lit_synth_client=None, lit_cache=None):
+                       lit_client=None, lit_synth_client=None, lit_cache=None,
+                       figures_dir=None, fig_complete_fn=None):
     """Case path: a CaseContext -> the 8-section case Dossier.
 
     Mirrors build_dossier but authors over the eight case surfaces (build_case_manifest) and
@@ -240,6 +241,20 @@ def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=No
         from neuro_caseboard.case_literature import attach_case_literature
         attach_case_literature(dossier, case, client=lit_client,
                                synth_client=lit_synth_client, cache=lit_cache)
+
+    # WS-4: generated case schematics (deterministic PIL renderer; offline-safe). Attached to the
+    # "Case Figures" section as FigureItems alongside any retrieved plates.
+    if figures_dir is not None:
+        from neuro_caseboard.figures_gen import generate_case_figures
+        items = generate_case_figures(case, figures_dir, complete_fn=fig_complete_fn)
+        if items:
+            fig_sec = next((s for s in dossier.sections if s.heading == "Case Figures"), None)
+            if fig_sec is None:
+                from neuro_caseboard.model import Section
+                fig_sec = Section(heading="Case Figures",
+                                  intro="Generated schematics for this case.")
+                dossier.sections.append(fig_sec)
+            fig_sec.figures.extend(items)
     return dossier
 
 

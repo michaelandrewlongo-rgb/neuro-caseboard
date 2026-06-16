@@ -8,6 +8,7 @@ eval/judge score before→after, next bottleneck.
 | 1 | WS-1 `CaseContext` + dictation intake (`case_context.py`, `intake.py`) | 400 passed, 1 skipped (was 383; +17 new, 0 regressions) | intake eval 6/6 side · 6/6 level · 6/6 goal · 6/6 comorbid · `missing_critical` ≤3 all / ==0 on complete (was n/a → MET) | WS-2: expand section taxonomy to the 8 case surfaces (model.py + compile.py + Explorer), topic-agnostic, single evidence axis |
 | 2 | WS-2 8-surface case taxonomy (`case_sections.py`, `case_author.py`, `compile_case_dossier`, `build_case_dossier`) | 416 passed, 1 skipped (was 400; +16 new, 0 regressions) | case-dossier eval 6/6 cases render 8/8 sections (det + ground-truth); zero hardcoded clinical literals; build path byte-identical → MET | WS-3: wire PubMed `[L#]` into the case build (Reasoning/Alternatives/Risks) on a separate axis |
 | 3 | WS-3 PubMed in the case build (`case_literature.py`, `Section.literature`, render_md, `build_case_dossier` lit args) | 421 passed, 1 skipped (was 416; +5 new, 0 regressions) | case eval 6/6 cases: 3/3 reasoning sections carry `[L#]`, zero fabrication (`[L#]`⊆injected PMIDs); `[n]`/`[L#]` separate → MET | WS-4: generated schematic figures (the headline) — figure-spec author + deterministic renderer + guard + image judge |
+| 4 | WS-4 generated schematic figures (`figures_gen/`: spec, guard, render, author; `build_case_dossier` figures_dir) | 441 passed, 1 skipped (was 421; +20 new, 0 regressions) | figure eval 3/3: archetype + side + level grounded, byte-stable PNG, guard rejects side-flip; no new dep (PIL core); image-judge ≥8/10 DEFERRED (no visual judge) | WS-5: PDF surface + `caseboard case` CLI + Streamlit Case lane |
 
 ## Notes
 
@@ -43,3 +44,14 @@ eval/judge score before→after, next bottleneck.
   `test_case_literature.py` ×3, `test_render_md.py` +1, `test_pipeline.py` +1. Eval `case_eval.py`
   extended: 6/6 cases carry `[L#]` on all three sections, no fabrication. Live PubMed recency/relevance
   grade deferred — no `NCBI_API_KEY`. `ask` literature path unchanged.
+- **Pass 4 (2026-06-16, WS-4).** The headline: generated **schematic** figures, code-drawn from a
+  structured spec (LOOP_PROMPT §2). New `neuro_caseboard/figures_gen/`: `spec.py` (`FigureSpec` +
+  tolerant `from_dict`), `author.py` (LLM-first injected author + topic-agnostic deterministic
+  fallback; archetype from `classify_profile`, nodes from case geometry), `render.py` (deterministic
+  **PIL** renderer — `pillow` is a core dep, so **no new dependency** — byte-stable PNG, mandatory
+  "SCHEMATIC — NOT A RADIOGRAPH" banner, per-archetype backdrop), `guard.py` (rejects a spec whose
+  side/level/region contradicts the case, reusing `figure_guards`). `generate_case_figures` →
+  `FigureItem`s captioned "Schematic (not a radiograph): …"; `build_case_dossier(figures_dir=…)`
+  attaches them to the Case Figures section. Tests +20. Eval `eval/figure_spec_eval.py` → 3/3
+  archetype + side/level grounding + byte-stability + guard-rejects-flip; artifacts in
+  `eval/_fig_specs/`. Blind image-opening judge ≥8/10 deferred — no visual judge in this environment.

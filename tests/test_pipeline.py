@@ -129,6 +129,26 @@ def test_build_case_dossier_attaches_literature_offline(monkeypatch):
     assert all(s.literature is None for s in d2.sections)
 
 
+def test_build_case_dossier_attaches_generated_schematics(tmp_path, monkeypatch):
+    # WS-4: with figures_dir set, generated schematics attach to the Case Figures section
+    # (deterministic, offline). Without it, no figures are generated.
+    monkeypatch.setenv("CASEBOARD_LLM", "0")     # hermetic: deterministic figure author
+    from neuro_caseboard.case_context import CaseContext
+    from neuro_caseboard.pipeline import build_case_dossier
+    case = CaseContext(laterality="left", level="C5-6",
+                       pathology="cervical spondylotic myelopathy", procedure="ACDF",
+                       surgical_goal="decompression")
+    d = build_case_dossier(case, enrich=False, use_llm=False, literature=False,
+                           figures_dir=tmp_path)
+    fig_sec = next(s for s in d.sections if s.heading == "Case Figures")
+    assert fig_sec.figures, "expected generated schematics in the Case Figures section"
+    assert all(f.caption.startswith("Schematic (not a radiograph)") for f in fig_sec.figures)
+
+    d2 = build_case_dossier(case, enrich=False, use_llm=False, literature=False)
+    fig_sec2 = next(s for s in d2.sections if s.heading == "Case Figures")
+    assert fig_sec2.figures == []        # no figures_dir -> none generated
+
+
 def test_render_ask_pdf_clinical_style_uses_fpdf(monkeypatch, tmp_path):
     monkeypatch.setenv("CASEBOARD_PDF_STYLE", "clinical")
     from neuro_caseboard.pipeline import render_ask_pdf

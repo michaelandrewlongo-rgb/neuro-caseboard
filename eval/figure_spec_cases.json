@@ -1,0 +1,34 @@
+{
+  "_note": "WS-4 generated-schematic eval. Each case gives the CaseContext fields + the expected archetype and the side/level the schematic must encode (case-specificity). Scored by eval/figure_spec_eval.py (offline, deterministic author + PIL renderer). The blind image-opening judge (>=8/10 conceptual + case-specificity) is deferred to a keyed/visual run; this harness renders real PNGs to eval/_fig_specs/ for that judge.",
+  "cases": [
+    {
+      "id": "spine_acdf_c56",
+      "subspecialty": "Spine",
+      "case": {"laterality": "left", "level": "C5-6",
+               "pathology": "cervical spondylotic myelopathy", "procedure": "ACDF",
+               "surgical_goal": "decompression"},
+      "expect_archetype": "spine_level",
+      "expect_side": "left",
+      "expect_level": "C5-6"
+    },
+    {
+      "id": "functional_awake_glioma",
+      "subspecialty": "Functional",
+      "case": {"laterality": "left", "location": "left frontal", "pathology": "diffuse glioma",
+               "procedure": "awake craniotomy", "surgical_goal": "maximal safe resection"},
+      "expect_archetype": "corridor",
+      "expect_side": "left",
+      "expect_level": ""
+    },
+    {
+      "id": "vascular_mca_clip",
+      "subspecialty": "Vascular",
+      "case": {"laterality": "left", "location": "MCA bifurcation",
+               "pathology": "ruptured MCA aneurysm", "procedure": "pterional clipping",
+               "surgical_goal": "clip ligation"},
+      "expect_archetype": "vessel_config",
+      "expect_side": "left",
+      "expect_level": ""
+    }
+  ]
+}
