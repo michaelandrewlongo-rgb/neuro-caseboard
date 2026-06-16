@@ -18,7 +18,7 @@ import streamlit as st
 
 import signal_theme as sig
 from neuro_caseboard.board_view import board_view
-from neuro_caseboard.pipeline import build_dossier, render_case_pdf
+from neuro_caseboard.pipeline import build_dossier, render_case_pdf, render_ask_pdf
 from neuro_caseboard.topic_extract import extract_board_topic
 from neuro_core.evidence import from_figure, from_figure_item, other_features, record
 from neuro_caseboard.qa import answer_question
@@ -102,6 +102,14 @@ if mode == "Ask":
             sig.section("Contemporary Literature", "LIT")
             st.markdown(sig.citation_chips(result.literature.narrative), unsafe_allow_html=True)
             sig.literature_panel(result.literature.citations)
+        from neuro_caseboard.pipeline import _slug
+        if st.checkbox("Prepare PDF", help="Render this answer as an Executive-Navy PDF"):
+            with st.spinner("Rendering PDF…"):
+                with tempfile.TemporaryDirectory() as td:
+                    pdf_path = render_ask_pdf(result, q, Path(td) / "ask.pdf")
+                    pdf_bytes = Path(pdf_path).read_bytes()
+            st.download_button("Download PDF", pdf_bytes,
+                               file_name=f"ask-{_slug(q)}.pdf", mime="application/pdf")
         if st.button("Build a board from this", type="primary"):
             try:
                 topic = extract_board_topic(q, result.answer)
