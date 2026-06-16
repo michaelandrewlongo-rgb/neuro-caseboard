@@ -20,18 +20,18 @@ class _Result:
     figures = [_F(7, "Schmidek and Sweet", 942, "/no/such/figure.png", "a figure")]
 
 
-def test_build_briefing_html_has_signal_tokens_and_content():
+def test_build_briefing_html_has_exec_navy_tokens_and_content():
     doc = build_briefing_html(_Result(), title="My Briefing Title", subtitle="a subtitle")
     # content
     assert "My Briefing Title" in doc and "a subtitle" in doc
     assert "Indications" in doc and "Sources" in doc
     assert "[1]" in doc and "Greenberg, Trauma, p.1102" in doc
-    assert "<strong>refractory</strong>" in doc        # markdown bold -> html
-    # Signal design tokens
-    assert "Syne" in doc                                # display font
-    assert "#22d3ee" in doc and "#67e8f9" in doc        # teal signal
-    assert "#ef4444" in doc                             # red signal accent
-    assert 'class="dot"' in doc                         # red eyebrow signal dot
+    assert "<strong>refractory</strong>" in doc          # markdown bold -> html
+    # Executive-Navy design tokens (replaces the old Signal asserts)
+    assert "Archivo" in doc and "Source+Serif+4" in doc and "IBM+Plex+Mono" in doc
+    assert "#0e7490" in doc                              # deep-teal accent
+    assert "NEURO·CASEBOARD" in doc                 # masthead brand
+    assert "Ask · Citation-grounded" in doc         # eyebrow chip
 
 
 def test_build_briefing_html_skips_unreadable_figure():
