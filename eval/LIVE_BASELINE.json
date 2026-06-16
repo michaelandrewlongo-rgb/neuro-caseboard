@@ -1,0 +1,17 @@
+{
+  "_about": "Informational baseline for the KEYED nightly live blind judges (.github/workflows/live-judge.yml). NEVER blocks a PR — the offline eval/quality_gate.py is the hard CI bar. `prior` is the previous loop's measured live score (on the original 6 cases, Vertex); `target` is this Output-Quality loop's goal that the nightly run on the held-out eval split tracks toward. Author and judge share a provider model (partial self-grading) — the per-point rubric grounding mitigates this and the offline gate is judge-independent. Backfill measured values here after a keyed run.",
+  "text_judge": {
+    "must_cover_coverage_pct": {"prior": 80.7, "target": 85.0, "direction": "min"},
+    "overall_mean_out_of_10": {"prior": 8.2, "target": 8.6, "direction": "min"},
+    "accuracy_mean_out_of_10": {"prior": null, "target": 8.0, "direction": "min"},
+    "red_flag_bleed": {"prior": 0, "target": 0, "direction": "max"}
+  },
+  "image_judge": {
+    "overall_mean_out_of_10": {"prior": 7.8, "target": 8.0, "direction": "min"},
+    "pass_at_8_of_10": {"prior": "9/12", "target": "11/12"},
+    "side_level_correct": {"prior": "12/12", "target": "12/12"},
+    "corridor_overall_out_of_10": {"prior": "9-10", "target": "9-10", "note": "frozen — must not regress"},
+    "structures_at_risk_overall_out_of_10": {"prior": "~7", "target": 8.0, "direction": "min",
+      "note": "WS-4 retrieved real-anatomy plate should raise this when a figure corpus is configured"}
+  }
+}
