@@ -1,0 +1,89 @@
+{
+  "_about": "WS-1 intake eval. Each item is a 4-6 sentence free-text dictation plus the ground-truth structured fields a correct CaseContext should capture. ids mirror eval/cases.json. Scored by eval/intake_eval.py: side/level via the offline deterministic parser (real); goal/comorbidities + missing_critical==0 via the full parse path fed the ground-truth JSON (validates capture, not model quality — live model grade deferred to a keyed run).",
+  "dictations": [
+    {
+      "id": "spine_acdf_c56",
+      "subspecialty": "Spine",
+      "dictation": "This is a 62 year old woman with twelve months of progressive gait imbalance and right C6 radiculopathy with hand clumsiness. MRI shows C5-6 spondylotic cord compression with myelomalacia. Her history is notable for hypertension and type 2 diabetes, and she takes aspirin daily. We are planning an anterior cervical discectomy and fusion at C5-6 to decompress the cord and the right C6 root.",
+      "ground_truth": {
+        "laterality": "right",
+        "level": "C5-6",
+        "location": "",
+        "pathology": "cervical spondylotic myelopathy",
+        "procedure": "anterior cervical discectomy and fusion",
+        "surgical_goal": "decompression",
+        "comorbidities": ["hypertension", "type 2 diabetes"]
+      }
+    },
+    {
+      "id": "skullbase_vs_retrosigmoid",
+      "subspecialty": "Skull base",
+      "dictation": "A 47 year old man presents with left-sided progressive sensorineural hearing loss and tinnitus, with serviceable hearing preserved on audiometry. MRI demonstrates a 2.5 cm left cerebellopontine angle vestibular schwannoma indenting the brainstem. He is otherwise healthy with no anticoagulation. The plan is a left retrosigmoid resection with attempted hearing preservation and continuous facial nerve and ABR monitoring.",
+      "ground_truth": {
+        "laterality": "left",
+        "level": "",
+        "location": "cerebellopontine angle",
+        "pathology": "vestibular schwannoma",
+        "procedure": "retrosigmoid resection",
+        "surgical_goal": "resection",
+        "comorbidities": []
+      }
+    },
+    {
+      "id": "functional_awake_glioma",
+      "subspecialty": "Functional",
+      "dictation": "This is a 38 year old right-handed woman with new word-finding difficulty and focal seizures. MRI shows a non-enhancing left dominant frontal lesion involving the inferior frontal gyrus, suspicious for a diffuse glioma. She is on levetiracetam and is otherwise well. We plan an awake craniotomy with cortical and subcortical language and motor mapping for maximal safe resection.",
+      "ground_truth": {
+        "laterality": "left",
+        "level": "",
+        "location": "left frontal",
+        "pathology": "diffuse glioma",
+        "procedure": "awake craniotomy",
+        "surgical_goal": "maximal safe resection",
+        "comorbidities": []
+      }
+    },
+    {
+      "id": "vascular_mca_clip",
+      "subspecialty": "Vascular",
+      "dictation": "A 65 year old woman presented with a sudden thunderclap headache and was found to have a Hunt-Hess 2 subarachnoid hemorrhage. CT angiography shows a ruptured left middle cerebral artery bifurcation aneurysm with a 6 mm dome. She has hypertension and is a current smoker. We plan a left pterional craniotomy for microsurgical clip ligation with proximal control and indocyanine green videoangiography.",
+      "ground_truth": {
+        "laterality": "left",
+        "level": "",
+        "location": "MCA bifurcation",
+        "pathology": "ruptured MCA bifurcation aneurysm",
+        "procedure": "pterional craniotomy for clipping",
+        "surgical_goal": "clip ligation",
+        "comorbidities": ["hypertension", "smoker"]
+      }
+    },
+    {
+      "id": "neurooncology_convexity_meningioma",
+      "subspecialty": "Neuro-oncology",
+      "dictation": "This is a 56 year old man with headaches and an incidental right frontal extra-axial mass. MRI shows a 4 cm right frontal convexity meningioma with a dural tail and surrounding edema, away from eloquent cortex. He is on no anticoagulation and has well-controlled hypertension. The plan is a right frontal craniotomy for a Simpson grade I resection with circumferential dural devascularization.",
+      "ground_truth": {
+        "laterality": "right",
+        "level": "",
+        "location": "right frontal convexity",
+        "pathology": "convexity meningioma",
+        "procedure": "right frontal craniotomy",
+        "surgical_goal": "Simpson grade I resection",
+        "comorbidities": ["hypertension"]
+      }
+    },
+    {
+      "id": "pediatric_posterior_fossa_medulloblastoma",
+      "subspecialty": "Pediatric",
+      "dictation": "A 7 year old boy presents with morning headaches, vomiting, and truncal ataxia. MRI shows a midline fourth-ventricle mass with obstructive hydrocephalus, most consistent with a medulloblastoma. He is otherwise healthy. We plan a suboccipital craniotomy with a telovelar approach for resection, with a perioperative CSF diversion plan for the hydrocephalus.",
+      "ground_truth": {
+        "laterality": "midline",
+        "level": "",
+        "location": "fourth ventricle",
+        "pathology": "medulloblastoma",
+        "procedure": "suboccipital craniotomy, telovelar approach",
+        "surgical_goal": "resection",
+        "comorbidities": []
+      }
+    }
+  ]
+}
