@@ -154,3 +154,32 @@ case-specificity over the schematics and the new retrieved plate). The offline h
 artifacts a keyed run can grade; run them via `live-judge.yml` (or locally with Vertex creds) and
 backfill the measured numbers into `eval/LIVE_BASELINE.json` + a **LIVE BLIND-JUDGE PASS** note, as
 the prior loop did.
+
+## LIVE BLIND-JUDGE PASS (2026-06-17) — the deferred judges, run on Vertex (held-out eval split)
+
+Keyed run of both blind judges on the **18-case held-out eval split** (Vertex/Gemini, GCP credit,
+$0.00). Harnesses: `eval/live_text_judge.py`, `eval/live_image_judge.py --backend vertex`. Reports:
+`eval/CASE_TEXT_JUDGE_REPORT_2026-06-17_loop2-eval.md`,
+`eval/CASE_IMAGE_JUDGE_REPORT_2026-06-17_loop2-eval.md`. Numbers backfilled into
+`eval/LIVE_BASELINE.json`.
+
+- **Text** (attending-examiner judge vs `cases.json` must_cover/red_flags, 18 cases): mean overall
+  **8.2 → 8.6/10** (meets the ≥8.6 target), mean must-cover coverage **80.7% → 82.8%** (just under
+  the 85% target — misses cluster in `spine_thoracic_meningioma` 56% and two endovascular cases),
+  **accuracy 9.7/10** (target ≥8 — corpus `[n]` grounding (WS-2) + facet completeness (WS-3) show up
+  as accurate claims), red-flag bleed **0/18**. Per-case overall 6–10; two perfect 10/10
+  (`spine_lumbar_microdisc`, `functional_temporal_lobectomy`).
+- **Image** (vision judge opening each rendered PNG, 18 cases × up to 2 figs = 33 figures): mean
+  overall **7.3/10**, pass (≥8) **20/33**, side/level near-perfect (one side miss). Split: the
+  approach/**corridor** schematic (fig-01) **8.4/10**; the abstract **structures-at-risk** node
+  scatter (fig-02) **6.2/10** — the documented ceiling. **Caveat:** this run graded the
+  deterministic/LLM-authored **schematics**, NOT the WS-4 retrieved real-anatomy plate
+  (`live_image_judge.py` calls `generate_case_figures` with no figret, and no figure corpus is
+  configured in this environment) — WS-4's plate is what raises the 6.2 when a textbook figure corpus
+  is present. **Caveat (both):** author and judge share the provider model (partial self-grading);
+  the per-point rubric grounding mitigates it, and the offline `quality_gate.py` is the
+  judge-independent hard bar.
+
+**Net:** text overall hit target (8.6), accuracy well above (9.7), bleed 0; coverage 82.8% (next
+lever) and the structures-at-risk figure (6.2, WS-4 plate addresses it with a corpus) are the two
+remaining gaps.

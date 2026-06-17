@@ -1,17 +1,19 @@
 {
-  "_about": "Informational baseline for the KEYED nightly live blind judges (.github/workflows/live-judge.yml). NEVER blocks a PR — the offline eval/quality_gate.py is the hard CI bar. `prior` is the previous loop's measured live score (on the original 6 cases, Vertex); `target` is this Output-Quality loop's goal that the nightly run on the held-out eval split tracks toward. Author and judge share a provider model (partial self-grading) — the per-point rubric grounding mitigates this and the offline gate is judge-independent. Backfill measured values here after a keyed run.",
+  "_about": "Baseline for the KEYED nightly live blind judges (.github/workflows/live-judge.yml). NEVER blocks a PR — the offline eval/quality_gate.py is the hard CI bar. `prior` is the previous loop's measured live score (original 6 cases, Vertex); `measured` is THIS loop's keyed run on the held-out 18-case eval split (Vertex, 2026-06-17); `target` is this loop's goal. Author and judge share a provider model (partial self-grading) — the per-point rubric grounding mitigates this and the offline gate is judge-independent. Reports: eval/CASE_TEXT_JUDGE_REPORT_2026-06-17_loop2-eval.md, eval/CASE_IMAGE_JUDGE_REPORT_2026-06-17_loop2-eval.md.",
   "text_judge": {
-    "must_cover_coverage_pct": {"prior": 80.7, "target": 85.0, "direction": "min"},
-    "overall_mean_out_of_10": {"prior": 8.2, "target": 8.6, "direction": "min"},
-    "accuracy_mean_out_of_10": {"prior": null, "target": 8.0, "direction": "min"},
-    "red_flag_bleed": {"prior": 0, "target": 0, "direction": "max"}
+    "_n_cases": 18,
+    "must_cover_coverage_pct": {"prior": 80.7, "measured": 82.8, "target": 85.0, "direction": "min"},
+    "overall_mean_out_of_10": {"prior": 8.2, "measured": 8.6, "target": 8.6, "direction": "min"},
+    "accuracy_mean_out_of_10": {"prior": null, "measured": 9.7, "target": 8.0, "direction": "min"},
+    "red_flag_bleed": {"prior": 0, "measured": 0, "target": 0, "direction": "max"}
   },
   "image_judge": {
-    "overall_mean_out_of_10": {"prior": 7.8, "target": 8.0, "direction": "min"},
-    "pass_at_8_of_10": {"prior": "9/12", "target": "11/12"},
-    "side_level_correct": {"prior": "12/12", "target": "12/12"},
-    "corridor_overall_out_of_10": {"prior": "9-10", "target": "9-10", "note": "frozen — must not regress"},
-    "structures_at_risk_overall_out_of_10": {"prior": "~7", "target": 8.0, "direction": "min",
-      "note": "WS-4 retrieved real-anatomy plate should raise this when a figure corpus is configured"}
+    "_n_figures": 33,
+    "overall_mean_out_of_10": {"prior": 7.8, "measured": 7.3, "target": 8.0, "direction": "min"},
+    "pass_at_8_of_10": {"prior": "9/12", "measured": "20/33", "target": "11/12"},
+    "side_level_correct": {"prior": "12/12", "measured": "near-perfect (only 1 side miss)", "target": "high"},
+    "corridor_overall_out_of_10": {"prior": "9-10", "measured": 8.4, "target": "9-10", "note": "approach/corridor schematic (fig-01) — strongest figure"},
+    "structures_at_risk_overall_out_of_10": {"prior": "~7", "measured": 6.2, "target": 8.0, "direction": "min",
+      "note": "abstract anatomy_map node-scatter (fig-02) — the documented ceiling. This keyed run graded the deterministic/LLM-authored SCHEMATICS, NOT the WS-4 retrieved real-anatomy plate (live_image_judge.py calls generate_case_figures with no figret, and no figure corpus is configured here). WS-4's plate raises this only when a textbook figure corpus is present."}
   }
 }
