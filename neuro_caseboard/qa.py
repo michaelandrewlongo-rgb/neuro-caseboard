@@ -73,7 +73,13 @@ def build_literature_section(question, *, config=None, lit_config=None,
 
             async def _retrieve():
                 try:
-                    return await retriever.retrieve(question, query=search_query)
+                    recs = await retriever.retrieve(question, query=search_query)
+                    # The LLM rewrite can over-narrow and collapse recall to zero; when it does,
+                    # retry once with the deterministic term so a salvageable query is never lost
+                    # (observed: a rewritten query returned 0 where the plain term returned 8).
+                    if not recs and search_query != term:
+                        recs = await retriever.retrieve(question, query=term)
+                    return recs
                 finally:
                     if owns_client:
                         await client.aclose()
