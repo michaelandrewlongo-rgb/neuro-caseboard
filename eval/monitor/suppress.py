@@ -1,19 +1,25 @@
 from __future__ import annotations
 
 import datetime
+import json
 from pathlib import Path
-
-import yaml
 
 from eval.monitor.contracts import Issue
 
 
 def load_suppressions(path, *, today: datetime.date | None = None) -> set[str]:
+    """Active suppressed fingerprints from a JSON file (a list of
+    ``{"fingerprint", "reason", "expires"?}``). Missing file -> empty set.
+    Entries whose ``expires`` date is before ``today`` are dropped.
+
+    JSON (stdlib) is used deliberately so the monitor adds no third-party
+    dependency; the file is small and hand-editable.
+    """
     p = Path(path)
     if not p.exists():
         return set()
     today = today or datetime.date.today()
-    entries = yaml.safe_load(p.read_text(encoding="utf-8")) or []
+    entries = json.loads(p.read_text(encoding="utf-8")) or []
     active: set[str] = set()
     for entry in entries:
         fp = entry.get("fingerprint")

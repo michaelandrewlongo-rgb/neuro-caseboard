@@ -15,14 +15,17 @@ detection can build boards):
     0 6 * * 1 cd /home/michael/PROJECTS/neuro-caseboard && python3 -m eval.monitor.detect >> eval/monitor/cron.log 2>&1
 
 Triage by reading `eval/monitor/issues/digest.md`. To mute a known non-issue,
-add its fingerprint (printed on the card) to `suppressions.yaml`:
+add its fingerprint (printed on the card) to `suppressions.json`:
 
-    - fingerprint: <16-hex from the card>
-      reason: why this is not worth fixing
-      expires: 2026-12-31   # optional; omit for a permanent mute
+    [
+      {"fingerprint": "<16-hex from the card>",
+       "reason": "why this is not worth fixing",
+       "expires": "2026-12-31"}
+    ]
 
-A muted issue auto-resurfaces if it worsens (its fingerprint changes when the
-set of missing items changes).
+(`expires` is optional; omit it for a permanent mute.) A muted issue
+auto-resurfaces if it worsens — its fingerprint changes when the set of missing
+items changes.
 
 ## Scope (this milestone)
 

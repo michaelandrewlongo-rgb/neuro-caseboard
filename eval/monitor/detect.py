@@ -58,7 +58,7 @@ def main(argv=None) -> int:
     ap.add_argument("--k", type=int, default=3, help="builds per case (worst-of-K)")
     ap.add_argument("--cases", default=str(EVAL_DIR / "cases.json"))
     ap.add_argument("--baseline", default=str(mon / "baseline.json"))
-    ap.add_argument("--suppressions", default=str(mon / "suppressions.yaml"))
+    ap.add_argument("--suppressions", default=str(mon / "suppressions.json"))
     ap.add_argument("--issues-dir", default=str(mon / "issues"))
     args = ap.parse_args(argv)
 
