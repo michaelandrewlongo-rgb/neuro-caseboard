@@ -19,5 +19,6 @@ def test_img_data_uri_derives_mime_from_basename_only(tmp_path):
 
 
 def test_css_carries_the_brand_tokens():
-    assert "--accent:#0e7490" in EXEC_NAVY_CSS
-    assert "Archivo" in EXEC_NAVY_CSS and "IBM+Plex+Mono" in EXEC_NAVY_CSS
+    # Neo Brutalism theme: red primary accent, DM Sans + Space Mono.
+    assert "--accent:#ff3333" in EXEC_NAVY_CSS
+    assert "DM+Sans" in EXEC_NAVY_CSS and "Space+Mono" in EXEC_NAVY_CSS

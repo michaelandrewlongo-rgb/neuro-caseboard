@@ -1,11 +1,10 @@
-"""Executive-Navy briefing PDF for Q&A (ask) results -- the print sibling of caseboard_pdf.py
-for the question-answer shape.
+"""Briefing PDF for Q&A (ask) results -- the print sibling of caseboard_pdf.py for the
+question-answer shape.
 
 Renders a query result (markdown answer + numbered textbook citations + optional contemporary
-PubMed literature + figures) in the current Executive-Navy identity (shared with the web console
-and the build dossier via exec_navy.py): a deep-navy masthead over a bright report plane, the
-three-font role system (Archivo UI / Source Serif 4 reading column / IBM Plex Mono micro-labels)
-and one deep-teal accent.
+PubMed literature + figures) in the current "Neo Brutalism" identity (shared with the web console
+and the build dossier via exec_navy.py): white ground, black 2px borders, red/yellow/blue accents,
+square corners, hard offset shadows, DM Sans + Space Mono.
 
 ``build_briefing_html`` is pure and dependency-light (unit-tested offline). ``render_briefing_pdf``
 needs the ``briefing`` extra (Playwright + a Chromium binary).
@@ -20,23 +19,23 @@ from neuro_caseboard.exec_navy import EXEC_NAVY_CSS, img_data_uri
 
 DEFAULT_EYEBROW = "Ask · Citation-grounded"
 
-# Q&A-only selectors layered on the shared Executive-Navy sheet (masthead, eyebrow chip, title,
+# Q&A-only selectors layered on the shared brutalist sheet (masthead, eyebrow chip, title,
 # rule, section headers, figures and footer all come from EXEC_NAVY_CSS).
 ASK_CSS = """
-.answer{ font-family:var(--read); font-size:11pt; line-height:1.55; color:#1e2a36; max-width:165mm; }
+.answer{ font-family:var(--read); font-size:11pt; line-height:1.55; color:#000; max-width:165mm; }
 .answer p{ margin:0 0 2.6mm; }
 .answer ul{ margin:0 0 3mm; padding-left:6mm; } .answer li{ margin:0 0 1.2mm; }
-.answer strong{ color:#0c2233; font-weight:600; }
-.answer h2{ font-family:var(--ui); font-weight:700; font-size:13pt; color:var(--ink);
-  letter-spacing:-.01em; margin:6mm 0 2mm; padding-top:3mm; border-top:1px solid var(--line); }
-.answer h3{ font-family:var(--ui); font-weight:600; font-size:10.5pt; color:var(--accent);
+.answer strong{ color:#000; font-weight:700; }
+.answer h2{ font-family:var(--ui); font-weight:700; font-size:13pt; color:#000;
+  letter-spacing:-.01em; margin:6mm 0 2mm; padding-top:3mm; border-top:2px solid #000; }
+.answer h3{ font-family:var(--ui); font-weight:700; font-size:10.5pt; color:var(--accent);
   margin:4mm 0 1.5mm; }
-.sources{ border:1px solid var(--line); border-radius:10px; padding:1mm 4mm; max-width:165mm;
-  box-shadow:0 1px 2px rgba(16,32,48,.04); }
-.src{ font-family:var(--read); font-size:9.6pt; color:#33424f; padding:1.8mm 0;
-  border-top:1px solid var(--line-soft); }
+.sources{ border:2px solid #000; border-radius:0; padding:1mm 4mm; max-width:165mm;
+  box-shadow:3px 3px 0 0 #000; }
+.src{ font-family:var(--read); font-size:9.6pt; color:#000; padding:1.8mm 0;
+  border-top:2px solid #000; }
 .src:first-child{ border-top:none; }
-.src .n, .src .ln{ font-family:var(--mono); font-size:7pt; color:var(--accent); font-weight:600;
+.src .n, .src .ln{ font-family:var(--mono); font-size:7pt; color:var(--accent); font-weight:700;
   margin-right:2mm; }
 .src a{ color:var(--accent); text-decoration:none; }
 .litmeta{ color:var(--muted); }
@@ -134,7 +133,7 @@ def _figures_html(result) -> str:
 
 def build_briefing_html(result, *, title: str, subtitle: str = "",
                         eyebrow: str = DEFAULT_EYEBROW, today: str | None = None) -> str:
-    """Pure: render a Q&A result to an Executive-Navy HTML briefing string. Figures whose image
+    """Pure: render a Q&A result to a brutalist HTML briefing string. Figures whose image
     file can't be read are skipped (never crash, never emit a broken image)."""
     today = today or dt.date.today().isoformat()
     parts = [
@@ -142,7 +141,7 @@ def build_briefing_html(result, *, title: str, subtitle: str = "",
         EXEC_NAVY_CSS, ASK_CSS,
         "</style></head><body>",
         '<div class="masthead"><div class="mh-brand"><span class="sq"></span>NEURO·CASEBOARD</div>',
-        '<div class="mh-eyebrow">Neurosurgery Signal · clinical briefing</div></div>',
+        '<div class="mh-eyebrow">Neuro·Caseboard · clinical briefing</div></div>',
         '<div class="content">',
         f'<span class="eyebrow">{html.escape(eyebrow)}</span>',
         f'<h1 class="title">{html.escape(title)}</h1>',
