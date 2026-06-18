@@ -35,7 +35,7 @@ class _SanitizingCorpus:
     the MATCH parser. caseprep passes the raw question (which contains '?', '/', '(',
     '->', '>=') straight into FTS5; we reduce it to bare informative terms first."""
 
-    def __init__(self, inner, *, max_terms: int = 6):
+    def __init__(self, inner, *, max_terms: int = 12):
         self._inner = inner
         self._max_terms = max_terms
 
