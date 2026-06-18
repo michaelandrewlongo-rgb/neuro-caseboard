@@ -92,7 +92,7 @@ def test_resolve_llm_underproduced_is_degraded_and_logged(monkeypatch, caplog):
     assert "reason=llm_underproduced" in caplog.text
 
 
-def test_build_manifest_wrapper_still_two_tuple(monkeypatch):
+def test_build_manifest_wrapper_still_two_tuple():
     from neuro_caseboard.pipeline import build_manifest
     m, prof = build_manifest("acdf c5-6", use_llm=False)   # must remain a 2-tuple
     assert m.cards and isinstance(prof, str)
@@ -121,7 +121,7 @@ def test_markdown_banner_present_only_when_degraded():
     base = dict(title="Case Board — acdf", summary=EvidenceSummary(to_verify=1))
     degraded = Dossier(provenance=Provenance(source="deterministic", degraded=True), **base)
     ok = Dossier(provenance=Provenance(source="llm_generated", degraded=False), **base)
-    assert FALLBACK_BANNER in render_markdown(degraded)
+    assert f"> ⚠ **Fallback —** {FALLBACK_BANNER}" in render_markdown(degraded)
     assert FALLBACK_BANNER not in render_markdown(ok)
 
 
@@ -173,3 +173,25 @@ def test_cli_build_prints_provenance(monkeypatch, capsys, tmp_path):
     assert rc == 0
     assert "Explorer: deterministic fallback" in out
     assert FALLBACK_BANNER in out                        # loud notice when degraded
+
+
+def test_cli_build_suppresses_warning_when_not_degraded(monkeypatch, capsys, tmp_path):
+    import neuro_caseboard.cli as cli
+    from neuro_caseboard.model import Section, Claim
+
+    d = Dossier(title="Case Board — acdf",
+                summary=EvidenceSummary(to_verify=0),
+                sections=[Section(heading="Operative Plan",
+                                  claims=[Claim(text="t", why="w", status="supported")])],
+                provenance=Provenance(source="llm_generated", degraded=False))
+    monkeypatch.setattr(cli, "generate",
+                        lambda *a, **k: (d, {"markdown": tmp_path / "case-board.md"}))
+
+    class _Args:
+        topic = "acdf"; output = str(tmp_path); pdf = False; no_enrich = True; no_llm = False
+
+    rc = cli._run_build(_Args())
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Explorer:" in out
+    assert "⚠" not in out                               # warning suppressed when not degraded

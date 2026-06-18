@@ -140,6 +140,7 @@ elif mode == "Build board":
             dossier = build_dossier(topic, enrich=enrich, use_llm=None if use_llm else False)
             view = board_view(dossier)
             notice = fallback_notice(dossier.provenance)
+            st.caption(f"Explorer: {dossier.provenance.source_label}")
             if notice:
                 st.warning(notice)
         st.session_state["last_board"] = {

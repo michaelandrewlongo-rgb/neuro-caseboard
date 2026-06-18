@@ -5,10 +5,11 @@ and never touch the network.
 """
 
 import json
+import logging
 
 import pytest
 
-from neuro_caseboard.explore_llm import build_llm_manifest, llm_available
+from neuro_caseboard.explore_llm import build_llm_manifest, llm_available, _SLOTS_BY_FILE, _SECTION_KEYS, _MIN_CARDS
 
 
 def _fake(payload):
@@ -266,10 +267,6 @@ def test_critic_failure_keeps_draft():
     assert m is not None and len(m.cards) == 6                      # draft survives
 
 
-import logging
-from neuro_caseboard.explore_llm import _SLOTS_BY_FILE, _SECTION_KEYS, _MIN_CARDS
-
-
 def test_author_schema_drop_logs_warning_with_counts(caplog):
     # Model returns plenty of cards, but every section_key is invalid -> all dropped by
     # coercion -> under the floor. This is the schema/vocabulary-drift signature; it must
@@ -281,7 +278,7 @@ def test_author_schema_drop_logs_warning_with_counts(caplog):
     with caplog.at_level(logging.WARNING, logger="neuro_caseboard.explore_llm"):
         m = build_llm_manifest("anything", complete_fn=_fake(json.dumps(payload)))
     assert m is None                                     # control flow unchanged
-    assert "rejected" in caplog.text and "9" in caplog.text
+    assert "rejected" in caplog.text and "9/9" in caplog.text
     assert "PHI_SENSITIVE" not in caplog.text            # PHI-safe: no card text in logs
 
 
