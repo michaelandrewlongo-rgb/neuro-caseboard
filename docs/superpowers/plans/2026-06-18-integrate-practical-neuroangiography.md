@@ -188,7 +188,7 @@ pytest. No new dependencies.
   Verify: `.loopvenv/bin/python -m pytest -q tests/neuro_core/test_probe_book_script.py` → pass.
   Commit: `feat(scripts): add probe_book CLI for corpus preflight`.
 
-- [ ] **Task 3 — Repo runbook `docs/runbooks/integrating-a-textbook.md` + import-consistency test**
+- [x] **Task 3 — Repo runbook `docs/runbooks/integrating-a-textbook.md` + import-consistency test**
 
   **Files:** Create `docs/runbooks/integrating-a-textbook.md`; Test
   `tests/neuro_core/test_runbook_consistency.py` (new).
