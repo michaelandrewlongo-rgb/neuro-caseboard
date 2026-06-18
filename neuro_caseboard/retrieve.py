@@ -209,7 +209,14 @@ def build_figure_retriever(*, index_dir=None):
 def build_retriever(*, enable_corpus: bool = True, enable_textbook=None):
     """Compose the available retrieval lanes, or return None when none are available."""
     if enable_textbook is None:
-        enable_textbook = os.environ.get("CASEPREP_TEXTBOOK", "0") == "1"
+        explicit = os.environ.get("CASEPREP_TEXTBOOK")
+        if explicit is not None:
+            enable_textbook = explicit == "1"
+        else:
+            # Auto-enable the textbook lane when the LanceDB index is present so the board
+            # also draws on textbook content (no GPU, reuses the existing index). Stays off
+            # when the index is absent or when CASEPREP_TEXTBOOK is set explicitly. (plan C.3)
+            enable_textbook = os.path.isdir(_default_index_dir())
     lanes = []
     if enable_corpus:
         c = _corpus_lane()
