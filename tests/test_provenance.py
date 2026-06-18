@@ -1,9 +1,5 @@
 """Provenance: the LLM-vs-deterministic source flag carried on every Dossier."""
 
-import json
-
-import pytest
-
 from neuro_caseboard.model import (
     Dossier, EvidenceSummary, Provenance, FALLBACK_BANNER, fallback_notice,
 )
@@ -41,4 +37,76 @@ def test_compile_dossier_threads_provenance():
     assert d.provenance is prov
     # default path still works (no provenance passed -> benign default)
     d2 = compile_dossier(audited, topic="acdf")
+    assert d2.provenance.degraded is False
+
+
+# ---------------------------------------------------------------------------
+# Task 2: _resolve_manifest decision-point provenance + PHI-safe fallback log
+# ---------------------------------------------------------------------------
+
+def _fake_manifest(n=8):
+    from caseprep.explorer.question_manifest import QuestionCard, QuestionManifest
+    return QuestionManifest(procedure_family="llm_generated", cards=[
+        QuestionCard(target_file="04-operative-plan.md", section_key="critical_steps",
+                     question=f"LLM step {i}", why_it_matters="w", compiler_slot="Critical Steps")
+        for i in range(n)])
+
+
+def test_resolve_disabled_is_not_degraded():
+    from neuro_caseboard.pipeline import _resolve_manifest
+    _m, _prof, prov = _resolve_manifest("acdf c5-6", use_llm=False)
+    assert prov.source == "deterministic" and prov.degraded is False
+    assert prov.reason == "llm_disabled"
+
+
+def test_resolve_llm_success_is_not_degraded(monkeypatch):
+    from neuro_caseboard import pipeline
+    monkeypatch.setattr("neuro_caseboard.explore_llm.build_llm_manifest",
+                        lambda topic: _fake_manifest())
+    _m, _prof, prov = pipeline._resolve_manifest("some procedure no template", use_llm=True)
+    assert prov.degraded is False
+    assert prov.source in ("llm_generated", "llm+template")
+
+
+def test_resolve_llm_error_is_degraded_and_logged_phi_safe(monkeypatch, caplog):
+    from neuro_caseboard import pipeline
+
+    def boom(topic):
+        raise RuntimeError("api down")
+
+    monkeypatch.setattr("neuro_caseboard.explore_llm.build_llm_manifest", boom)
+    with caplog.at_level("WARNING", logger="neuro_caseboard.pipeline"):
+        _m, _prof, prov = pipeline._resolve_manifest("SECRET_PATIENT craniotomy", use_llm=True)
+    assert prov.degraded is True
+    assert prov.reason == "llm_error" and prov.detail == "RuntimeError"
+    assert "reason=llm_error" in caplog.text
+    assert "SECRET_PATIENT" not in caplog.text          # PHI-safe: no topic in logs
+
+
+def test_resolve_llm_underproduced_is_degraded_and_logged(monkeypatch, caplog):
+    from neuro_caseboard import pipeline
+    monkeypatch.setattr("neuro_caseboard.explore_llm.build_llm_manifest", lambda topic: None)
+    with caplog.at_level("WARNING", logger="neuro_caseboard.pipeline"):
+        _m, _prof, prov = pipeline._resolve_manifest("acdf", use_llm=True)
+    assert prov.degraded is True and prov.reason == "llm_underproduced"
+    assert "reason=llm_underproduced" in caplog.text
+
+
+def test_build_manifest_wrapper_still_two_tuple(monkeypatch):
+    from neuro_caseboard.pipeline import build_manifest
+    m, prof = build_manifest("acdf c5-6", use_llm=False)   # must remain a 2-tuple
+    assert m.cards and isinstance(prof, str)
+
+
+def test_build_dossier_degraded_sets_provenance(monkeypatch):
+    from neuro_caseboard.pipeline import build_dossier
+
+    def boom(topic):
+        raise RuntimeError("api down")
+
+    monkeypatch.setattr("neuro_caseboard.explore_llm.build_llm_manifest", boom)
+    d = build_dossier("awake left temporal glioma", enrich=False, use_llm=True)
+    assert d.provenance.degraded is True
+
+    d2 = build_dossier("awake left temporal glioma", enrich=False, use_llm=False)
     assert d2.provenance.degraded is False

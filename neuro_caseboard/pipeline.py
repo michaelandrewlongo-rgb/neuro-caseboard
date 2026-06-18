@@ -29,6 +29,9 @@ from neuro_caseboard.guard import prune_offtarget
 from neuro_caseboard.compile import compile_dossier
 from neuro_caseboard.render_md import render_markdown
 from neuro_caseboard.render_pdf import render_pdf
+from neuro_caseboard.model import Provenance
+
+_log = logging.getLogger(__name__)
 
 _PROFILE_SIGNALS = {
     "spine": ("spine", "spinal", "cervical", "thoracic", "lumbar", "corpectomy",
@@ -76,41 +79,66 @@ def _deterministic_manifest(topic: str, profile: str):
     return QuestionManifest(procedure_family=key or profile or "generic", cards=cards)
 
 
-def build_manifest(topic: str, *, use_llm=None):
-    """Build the question manifest for *topic*.
+def _resolve_manifest(topic: str, *, use_llm=None):
+    """Decide LLM-vs-deterministic and report provenance.
 
-    Clinical depth comes from the LLM Explorer (case-specific cards for any procedure)
-    when a key is available; otherwise the deterministic generator. Either way the result
-    passes through the anti-bleed guard, which strips cross-region content. Returns
-    ``(manifest, profile)``.
+    The provenance reason is fixed HERE, at the decision point — never re-derived downstream
+    from ``procedure_family`` (which cannot say *why* the fallback happened). Returns
+    ``(manifest, profile, provenance)``. ``degraded`` is True only when the LLM lane was
+    requested but the deterministic fallback was used.
     """
     profile = classify_profile(topic)
     if use_llm is None:
         use_llm = llm_enabled()
 
     llm_manifest = None
+    reason = "" if use_llm else "llm_disabled"
+    detail = ""
     if use_llm:
         from neuro_caseboard.explore_llm import build_llm_manifest
         try:
             llm_manifest = build_llm_manifest(topic)
-        except Exception:
+        except Exception as exc:
             llm_manifest = None
+            reason, detail = "llm_error", type(exc).__name__
 
     if llm_manifest is not None and llm_manifest.cards:
         # Merge curated hand-written family templates (which outperform a general model on
-        # their own family) as a high-priority floor; the LLM fills the long tail and the
-        # subspecialties no template covers.
+        # their own family) as a high-priority floor; the LLM fills the long tail.
         cards = list(llm_manifest.cards)
         key = _detect_manifest_key("", topic)
         if key and key in _FAMILY_MANIFESTS:
             template_cards = [c for cs in _FAMILY_MANIFESTS[key].values() for c in cs]
             cards = _merge_cards(template_cards, cards)  # templates win their slots
-        manifest = QuestionManifest(
-            procedure_family=("llm+template" if key else "llm_generated"), cards=cards)
+        source = "llm+template" if key else "llm_generated"
+        manifest = QuestionManifest(procedure_family=source, cards=cards)
+        provenance = Provenance(source=source, degraded=False)
     else:
         manifest = _deterministic_manifest(topic, profile)
+        if use_llm and not reason:
+            # The call returned but produced no usable manifest (too few valid cards /
+            # schema-drift drops). Distinct from an outage (llm_error).
+            reason = "llm_underproduced"
+        provenance = Provenance(source="deterministic", degraded=bool(use_llm),
+                                reason=reason, detail=detail)
+        if provenance.degraded:
+            # PHI-safe: reason code + exception type only — never the topic or any card text.
+            _log.warning("LLM Explorer fell back to the deterministic lane (reason=%s%s).",
+                         reason, f", detail={detail}" if detail else "")
 
-    return prune_offtarget(manifest, topic), profile
+    return prune_offtarget(manifest, topic), profile, provenance
+
+
+def build_manifest(topic: str, *, use_llm=None):
+    """Backward-compatible ``(manifest, profile)`` wrapper around :func:`_resolve_manifest`.
+
+    Clinical depth comes from the LLM Explorer when a key is available; otherwise the
+    deterministic generator. Either way the result passes through the anti-bleed guard.
+    Existing callers keep their 2-tuple; the dossier path uses ``_resolve_manifest`` directly
+    for the provenance flag.
+    """
+    manifest, profile, _prov = _resolve_manifest(topic, use_llm=use_llm)
+    return manifest, profile
 
 
 def _sources_from_audited(audited, *, limit: int = 15):
@@ -191,7 +219,7 @@ def _figures_enabled() -> bool:
 
 def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
     """Run the full pipeline and return a compiled Dossier."""
-    manifest, _profile = build_manifest(topic, use_llm=use_llm)
+    manifest, _profile, provenance = _resolve_manifest(topic, use_llm=use_llm)
     retriever = build_retriever() if enrich else None
     enriched = enrich_manifest(manifest, topic=topic, retriever=retriever, top_n=3)
     audited = audit_manifest(enriched, topic=topic)
@@ -200,7 +228,8 @@ def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
     if retriever is not None and _figures_enabled():
         card_evidence, page_texts = _collect_figures(manifest, topic, retriever)
     return compile_dossier(audited, topic=topic, evidence=evidence,
-                           card_evidence=card_evidence, page_texts=page_texts)
+                           card_evidence=card_evidence, page_texts=page_texts,
+                           provenance=provenance)
 
 
 def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=None,
