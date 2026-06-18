@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+/* "Neurosurgery Signal" design tokens. In Tailwind v4 these generate utilities directly,
+   e.g. --color-teal -> text-teal/bg-teal, --font-display -> font-display. Dark navy plane,
+   teal + red signal accents, Syne display / Inter reading / IBM Plex Mono micro-labels. */
+@theme {
+  --font-display: "Syne", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-navy-950: #070b16;
+  --color-navy-900: #0a0f1f;
+  --color-navy-850: #0e1428;
+  --color-navy-800: #121a33;
+  --color-navy-700: #1b2547;
+  --color-navy-600: #283466;
+
+  --color-ink: #e7ecf5;
+  --color-ink-dim: #9aa6bf;
+  --color-ink-faint: #5d6986;
+
+  --color-teal: #2dd4bf;
+  --color-teal-deep: #0f766e;
+  --color-signal: #f0496b;
+  --color-signal-deep: #9f1239;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--color-navy-950);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
