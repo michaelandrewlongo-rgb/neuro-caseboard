@@ -123,7 +123,7 @@ pytest. No new dependencies.
   Verify: `.loopvenv/bin/python -m pytest -q tests/neuro_core/test_probe_book.py` → all pass.
   Commit: `feat(ingest): add probe_book preflight (scanned-book guard) for corpus PDFs`.
 
-- [ ] **Task 2 — `neuro_core/scripts/probe_book.py` CLI (TDD)**
+- [x] **Task 2 — `neuro_core/scripts/probe_book.py` CLI (TDD)**
 
   **Files:** Create `neuro_core/scripts/probe_book.py`; Test
   `tests/neuro_core/test_probe_book_script.py` (new).
