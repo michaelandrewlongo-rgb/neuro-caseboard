@@ -1,11 +1,10 @@
-"""Executive-Navy briefing PDF for Q&A (ask) results -- the print sibling of caseboard_pdf.py
-for the question-answer shape.
+"""Briefing PDF for Q&A (ask) results -- the print sibling of caseboard_pdf.py for the
+question-answer shape.
 
 Renders a query result (markdown answer + numbered textbook citations + optional contemporary
-PubMed literature + figures) in the current Executive-Navy identity (shared with the web console
-and the build dossier via exec_navy.py): a deep-navy masthead over a bright report plane, the
-three-font role system (Archivo UI / Source Serif 4 reading column / IBM Plex Mono micro-labels)
-and one deep-teal accent.
+PubMed literature + figures) in the current "Neo Brutalism" identity (shared with the web console
+and the build dossier via exec_navy.py): white ground, black 2px borders, red/yellow/blue accents,
+square corners, hard offset shadows, DM Sans + Space Mono.
 
 ``build_briefing_html`` is pure and dependency-light (unit-tested offline). ``render_briefing_pdf``
 needs the ``briefing`` extra (Playwright + a Chromium binary).
@@ -20,7 +19,7 @@ from neuro_caseboard.exec_navy import EXEC_NAVY_CSS, img_data_uri
 
 DEFAULT_EYEBROW = "Ask · Citation-grounded"
 
-# Q&A-only selectors layered on the shared Executive-Navy sheet (masthead, eyebrow chip, title,
+# Q&A-only selectors layered on the shared brutalist sheet (masthead, eyebrow chip, title,
 # rule, section headers, figures and footer all come from EXEC_NAVY_CSS).
 ASK_CSS = """
 .answer{ font-family:var(--read); font-size:11pt; line-height:1.55; color:#000; max-width:165mm; }
@@ -134,7 +133,7 @@ def _figures_html(result) -> str:
 
 def build_briefing_html(result, *, title: str, subtitle: str = "",
                         eyebrow: str = DEFAULT_EYEBROW, today: str | None = None) -> str:
-    """Pure: render a Q&A result to an Executive-Navy HTML briefing string. Figures whose image
+    """Pure: render a Q&A result to a brutalist HTML briefing string. Figures whose image
     file can't be read are skipped (never crash, never emit a broken image)."""
     today = today or dt.date.today().isoformat()
     parts = [
@@ -142,7 +141,7 @@ def build_briefing_html(result, *, title: str, subtitle: str = "",
         EXEC_NAVY_CSS, ASK_CSS,
         "</style></head><body>",
         '<div class="masthead"><div class="mh-brand"><span class="sq"></span>NEURO·CASEBOARD</div>',
-        '<div class="mh-eyebrow">Neurosurgery Signal · clinical briefing</div></div>',
+        '<div class="mh-eyebrow">Neuro·Caseboard · clinical briefing</div></div>',
         '<div class="content">',
         f'<span class="eyebrow">{html.escape(eyebrow)}</span>',
         f'<h1 class="title">{html.escape(title)}</h1>',

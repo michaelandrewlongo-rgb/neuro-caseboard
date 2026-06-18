@@ -32,7 +32,7 @@ export default function Home() {
           className="pointer-events-none absolute -top-3 left-0 h-12 w-32 border-2 border-border bg-secondary"
         />
         <div className="reveal" style={{ animationDelay: "0ms" }}>
-          <Eyebrow accent>Neurosurgery Signal · Local console</Eyebrow>
+          <Eyebrow accent>Neuro·Caseboard · Local console</Eyebrow>
         </div>
         <div
           className="reveal mt-4 [&>.blur-text]:flex-nowrap"

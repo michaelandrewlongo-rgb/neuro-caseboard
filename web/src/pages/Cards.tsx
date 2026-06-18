@@ -115,7 +115,7 @@ export default function Cards() {
 
       {netError && !loading && (
         <Card className="p-5 text-sm">
-          <p className="font-medium text-destructive">Request failed</p>
+          <p className="font-bold text-primary">Request failed</p>
           <p className="mt-1 text-muted-foreground">{netError}</p>
           <p className="mt-2 font-mono text-xs text-muted-foreground">
             Is the engine wrapper running on :8001?

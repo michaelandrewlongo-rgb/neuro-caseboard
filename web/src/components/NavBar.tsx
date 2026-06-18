@@ -10,7 +10,7 @@ const LINKS = [
 
 export default function NavBar() {
   return (
-    <header className="glass-header sticky top-0 z-30">
+    <header className="site-header sticky top-0 z-30">
       <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3.5">
         <NavLink to="/" className="group flex items-center gap-2.5">
           <span

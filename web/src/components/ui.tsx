@@ -8,16 +8,14 @@ import { cn } from "@/lib/utils"
 export function Card({
   className,
   hover,
-  glow,
   ...props
-}: HTMLAttributes<HTMLDivElement> & { hover?: boolean; glow?: boolean }) {
+}: HTMLAttributes<HTMLDivElement> & { hover?: boolean }) {
   return (
     <div
       className={cn(
         "border-2 border-border bg-card shadow-card",
         hover &&
           "transition-transform duration-100 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-raised",
-        glow && "shadow-raised",
         className,
       )}
       {...props}
@@ -53,10 +51,11 @@ export function Button({
 }
 
 // ---- Badge / status chip --------------------------------------------------------------------
+// Black text on the saturated fills (green/amber/red) clears WCAG AA; blue needs white.
 const BADGE_TONES = {
-  success: "bg-[var(--color-success)] text-white",
-  amber: "bg-[var(--color-amber)] text-white",
-  signal: "bg-primary text-primary-foreground",
+  success: "bg-success text-foreground",
+  amber: "bg-amber text-foreground",
+  signal: "bg-primary text-foreground",
   accent: "bg-accent text-accent-foreground",
   neutral: "bg-card text-foreground",
 } as const
@@ -101,8 +100,8 @@ export function Eyebrow({
 
 // ---- Stat (metric) --------------------------------------------------------------------------
 const STAT_VALUE_TONES = {
-  success: "text-[var(--color-success)]",
-  amber: "text-[var(--color-amber)]",
+  success: "text-success",
+  amber: "text-amber",
   signal: "text-primary",
   accent: "text-accent",
   neutral: "text-foreground",

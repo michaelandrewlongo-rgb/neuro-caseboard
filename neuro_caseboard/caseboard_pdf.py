@@ -1,12 +1,10 @@
-"""Executive-Navy case-board PDF — render a Dossier to a print-grade PDF that matches the
-redesigned Streamlit console (`app/signal_theme.py`).
+"""Case-board PDF — render a Dossier to a print-grade PDF that matches the web console (web/).
 
-Where ``render_pdf.py`` (fpdf2) emits a plain light clinical document and ``briefing_pdf.py``
-emits the *old* dark Signal briefing for Q&A, this renders the **build dossier** in the current
-Executive-Navy identity: a deep-navy masthead over a bright report plane, the three-font role
-system (Archivo UI / Source Serif 4 reading column / IBM Plex Mono micro-labels), one deep-teal
-accent, an evidence-mix proportion bar + stat cards + legend, and status-marker claim cards with
-indented ``Why:`` rationale. HTML → PDF via Playwright/Chromium.
+Where ``render_pdf.py`` (fpdf2) emits a plain light clinical document, this renders the **build
+dossier** in the current "Neo Brutalism" identity (shared with the web UI and the ask briefing
+via exec_navy.py): white ground, black 2px borders, red/yellow/blue accents, square corners, hard
+offset shadows, DM Sans + Space Mono — an evidence-mix proportion bar + stat cards + legend, and
+status-marker claim cards with indented ``Why:`` rationale. HTML → PDF via Playwright/Chromium.
 
 ``build_caseboard_html`` is pure and dependency-light (testable offline). ``render_caseboard_pdf``
 needs the ``briefing`` extra (Playwright + a Chromium binary).
@@ -91,7 +89,7 @@ def _figure_html(fig) -> str:
 
 
 def build_caseboard_html(dossier: Dossier, *, subtitle: str = "", today: str | None = None) -> str:
-    """Pure: render a Dossier to an Executive-Navy HTML string (figures whose file can't be read
+    """Pure: render a Dossier to a brutalist HTML string (figures whose file can't be read
     are kept caption-only, never crash)."""
     today = today or dt.date.today().isoformat()
     s = dossier.summary
@@ -102,7 +100,7 @@ def build_caseboard_html(dossier: Dossier, *, subtitle: str = "", today: str | N
         EXEC_NAVY_CSS, _CASE_EXTRA_CSS, "</style></head><body>",
         f'<div class="verify-banner">{html.escape(VERIFY_BANNER)}</div>',
         '<div class="masthead"><div class="mh-brand"><span class="sq"></span>NEURO·CASEBOARD</div>',
-        '<div class="mh-eyebrow">Neurosurgery Signal · pre-operative dossier</div></div>',
+        '<div class="mh-eyebrow">Neuro·Caseboard · pre-operative dossier</div></div>',
         '<div class="content">',
         '<span class="eyebrow">Build · Pre-op dossier</span>',
         f'<h1 class="title">{html.escape(dossier.title)}</h1>',

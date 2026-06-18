@@ -42,7 +42,7 @@ function Dot({ ok }: { ok: boolean }) {
     <span
       className={cn(
         "inline-block h-2.5 w-2.5 shrink-0 border-2 border-border",
-        ok ? "bg-[var(--color-success)]" : "bg-primary",
+        ok ? "bg-success" : "bg-primary",
       )}
       aria-hidden
     />
@@ -80,8 +80,8 @@ export default function HealthPanel() {
       {loading && <p className="font-mono text-sm text-muted-foreground">probing engine…</p>}
 
       {error && !loading && (
-        <div className="border-2 border-border bg-secondary p-4 text-sm">
-          <p className="font-bold text-foreground">API unreachable</p>
+        <div className="border-2 border-border bg-card p-4 text-sm shadow-card">
+          <p className="font-bold text-primary">API unreachable</p>
           <p className="mt-1 text-muted-foreground">{error}</p>
           <p className="mt-2 font-mono text-xs text-muted-foreground">
             Is the engine wrapper running on :8001? Start it with the dev command.

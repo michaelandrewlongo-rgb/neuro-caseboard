@@ -3,7 +3,7 @@ import remarkGfm from "remark-gfm"
 import { citify } from "@/lib/citations"
 import { Card } from "@/components/ui"
 
-// Clinical reading surface: a calm Source Serif 4 column. Inline [n] / [L#] markers become
+// Clinical reading surface: a clean DM Sans reading column. Inline [n] / [L#] markers become
 // footnote-style chips; everything else stays static and legible (no animated clinical text).
 const components: Components = {
   h2: ({ children }) => (

@@ -48,7 +48,6 @@
   --shadow-brutal-sm: 2px 2px 0 0 #000;
   --shadow-card: 4px 4px 0 0 #000;
   --shadow-raised: 6px 6px 0 0 #000;
-  --shadow-glow: 4px 4px 0 0 #000;
 }
 
 @layer base {
@@ -93,7 +92,7 @@
   .surface {
     @apply border-2 border-border bg-card shadow-card;
   }
-  .glass-header {
+  .site-header {
     @apply border-b-2 border-border bg-background;
   }
   /* form input */
@@ -102,6 +101,7 @@
     @apply placeholder:text-muted-foreground focus:outline-none;
   }
   .field:focus {
+    border-color: var(--color-primary);
     box-shadow: var(--shadow-card);
   }
   /* example "chip" buttons */
