@@ -9,6 +9,51 @@ def _flag(value: str) -> bool:
     return str(value).strip().lower() in ("1", "true", "yes", "on")
 
 
+_DOTENV_LOADED = False
+
+
+def _load_dotenv_once() -> None:
+    """Populate os.environ from a project .env, without depending on python-dotenv.
+
+    Looks for a .env at the repo root (anchored to this file) first, then the current
+    working directory and its parents; the first file found wins. Existing environment
+    variables are never overwritten — real env always beats the file, matching
+    python-dotenv's default (override=False). This lets a local, gitignored .env supply
+    secrets like NCBI_API_KEY to every engine entrypoint (API, CLI, Streamlit) with no
+    extra setup in future sessions.
+    """
+    global _DOTENV_LOADED
+    if _DOTENV_LOADED:
+        return
+    if _flag(os.environ.get("NEURO_CASEBOARD_SKIP_DOTENV", "")):
+        return  # tests/CI opt out so an ambient developer .env can't leak into a controlled env
+    _DOTENV_LOADED = True
+    repo_root = Path(__file__).resolve().parents[2]  # neuro_caseboard/literature/config.py -> repo
+    cwd = Path.cwd()
+    candidates = [repo_root / ".env", *(p / ".env" for p in (cwd, *cwd.parents))]
+    seen: set[Path] = set()
+    for env_path in candidates:
+        if env_path in seen:
+            continue
+        seen.add(env_path)
+        try:
+            text = env_path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for raw in text.splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            if key.startswith("export "):
+                key = key[len("export "):].strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+        return  # first .env found wins
+
+
 @dataclass(frozen=True)
 class LiteratureConfig:
     enabled: bool
@@ -20,6 +65,7 @@ class LiteratureConfig:
 
 
 def load_literature_config() -> LiteratureConfig:
+    _load_dotenv_once()
     default_cache = str(Path.home() / ".cache" / "neuro_caseboard" / "pubmed")
     return LiteratureConfig(
         enabled=_flag(os.environ.get("LITERATURE_RETRIEVAL", "true")),

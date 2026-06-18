@@ -1,10 +1,12 @@
-import { motion, type Transition, type Easing } from 'motion/react';
-import { useEffect, useRef, useState, useMemo, type FC } from 'react';
+import { motion, useReducedMotion, type Transition, type Easing } from 'motion/react';
+import { useEffect, useRef, useState, useMemo, type ElementType, type FC, type Ref } from 'react';
 
 type BlurTextProps = {
   text?: string;
   delay?: number;
   className?: string;
+  /** Element to render as (default 'p'). Use 'h1'/'h2' to make the animated title a real heading. */
+  as?: ElementType;
   animateBy?: 'words' | 'letters';
   direction?: 'top' | 'bottom';
   threshold?: number;
@@ -33,6 +35,7 @@ const BlurText: FC<BlurTextProps> = ({
   text = '',
   delay = 200,
   className = '',
+  as: Tag = 'p',
   animateBy = 'words',
   direction = 'top',
   threshold = 0.1,
@@ -45,7 +48,8 @@ const BlurText: FC<BlurTextProps> = ({
 }) => {
   const elements = animateBy === 'words' ? text.split(' ') : text.split('');
   const [inView, setInView] = useState(false);
-  const ref = useRef<HTMLParagraphElement>(null);
+  const prefersReduced = useReducedMotion();
+  const ref = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -87,8 +91,17 @@ const BlurText: FC<BlurTextProps> = ({
   const totalDuration = stepDuration * (stepCount - 1);
   const times = Array.from({ length: stepCount }, (_, i) => (stepCount === 1 ? 0 : i / (stepCount - 1)));
 
+  if (prefersReduced) {
+    // Honor prefers-reduced-motion: render the text statically, with no blur/translate animation.
+    return (
+      <Tag ref={ref as Ref<HTMLElement>} className={`blur-text ${className} flex flex-wrap`}>
+        {text}
+      </Tag>
+    );
+  }
+
   return (
-    <p ref={ref} className={`blur-text ${className} flex flex-wrap`}>
+    <Tag ref={ref as Ref<HTMLElement>} className={`blur-text ${className} flex flex-wrap`}>
       {elements.map((segment, index) => {
         const animateKeyframes = buildKeyframes(fromSnapshot, toSnapshots);
 
@@ -116,7 +129,7 @@ const BlurText: FC<BlurTextProps> = ({
           </motion.span>
         );
       })}
-    </p>
+    </Tag>
   );
 };
 

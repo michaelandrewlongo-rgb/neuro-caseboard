@@ -19,7 +19,9 @@
   --color-popover: #ffffff;
   --color-popover-foreground: #000000;
   --color-primary: #ff3333;
-  --color-primary-foreground: #ffffff;
+  /* Black (not white) on the bright red fill clears WCAG AA — white-on-#ff3333 is only 3.6:1,
+     black-on-#ff3333 is 5.8:1. Keeps the loud red blocks; just flips their label ink. */
+  --color-primary-foreground: #000000;
   --color-secondary: #ffff00;
   --color-secondary-foreground: #000000;
   --color-muted: #f0f0f0;
@@ -36,6 +38,13 @@
   --color-success: #1aa11a;
   --color-amber: #d97706;
   --color-signal: #ff3333;
+
+  /* "Ink" variants — the same hues darkened to clear WCAG AA as TEXT on white (≥4.5:1).
+     The bright tokens above stay for FILLS (which carry black text). Use text-*-ink for any
+     colored lettering on a light surface so the brand stays loud without failing contrast. */
+  --color-primary-ink: #c8102e; /* red text   — 5.9:1 on white */
+  --color-success-ink: #15803d; /* green text — 5.0:1 on white */
+  --color-amber-ink: #b45309;   /* amber text — 5.0:1 on white */
 
   /* square corners everywhere */
   --radius-sm: 0px;
@@ -83,7 +92,7 @@
 
 @layer components {
   .eyebrow {
-    @apply font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-primary;
+    @apply font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-primary-ink;
   }
   .reading {
     @apply text-[1.02rem] leading-[1.7] text-foreground;
@@ -134,5 +143,10 @@
   .reveal {
     animation: none;
     opacity: 1;
+  }
+  /* Stop the continuous loaders (shimmer skeletons + pulsing status dot). These rules are
+     unlayered, so they win over Tailwind's layered `.animate-pulse` without !important. */
+  .animate-pulse {
+    animation: none;
   }
 }

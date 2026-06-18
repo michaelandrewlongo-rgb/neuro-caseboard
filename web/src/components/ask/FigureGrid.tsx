@@ -23,7 +23,7 @@ function FigureCard({ fig }: { fig: Figure }) {
         )}
       </div>
       <figcaption className="space-y-1 p-3.5">
-        <span className="font-mono text-[10px] uppercase tracking-wider text-primary">
+        <span className="font-mono text-[10px] uppercase tracking-wider text-primary-ink">
           [{fig.source_n}] {fig.location}
         </span>
         {fig.caption && <p className="text-xs leading-snug text-muted-foreground">{fig.caption}</p>}

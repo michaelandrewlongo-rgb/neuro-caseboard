@@ -19,23 +19,31 @@ export default function AskLoader() {
   }, [])
 
   return (
-    <Card className="p-6">
+    <Card className="p-6" role="status" aria-live="polite" aria-busy="true">
       <div className="flex items-center gap-3">
-        <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
-        <BlurText
-          key={i}
-          text={STEPS[i]}
-          animateBy="words"
-          delay={40}
-          className="font-mono text-sm text-primary"
-        />
+        <span className="h-2 w-2 animate-pulse rounded-full bg-primary" aria-hidden />
+        <div aria-hidden className="min-w-0">
+          <BlurText
+            key={i}
+            text={STEPS[i]}
+            animateBy="words"
+            delay={40}
+            className="font-mono text-sm text-primary-ink"
+          />
+        </div>
+        {/* Stable, non-animated text the screen reader actually announces (the cycling stages above
+            are decorative). */}
+        <span className="sr-only">
+          Working on your answer — searching the corpus, synthesizing a cited answer, and scanning
+          recent literature. This usually takes 30–80 seconds.
+        </span>
       </div>
       <div className="mt-6 flex flex-col gap-3" aria-hidden>
         {["w-11/12", "w-full", "w-10/12", "w-9/12", "w-full", "w-7/12"].map((w, idx) => (
           <div key={idx} className={`h-3 ${w} animate-pulse rounded bg-muted`} />
         ))}
       </div>
-      <p className="mt-5 font-mono text-xs text-muted-foreground">
+      <p className="mt-5 font-mono text-xs text-muted-foreground" aria-hidden>
         Usually 30–80 seconds — retrieval, citation-grounded synthesis, and a live literature lookup.
       </p>
     </Card>

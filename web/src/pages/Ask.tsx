@@ -46,8 +46,26 @@ export default function Ask() {
     }
   }
 
+  const liveMsg = loading
+    ? ""
+    : netError
+      ? "Request failed."
+      : resp
+        ? resp.kind === "answer"
+          ? "Answer ready below."
+          : resp.kind === "clarification"
+            ? "This question maps to several topics — choose one below."
+            : resp.kind === "unavailable"
+              ? "Engine temporarily unavailable."
+              : "Engine error."
+        : ""
+
   return (
     <div className="flex flex-col gap-6">
+      {/* Persistent live region: announces result arrival to screen readers after a slow call. */}
+      <div aria-live="polite" className="sr-only">
+        {liveMsg}
+      </div>
       <header>
         <Eyebrow accent>Ask · Citation-grounded</Eyebrow>
         <h1 className="mt-3 font-display text-4xl font-bold tracking-tight text-foreground">
@@ -94,7 +112,7 @@ export default function Ask() {
 
       {netError && !loading && (
         <Card className="p-5 text-sm">
-          <p className="font-bold text-primary">Request failed</p>
+          <p className="font-bold text-primary-ink">Request failed</p>
           <p className="mt-1 text-muted-foreground">{netError}</p>
           <p className="mt-2 font-mono text-xs text-muted-foreground">
             Is the engine wrapper running on :8001?
@@ -117,7 +135,7 @@ function ResultView({
   if (resp.kind === "error") {
     return (
       <Card className="p-5 text-sm">
-        <p className="font-bold text-primary">Engine error</p>
+        <p className="font-bold text-primary-ink">Engine error</p>
         <p className="mt-1 font-mono text-xs text-muted-foreground">{resp.error}</p>
       </Card>
     )
@@ -143,7 +161,7 @@ function ResultView({
             <button
               key={v.label}
               onClick={() => onPickVariant(v.rewrite || v.label)}
-              className="rounded-lg border border-border bg-muted px-4 py-3 text-left text-sm text-foreground transition-colors hover:border-primary"
+              className="border-2 border-border bg-muted px-4 py-3 text-left text-sm text-foreground transition-colors hover:border-primary"
             >
               {v.label}
             </button>

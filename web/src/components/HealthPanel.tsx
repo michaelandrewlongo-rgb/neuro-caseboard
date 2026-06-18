@@ -81,7 +81,7 @@ export default function HealthPanel() {
 
       {error && !loading && (
         <div className="border-2 border-border bg-card p-4 text-sm shadow-card">
-          <p className="font-bold text-primary">API unreachable</p>
+          <p className="font-bold text-primary-ink">API unreachable</p>
           <p className="mt-1 text-muted-foreground">{error}</p>
           <p className="mt-2 font-mono text-xs text-muted-foreground">
             Is the engine wrapper running on :8001? Start it with the dev command.
