@@ -264,3 +264,36 @@ def test_critic_failure_keeps_draft():
     plan_fn, author_fn, _ = _roles(themes={"themes": []}, draft=VALID_CARDS)
     m = build_llm_manifest("anything", plan_fn=plan_fn, author_fn=author_fn, critic_fn=boom)
     assert m is not None and len(m.cards) == 6                      # draft survives
+
+
+import logging
+from neuro_caseboard.explore_llm import _SLOTS_BY_FILE, _SECTION_KEYS, _MIN_CARDS
+
+
+def test_author_schema_drop_logs_warning_with_counts(caplog):
+    # Model returns plenty of cards, but every section_key is invalid -> all dropped by
+    # coercion -> under the floor. This is the schema/vocabulary-drift signature; it must
+    # produce a PHI-safe WARNING with counts, and still return None (control flow unchanged).
+    payload = {"cards": [
+        {"target_file": "03-anatomy-at-risk.md", "section_key": "made_up_key",
+         "question": f"PHI_SENSITIVE question {i}", "why_it_matters": "w"}
+        for i in range(9)]}
+    with caplog.at_level(logging.WARNING, logger="neuro_caseboard.explore_llm"):
+        m = build_llm_manifest("anything", complete_fn=_fake(json.dumps(payload)))
+    assert m is None                                     # control flow unchanged
+    assert "rejected" in caplog.text and "9" in caplog.text
+    assert "PHI_SENSITIVE" not in caplog.text            # PHI-safe: no card text in logs
+
+
+def test_prompt_section_keys_match_validator():
+    # Dev-time canary: the keys advertised to the model in the AUTHOR/CRITIC prompt MUST be a
+    # subset of the validator vocabulary. If the prompt and _SLOTS_BY_FILE drift apart, the
+    # model is told keys that _coerce_cards will silently reject -> mass drop -> silent
+    # fallback. This test fails loud at the dev/CI boundary so that can never ship.
+    for line in _SECTION_KEYS.strip().splitlines():
+        target, _, keys_str = line.strip().partition(":")
+        target = target.strip()
+        assert target in _SLOTS_BY_FILE, f"prompt names unknown target_file {target!r}"
+        for key in (k.strip() for k in keys_str.split(",")):
+            assert key in _SLOTS_BY_FILE[target], \
+                f"prompt section_key {key!r} for {target} is not a valid validator key"
