@@ -15,15 +15,16 @@ from PIL import Image, ImageDraw, ImageFont
 
 _FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
 
-# Palette (fixed -> deterministic).
+# Palette (fixed -> deterministic). Neo Brutalism: black ink/lines, red primary, blue/yellow
+# accents — matches the web GUI + PDF theme.
 _BG = (255, 255, 255)
-_INK = (22, 32, 44)
-_MUTED = (88, 102, 118)
-_LINE = (150, 162, 174)
-_ACCENT = (14, 116, 144)          # deep teal (Executive-Navy accent)
-_TARGET = (180, 73, 59)           # the target/lesion
-_BANNER_BG = (169, 120, 27)       # amber caution
-_KIND_COLOR = {"target": _TARGET, "corridor": _ACCENT, "vessel": (140, 60, 90),
+_INK = (0, 0, 0)
+_MUTED = (51, 51, 51)
+_LINE = (0, 0, 0)
+_ACCENT = (255, 51, 51)            # red primary (Neo Brutalism)
+_TARGET = (0, 102, 255)            # the target/lesion (blue, distinct from the red corridor)
+_BANNER_BG = (255, 255, 0)         # yellow caution
+_KIND_COLOR = {"target": _TARGET, "corridor": _ACCENT, "vessel": (153, 0, 153),
                "level": _ACCENT, "callout": _MUTED, "structure": _INK}
 
 
@@ -127,15 +128,15 @@ def render_spec(spec, *, width: int = 900, height: int = 640) -> bytes:
     f_small = _font(13)
     f_banner = _font(13, bold=True)
 
-    # frame
-    d.rectangle([6, 6, width - 7, height - 7], outline=_LINE, width=2)
+    # frame (thick black brutalist border)
+    d.rectangle([6, 6, width - 7, height - 7], outline=_LINE, width=4)
 
     # mandatory banner: this is a schematic, not a radiograph (top-right)
     banner = "SCHEMATIC — NOT A RADIOGRAPH"
     bw = d.textlength(banner, font=f_banner)
     banner_x = width - pad - bw - 16
-    d.rectangle([banner_x, 16, width - pad + 2, 40], fill=_BANNER_BG)
-    d.text((banner_x + 8, 19), banner, font=f_banner, fill=(255, 255, 255))
+    d.rectangle([banner_x, 16, width - pad + 2, 40], fill=_BANNER_BG, outline=_INK, width=2)
+    d.text((banner_x + 8, 19), banner, font=f_banner, fill=_INK)
 
     # title, truncated so it never runs under the banner
     title = spec.title or "Case schematic"
@@ -174,7 +175,7 @@ def render_spec(spec, *, width: int = 900, height: int = 640) -> bytes:
         x, y = pos[n.id]
         color = _KIND_COLOR.get(n.kind, _INK)
         r = 9
-        d.ellipse([x - r, y - r, x + r, y + r], fill=color, outline=_BG, width=2)
+        d.ellipse([x - r, y - r, x + r, y + r], fill=color, outline=_INK, width=2)
         lines = _wrap(d, n.label, f_label, max_label_w)
         bw = int(max(d.textlength(ln, font=f_label) for ln in lines))
         bh = lh * len(lines)
@@ -240,10 +241,11 @@ def render_plate(src_path, out_path, *, citation: str = "", labels=(), width: in
     foot = 26 if citation else 0
     img = Image.new("RGB", (width, band + body_h + foot), _BG)
     d = ImageDraw.Draw(img)
-    # top reference banner (amber caution, like the schematic banner) — honesty about the source
+    # top reference banner (yellow caution, like the schematic banner) — honesty about the source
     d.rectangle([0, 0, width, band], fill=_BANNER_BG)
+    d.rectangle([0, band - 2, width, band], fill=_INK)   # thick black rule under the banner
     f_band = _font(15, bold=True)
-    d.text((10, 8), _REF_BANNER, font=f_band, fill=(255, 255, 255))
+    d.text((10, 8), _REF_BANNER, font=f_band, fill=_INK)
     img.paste(plate, (0, band))
     # optional structure labels along the top of the plate body
     f_small = _font(13)
