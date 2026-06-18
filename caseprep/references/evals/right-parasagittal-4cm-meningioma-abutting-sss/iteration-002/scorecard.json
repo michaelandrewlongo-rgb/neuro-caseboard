@@ -1,0 +1,32 @@
+{
+  "case_id": "right-parasagittal-4cm-meningioma-abutting-sss",
+  "iteration": 2,
+  "case_input": "right parasagittal 4cm meningioma abutting SSS",
+  "output_path": "/tmp/caseprep-live-right-parasagittal-4cm-meningioma-sss-v2",
+  "overall_score": 57,
+  "pass_threshold": 75,
+  "passed": false,
+  "previous_score": 9,
+  "score_delta": 48,
+  "deterministic_eval_passed": true,
+  "focused_tests": "python3 -m pytest tests/test_case_parser.py tests/test_procedure_taxonomy.py tests/test_renderers.py tests/test_core_builder.py -q => 59 passed",
+  "full_tests": "python3 -m pytest -q => 290 passed",
+  "category_scores": {
+    "technique_operative_workflow": 15,
+    "anatomy_dangerous_structures": 15,
+    "complications_rescue_plans": 8,
+    "alternatives_decision_boundaries": 5,
+    "evidence_quality_relevance": 1,
+    "case_specificity": 6,
+    "readability_usability": 4,
+    "provenance_citation_support": 3
+  },
+  "primary_remaining_failures": [
+    "SSS invasion/management decision tree missing",
+    "venous rescue algorithms too high-level",
+    "evidence synthesis weak",
+    "AP/motor-SMA localization insufficient",
+    "placeholder burden"
+  ],
+  "next_fix": "Add a parasagittal/SSS meningioma decision-tree + rescue-algorithm module, then improve evidence retrieval/synthesis."
+}

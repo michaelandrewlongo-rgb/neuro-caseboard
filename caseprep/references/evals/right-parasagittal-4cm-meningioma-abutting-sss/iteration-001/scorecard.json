@@ -1,0 +1,30 @@
+{
+  "case_id": "right-parasagittal-4cm-meningioma-abutting-sss",
+  "iteration": 1,
+  "case_input": "right parasagittal 4cm meningioma abutting SSS",
+  "output_path": "/tmp/caseprep-live-right-parasagittal-4cm-meningioma-sss-v1",
+  "overall_score": 9,
+  "pass_threshold": 75,
+  "passed": false,
+  "previous_score": null,
+  "score_delta": null,
+  "deterministic_eval_passed": false,
+  "category_scores": {
+    "technique_operative_workflow": 0,
+    "anatomy_dangerous_structures": 0,
+    "complications_rescue_plans": 2,
+    "alternatives_decision_boundaries": 1,
+    "evidence_quality_relevance": 0,
+    "case_specificity": 2,
+    "readability_usability": 4,
+    "provenance_citation_support": 2
+  },
+  "primary_failures": [
+    "wrong/degraded skull_base routing",
+    "empty operative workflow",
+    "missing SSS/bridging-vein anatomy",
+    "missing rescue algorithms",
+    "no evidence synthesis"
+  ],
+  "next_fix": "Add one narrow tumor_convexity_meningioma/parasagittal-SSS parser + renderer default path that routes the case correctly and fills SSS, bridging-vein, imaging, operative, risk/rescue, and morning-of-case content while preserving visible missing facts."
+}

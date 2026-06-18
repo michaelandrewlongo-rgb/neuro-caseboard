@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+dist/
+.pytest_cache/
+*.caseprep/
+*-caseprep/
+*-images/
+*.swp
+.env
+.DS_Store
+*.db
+*.db-journal
+.hermes/
+.claude/

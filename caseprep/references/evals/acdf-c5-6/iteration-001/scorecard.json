@@ -1,0 +1,74 @@
+{
+  "case_id": "acdf-c5-6",
+  "iteration": 1,
+  "case_input": "C5-6 anterior cervical discectomy and fusion for right C6 radiculopathy from foraminal disc osteophyte complex",
+  "output_path": "/tmp/caseprep-live-acdf-c5-6-v1",
+  "overall_score": 10,
+  "pass_threshold": 75,
+  "passed": false,
+  "previous_score": null,
+  "score_delta": null,
+  "stop_reason": "cold_baseline_failed_blind_review_and_deterministic_eval",
+  "category_scores": {
+    "technique_operative_workflow": 1,
+    "anatomy_dangerous_structures": 0,
+    "complications_rescue_plans": 1,
+    "alternatives_decision_boundaries": 1,
+    "evidence_quality_relevance": 1,
+    "case_specificity": 2,
+    "readability_usability": 2,
+    "provenance_citation_support": 2
+  },
+  "deterministic_eval": {
+    "passed": false,
+    "score": 40,
+    "missing_required_concepts": [
+      "anterior cervical exposure",
+      "localization",
+      "recurrent laryngeal nerve",
+      "esophagus",
+      "vertebral artery",
+      "dysphagia"
+    ],
+    "deterministic_failures": [
+      "required concept missing: anterior cervical exposure",
+      "required concept missing: localization",
+      "required concept missing: recurrent laryngeal nerve",
+      "required concept missing: esophagus",
+      "required concept missing: vertebral artery",
+      "required concept missing: dysphagia"
+    ],
+    "degradation_status": "not degraded"
+  },
+  "build_result": {
+    "pathology": "cervical radiculopathy; foraminal disc osteophyte complex; disc osteophyte complex",
+    "procedure": "anterior cervical discectomy and fusion",
+    "approach": "anterior cervical",
+    "missing_critical_facts": "none",
+    "degraded": false,
+    "family": "spine_acdf",
+    "profile": "spine",
+    "source_counts": {
+      "pubmed": 1
+    },
+    "warnings": [
+      "Corpus: Invalid FTS query: no such column: 6"
+    ]
+  },
+  "review_notes": "Independent blind spine neurosurgeon review scored the cold ACDF output 10/100 fail. The output correctly parsed the case but was essentially an empty/template dossier with weak evidence and no usable ACDF operative, anatomy, imaging, or rescue content.",
+  "primary_remaining_failures": [
+    "No ACDF operative workflow: missing positioning, exposure, level localization, discectomy/decompression sequence, foraminal/uncinate work, graft/cage/plate steps, fluoroscopy, closure, and drain considerations.",
+    "No ACDF-specific anatomy at risk: missing carotid sheath, esophagus/trachea, recurrent laryngeal nerve, thyroid vessels, longus coli, sympathetic chain, vertebral artery, C6 root, uncinate process, dura, and spinal cord.",
+    "No imaging review guidance for C5-6 right foraminal stenosis/disc-osteophyte complex, canal stenosis/myelomalacia, alignment, instability, OPLL, adjacent segment disease, or approach planning.",
+    "No ACDF-specific complication/rescue algorithms, especially postop neck hematoma/airway compromise, dysphagia/esophageal injury, RLN palsy, vertebral artery injury, CSF leak, wrong level, hardware/graft malposition, neurologic worsening, infection, or pseudarthrosis.",
+    "Evidence retrieval is weak and partly broken: only one weakly relevant PubMed source and a corpus query warning for C5-6 syntax."
+  ],
+  "unsafe_or_misleading_content": [
+    "Output states missing critical facts: none identified despite absent imaging, neurologic, approach-side, airway, implant, prior-treatment, and risk details.",
+    "Output labels itself not degraded despite blank/placeholder substantive sections and failed/weak evidence retrieval.",
+    "Generic cranial/neurosurgical rescue content such as declining mental status/CT head appears instead of anterior cervical airway and neurologic rescue priorities.",
+    "Irrelevant generic postop/open-question content such as antiepileptic appears for routine ACDF."
+  ],
+  "resident_usefulness": "No. Reviewer said it might remind a trainee to review basic categories, but it would not meaningfully help prepare for a C5-6 ACDF.",
+  "next_fix": "Add a procedure-specific ACDF dossier skeleton/content pack and fix spinal-level query escaping, then rebuild the same ACDF case and repeat deterministic plus blind review."
+}

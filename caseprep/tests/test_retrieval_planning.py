@@ -1,0 +1,260 @@
+"""Tests for procedure-aware retrieval query planning."""
+
+from __future__ import annotations
+
+import pytest
+
+from caseprep.case_parser import parse_case_input, select_procedure_family
+from caseprep.core import BuildCasePlanRequest, EvidenceRecord
+from caseprep.core.builder import CoreRetrieverSet, build_core_case_plan
+from caseprep.retrieval_planning import (
+    build_case_queries,
+    build_corpus_query,
+    resolve_case_evidence_pack,
+)
+
+
+CANONICAL_CASES = {
+    "spine_acdf": (
+        "C5-6 anterior cervical discectomy and fusion for right C6 "
+        "radiculopathy from foraminal disc osteophyte complex"
+    ),
+    "tumor_convexity_meningioma": (
+        "right frontal convexity meningioma resection near the superior sagittal sinus"
+    ),
+    "posterior_fossa_chiari": (
+        "suboccipital craniectomy and C1 laminectomy for Chiari I malformation "
+        "with syringomyelia"
+    ),
+    "endovascular_thrombectomy": (
+        "mechanical thrombectomy for acute ischemic stroke from M1 occlusion using "
+        "balloon guide aspiration and stent retriever"
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    ("family_id", "expected_terms"),
+    [
+        (
+            "spine_acdf",
+            ["ACDF", "anterior cervical", "uncinate", "RLN"],
+        ),
+        (
+            "tumor_convexity_meningioma",
+            ["superior sagittal sinus", "bridging veins", "Simpson"],
+        ),
+        (
+            "posterior_fossa_chiari",
+            ["foramen magnum", "C1", "duraplasty", "syringomyelia"],
+        ),
+        (
+            "endovascular_thrombectomy",
+            ["M1", "M2", "balloon guide", "aspiration", "stent retriever", "TICI"],
+        ),
+    ],
+)
+def test_build_case_queries_uses_family_templates_for_canonical_cases(
+    family_id: str,
+    expected_terms: list[str],
+):
+    case = parse_case_input(CANONICAL_CASES[family_id])
+    family = select_procedure_family(case)
+
+    axes = build_case_queries(case, family)
+    combined_queries = "\n".join(axis.query for axis in axes)
+
+    assert family is not None
+    assert family.id == family_id
+    assert [axis.label for axis in axes] == [
+        "Anatomy / Relevant Structures",
+        "Outcomes / Evidence",
+        "Surgical Technique",
+        "Complications",
+        "Reviews / Landmarks",
+    ]
+    assert [axis.filter_type for axis in axes] == [
+        None,
+        "therapy",
+        None,
+        "etiology",
+        "systematic_review",
+    ]
+    for term in expected_terms:
+        assert term.casefold() in combined_queries.casefold()
+    assert "systematic review" in axes[-1].query
+
+
+def test_build_case_queries_falls_back_to_topic_axes_without_family():
+    case = parse_case_input("generic operative planning topic")
+
+    axes = build_case_queries(case, None)
+
+    assert axes[0].label == "Anatomy / Relevant Structures"
+    assert "generic operative planning topic" in axes[0].query
+    assert axes[1].query == "generic operative planning topic outcomes"
+    assert axes[1].filter_type == "therapy"
+    assert axes[2].query == "generic operative planning topic surgical technique approach"
+    assert axes[3].query == "generic operative planning topic complications adverse"
+    assert axes[3].filter_type == "etiology"
+    assert axes[4].query == "generic operative planning topic"
+    assert axes[4].filter_type == "systematic_review"
+
+
+def test_retrieval_planning_resolves_m1_pack_without_changing_axes():
+    case = parse_case_input(
+        "mechanical thrombectomy for acute ischemic stroke due to right M1 MCA occlusion"
+    )
+    family = select_procedure_family(case)
+
+    axes = build_case_queries(case, family)
+
+    assert resolve_case_evidence_pack(case, family) == "anterior_circulation_lvo_m1"
+    assert [axis.label for axis in axes] == [
+        "Anatomy / Relevant Structures",
+        "Outcomes / Evidence",
+        "Surgical Technique",
+        "Complications",
+        "Reviews / Landmarks",
+    ]
+
+
+def test_retrieval_planning_does_not_force_pack_for_bare_stroke_thrombectomy():
+    case = parse_case_input("stroke thrombectomy")
+    family = select_procedure_family(case)
+
+    assert family is not None
+    assert family.id == "endovascular_thrombectomy"
+    assert case.degraded is True
+    assert resolve_case_evidence_pack(case, family) is None
+
+
+def test_build_enriched_retrieval_plan_wraps_query_enrichment_for_m1():
+    from caseprep.retrieval_planning import build_enriched_retrieval_plan
+
+    case = parse_case_input(
+        "mechanical thrombectomy for acute ischemic stroke due to right M1 MCA occlusion"
+    )
+    family = select_procedure_family(case)
+
+    plan = build_enriched_retrieval_plan(case, family, profile="vascular")
+
+    assert plan["procedure_family"] == "endovascular_thrombectomy"
+    assert any(query["id"] == "pubmed_outcomes" for query in plan["queries"])
+    assert any(query["retriever"] == "local_corpus" for query in plan["queries"])
+
+
+@pytest.mark.parametrize(
+    ("family_id", "expected_terms", "unexpected_fragments"),
+    [
+        (
+            "spine_acdf",
+            ["ACDF", '"anterior cervical"', "discectomy", "fusion", '"C5-6"', "radiculopathy"],
+            ["right C6", "from foraminal disc osteophyte complex"],
+        ),
+        (
+            "tumor_convexity_meningioma",
+            ["meningioma", '"superior sagittal sinus"', "parasagittal", "convexity", '"bridging veins"'],
+            ["right frontal", "near the superior sagittal sinus"],
+        ),
+        (
+            "posterior_fossa_chiari",
+            ["Chiari", "syringomyelia", "duraplasty", "decompression", "C1"],
+            ["suboccipital craniectomy and C1 laminectomy for Chiari I malformation with syringomyelia"],
+        ),
+        (
+            "endovascular_thrombectomy",
+            ['"mechanical thrombectomy"', "M1", "MCA", '"large vessel occlusion"', '"stent retriever"', "aspiration"],
+            ["right", "using balloon guide aspiration and stent retriever"],
+        ),
+    ],
+)
+def test_build_corpus_query_renders_fts5_safe_family_concepts(
+    family_id: str,
+    expected_terms: list[str],
+    unexpected_fragments: list[str],
+):
+    case = parse_case_input(CANONICAL_CASES[family_id])
+    family = select_procedure_family(case)
+
+    query = build_corpus_query(case, family)
+
+    assert family is not None
+    assert query != case.raw_input
+    assert " OR " in query
+    assert " AND " not in query
+    for term in expected_terms:
+        assert term.casefold() in query.casefold()
+    for fragment in unexpected_fragments:
+        assert fragment.casefold() not in query.casefold()
+
+
+@pytest.mark.asyncio
+async def test_core_builder_retrieves_with_family_template_queries_for_acdf():
+    pubmed_calls = []
+    corpus_calls = []
+
+    class FakePubMedRetriever:
+        async def retrieve(
+            self,
+            query,
+            *,
+            max_results=10,
+            filter_type=None,
+            include_abstracts=True,
+        ):
+            pubmed_calls.append((query, filter_type))
+            return [
+                EvidenceRecord(
+                    id=f"pmid-{len(pubmed_calls)}",
+                    source="pubmed",
+                    title=query,
+                )
+            ]
+
+    class EmptyRadiologyRetriever:
+        async def retrieve(self, query, *, max_results=5, modality=None):
+            return []
+
+    class EmptyCorpusRetriever:
+        def retrieve(self, fts_query, *, subdomain=None, top_n=8):
+            corpus_calls.append((fts_query, subdomain, top_n))
+            return []
+
+    case = parse_case_input(CANONICAL_CASES["spine_acdf"])
+    family = select_procedure_family(case)
+    expected_corpus_query = build_corpus_query(case, family)
+
+    result = await build_core_case_plan(
+        BuildCasePlanRequest(
+            case_input=CANONICAL_CASES["spine_acdf"],
+            max_per_category=1,
+        ),
+        retrievers=CoreRetrieverSet(
+            pubmed=FakePubMedRetriever(),
+            radiology=EmptyRadiologyRetriever(),
+            corpus=EmptyCorpusRetriever(),
+        ),
+    )
+
+    queries = [query for query, _ in pubmed_calls]
+    assert len(queries) == 5
+    assert queries[0].startswith("ACDF anterior cervical exposure anatomy")
+    assert queries[1].startswith("ACDF cervical radiculopathy outcomes")
+    assert queries[1] != f"{CANONICAL_CASES['spine_acdf']} outcomes"
+    assert queries[2].startswith("anterior cervical discectomy fusion technique")
+    assert queries[3].startswith("ACDF complications")
+    assert pubmed_calls[1][1] == "therapy"
+    assert pubmed_calls[3][1] == "etiology"
+    assert pubmed_calls[4][1] == "systematic_review"
+    assert corpus_calls
+    assert corpus_calls[0][0] == expected_corpus_query
+    assert corpus_calls[0][0] != CANONICAL_CASES["spine_acdf"]
+    assert '"C5-6"' in corpus_calls[0][0]
+    assert result.structured["retrieval"]["pubmed_queries"][0]["query"] == queries[0]
+    assert result.structured["retrieval"]["corpus_query"] == expected_corpus_query
+    assert all(
+        record.metadata["procedure_family"] == "spine_acdf"
+        for record in result.evidence
+        if record.source == "pubmed"
+    )

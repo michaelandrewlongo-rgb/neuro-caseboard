@@ -1,0 +1,2219 @@
+"""MCP server for caseprep — PubMed-powered case preparation.
+
+Tools:
+  search_pubmed      — search with clinical query filters, optional abstracts
+  build_caseplan     — run 5 targeted searches, pull abstracts, write filled-in templates
+  generate_caseprep  — static template folder (quick scaffold)
+  search_local_pdfs  — PyMuPDF local PDF search
+  get_fulltext       — 3-tier best-available content for a PMID
+  search_radiology   — search Open-i for radiology images (MRI, CT, X-ray)
+  send_email         — send email via Resend REST API
+"""
+
+from __future__ import annotations
+
+import asyncio
+import math
+import os
+import re
+import sqlite3
+import time
+import xml.etree.ElementTree as ET
+from dataclasses import replace
+from pathlib import Path
+
+import httpx
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+from mcp.types import TextContent, Tool
+
+from caseprep.adapters.caseplan import build_caseplan_markdown
+from caseprep.core import CasePlanBuilder
+from caseprep.generator import generate_caseprep as _generate_caseprep
+from caseprep.integrations import corpus_topology
+from caseprep.pdfs import format_pdf_results, search_local_pdfs as _search_local_pdfs
+from caseprep.retrievers.fulltext import FullTextRecord, FullTextRetriever
+from caseprep.scoring import (
+    EvidenceGrade,
+    grade_evidence,
+    neurosurg_relevance_score,
+)
+
+# ── Load .env file ───────────────────────────────────────────────────────────
+
+import os
+from pathlib import Path as _Path
+
+_ENV_FILE = _Path(__file__).resolve().parent.parent / ".env"
+if _ENV_FILE.exists():
+    with open(_ENV_FILE) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _key, _val = _line.split("=", 1)
+                os.environ.setdefault(_key.strip(), _val.strip())
+
+# Also load Hermes .env as fallback (for OPENROUTER_API_KEY etc.)
+_HERMES_ENV = _Path.home() / ".hermes" / ".env"
+if _HERMES_ENV.exists():
+    with open(_HERMES_ENV) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _key, _val = _line.split("=", 1)
+                os.environ.setdefault(_key.strip(), _val.strip())
+
+# ── NCBI API key ────────────────────────────────────────────────────────────
+
+_NCBI_API_KEY = os.environ.get("NCBI_API_KEY", "").strip()
+_DELAY = 0.15 if _NCBI_API_KEY else 0.6  # 10/sec with key, ~1.5/sec without
+
+# ── Resend email API ─────────────────────────────────────────────────────────
+
+_RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
+RESEND_API = "https://api.resend.com"
+RESEND_DEFAULT_FROM = "CasePrep <onboarding@resend.dev>"
+
+# ── HTTP client ─────────────────────────────────────────────────────────────
+
+_http: httpx.AsyncClient | None = None
+
+def _client() -> httpx.AsyncClient:
+    global _http
+    if _http is None:
+        _http = httpx.AsyncClient(
+            timeout=httpx.Timeout(45.0),
+            headers={"User-Agent": "caseprep-mcp/0.2 (hermes-agent)"},
+        )
+    return _http
+
+EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+OPENI = "https://openi.nlm.nih.gov/api"
+
+# ── Local corpus (NSGY_DB_lean) ─────────────────────────────────────────────
+
+_CORPUS_DB = os.environ.get(
+    "CASEPREP_CORPUS_DB",
+    "/mnt/c/dev/NSGY_DB_lean/corpus/neurointerventional.sqlite",
+)
+_FULLTEXT_DB = os.environ.get(
+    "CASEPREP_FULLTEXT_DB",
+    "/mnt/c/dev/NSGY_DB_lean/fulltext/neurointerventional_fulltext.sqlite",
+)
+
+_CORPUS_AVAILABLE = Path(_CORPUS_DB).exists() and Path(_FULLTEXT_DB).exists()
+
+# Subdomain descriptions (mirrors neurointerventional_mcp)
+SUBDOMAIN_DESCRIPTIONS: dict[str, str] = {
+    "stroke_thrombectomy": "Acute ischemic stroke, mechanical thrombectomy, LVO, thrombolysis",
+    "aneurysm_sah": "Intracranial aneurysm, subarachnoid hemorrhage, coiling, clipping, vasospasm",
+    "avm_vascular_malformation": "AVM, dAVF, cavernous malformations, vein of Galen",
+    "carotid_cervical_vascular": "Carotid stenosis/stenting, CEA, vertebral artery, extracranial vascular",
+    "intracranial_hemorrhage": "ICH, subdural hematoma, MMA embolization, intracerebral hemorrhage",
+    "flow_diversion": "Flow diverters (Pipeline, FRED, Surpass), WEB device, intrasaccular",
+    "venous_interventional": "Venous sinus stenting, IIH, cerebral venous thrombosis",
+    "moyamoya": "Moyamoya disease, EC-IC bypass, cerebral revascularization",
+    "intracranial_atherosclerosis": "ICAD, intracranial stenting, Wingspan, basilar stenosis",
+    "radiosurgery": "Gamma Knife, stereotactic radiosurgery, LINAC",
+    "tumor_skull_base": "Tumor embolization, meningioma, GBM, skull base",
+    "spine_interventional": "Vertebroplasty, kyphoplasty, spinal AVM/dAVF",
+    "neurocritical_care": "ICP, decompressive craniectomy, TBI, brain death",
+    "functional_epilepsy": "Epilepsy surgery, Wada test, SEEG, DBS, VNS",
+    "pediatric_neurointerventional": "Pediatric neurointerventional procedures",
+    "cerebrovascular_other": "CNS vasculitis, hydrocephalus, vessel wall imaging",
+    "general_neurointerventional": "Cross-cutting technique/access papers, general endovascular",
+}
+
+EVIDENCE_TIER_LABELS: dict[str, str] = {
+    "guideline": "Level 1 — Guideline",
+    "meta_analysis": "Level 1 — Meta-Analysis",
+    "RCT": "Level 2 — Randomized Controlled Trial",
+    "observational": "Level 3 — Observational Study",
+    "case_report": "Level 5 — Case Report / Series",
+    "narrative_review": "Level 5 — Narrative Review",
+    "technical_note": "Level 5 — Technical Note",
+}
+
+# ── Open-i radiology image type codes ────────────────────────────────────────
+# Codes are loosely tagged; prefer "x" (general radiology) as default.
+OPENI_MODALITY: dict[str, str] = {
+    "any": "x",         # all radiology (MRI/CT/X-ray/ultrasound)
+    "mri": "m",         # MRI
+    "ct": "c",          # CT
+    "xray": "x",        # general x-ray / radiology
+    "ultrasound": "u",  # ultrasound
+    "graph": "g",       # charts / graphs (non-radiology fallback)
+}
+
+STOP_WORDS: set[str] = {
+    "and", "or", "not", "the", "a", "an", "in", "of", "for",
+    "with", "to", "from", "by", "on", "at", "is", "are",
+    "was", "were", "be", "been", "being",
+}
+
+
+def _query_terms(query: str) -> list[str]:
+    """Extract meaningful search terms from a query string.
+
+    Splits on whitespace, punctuation, and hyphens; removes stop words
+    and tokens shorter than 2 chars. Each term is lowercased and deduplicated.
+    """
+    tokens = re.split(r'[\s,"\':;()\[\]{}-]+', query.lower())
+    seen: set[str] = set()
+    terms: list[str] = []
+    for t in tokens:
+        t = t.strip(".")
+        if len(t) >= 2 and t not in STOP_WORDS and t not in seen:
+            seen.add(t)
+            terms.append(t)
+    return terms
+
+
+# ── Clinical query filters (PubMed syntax) ──────────────────────────────────
+
+CLINICAL_FILTERS: dict[str, str] = {
+    "therapy": (
+        " AND (clinical trial[pt] OR randomized controlled trial[pt] "
+        "OR comparative study[pt] OR multicenter study[pt])"
+    ),
+    "prognosis": (
+        " AND (prognosis[MeSH] OR survival analysis[MeSH] "
+        "OR mortality[MeSH] OR follow-up studies[MeSH] OR outcome*[tiab])"
+    ),
+    "etiology": (
+        " AND (risk[MeSH] OR cohort studies[MeSH] OR case-control studies[MeSH] "
+        "OR retrospective studies[MeSH] OR complications[sh])"
+    ),
+    "diagnosis": (
+        " AND (sensitivity and specificity[MeSH] OR diagnosis[sh] "
+        "OR diagnostic imaging[MeSH] OR diagnostic use[sh])"
+    ),
+    "systematic_review": (
+        " AND (systematic review[pt] OR meta-analysis[pt] "
+        "OR systematic review[tiab] OR meta-analysis[tiab])"
+    ),
+}
+
+
+def _apply_filter(query: str, filter_type: str | None) -> str:
+    """Append a clinical query filter to the PubMed query string."""
+    ft = (filter_type or "").strip().lower()
+    if ft in CLINICAL_FILTERS:
+        return query + CLINICAL_FILTERS[ft]
+    return query
+
+
+# ── Rate limiter (NCBI: 3 req/sec without API key) ───────────────────────────
+
+_last_request: float = 0.0
+
+
+async def _rate_limit():
+    """Enforce delay between NCBI requests."""
+    global _last_request
+    now = time.monotonic()
+    wait = _last_request + _DELAY - now
+    if wait > 0:
+        await asyncio.sleep(wait)
+    _last_request = time.monotonic()
+
+
+async def _ncbi_get(url: str, params: dict) -> httpx.Response:
+    """GET with API key injection, rate limiting, and retry on 429."""
+    if _NCBI_API_KEY:
+        params["api_key"] = _NCBI_API_KEY
+    for attempt in range(3):
+        await _rate_limit()
+        resp = await _client().get(url, params=params)
+        if resp.status_code == 429 and attempt < 2:
+            await asyncio.sleep(2.0 * (attempt + 1))
+            continue
+        resp.raise_for_status()
+        return resp
+    raise RuntimeError("NCBI rate limit exceeded after retries")
+
+
+# ── PubMed API helpers ──────────────────────────────────────────────────────
+
+async def _pubmed_search(
+    query: str,
+    max_results: int = 10,
+    filter_type: str | None = None,
+) -> tuple[list[str], int]:
+    """Return PMIDs and total count matching *query*, optionally filtered by clinical type."""
+    term = _apply_filter(query, filter_type)
+    params = {
+        "db": "pubmed",
+        "term": term,
+        "retmax": str(max_results),
+        "retmode": "xml",
+        "sort": "relevance",
+    }
+    resp = await _ncbi_get(f"{EUTILS}/esearch.fcgi", params)
+    root = ET.fromstring(resp.text)
+    total = root.findtext(".//Count") or "0"
+    pmids = [e.text or "" for e in root.findall(".//Id") if e.text]
+    # Attach total count as a pseudo-attribute on first element
+    return pmids, int(total)
+
+
+async def _pubmed_summaries(pmids: list[str]) -> list[dict]:
+    """Fetch structured summaries (title, authors, journal, etc.) for PMIDs."""
+    if not pmids:
+        return []
+    params = {"db": "pubmed", "id": ",".join(pmids), "retmode": "json"}
+    resp = await _ncbi_get(f"{EUTILS}/esummary.fcgi", params)
+    data = resp.json()
+    results = []
+    for pmid in pmids:
+        a = data.get("result", {}).get(pmid, {})
+        if not a or "uid" not in a:
+            continue
+        pub_types = a.get("pubtype", [])
+        if isinstance(pub_types, str):
+            pub_types = [pub_types]
+        results.append({
+            "pmid": a.get("uid", ""),
+            "title": a.get("title", ""),
+            "authors": _fmt_authors(a.get("authors", [])),
+            "source": a.get("source", ""),
+            "pubdate": a.get("pubdate", ""),
+            "pub_types": pub_types,
+            "doi": a.get("elocationid", "").replace("doi: ", "")
+                   if a.get("elocationid", "") else "",
+            "url": f"https://pubmed.ncbi.nlm.nih.gov/{a.get('uid', '')}/",
+        })
+    return results
+
+
+async def _pubmed_abstracts(pmids: list[str]) -> dict[str, str]:
+    """Fetch plain-text abstracts for PMIDs. Returns dict[pmid → abstract_text]."""
+    if not pmids:
+        return {}
+    params = {
+        "db": "pubmed",
+        "id": ",".join(pmids),
+        "retmode": "xml",
+        "rettype": "abstract",
+    }
+    resp = await _ncbi_get(f"{EUTILS}/efetch.fcgi", params)
+    root = ET.fromstring(resp.text)
+    abstracts = {}
+    for article in root.findall(".//PubmedArticle"):
+        pmid_el = article.find(".//PMID")
+        abstract_el = article.find(".//Abstract/AbstractText")
+        pmid = pmid_el.text if pmid_el is not None else ""
+        text = abstract_el.text if abstract_el is not None else ""
+        if pmid and text:
+            abstracts[pmid] = text
+    return abstracts
+
+
+async def _pubmed_structured_abstracts(pmids: list[str]) -> dict[str, dict[str, str]]:
+    """Fetch structured abstracts with labeled sections for PMIDs.
+
+    Returns dict[pmid → {label: text}] where labels are BACKGROUND, METHODS,
+    RESULTS, CONCLUSIONS, or empty string for unlabeled paragraphs.
+    Works for JAMA, NEJM, Lancet, Neurology — even without PMC access.
+    """
+    if not pmids:
+        return {}
+    params = {
+        "db": "pubmed",
+        "id": ",".join(pmids),
+        "retmode": "xml",
+        "rettype": "abstract",
+    }
+    resp = await _ncbi_get(f"{EUTILS}/efetch.fcgi", params)
+    root = ET.fromstring(resp.text)
+    results: dict[str, dict[str, str]] = {}
+    for article in root.findall(".//PubmedArticle"):
+        pmid_el = article.find(".//PMID")
+        pmid = pmid_el.text if pmid_el is not None else ""
+        if not pmid:
+            continue
+        sections: dict[str, str] = {}
+        for at in article.findall(".//Abstract/AbstractText"):
+            label = (at.get("Label") or "").upper().rstrip(":")
+            text = at.text or ""
+            # Also collect text from child elements (some abstracts have inline markup)
+            for child in at:
+                if child.text:
+                    text += child.text
+                if child.tail:
+                    text += child.tail
+            if text.strip():
+                key = label if label else "TEXT"
+                sections[key] = sections.get(key, "") + text.strip() + " "
+        if sections:
+            results[pmid] = {k: v.strip() for k, v in sections.items()}
+    return results
+
+
+async def _pubmed_fulltext(pmids: list[str]) -> dict[str, str]:
+    """Fetch PMC full text via curl subprocess with retry.
+
+    Three attempts per article, exponential backoff, ."""
+    if not pmids:
+        return {}
+    # Step 1: get PMCIDs via elink
+    params = {
+        "dbfrom": "pubmed", "db": "pmc", "id": ",".join(pmids),
+        "retmode": "xml", "linkname": "pubmed_pmc",
+    }
+    try:
+        resp = await _ncbi_get(f"{EUTILS}/elink.fcgi", params)
+        root = ET.fromstring(resp.text)
+    except Exception:
+        return {}
+    pmid_to_pmcid: dict[str, str] = {}
+    for link_set in root.findall(".//LinkSet"):
+        pmid_el = link_set.find(".//Id")
+        if pmid_el is None or not pmid_el.text:
+            continue
+        for link in link_set.findall(".//Link/Id"):
+            if link.text:
+                link_id = link.text
+                if not link_id.startswith("PMC"):
+                    link_id = "PMC" + link_id
+                pmid_to_pmcid[pmid_el.text] = link_id
+                break
+    if not pmid_to_pmcid:
+        return {}
+    # Step 2: fetch via curl with retry
+    fulltexts: dict[str, str] = {}
+    api_key_param = f"&api_key={_NCBI_API_KEY}" if _NCBI_API_KEY else ""
+    for pmid, pmcid in pmid_to_pmcid.items():
+        url = f"{EUTILS}/efetch.fcgi?db=pmc&id={pmcid}&retmode=xml{api_key_param}"
+        for attempt in range(3):
+            proc = await asyncio.create_subprocess_exec(
+                "curl", "-sS", "--max-time", "45", "--retry", "2", url,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await proc.communicate()
+            if proc.returncode != 0 or not stdout:
+                if attempt < 2:
+                    await asyncio.sleep(1.5 * (attempt + 1))
+                continue
+            try:
+                root = ET.fromstring(stdout.decode("utf-8", errors="replace"))
+                for article in root.findall(".//article"):
+                    body = article.find(".//body")
+                    if body is not None:
+                        text = ET.tostring(body, encoding="unicode", method="text")
+                        # Clean excessive whitespace
+                        text = " ".join(text.split())
+                        fulltexts[pmid] = text[:5000]
+                        break
+                break  # success, stop retrying
+            except ET.ParseError:
+                if attempt < 2:
+                    await asyncio.sleep(1.5 * (attempt + 1))
+                continue
+    return fulltexts
+
+
+# ── Local corpus search (FTS5) ─────────────────────────────────────────────
+
+
+def _compute_quality_boost(
+    journal_tier: int | None,
+    citation_count: int | None,
+    pub_year: int | None,
+    current_year: int = 2026,
+) -> float:
+    '''Compute quality boost from journal tier + citation half-life.
+
+    Journal boost: tier 2 -> 0.16, tier 1 -> 0.08, else 0.00.
+    Citation boost: log10(cites/year + 1) / 2 x 0.15, capped at 0.15.
+    Combined range: 0.00-0.31.
+    '''
+    journal_boost = {2: 0.16, 1: 0.08}.get(journal_tier if journal_tier else 0, 0.0)
+
+    citation_boost = 0.0
+    if citation_count and pub_year and citation_count > 0:
+        years_since_pub = max(current_year - pub_year, 1)
+        cites_per_year = citation_count / years_since_pub
+        citation_boost = min(math.log10(cites_per_year + 1) / 2 * 0.15, 0.15)
+
+    return journal_boost + citation_boost
+
+
+def _rerank_corpus_results(papers: list[dict]) -> list[dict]:
+    '''Re-rank corpus results by blending BM25 similarity with quality boost.
+
+    Formula: final_score = 0.6 x BM25_normalized + 0.4 x quality_boost
+    BM25 rank is inverted (more negative = better match) and normalized to 0-1.
+    Quality boost (0-0.31) from journal tier + citation half-life.
+    '''
+    if not papers:
+        return papers
+
+    ranks = [p["rank"] for p in papers]
+    min_rank = min(ranks)  # most negative = best BM25 match
+    max_rank = max(ranks)  # least negative
+    rank_range = max_rank - min_rank if max_rank - min_rank > 0.001 else 1.0
+
+    for paper in papers:
+        bm25_sim = (paper["rank"] - min_rank) / rank_range  # 0=worst, 1=best
+        quality = _compute_quality_boost(
+            paper.get("journal_tier"),
+            paper.get("citation_count"),
+            paper.get("year"),
+        )
+        paper["quality_score"] = 0.6 * bm25_sim + 0.4 * quality
+
+    papers.sort(key=lambda p: p["quality_score"], reverse=True)
+    return papers
+
+
+def _corpus_conn() -> sqlite3.Connection:
+    """Open corpus DB with fulltext attached (read-only)."""
+    conn = sqlite3.connect(f"file:{_CORPUS_DB}?mode=ro", uri=True)
+    conn.execute("ATTACH DATABASE ? AS ft", (f"file:{_FULLTEXT_DB}?mode=ro",))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _corpus_list_subdomains() -> list[dict]:
+    """Return subdomain IDs with paper counts and descriptions."""
+    if not _CORPUS_AVAILABLE:
+        return []
+    conn = _corpus_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT subdomain_id, COUNT(DISTINCT work_id) AS n
+        FROM subdomain_assignments
+        GROUP BY subdomain_id ORDER BY n DESC
+    """)
+    rows = cur.fetchall()
+    conn.close()
+    return [
+        {
+            "id": r["subdomain_id"],
+            "paper_count": r["n"],
+            "description": SUBDOMAIN_DESCRIPTIONS.get(r["subdomain_id"], ""),
+        }
+        for r in rows
+    ]
+
+
+def _corpus_search(
+    fts_query: str,
+    subdomain: str | None = None,
+    top_n: int = 8,
+) -> dict:
+    """FTS5 search over the local neurointerventional corpus.
+
+    Returns ranked papers with metadata, abstract, and conclusion passages.
+    """
+    if not _CORPUS_AVAILABLE:
+        return {"error": "Local corpus not available", "papers": [], "total_matches": 0}
+
+    top_n = min(max(top_n, 1), 25)
+    # Fetch 3x candidates for re-ranking so high-quality papers that are not
+    # the absolute top BM25 match still get surfaced by journal/citation boost.
+    fetch_n = min(top_n * 3, 75)
+    conn = _corpus_conn()
+    try:
+        cur = conn.cursor()
+
+        # Ranked FTS5 search with optional subdomain filter
+        if subdomain:
+            cur.execute("""
+                SELECT DISTINCT w.id, bm25(works_fts) AS rank
+                FROM works_fts
+                JOIN works w ON w.rowid = works_fts.rowid
+                JOIN subdomain_assignments sa ON sa.work_id = w.id
+                WHERE works_fts MATCH ? AND sa.subdomain_id = ?
+                ORDER BY rank LIMIT ?
+            """, (fts_query, subdomain, fetch_n))
+        else:
+            cur.execute("""
+                SELECT w.id, bm25(works_fts) AS rank
+                FROM works_fts
+                JOIN works w ON w.rowid = works_fts.rowid
+                WHERE works_fts MATCH ?
+                ORDER BY rank LIMIT ?
+            """, (fts_query, fetch_n))
+        top_ids = [(r["id"], r["rank"]) for r in cur.fetchall()]
+
+        # Total match count + subdomain distribution
+        if subdomain:
+            cur.execute("""
+                SELECT COUNT(DISTINCT w.id) FROM works_fts
+                JOIN works w ON w.rowid = works_fts.rowid
+                JOIN subdomain_assignments sa ON sa.work_id = w.id
+                WHERE works_fts MATCH ? AND sa.subdomain_id = ?
+            """, (fts_query, subdomain))
+            total = cur.fetchone()[0]
+            subdomain_dist = {subdomain: total}
+        else:
+            cur.execute("SELECT COUNT(*) FROM works_fts WHERE works_fts MATCH ?", (fts_query,))
+            total = cur.fetchone()[0]
+            cur.execute("""
+                SELECT sa.subdomain_id, COUNT(DISTINCT w.id) AS n
+                FROM works_fts
+                JOIN works w ON w.rowid = works_fts.rowid
+                JOIN subdomain_assignments sa ON sa.work_id = w.id
+                WHERE works_fts MATCH ?
+                GROUP BY sa.subdomain_id ORDER BY n DESC
+            """, (fts_query,))
+            subdomain_dist = {r["subdomain_id"]: r["n"] for r in cur.fetchall()}
+
+        papers = []
+        for wid, rank in top_ids:
+            cur.execute("""
+                SELECT w.title, w.pub_year, w.study_design, w.evidence_tier,
+                       w.citation_count, w.article_type, j.title AS journal, j.tier AS journal_tier,
+                       (SELECT value FROM identifiers WHERE work_id=w.id AND scheme='pmid' LIMIT 1) AS pmid,
+                       (SELECT value FROM identifiers WHERE work_id=w.id AND scheme='doi' LIMIT 1) AS doi
+                FROM works w
+                LEFT JOIN journals j ON w.journal_id = j.id
+                WHERE w.id = ?
+            """, (wid,))
+            meta = cur.fetchone()
+            if not meta:
+                continue
+
+            # Abstract from fulltext DB
+            cur.execute("SELECT abstract FROM ft.works WHERE id = ?", (wid,))
+            ft_row = cur.fetchone()
+            abstract = ft_row["abstract"] if ft_row and ft_row["abstract"] else None
+
+            # Conclusion passages from fulltext
+            cur.execute("""
+                SELECT content FROM ft.text_passages
+                WHERE work_id = ? AND section_type = 'conclusion'
+                ORDER BY sequence_number
+            """, (wid,))
+            conclusion_parts = [r["content"] for r in cur.fetchall()]
+            conclusion = " ".join(conclusion_parts) if conclusion_parts else None
+
+            # Subdomain tags
+            cur.execute(
+                "SELECT DISTINCT subdomain_id FROM subdomain_assignments WHERE work_id = ?",
+                (wid,),
+            )
+            subdomains = [r["subdomain_id"] for r in cur.fetchall()]
+
+            papers.append({
+                "work_id": wid,
+                "rank": rank,
+                "title": meta["title"],
+                "year": meta["pub_year"],
+                "journal": meta["journal"],
+                "journal_tier": meta["journal_tier"],
+                "study_design": meta["study_design"],
+                "evidence_tier": meta["evidence_tier"],
+                "article_type": meta["article_type"],
+                "citation_count": meta["citation_count"],
+                "subdomains": subdomains,
+                "pmid": meta["pmid"],
+                "doi": meta["doi"],
+                "pubmed_url": f"https://pubmed.ncbi.nlm.nih.gov/{meta['pmid']}/" if meta["pmid"] else None,
+                "doi_url": f"https://doi.org/{meta['doi']}" if meta["doi"] else None,
+                "abstract": abstract,
+                "conclusion": conclusion,
+            })
+
+        # Quality-weighted re-ranking: blend BM25 similarity with journal tier + citation half-life
+        papers = _rerank_corpus_results(papers)
+        papers = papers[:top_n]  # truncate back to requested count after re-ranking
+
+        return {
+            "fts_query": fts_query,
+            "subdomain": subdomain,
+            "total_matches": total,
+            "returned": len(papers),
+            "subdomain_distribution": subdomain_dist,
+            "papers": papers,
+        }
+    except sqlite3.OperationalError as exc:
+        return {
+            "error": f"Invalid FTS query: {exc}",
+            "papers": [],
+            "total_matches": 0,
+        }
+    finally:
+        conn.close()
+
+
+def _corpus_get_paper(work_id: str) -> dict | None:
+    """Retrieve full paper details including all section passages."""
+    if not _CORPUS_AVAILABLE:
+        return None
+    conn = _corpus_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT w.id, w.title, w.pub_year, w.study_design, w.evidence_tier,
+               w.citation_count, w.language, w.tier, j.title AS journal,
+               (SELECT value FROM identifiers WHERE work_id=w.id AND scheme='pmid' LIMIT 1) AS pmid,
+               (SELECT value FROM identifiers WHERE work_id=w.id AND scheme='doi' LIMIT 1) AS doi
+        FROM works w
+        LEFT JOIN journals j ON w.journal_id = j.id
+        WHERE w.id = ?
+    """, (work_id,))
+    meta = cur.fetchone()
+    if not meta:
+        conn.close()
+        return None
+
+    # Abstract
+    cur.execute("SELECT abstract FROM ft.works WHERE id = ?", (work_id,))
+    ft_row = cur.fetchone()
+    abstract = ft_row["abstract"] if ft_row and ft_row["abstract"] else None
+
+    # All section passages
+    from collections import defaultdict
+    cur.execute("""
+        SELECT section_type, content, sequence_number
+        FROM ft.text_passages WHERE work_id = ?
+        ORDER BY section_type, sequence_number
+    """, (work_id,))
+    sections = defaultdict(list)
+    for r in cur.fetchall():
+        sections[r["section_type"]].append(r["content"])
+    sections_out = {k: " ".join(v) for k, v in sections.items()}
+
+    # Subdomains
+    cur.execute(
+        "SELECT DISTINCT subdomain_id FROM subdomain_assignments WHERE work_id = ?",
+        (work_id,),
+    )
+    subdomains = [r["subdomain_id"] for r in cur.fetchall()]
+
+    # MeSH + keywords
+    cur.execute("""
+        SELECT s.scheme, s.value FROM work_subjects ws
+        JOIN subjects s ON ws.subject_id = s.id WHERE ws.work_id = ?
+    """, (work_id,))
+    mesh, keywords = [], []
+    for r in cur.fetchall():
+        (mesh if r["scheme"] == "mesh" else keywords).append(r["value"])
+
+    conn.close()
+    return {
+        "work_id": meta["id"],
+        "title": meta["title"],
+        "year": meta["pub_year"],
+        "journal": meta["journal"],
+        "language": meta["language"],
+        "study_design": meta["study_design"],
+        "evidence_tier": meta["evidence_tier"],
+        "journal_tier": meta["tier"],
+        "citation_count": meta["citation_count"],
+        "subdomains": subdomains,
+        "mesh_terms": mesh,
+        "keywords": keywords,
+        "pmid": meta["pmid"],
+        "doi": meta["doi"],
+        "pubmed_url": f"https://pubmed.ncbi.nlm.nih.gov/{meta['pmid']}/" if meta["pmid"] else None,
+        "doi_url": f"https://doi.org/{meta['doi']}" if meta["doi"] else None,
+        "abstract": abstract,
+        "sections": sections_out,
+    }
+
+
+# ── Open-i radiology image search ────────────────────────────────────────────
+
+async def _openi_search(
+    query: str,
+    max_results: int = 5,
+    modality: str | None = None,
+    query_terms: list[str] | None = None,
+) -> tuple[list[dict], int]:
+    """Search Open-i for radiology images. Returns (results, total_count).
+
+    Each result: uid, pmid, pmcid, title, journal, authors, pubdate,
+    caption (cleaned), img_thumb, img_large, img_grid, pmc_url, pubmed_url,
+    article_type.
+
+    If *query_terms* is provided, results are post-filtered — only images
+    whose title or caption contains at least one query term are returned.
+    Fetches more results from Open-i (up to 20) to compensate for filtering.
+    """
+    it_code = OPENI_MODALITY.get((modality or "").strip().lower(), "x")
+    # Fetch more from Open-i to compensate for post-filtering
+    fetch_n = min(max(max_results * 4, 10), 20)
+    params = {
+        "query": query,
+        "it": it_code,
+        "m": 1,
+        "n": str(fetch_n),
+    }
+    try:
+        resp = await _client().get(f"{OPENI}/search", params=params)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:
+        msg = str(exc)[:200]
+        print(f"  [Open-i API error: {msg}]", file=__import__("sys").stderr)
+        return [], 0
+
+    total = int(data.get("total", 0))
+    results: list[dict] = []
+    for item in data.get("list", []):
+        img = item.get("image", {})
+        caption_raw = img.get("caption", "")
+        # Strip HTML bold tags from captions
+        caption_clean = caption_raw.replace("<b>", "").replace("</b>", "").replace("\\/", "/")
+        title = item.get("title", "")
+
+        # Post-filter by relevance: require title or caption to contain a query term
+        if query_terms:
+            title_lower = title.lower()
+            caption_lower = caption_clean.lower()
+            if not any(
+                term in title_lower or term in caption_lower
+                for term in query_terms
+            ):
+                continue
+
+        journal_date = item.get("journal_date", {})
+        pubdate = f"{journal_date.get('year','')}-{journal_date.get('month','')}-{journal_date.get('day','')}"
+        pubdate = pubdate.strip("-")
+        # Image URLs are top-level fields on the item (not inside 'image' dict)
+        thumb = item.get("imgThumb", "") or ""
+        large = item.get("imgLarge", "") or ""
+        grid = item.get("imgGrid150", "") or ""
+        results.append({
+            "uid": item.get("uid", ""),
+            "pmid": item.get("pmid", ""),
+            "pmcid": item.get("pmcid", ""),
+            "title": title,
+            "journal": item.get("journal_title", "") or item.get("journal_abbr", ""),
+            "authors": item.get("authors", ""),
+            "pubdate": pubdate,
+            "caption": caption_clean,
+            "img_thumb": f"https://openi.nlm.nih.gov{thumb}" if thumb else "",
+            "img_large": f"https://openi.nlm.nih.gov{large}" if large else "",
+            "img_grid": f"https://openi.nlm.nih.gov{grid}" if grid else "",
+            "pmc_url": item.get("pmc_url", ""),
+            "pubmed_url": item.get("pubMed_url", ""),
+            "article_type": item.get("articleType", ""),
+        })
+        if len(results) >= max_results:
+            break
+    return results, total
+
+
+async def _download_images(
+    results: list[dict],
+    output_dir: Path,
+    max_images: int = 5,
+) -> list[dict]:
+    """Download radiology images from Open-i and add local_path to each result.
+
+    Tries img_large first, falls back to img_grid, then img_thumb.
+    Saves files as <nn>_<uid>.<ext> in *output_dir*.
+    Errors are captured in local_path as "Error: …" strings.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for i, r in enumerate(results[:max_images]):
+        img_url = r["img_large"] or r["img_grid"] or r["img_thumb"]
+        if not img_url:
+            r["local_path"] = "Error: no image URL"
+            continue
+        try:
+            resp = await _client().get(img_url)
+            resp.raise_for_status()
+            # Determine extension from content-type header
+            ct = resp.headers.get("content-type", "")
+            if "jpeg" in ct or "jpg" in ct:
+                ext = ".jpg"
+            elif "png" in ct:
+                ext = ".png"
+            elif img_url.lower().endswith(".png"):
+                ext = ".png"
+            else:
+                ext = ".jpg"
+            filename = f"{i + 1:02d}_{r['uid']}{ext}"
+            filepath = output_dir / filename
+            filepath.write_bytes(resp.content)
+            r["local_path"] = str(filepath.resolve())
+        except Exception as exc:
+            r["local_path"] = f"Error: {exc}"
+    return results
+
+
+def _fmt_authors(authors: list[dict]) -> str:
+    names = [a.get("name", "") for a in authors[:5]]
+    suffix = " et al." if len(authors) > 5 else ""
+    return ", ".join(names) + suffix
+
+
+# ── Formatters ──────────────────────────────────────────────────────────────
+
+def _fmt_paper(
+    paper: dict,
+    num: int,
+    *,
+    abstract: str | None = None,
+    structured: dict[str, str] | None = None,
+    fulltext: str | None = None,
+    evidence_tier: str | None = None,
+    evidence_grade: EvidenceGrade | None = None,
+    study_design: str | None = None,
+    citation_count: int | None = None,
+) -> list[str]:
+    """Format a paper with best-available content.
+
+    Precedence: structured abstract sections > plain abstract > nothing.
+    PMC full text appended separately when available.
+    """
+    lines = [
+        f"{num}. **{paper['title']}**",
+        f"   {paper['authors']}",
+        f"   *{paper['source']}* ({paper['pubdate']})",
+    ]
+    if paper["doi"]:
+        lines.append(f"   DOI: {paper['doi']}")
+    lines.append(f"   {paper['url']}")
+
+    # Evidence tier + study design (when available from local corpus or PubMed)
+    meta_parts = []
+    if evidence_grade:
+        meta_parts.append(f"{evidence_grade.label} ({evidence_grade.quality_label})")
+    if evidence_tier:
+        label = EVIDENCE_TIER_LABELS.get(evidence_tier, evidence_tier)
+        meta_parts.append(label)
+    if study_design:
+        meta_parts.append(study_design.replace("_", " ").title())
+    if citation_count is not None and citation_count > 0:
+        meta_parts.append(f"cited {citation_count}×")
+    if meta_parts:
+        lines.append(f"   Evidence: {' | '.join(meta_parts)}")
+
+    # Show structured abstract sections (best quality)
+    if structured:
+        for label in ("BACKGROUND", "METHODS", "RESULTS", "CONCLUSIONS"):
+            if label in structured:
+                text = structured[label]
+                if len(text) > 400:
+                    text = text[:400] + "…"
+                lines.append(f"   {label.title()}: {text}")
+    elif abstract:
+        ab = abstract[:500] + ("…" if len(abstract) > 500 else "")
+        lines.append(f"   Abstract: {ab}")
+
+    if fulltext:
+        ft = fulltext[:1000] + ("…" if len(fulltext) > 1000 else "")
+        lines.append(f"   PMC: {ft}")
+
+    lines.append("")
+    return lines
+
+
+def _fmt_corpus_paper(paper: dict, num: int) -> list[str]:
+    """Format a paper from the local corpus with evidence tier metadata.
+
+    Corpus papers have a different shape than PubMed summaries —
+    title, year, journal, study_design, evidence_tier, citation_count, etc.
+    """
+    title = paper.get("title", "") or "(untitled)"
+    title_display = title[:150] + ("…" if len(title) > 150 else "")
+
+    lines = [f"{num}. **{title_display}**"]
+
+    journal = paper.get("journal", "")
+    year = paper.get("year", "")
+    if journal and year:
+        lines.append(f"   *{journal}* ({year})")
+    elif journal:
+        lines.append(f"   *{journal}*")
+    elif year:
+        lines.append(f"   ({year})")
+
+    work_id = paper.get("work_id") or paper.get("id")
+    if work_id:
+        lines.append(f"   Work ID: {work_id}")
+
+    # Evidence tier + study design
+    meta_parts = []
+    evidence_tier = paper.get("evidence_tier", "")
+    if evidence_tier:
+        label = EVIDENCE_TIER_LABELS.get(evidence_tier, evidence_tier)
+        meta_parts.append(label)
+    study_design = paper.get("study_design", "")
+    if study_design:
+        meta_parts.append(study_design.replace("_", " ").title())
+    citation_count = paper.get("citation_count")
+    if citation_count and citation_count > 0:
+        meta_parts.append(f"cited {citation_count}×")
+    if meta_parts:
+        lines.append(f"   Evidence: {' | '.join(meta_parts)}")
+
+    # Subdomain tags
+    subdomains = paper.get("subdomains", [])
+    if subdomains:
+        subdomain_labels = [
+            SUBDOMAIN_DESCRIPTIONS.get(s, s).split(",")[0]
+            for s in subdomains[:3]
+        ]
+        lines.append(f"   Topics: {', '.join(subdomain_labels)}")
+
+    # Links
+    if paper.get("pubmed_url"):
+        lines.append(f"   PubMed: {paper['pubmed_url']}")
+    if paper.get("doi"):
+        lines.append(f"   DOI: {paper['doi']}")
+
+    # Abstract
+    abstract = paper.get("abstract", "")
+    if abstract:
+        ab = abstract[:500] + ("…" if len(abstract) > 500 else "")
+        lines.append(f"   Abstract: {ab}")
+
+    # Conclusion
+    conclusion = paper.get("conclusion", "")
+    if conclusion:
+        cc = conclusion[:400] + ("…" if len(conclusion) > 400 else "")
+        lines.append(f"   Conclusion: {cc}")
+
+    lines.append("")
+    return lines
+
+
+# ── MCP Server ──────────────────────────────────────────────────────────────
+
+server = Server("caseprep-mcp")
+
+
+@server.list_tools()
+async def list_tools() -> list[Tool]:
+    return [
+        Tool(
+            name="search_pubmed",
+            description=(
+                "Search PubMed via NCBI E-utilities API with optional clinical query "
+                "filters and abstract fetching. Returns title, authors, journal, date, "
+                "DOI, and direct link. Optionally includes full abstract text. "
+                "Supports clinical filters: therapy, prognosis, etiology, diagnosis, "
+                "systematic_review."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "PubMed search query (supports full PubMed syntax)",
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum results (default: 10, max: 20)",
+                        "default": 10,
+                    },
+                    "filter_type": {
+                        "type": "string",
+                        "description": (
+                            "Clinical query filter: therapy, prognosis, etiology, "
+                            "diagnosis, systematic_review. Omit for unfiltered search."
+                        ),
+                        "enum": ["therapy", "prognosis", "etiology", "diagnosis", "systematic_review"],
+                    },
+                    "include_abstracts": {
+                        "type": "boolean",
+                        "description": "Include abstract text for each result (default: false)",
+                        "default": False,
+                    },
+                },
+                "required": ["query"],
+            },
+        ),
+        Tool(
+            name="build_caseplan",
+            description=(
+                "Run 5 targeted PubMed searches for a neurosurgical topic, fetch "
+                "abstracts for the top results, and write a filled-in case prep folder. "
+                "Searches cover: anatomy/relevant structures, outcomes/therapy, surgical technique, complications, "
+                "and landmark/systematic reviews. Returns organized findings and writes "
+                "completed templates to disk."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "The case or procedure (e.g., 'retrosigmoid vestibular schwannoma')",
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Output directory (default: {slug}-caseprep/)",
+                    },
+                    "max_per_category": {
+                        "type": "integer",
+                        "description": "Max papers per search category (default: 3, max: 5)",
+                        "default": 3,
+                    },
+                    "semantic_top_n": {
+                        "type": "integer",
+                        "description": "Semantic corpus rescue records (default: 5, hard cap: 10)",
+                        "default": 5,
+                    },
+                },
+                "required": ["topic"],
+            },
+        ),
+        Tool(
+            name="generate_caseprep",
+            description=(
+                "Generate a blank (fill-in-the-blanks) structured case-prep folder "
+                "with Markdown templates and a resource-links.html file."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "topic": {"type": "string", "description": "Case or topic"},
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Output directory (default: {slug}-caseprep/)",
+                    },
+                },
+                "required": ["topic"],
+            },
+        ),
+        Tool(
+            name="get_fulltext",
+            description=(
+                "Fetch the best available full content for a specific PMID. "
+                "Tries three tiers: (1) PMC full text via curl, "
+                "(2) structured abstract sections (BACKGROUND/METHODS/RESULTS/CONCLUSIONS), "
+                "(3) plain abstract text. Returns whatever tier succeeds."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "pmid": {
+                        "type": "string",
+                        "description": "PubMed ID to fetch full text for",
+                    },
+                },
+                "required": ["pmid"],
+            },
+        ),
+        Tool(
+            name="search_local_pdfs",
+            description=(
+                "Search a directory of local PDF files for topic matches using PyMuPDF. "
+                "Returns filename matches and text snippets from first 3 pages."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "topic": {"type": "string", "description": "Topic to search for"},
+                    "pdf_dir": {"type": "string", "description": "Directory with PDFs"},
+                },
+                "required": ["topic", "pdf_dir"],
+            },
+        ),
+        Tool(
+            name="search_radiology",
+            description=(
+                "Search Open-i (NIH) for radiology images — MRI, CT, X-ray, ultrasound — "
+                "from PubMed Central articles. Images are downloaded to disk as PNG/JPEG "
+                "by default (set download_images=false to skip). Results are filtered for "
+                "relevance: title or caption must contain at least one query term. "
+                "Filter by modality: any (default), mri, ct, xray, ultrasound."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query (e.g., 'vestibular schwannoma MRI CPA angle')",
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum image results (default: 5, max: 10)",
+                        "default": 5,
+                    },
+                    "modality": {
+                        "type": "string",
+                        "description": (
+                            "Image modality filter: any (all radiology, default), "
+                            "mri, ct, xray, ultrasound"
+                        ),
+                        "enum": ["any", "mri", "ct", "xray", "ultrasound"],
+                    },
+                    "download_images": {
+                        "type": "boolean",
+                        "description": (
+                            "Download images to disk as PNG/JPEG (default: true). "
+                            "Set false to return URLs only."
+                        ),
+                        "default": True,
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": (
+                            "Directory to save downloaded images. Default: "
+                            "<query>-images/ in the current working directory."
+                        ),
+                    },
+                },
+                "required": ["query"],
+            },
+        ),
+        Tool(
+            name="send_email",
+            description=(
+                "Send an email via Resend REST API. Requires RESEND_API_KEY in environment. "
+                "Supports plain text body. Default sender: CasePrep <onboarding@resend.dev>. "
+                "Returns the Resend email ID on success."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "to": {
+                        "type": "string",
+                        "description": "Recipient email address",
+                    },
+                    "subject": {
+                        "type": "string",
+                        "description": "Email subject line",
+                    },
+                    "body": {
+                        "type": "string",
+                        "description": "Plain text email body",
+                    },
+                    "from_": {
+                        "type": "string",
+                        "description": (
+                            "Sender address. Default: CasePrep <onboarding@resend.dev>. "
+                            "Custom domains must be verified in Resend dashboard."
+                        ),
+                    },
+                },
+                "required": ["to", "subject", "body"],
+            },
+        ),
+        Tool(
+            name="list_subdomains",
+            description=(
+                "List available clinical subdomains in the local neurointerventional "
+                "corpus with paper counts and descriptions. Use this first to see what "
+                "evidence buckets are available before searching the corpus."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
+        Tool(
+            name="search_corpus",
+            description=(
+                "Search the local neurointerventional literature corpus using FTS5 "
+                "(full-text search) with BM25 ranking, optionally filtered by subdomain. "
+                "Returns ranked papers with title, year, journal, study design, evidence "
+                "tier, citation count, abstract, and conclusion. Much faster than PubMed "
+                "— sub-second local search over 51,980 pre-indexed papers."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "fts_query": {
+                        "type": "string",
+                        "description": (
+                            "SQLite FTS5 query. Use boolean operators (AND, OR), "
+                            "quoted phrases, parentheses. Example: "
+                            "'thrombectomy AND (\"stent retriever\" OR aspiration)'"
+                        ),
+                    },
+                    "subdomain": {
+                        "type": "string",
+                        "description": (
+                            "Optional subdomain ID from list_subdomains() to filter. "
+                            "Use for clinically-bounded questions. Omit for "
+                            "cross-cutting topics."
+                        ),
+                    },
+                    "top_n": {
+                        "type": "integer",
+                        "description": "Number of top-ranked papers to return (default: 8, max: 25)",
+                        "default": 8,
+                    },
+                },
+                "required": ["fts_query"],
+            },
+        ),
+        Tool(
+            name="get_paper",
+            description=(
+                "Retrieve detailed information for a specific paper from the local "
+                "neurointerventional corpus by work_id. Returns full metadata (title, "
+                "journal, year, study design, evidence tier, citation count, MeSH terms, "
+                "keywords), plus all available full-text section passages (introduction, "
+                "methods, results, discussion, conclusion). Use for drill-down after "
+                "search_corpus surfaces a paper that needs deeper inspection."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "work_id": {
+                        "type": "string",
+                        "description": "The work_id from a search_corpus result",
+                    },
+                },
+                "required": ["work_id"],
+            },
+        ),
+        Tool(
+            name="search_corpus_semantic",
+            description=(
+                "Semantic search over the neurosurgery corpus using BioBERT embeddings. "
+                "Unlike search_corpus (keyword FTS5), this finds papers by meaning — "
+                "throw in a free-text case description and it locates the most relevant "
+                "topic clusters. Returns top-K matching clusters with names, terms, "
+                "domain labels, and confidence scores. Optionally returns papers from "
+                "each matched cluster. Useful when you don't know the exact keywords "
+                "or when keyword search returns poor results."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "Free-text clinical query (e.g. 'right M1 occlusion NIHSS 18 "
+                            "ASPECTS 7 transferred for thrombectomy')"
+                        ),
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Number of top clusters to return (default: 5, max: 15)",
+                        "default": 5,
+                    },
+                    "papers_per_cluster": {
+                        "type": "integer",
+                        "description": (
+                            "If > 0, also return this many top papers from each matched "
+                            "cluster (default: 0 — clusters only)"
+                        ),
+                        "default": 0,
+                    },
+                    "min_confidence": {
+                        "type": "string",
+                        "description": (
+                            "Minimum confidence to include a cluster: 'low', 'medium', "
+                            "or 'high'. Default: 'low' (include all)."
+                        ),
+                        "default": "low",
+                    },
+                },
+                "required": ["query"],
+            },
+        ),
+        Tool(
+            name="neighbors_paper",
+            description=(
+                "Find semantically similar papers to a given paper using pgvector "
+                "cosine distance over BioBERT embeddings. Use this to expand from a "
+                "known paper to its intellectual neighborhood — works like 'cited by' "
+                "but based on semantic content, not citation graphs."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "paper_id": {
+                        "type": "string",
+                        "description": "Paper ID (work_id from search_corpus or get_paper)",
+                    },
+                    "k": {
+                        "type": "integer",
+                        "description": "Number of neighbors to return (default: 10, max: 50)",
+                        "default": 10,
+                    },
+                },
+                "required": ["paper_id"],
+            },
+        ),
+    ]
+
+
+@server.call_tool()
+async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    try:
+        match name:
+            case "search_pubmed":
+                result = await _handle_pubmed(arguments)
+            case "build_caseplan":
+                result = await _handle_build_caseplan(arguments)
+            case "generate_caseprep":
+                result = _handle_generate(arguments)
+            case "search_local_pdfs":
+                result = _handle_pdfs(arguments)
+            case "get_fulltext":
+                result = await _handle_get_fulltext(arguments)
+            case "search_radiology":
+                result = await _handle_radiology(arguments)
+            case "send_email":
+                result = await _handle_send_email(arguments)
+            case "list_subdomains":
+                result = _handle_list_subdomains(arguments)
+            case "search_corpus":
+                result = _handle_search_corpus(arguments)
+            case "get_paper":
+                result = _handle_get_paper(arguments)
+            case "search_corpus_semantic":
+                result = _handle_search_corpus_semantic(arguments)
+            case "neighbors_paper":
+                result = _handle_neighbors_paper(arguments)
+            case _:
+                result = f"Unknown tool: {name}"
+        return [TextContent(type="text", text=result)]
+    except Exception as exc:
+        return [TextContent(type="text", text=f"Error: {exc}")]
+
+
+# ── Tool handlers ───────────────────────────────────────────────────────────
+
+_PUBMED_RETRIEVAL_STRATEGIES = {
+    "deterministic_enrichment",
+    "landmark_seeded",
+    "local_prior",
+    "hybrid",
+}
+
+
+def _normalize_pubmed_retrieval_strategy(args: dict) -> tuple[str, list[str]]:
+    strategy = args.get("retrieval_strategy", "deterministic_enrichment") or "deterministic_enrichment"
+    if strategy in _PUBMED_RETRIEVAL_STRATEGIES:
+        return strategy, []
+    return (
+        "deterministic_enrichment",
+        [
+            "Invalid retrieval_strategy "
+            f"{strategy!r}; falling back to 'deterministic_enrichment'."
+        ],
+    )
+
+
+def _compact_query_plan_value(value) -> str:
+    if isinstance(value, list):
+        return "; ".join(_compact_query_plan_value(item) for item in value)
+    if isinstance(value, dict):
+        return "; ".join(
+            f"{key}={_compact_query_plan_value(item)}"
+            for key, item in value.items()
+        )
+    return str(value)
+
+
+def _pubmed_plan_queries(query_plan: dict) -> list[dict]:
+    queries = query_plan.get("queries", [])
+    if not isinstance(queries, list):
+        return []
+    return [
+        query
+        for query in queries
+        if isinstance(query, dict)
+        and str(query.get("retriever", "")).lower() == "pubmed"
+    ]
+
+
+def _coerce_positive_int(value, default: int) -> int:
+    try:
+        coerced = int(value)
+    except (TypeError, ValueError):
+        return default
+    return coerced if coerced > 0 else default
+
+
+def _select_pubmed_queries_from_plan(
+    original_query: str,
+    query_plan,
+    args: dict,
+) -> tuple[list[str], dict | None, list[str]]:
+    if not isinstance(query_plan, dict):
+        return [original_query], None, [
+            "Malformed query_plan; falling back to original query."
+        ]
+
+    pubmed_queries = _pubmed_plan_queries(query_plan)
+    max_axes = (
+        _coerce_positive_int(args.get("max_axes"), 1)
+        if "max_axes" in args
+        else 1
+    )
+    selection_scope = "max_axes" if "max_axes" in args else "first_pubmed_query"
+    metadata = {
+        "available_pubmed_queries": len(pubmed_queries),
+        "searched_pubmed_queries": 0,
+        "selection_scope": selection_scope,
+    }
+    if "max_axes" in args:
+        metadata["max_axes"] = max_axes
+
+    warnings: list[str] = []
+    if not pubmed_queries:
+        warnings.append(
+            "No PubMed query found in query_plan; falling back to original query."
+        )
+        return [original_query], metadata, warnings
+
+    selected = pubmed_queries[:max_axes]
+    if not selected:
+        warnings.append(
+            "PubMed query_plan entries did not include rendered query strings; "
+            "falling back to original query."
+        )
+        return [original_query], metadata, warnings
+
+    selected_queries = []
+    for selected_query in selected:
+        query_string = selected_query.get("query")
+        if not isinstance(query_string, str) or not query_string.strip():
+            warnings.append(
+                "Selected PubMed query_plan entry did not include a rendered "
+                "query string; falling back to original query."
+            )
+            return [original_query], metadata, warnings
+        selected_queries.append(query_string.strip())
+    metadata.update(
+        {
+            "selected_pubmed_queries": len(selected_queries),
+            "selected_query_id": selected[0].get("id"),
+            "selected_query_axis": selected[0].get("axis"),
+            "selected_query_ids": [query.get("id") for query in selected],
+            "selected_query_axes": [query.get("axis") for query in selected],
+            "searched_query_ids": [],
+            "searched_query_axes": [],
+        }
+    )
+    return selected_queries, metadata, warnings
+
+
+def _record_actual_pubmed_plan_searches(
+    query_plan_metadata: dict | None,
+    actual_search_count: int,
+) -> None:
+    """Update query-plan metadata with PubMed plan queries actually sent.
+
+    ``searched_pubmed_queries`` is intentionally about rendered PubMed entries
+    selected from the query plan, not fallback searches of the original query.
+    """
+    if query_plan_metadata is None or "selected_query_ids" not in query_plan_metadata:
+        return
+
+    selected_ids = query_plan_metadata.get("selected_query_ids", [])
+    selected_axes = query_plan_metadata.get("selected_query_axes", [])
+    searched_ids = selected_ids[:actual_search_count]
+    searched_axes = selected_axes[:actual_search_count]
+    query_plan_metadata.update(
+        {
+            "searched_pubmed_queries": actual_search_count,
+            "searched_query_ids": searched_ids,
+            "searched_query_axes": searched_axes,
+        }
+    )
+    if searched_ids:
+        query_plan_metadata["searched_query_id"] = searched_ids[0]
+    else:
+        query_plan_metadata.pop("searched_query_id", None)
+    if searched_axes:
+        query_plan_metadata["searched_query_axis"] = searched_axes[0]
+    else:
+        query_plan_metadata.pop("searched_query_axis", None)
+
+
+def _append_query_plan_section(markdown: str, result: dict) -> str:
+    query_plan = result.get("query_plan")
+    if not query_plan:
+        return markdown
+
+    lines = [
+        "",
+        "## Query plan",
+        f"retrieval_strategy: {result.get('retrieval_strategy', 'deterministic_enrichment')}",
+        f"rendered_query: {result.get('rendered_query', result.get('query', ''))}",
+    ]
+    if isinstance(query_plan, dict):
+        for key, value in query_plan.items():
+            if key in {"retrieval_strategy", "rendered_query"}:
+                continue
+            lines.append(f"{key}: {_compact_query_plan_value(value)}")
+    else:
+        lines.append(_compact_query_plan_value(query_plan))
+    return f"{markdown}\n" + "\n".join(lines)
+
+
+async def _handle_pubmed(args: dict) -> str:
+    result = await _handle_pubmed_structured(args)
+    return result["markdown"]
+
+
+async def _handle_pubmed_structured(args: dict) -> dict:
+    """Return structured PubMed search data plus markdown.
+
+    Private helper for planned retriever orchestration. It intentionally uses
+    the same PubMed helpers and markdown formatting as ``_handle_pubmed`` while
+    leaving the public MCP handler contract unchanged.
+    """
+    query = args["query"]
+    max_results = min(args.get("max_results", 10), 20)
+    filter_type = args.get("filter_type")
+    include_abstracts = args.get("include_abstracts", False)
+    query_plan = args.get("query_plan")
+    retrieval_strategy, warnings = _normalize_pubmed_retrieval_strategy(args)
+    search_queries = [query]
+    query_plan_metadata = None
+    if query_plan is not None:
+        (
+            search_queries,
+            query_plan_metadata,
+            plan_warnings,
+        ) = _select_pubmed_queries_from_plan(
+            query,
+            query_plan,
+            args,
+        )
+        warnings.extend(plan_warnings)
+    search_query = search_queries[0]
+
+    pmids: list[str] = []
+    total = 0
+    seen_pmids: set[str] = set()
+    actual_search_queries: list[str] = []
+    for current_query in search_queries:
+        if len(pmids) >= max_results:
+            break
+        actual_search_queries.append(current_query)
+        current_pmids, current_total = await _pubmed_search(
+            current_query,
+            max_results,
+            filter_type,
+        )
+        total += current_total
+        for pmid in current_pmids:
+            if pmid in seen_pmids:
+                continue
+            seen_pmids.add(pmid)
+            pmids.append(pmid)
+            if len(pmids) >= max_results:
+                break
+    if actual_search_queries:
+        search_query = actual_search_queries[0]
+    rendered_query = " | ".join(
+        _apply_filter(item, filter_type) for item in actual_search_queries
+    )
+    _record_actual_pubmed_plan_searches(
+        query_plan_metadata,
+        len(actual_search_queries),
+    )
+    if not pmids:
+        filter_note = f" (filter: {filter_type})" if filter_type else ""
+        result = {
+            "query": query,
+            "rendered_query": rendered_query,
+            "query_plan": query_plan,
+            "retrieval_strategy": retrieval_strategy,
+            "total": total,
+            "articles": [],
+            "markdown": f"No PubMed results for: {search_query}{filter_note}",
+        }
+        if query_plan_metadata is not None:
+            result["query_plan_metadata"] = query_plan_metadata
+        if warnings:
+            result["warnings"] = warnings
+        if args.get("return_query_plan"):
+            result["markdown"] = _append_query_plan_section(result["markdown"], result)
+        return result
+
+    articles = await _pubmed_summaries(pmids[:max_results])
+    for article in articles:
+        article.setdefault("title", "")
+        article.setdefault("authors", "")
+        article.setdefault("source", "")
+        article.setdefault("pubdate", "")
+        article.setdefault("pub_types", [])
+        article.setdefault("doi", "")
+        article.setdefault("url", "")
+
+    abstracts = {}
+    if include_abstracts:
+        abstracts = await _pubmed_abstracts([a["pmid"] for a in articles])
+
+    for article in articles:
+        abstract = abstracts.get(article["pmid"])
+        article["_relevance_score"] = neurosurg_relevance_score(
+            article.get("title", ""),
+            abstract,
+        )
+        article["_evidence_grade"] = grade_evidence(article.get("pub_types", []))
+    articles.sort(key=lambda a: a.get("_relevance_score", 0.0), reverse=True)
+
+    filter_note = f" — filter: {filter_type}" if filter_type else ""
+    lines = [
+        f"## PubMed{filter_note} — {search_query}",
+        f"({len(articles)} shown of {total} total)\n",
+    ]
+    for i, a in enumerate(articles, 1):
+        lines.extend(_fmt_paper(
+            a,
+            i,
+            abstract=abstracts.get(a["pmid"]),
+            evidence_grade=a.get("_evidence_grade"),
+        ))
+
+    markdown = "\n".join(lines)
+    result = {
+        "query": query,
+        "rendered_query": rendered_query,
+        "query_plan": query_plan,
+        "retrieval_strategy": retrieval_strategy,
+        "total": total,
+        "articles": articles,
+        "markdown": markdown,
+    }
+    if query_plan_metadata is not None:
+        result["query_plan_metadata"] = query_plan_metadata
+    if warnings:
+        result["warnings"] = warnings
+    if args.get("return_query_plan"):
+        result["markdown"] = _append_query_plan_section(result["markdown"], result)
+    return result
+
+
+async def _handle_build_caseplan(args: dict) -> str:
+    return await build_caseplan_markdown(args, builder_factory=CasePlanBuilder)
+
+
+def _handle_generate(args: dict) -> str:
+    topic = args["topic"]
+    output_dir = args.get("output_dir", "")
+    out = Path(output_dir) if output_dir else None
+    slug = topic.lower().replace(" ", "-")
+    resource_path = _generate_caseprep(topic, out or f"{slug}-caseprep")
+    return (
+        f"Case prep generated.\n"
+        f"  Output: {resource_path.parent.resolve()}\n"
+        f"  Resources: {resource_path}\n"
+    )
+
+
+def _handle_pdfs(args: dict) -> str:
+    topic = args["topic"]
+    pdf_dir = Path(args["pdf_dir"])
+    results = _search_local_pdfs(topic, pdf_dir)
+    return format_pdf_results(results)
+
+
+def _format_fulltext_record(record: FullTextRecord) -> str:
+    """Format a FullTextRecord using get_fulltext markdown semantics."""
+    pmid = record.pmid
+    if record.tier == "missing":
+        message = f"No full text or abstract available for PMID {pmid}."
+        if record.warnings:
+            warnings = "\n".join(f"- {warning}" for warning in record.warnings)
+            return f"{message}\n\nWarnings:\n{warnings}"
+        return message
+
+    lines = _format_fulltext_header(record)
+
+    if record.tier == "pmc_fulltext":
+        text = record.sections.get("FULL_TEXT") or record.text
+        lines.append("### PMC Full Text\n")
+        lines.append(text[:5000])
+        return "\n".join(lines)
+
+    if record.tier == "structured_abstract":
+        sections = record.sections
+        has_content = any(
+            sections.get(k)
+            for k in ("BACKGROUND", "METHODS", "RESULTS", "CONCLUSIONS", "TEXT")
+        )
+        if has_content:
+            lines.append("### Structured Abstract\n")
+            for label in ("BACKGROUND", "METHODS", "RESULTS", "CONCLUSIONS"):
+                if label in sections:
+                    lines.append(f"**{label.title()}:** {sections[label]}\n")
+            if "TEXT" in sections:
+                lines.append(f"{sections['TEXT']}\n")
+            return "\n".join(lines)
+        if record.text:
+            lines.append("### Structured Abstract\n")
+            lines.append(record.text)
+            return "\n".join(lines)
+
+    if record.tier == "plain_abstract":
+        lines.append("### Abstract\n")
+        lines.append(record.text)
+        return "\n".join(lines)
+
+    if record.tier == "local_fulltext":
+        text = record.sections.get("FULL_TEXT") or record.text
+        lines.append("### Local Full Text\n")
+        lines.append(text[:5000])
+        return "\n".join(lines)
+
+    if record.text:
+        lines.append(record.text)
+        return "\n".join(lines)
+    return f"No full text or abstract available for PMID {pmid}."
+
+
+def _format_fulltext_header(record: FullTextRecord) -> list[str]:
+    metadata = record.metadata
+    title = str(metadata.get("title") or "").strip()
+    if not title:
+        return []
+
+    authors = str(metadata.get("authors") or "").strip()
+    source = str(metadata.get("source") or "").strip()
+    pubdate = str(metadata.get("pubdate") or "").strip()
+    if authors or source or pubdate:
+        return [f"## {title}", f"{authors} — *{source}* ({pubdate})", ""]
+    return [f"## {title}", ""]
+
+
+async def _handle_get_fulltext(args: dict) -> str:
+    """Fetch best available content for a single PMID: PMC > structured > plain."""
+    pmid = args["pmid"]
+    summaries = await _pubmed_summaries([pmid])
+    if not summaries:
+        return f"PMID {pmid} not found."
+    paper = summaries[0]
+    record = await FullTextRetriever().retrieve(pmid)
+    record = replace(
+        record,
+        metadata={
+            **record.metadata,
+            "title": paper.get("title", ""),
+            "authors": paper.get("authors", ""),
+            "source": paper.get("source", ""),
+            "pubdate": paper.get("pubdate", ""),
+        },
+    )
+    return _format_fulltext_record(record)
+
+
+async def _handle_radiology(args: dict) -> str:
+    """Search Open-i for radiology images, download them, return local paths.
+
+    Extracts query terms for relevance filtering: a result's title or caption
+    must contain at least one term to be included.  Fetches more results from
+    Open-i to compensate for the filter.
+
+    Images are downloaded to <query>-images/ (or *output_dir* if provided).
+    Set download_images=false to skip downloading and return URLs only.
+    """
+    query = args["query"]
+    max_results = min(args.get("max_results", 5), 10)
+    modality = args.get("modality")
+    download = args.get("download_images", True)
+    output_dir = args.get("output_dir", "")
+
+    # Extract terms for relevance post-filtering
+    terms = _query_terms(query)
+
+    results, total = await _openi_search(query, max_results, modality, query_terms=terms)
+
+    mod_note = f" — modality: {modality}" if modality and modality != "any" else ""
+    filter_note = f" (filtered by: {', '.join(terms)})" if terms else ""
+    lines = [
+        f"## Radiology Images{mod_note} — {query}{filter_note}",
+        f"({len(results)} shown of {total} total)\n",
+    ]
+
+    if not results:
+        lines.append("No radiology images found. Try a broader query or a different modality.")
+        return "\n".join(lines)
+
+    # Download images if requested
+    if download and results:
+        slug = query.strip().lower().replace(" ", "-")[:60]
+        out_dir = Path(output_dir) if output_dir else Path(f"{slug}-images")
+        if not out_dir.is_absolute():
+            out_dir = Path.cwd() / out_dir
+        results = await _download_images(results, out_dir, max_images=max_results)
+        lines.append(f"*Images saved to {out_dir.resolve()}/*\n")
+
+    for i, r in enumerate(results, 1):
+        lines.append(f"{i}. **{r['title'][:120]}{'…' if len(r['title']) > 120 else ''}**")
+        lines.append(f"   *{r['journal']}* ({r['pubdate']}) — {r['authors'][:80]}")
+        if r["pmid"]:
+            lines.append(f"   PMID: [{r['pmid']}](https://pubmed.ncbi.nlm.nih.gov/{r['pmid']}/)")
+        if r.get("article_type"):
+            lines.append(f"   Type: {r['article_type']}")
+        if r["caption"]:
+            cap = r["caption"][:300] + ("…" if len(r["caption"]) > 300 else "")
+            lines.append(f"   Caption: {cap}")
+        local = r.get("local_path", "")
+        if local and not local.startswith("Error"):
+            lines.append(f"   Image: {local}")
+            # MEDIA tag so Hermes can show the image inline
+            lines.append(f"   MEDIA:{local}")
+        elif local:
+            lines.append(f"   Download error: {local}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _handle_list_subdomains(args: dict) -> str:
+    """List available clinical subdomains in the local corpus."""
+    if not _CORPUS_AVAILABLE:
+        return (
+            "Local corpus not available.\n\n"
+            "The neurointerventional corpus databases were not found at:\n"
+            f"  Corpus: {_CORPUS_DB}\n"
+            f"  Fulltext: {_FULLTEXT_DB}\n\n"
+            "Set CASEPREP_CORPUS_DB and CASEPREP_FULLTEXT_DB environment variables "
+            "to point to your NSGY_DB_lean databases."
+        )
+    subdomains = _corpus_list_subdomains()
+    lines = [
+        f"## Neurointerventional Corpus — {len(subdomains)} Subdomains",
+        f"({sum(s['paper_count'] for s in subdomains):,} total paper assignments across 51,980 papers)\n",
+    ]
+    for sd in subdomains:
+        desc = sd["description"][:80]
+        lines.append(f"- **{sd['id']}** ({sd['paper_count']:,} papers): {desc}")
+    return "\n".join(lines)
+
+
+def _handle_search_corpus(args: dict) -> str:
+    """Search the local corpus via FTS5."""
+    fts_query = args["fts_query"]
+    subdomain = args.get("subdomain")
+    top_n = min(args.get("top_n", 8), 25)
+
+    result = _corpus_search(fts_query, subdomain, top_n)
+
+    if "error" in result:
+        if str(result["error"]).startswith("Invalid FTS query:"):
+            return (
+                f"{result['error']}\n\n"
+                "Check the FTS5 syntax in fts_query, then retry the corpus search."
+            )
+        return (
+            f"Corpus search unavailable: {result['error']}\n\n"
+            f"  Corpus: {_CORPUS_DB}\n"
+            f"  Fulltext: {_FULLTEXT_DB}"
+        )
+
+    papers = result["papers"]
+    total = result["total_matches"]
+    returned = result["returned"]
+    subdomain_dist = result.get("subdomain_distribution", {})
+
+    sd_note = f" — subdomain: {subdomain}" if subdomain else ""
+
+    lines = [
+        f"## Corpus Search{sd_note} — `{fts_query}`",
+        f"({returned} shown of {total:,} total matches)\n",
+    ]
+
+    # Subdomain distribution (only when no subdomain filter)
+    if not subdomain and subdomain_dist:
+        top_sds = sorted(subdomain_dist.items(), key=lambda x: x[1], reverse=True)[:5]
+        sd_parts = []
+        for sd_id, count in top_sds:
+            desc = SUBDOMAIN_DESCRIPTIONS.get(sd_id, sd_id).split(",")[0]
+            sd_parts.append(f"{desc} ({count})")
+        lines.append(f"Top domains: {' | '.join(sd_parts)}\n")
+
+    for i, paper in enumerate(papers, 1):
+        lines.extend(_fmt_corpus_paper(paper, i))
+
+    # Corpus availability note
+    lines.append(
+        f"---\n*Searched local neurointerventional corpus ({total:,} papers indexed). "
+        "Use search_pubmed for live PubMed queries or get_paper with a work_id for "
+        "full section-by-section detail.*"
+    )
+
+    return "\n".join(lines)
+
+
+def _handle_get_paper(args: dict) -> str:
+    """Retrieve full paper details from the local corpus."""
+    work_id = args["work_id"]
+
+    if not _CORPUS_AVAILABLE:
+        return "Local corpus not available."
+
+    paper = _corpus_get_paper(work_id)
+    if not paper:
+        return f"Paper '{work_id}' not found in local corpus."
+
+    lines = [
+        f"## {paper['title']}",
+        f"*{paper['journal']}* ({paper['year']})",
+        "",
+    ]
+
+    # Evidence metadata
+    meta_parts = []
+    if paper["evidence_tier"]:
+        label = EVIDENCE_TIER_LABELS.get(paper["evidence_tier"], paper["evidence_tier"])
+        meta_parts.append(label)
+    if paper["study_design"]:
+        meta_parts.append(paper["study_design"].replace("_", " ").title())
+    if paper["citation_count"] and paper["citation_count"] > 0:
+        meta_parts.append(f"cited {paper['citation_count']}×")
+    if paper["journal_tier"]:
+        meta_parts.append(f"journal tier {paper['journal_tier']}")
+    if meta_parts:
+        lines.append(f"**Evidence:** {' | '.join(meta_parts)}")
+        lines.append("")
+
+    # Subdomains
+    if paper["subdomains"]:
+        sd_labels = [
+            f"{s} ({SUBDOMAIN_DESCRIPTIONS.get(s, '').split(',')[0]})"
+            for s in paper["subdomains"]
+        ]
+        lines.append(f"**Topics:** {', '.join(sd_labels)}")
+        lines.append("")
+
+    # Links
+    if paper["pubmed_url"]:
+        lines.append(f"PubMed: {paper['pubmed_url']}")
+    if paper["doi_url"]:
+        lines.append(f"DOI: {paper['doi_url']}")
+    lines.append("")
+
+    # MeSH and keywords
+    if paper["mesh_terms"]:
+        lines.append(f"**MeSH:** {', '.join(paper['mesh_terms'][:20])}")
+    if paper["keywords"]:
+        lines.append(f"**Keywords:** {', '.join(paper['keywords'][:20])}")
+    if paper["mesh_terms"] or paper["keywords"]:
+        lines.append("")
+
+    # Abstract
+    if paper["abstract"]:
+        lines.append("### Abstract\n")
+        lines.append(paper["abstract"][:2000])
+        lines.append("")
+
+    # Sections
+    sections = paper.get("sections", {})
+    for section_type in ("introduction", "methods", "results", "discussion", "conclusion"):
+        if section_type in sections:
+            content = sections[section_type]
+            display = content[:1500] + ("…" if len(content) > 1500 else "")
+            lines.append(f"### {section_type.title()}\n")
+            lines.append(display)
+            lines.append("")
+
+    # Other section types
+    for st, content in sections.items():
+        if st not in ("introduction", "methods", "results", "discussion", "conclusion"):
+            display = content[:800] + ("…" if len(content) > 800 else "")
+            lines.append(f"### {st.replace('_', ' ').title()}\n")
+            lines.append(display)
+            lines.append("")
+
+    return "\n".join(lines)
+
+
+async def _handle_send_email(args: dict) -> str:
+    """Send an email via Resend REST API."""
+    if not _RESEND_API_KEY:
+        return (
+            "Error: RESEND_API_KEY not set. Set it in your environment:\n"
+            "  export RESEND_API_KEY=re_xxxx\n"
+            "Get a key at https://resend.com/api-keys"
+        )
+
+    to = args["to"]
+    subject = args["subject"]
+    body = args["body"]
+    sender = args.get("from_", "").strip() or RESEND_DEFAULT_FROM
+
+    payload = {
+        "from": sender,
+        "to": [to],
+        "subject": subject,
+        "text": body,
+    }
+
+    resp = await _client().post(
+        f"{RESEND_API}/emails",
+        json=payload,
+        headers={
+            "Authorization": f"Bearer {_RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+    )
+
+    if resp.status_code == 200:
+        data = resp.json()
+        email_id = data.get("id", "unknown")
+        return f"Email sent ✓\n  From: {sender}\n  To: {to}\n  Subject: {subject}\n  Resend ID: {email_id}"
+    else:
+        try:
+            detail = resp.json()
+        except Exception:
+            detail = {"message": resp.text}
+        msg = detail.get("message", resp.text)
+        return f"Email failed (HTTP {resp.status_code}): {msg}"
+
+
+# ── corpus_topology handlers ─────────────────────────────────────────────────
+
+
+def _handle_search_corpus_semantic(args: dict) -> str:
+    """Search for semantically relevant clusters and optionally their papers."""
+    if not corpus_topology.is_available():
+        return (
+            "Semantic search unavailable: corpus_topology module not found. "
+            "Ensure ~/corpus_clustering/ exists (or set CORPUS_CLUSTERING_PATH) "
+            "and corpus_topology.py is importable."
+        )
+
+    query = args["query"]
+    top_k = min(args.get("top_k", 5), 15)
+    papers_per_cluster = min(args.get("papers_per_cluster", 0), 20)
+    min_confidence = args.get("min_confidence", "low")
+
+    try:
+        result = corpus_topology.locate_clusters(
+            query, k=top_k, min_confidence=min_confidence
+        )
+    except corpus_topology.TopologyUnavailable as exc:
+        return f"Semantic search unavailable: {exc}"
+    except Exception as exc:
+        return f"Semantic search error: {exc}"
+
+    top = result["top"]
+    if not top:
+        return (
+            f"## Semantic Search — `{query}`\n\n"
+            f"No clusters found at or above **{min_confidence}** confidence.\n"
+            f"Best cosine: {result.get('best_cosine', 'N/A')}\n\n"
+            f"Try broadening the query or lowering min_confidence."
+        )
+
+    lines = [
+        f"## Semantic Search — `{query}`",
+        f"Confidence: **{result['confidence']}** (best cosine: {result['best_cosine']:.4f})",
+        f"Model: {result['model']}",
+        "",
+    ]
+
+    for item in top:
+        cid = item["cluster_id"]
+        name = item["name"] or f"cluster-{cid}"
+        domain = item.get("primary_domain", "—")
+        size = item.get("size", 0)
+        pct = item.get("pct_of_corpus", 0)
+        terms = item.get("terms", [])[:8]
+
+        lines.append(
+            f"### #{item['rank']} — {name} (cluster {cid})"
+        )
+        lines.append(
+            f"cosine={item['cosine']:.4f} | domain={domain} | "
+            f"papers={size:,} ({pct:.1f}%)"
+        )
+        if item.get("is_subcluster"):
+            parent = item.get("parent_name")
+            if parent:
+                lines.append(f"  ↳ subcluster of: {parent}")
+        if terms:
+            lines.append(f"  terms: {', '.join(terms)}")
+
+        # Optionally fetch papers from this cluster
+        if papers_per_cluster > 0:
+            lines.append(f"\n  *Top papers from this cluster:*")
+            try:
+                papers = corpus_topology.papers_in_cluster(cid, k=papers_per_cluster)
+            except corpus_topology.TopologyUnavailable as exc:
+                lines.append(f"  *(papers unavailable: {exc})*")
+                lines.append("")
+                continue
+            except Exception as exc:
+                lines.append(f"  *(papers unavailable: {exc})*")
+                lines.append("")
+                continue
+            try:
+                for pi, p in enumerate(papers, 1):
+                    title = (p.get("title") or "Untitled")[:120]
+                    cites = p.get("citation_count", 0) or 0
+                    year = p.get("year", "—")
+                    lines.append(
+                        f"  {pi}. {title}  "
+                        f"*({year}, cited {cites}×)*"
+                    )
+            except Exception as exc:
+                lines.append(f"  *(papers unavailable: {exc})*")
+        lines.append("")
+
+    lines.append(f"---\n*Semantic search over {len(corpus_topology.list_clusters())} "
+                  f"BioBERT-derived topic clusters. Use search_corpus for keyword "
+                  f"(FTS5) search, or get_paper for full paper detail.*")
+
+    return "\n".join(lines)
+
+
+def _handle_neighbors_paper(args: dict) -> str:
+    """Find semantically similar papers via pgvector."""
+    if not corpus_topology.is_available():
+        return (
+            "Neighbors search unavailable: corpus_topology module not found. "
+            "Ensure ~/corpus_clustering/ exists (or set CORPUS_CLUSTERING_PATH) "
+            "and corpus_topology.py is importable."
+        )
+
+    paper_id = args["paper_id"]
+    k = min(args.get("k", 10), 50)
+
+    try:
+        result = corpus_topology.paper_neighbors(paper_id, k=k)
+    except corpus_topology.TopologyUnavailable as exc:
+        return f"Neighbors search unavailable: {exc}"
+    except Exception as exc:
+        return f"Neighbors search error: {exc}"
+
+    if "error" in result:
+        error = result["error"]
+        pid = result.get("id", paper_id)
+        if error == "unknown_paper":
+            return f"Paper '{pid}' not found in corpus."
+        if error == "no_embedding":
+            return f"Paper '{pid}' has no embedding — neighbors unavailable."
+        return f"Unknown error for '{pid}': {error}"
+
+    neighbors = result["neighbors"]
+    if not neighbors:
+        return f"No neighbors found for '{paper_id}'."
+
+    lines = [
+        f"## Semantic Neighbors — `{paper_id}`",
+        f"",
+    ]
+    for i, n in enumerate(neighbors, 1):
+        title = (n.get("title") or "Untitled")[:120]
+        domain = n.get("primary_domain", "—")
+        cosine = n.get("cosine", 0)
+        lines.append(
+            f"{i}. [{n['id']}] **{title}**  "
+            f"(cosine={cosine:.4f}, domain={domain})"
+        )
+
+    lines.append(
+        f"\n---\n*pgvector halfvec HNSW search. "
+        f"Use get_paper with any returned paper_id for full details.*"
+    )
+    return "\n".join(lines)
+
+
+# ── Entry point ─────────────────────────────────────────────────────────────
+
+def run():
+    """Run the MCP server on stdio."""
+    async def _main():
+        async with stdio_server() as (read, write):
+            await server.run(read, write, server.create_initialization_options())
+    asyncio.run(_main())
+
+
+if __name__ == "__main__":
+    run()
