@@ -39,6 +39,7 @@ export default function Home() {
           style={{ animationDelay: "90ms" }}
         >
           <BlurText
+            as="h1"
             text="Neuro·Caseboard"
             animateBy="letters"
             delay={55}
@@ -66,10 +67,10 @@ export default function Home() {
           <Link key={s.to} to={s.to} className="group">
             <Card hover className="h-full p-5">
               <div className="flex items-center justify-between">
-                <span className="font-mono text-xs uppercase tracking-[0.2em] text-primary">
+                <span className="font-mono text-xs uppercase tracking-[0.2em] text-primary-ink">
                   {s.tag}
                 </span>
-                <span className="font-mono text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary">
+                <span className="font-mono text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary-ink">
                   →
                 </span>
               </div>

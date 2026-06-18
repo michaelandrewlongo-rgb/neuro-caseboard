@@ -20,16 +20,20 @@ export default function PipelineLoader({
   }, [steps.length])
 
   return (
-    <Card className="p-6">
+    <Card className="p-6" role="status" aria-live="polite" aria-busy="true">
       <div className="flex items-center gap-3">
-        <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
-        <BlurText
-          key={i}
-          text={steps[i]}
-          animateBy="words"
-          delay={40}
-          className="font-mono text-sm text-primary"
-        />
+        <span className="h-2 w-2 animate-pulse rounded-full bg-primary" aria-hidden />
+        <div aria-hidden className="min-w-0">
+          <BlurText
+            key={i}
+            text={steps[i]}
+            animateBy="words"
+            delay={40}
+            className="font-mono text-sm text-primary-ink"
+          />
+        </div>
+        {/* Stable, non-animated text the screen reader announces (the cycling stages are decorative). */}
+        <span className="sr-only">Working on your request. {estimate}</span>
       </div>
       <div className="mt-6 flex flex-col gap-3" aria-hidden>
         {Array.from({ length: bars }).map((_, idx) => (
@@ -41,7 +45,7 @@ export default function PipelineLoader({
           />
         ))}
       </div>
-      <p className="mt-5 font-mono text-xs text-muted-foreground">{estimate}</p>
+      <p className="mt-5 font-mono text-xs text-muted-foreground" aria-hidden>{estimate}</p>
     </Card>
   )
 }

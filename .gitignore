@@ -2,7 +2,10 @@ __pycache__/
 *.pyc
 *.egg-info/
 .eggs/
-build/
+# repo-root Python build artifact only — anchored with a leading slash so the
+# pattern does not also swallow nested dirs like web/src/components/build/
+# (the unanchored form silently kept those out of git and broke the web build).
+/build/
 dist/
 .pytest_cache/
 .venv/
@@ -19,6 +22,12 @@ out/
 eval/_outputs/
 # regenerable generated-schematic render artifacts (WS-4 eval)
 eval/_fig_specs/
-
+# local secrets / environment — never commit (keep .env.example tracked)
+.env
+.env.*
+!.env.example
+# GUI council capture artifacts (regenerable)
+gui-council/shots/
+gui-council/axe/
 # local throwaway venvs
 .testvenv/

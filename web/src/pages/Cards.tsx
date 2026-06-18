@@ -45,8 +45,26 @@ export default function Cards() {
     }
   }
 
+  const liveMsg = loading
+    ? ""
+    : netError
+      ? "Request failed."
+      : resp
+        ? resp.kind === "cards"
+          ? `${resp.cards.length} card${resp.cards.length === 1 ? "" : "s"} found.`
+          : resp.kind === "not_built"
+            ? "Card bank not built."
+            : resp.kind === "unavailable"
+              ? "Engine temporarily unavailable."
+              : "Engine error."
+        : ""
+
   return (
     <div className="flex flex-col gap-6">
+      {/* Persistent live region: announces match results to screen readers after the search. */}
+      <div aria-live="polite" className="sr-only">
+        {liveMsg}
+      </div>
       <header>
         <Eyebrow accent>Cards · Study deck</Eyebrow>
         <h1 className="mt-3 font-display text-4xl font-bold tracking-tight text-foreground">
@@ -115,7 +133,7 @@ export default function Cards() {
 
       {netError && !loading && (
         <Card className="p-5 text-sm">
-          <p className="font-bold text-primary">Request failed</p>
+          <p className="font-bold text-primary-ink">Request failed</p>
           <p className="mt-1 text-muted-foreground">{netError}</p>
           <p className="mt-2 font-mono text-xs text-muted-foreground">
             Is the engine wrapper running on :8001?
@@ -132,7 +150,7 @@ function CardsResult({ resp }: { resp: CardsResponse }) {
   if (resp.kind === "error") {
     return (
       <Card className="p-5 text-sm">
-        <p className="font-bold text-primary">Engine error</p>
+        <p className="font-bold text-primary-ink">Engine error</p>
         <p className="mt-1 font-mono text-xs text-muted-foreground">{resp.error}</p>
       </Card>
     )

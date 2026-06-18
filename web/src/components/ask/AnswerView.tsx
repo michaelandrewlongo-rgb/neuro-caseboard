@@ -10,7 +10,7 @@ const components: Components = {
     <h2 className="mt-7 mb-3 font-display text-xl font-bold text-foreground">{children}</h2>
   ),
   h3: ({ children }) => (
-    <h3 className="mt-6 mb-2 font-display text-sm font-bold uppercase tracking-[0.14em] text-primary">
+    <h3 className="mt-6 mb-2 font-display text-sm font-bold uppercase tracking-[0.14em] text-primary-ink">
       {children}
     </h3>
   ),
@@ -25,7 +25,7 @@ const components: Components = {
   strong: ({ children }) => <strong className="font-semibold text-foreground">{citify(children)}</strong>,
   em: ({ children }) => <em className="italic text-muted-foreground">{children}</em>,
   code: ({ children }) => (
-    <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em] text-primary">
+    <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em] text-primary-ink">
       {children}
     </code>
   ),
@@ -34,7 +34,7 @@ const components: Components = {
       href={href}
       target="_blank"
       rel="noreferrer noopener"
-      className="text-primary underline decoration-primary underline-offset-2 hover:decoration-primary"
+      className="text-primary-ink underline decoration-primary-ink underline-offset-2 hover:decoration-primary-ink"
     >
       {children}
     </a>

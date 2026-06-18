@@ -19,7 +19,7 @@ export default function CardItem({ card, index }: { card: CardData; index: numbe
 
       {card.question_text && (
         <p className="reading">
-          <span className="mr-1 font-mono text-xs uppercase tracking-wider text-primary">Q.</span>
+          <span className="mr-1 font-mono text-xs uppercase tracking-wider text-primary-ink">Q.</span>
           {card.question_text}
         </p>
       )}
@@ -38,7 +38,7 @@ export default function CardItem({ card, index }: { card: CardData; index: numbe
               src={im.image_url!}
               alt={`card ${index + 1} media ${i + 1}`}
               loading="lazy"
-              className="w-full rounded-lg border border-border bg-background object-contain"
+              className="w-full border-2 border-border bg-background object-contain"
             />
           ))}
         </div>

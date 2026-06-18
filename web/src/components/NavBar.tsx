@@ -20,7 +20,7 @@ export default function NavBar() {
             ◈
           </span>
           <span className="font-display text-lg font-bold tracking-tight text-foreground">
-            Neuro<span className="text-primary">·</span>Caseboard
+            Neuro<span className="text-primary-ink">·</span>Caseboard
           </span>
         </NavLink>
         <ul className="flex items-center gap-1.5">

@@ -25,7 +25,7 @@ export function Card({
 
 // ---- Button ---------------------------------------------------------------------------------
 const BTN_BASE =
-  "inline-flex select-none items-center justify-center gap-2 border-2 border-border font-bold uppercase tracking-wide shadow-[var(--shadow-brutal-sm)] transition-all duration-100 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none active:translate-x-[3px] active:translate-y-[3px] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-x-0 disabled:hover:translate-y-0 disabled:hover:shadow-[var(--shadow-brutal-sm)]"
+  "inline-flex select-none items-center justify-center gap-2 border-2 border-border font-bold uppercase tracking-wide shadow-[var(--shadow-brutal-sm)] transition-all duration-100 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none active:translate-x-[3px] active:translate-y-[3px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-x-0 disabled:hover:translate-y-0 disabled:hover:shadow-none"
 const BTN_VARIANTS = {
   primary: "bg-primary text-primary-foreground",
   outline: "bg-card text-foreground hover:bg-secondary",
@@ -95,14 +95,14 @@ export function Eyebrow({
   children: ReactNode
   accent?: boolean
 }) {
-  return <p className={cn("eyebrow", accent && "!text-primary", className)}>{children}</p>
+  return <p className={cn("eyebrow", accent && "!text-primary-ink", className)}>{children}</p>
 }
 
 // ---- Stat (metric) --------------------------------------------------------------------------
 const STAT_VALUE_TONES = {
-  success: "text-success",
-  amber: "text-amber",
-  signal: "text-primary",
+  success: "text-success-ink",
+  amber: "text-amber-ink",
+  signal: "text-primary-ink",
   accent: "text-accent",
   neutral: "text-foreground",
 } as const
