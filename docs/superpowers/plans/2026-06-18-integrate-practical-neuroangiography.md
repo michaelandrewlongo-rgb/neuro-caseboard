@@ -222,7 +222,7 @@ pytest. No new dependencies.
   Verify: `.loopvenv/bin/python -m pytest -q tests/neuro_core/test_runbook_consistency.py` → pass.
   Commit: `docs(runbook): add neuro-caseboard textbook integration runbook + consistency test`.
 
-- [ ] **Task 4 — Run-log `docs/runbooks/2026-06-18-practical-neuroangiography.md`**
+- [x] **Task 4 — Run-log `docs/runbooks/2026-06-18-practical-neuroangiography.md`**
 
   **Files:** Create `docs/runbooks/2026-06-18-practical-neuroangiography.md`.
 
