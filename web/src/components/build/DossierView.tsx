@@ -4,11 +4,10 @@ import { Card } from "@/components/ui"
 function StatusMark({ status }: { status: DossierClaim["status"] }) {
   const ok = status === "supported"
   return (
-    <span
-      title={ok ? "corpus-supported" : "needs clinician verification"}
-      className={`mt-0.5 select-none font-mono text-sm ${ok ? "text-success-ink" : "text-amber-ink"}`}
-    >
-      {ok ? "✓" : "⚠"}
+    <span className={`mt-0.5 select-none font-mono text-sm ${ok ? "text-success-ink" : "text-amber-ink"}`}>
+      <span aria-hidden>{ok ? "✓" : "⚠"}</span>
+      {/* glyph + color aren't enough for SR / colorblind users — state the status in words */}
+      <span className="sr-only">{ok ? "corpus-supported: " : "needs clinician verification: "}</span>
     </span>
   )
 }

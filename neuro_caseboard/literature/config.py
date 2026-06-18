@@ -37,9 +37,9 @@ def _load_dotenv_once() -> None:
             continue
         seen.add(env_path)
         try:
-            text = env_path.read_text(encoding="utf-8")
-        except OSError:
-            continue
+            text = env_path.read_text(encoding="utf-8-sig")  # utf-8-sig drops a leading BOM
+        except (OSError, UnicodeDecodeError):
+            continue  # unreadable or non-UTF-8 .env must never crash an entrypoint
         for raw in text.splitlines():
             line = raw.strip()
             if not line or line.startswith("#") or "=" not in line:
@@ -48,7 +48,13 @@ def _load_dotenv_once() -> None:
             key = key.strip()
             if key.startswith("export "):
                 key = key[len("export "):].strip()
-            value = value.strip().strip('"').strip("'")
+            value = value.strip()
+            if len(value) >= 2 and value[0] in "\"'" and value[-1] == value[0]:
+                value = value[1:-1]  # strip matching surrounding quotes; keep any inner '#'
+            else:
+                hash_idx = value.find(" #")
+                if hash_idx != -1:
+                    value = value[:hash_idx].rstrip()  # drop an unquoted inline comment
             if key and key not in os.environ:
                 os.environ[key] = value
         return  # first .env found wins
