@@ -58,7 +58,7 @@ pytest. No new dependencies.
 
 ## Tasks
 
-- [ ] **Task 1 — `probe_book` preflight helper in `neuro_core/ingest.py` (TDD)**
+- [x] **Task 1 — `probe_book` preflight helper in `neuro_core/ingest.py` (TDD)**
 
   **Files:** Modify `neuro_core/ingest.py`; Test `tests/neuro_core/test_probe_book.py` (new).
 
