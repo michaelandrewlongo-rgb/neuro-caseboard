@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { buildDossier, fetchBuildPdf, type BuildResponse } from "@/lib/api"
+import { Button, Card, Eyebrow } from "@/components/ui"
 import PipelineLoader from "@/components/PipelineLoader"
 import EvidenceBar from "@/components/build/EvidenceBar"
 import DossierView from "@/components/build/DossierView"
@@ -79,13 +80,11 @@ export default function Build() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <p className="font-mono text-xs uppercase tracking-[0.3em] text-teal">
-          Build · Pre-op dossier
-        </p>
-        <h1 className="mt-2 font-display text-4xl font-bold tracking-tight text-ink">
+        <Eyebrow accent>Build · Pre-op dossier</Eyebrow>
+        <h1 className="mt-3 font-display text-4xl font-bold tracking-tight text-foreground">
           Build a pre-op board
         </h1>
-        <p className="mt-2 max-w-2xl text-ink-dim">
+        <p className="mt-2 max-w-2xl text-muted-foreground">
           A structured, corpus-grounded dossier for the exact procedure — anatomy at risk, operative
           plan, risk &amp; rescue. Decision-support only; verify against primary sources.
         </p>
@@ -104,26 +103,22 @@ export default function Build() {
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             placeholder='e.g. "right carotid endarterectomy"'
-            className="flex-1 rounded-lg border border-navy-700/60 bg-navy-900/60 px-4 py-3 text-ink placeholder:text-ink-faint focus:border-teal/60 focus:outline-none"
+            className="field flex-1"
             disabled={loading}
             autoFocus
           />
-          <button
-            type="submit"
-            disabled={loading || !topic.trim()}
-            className="rounded-lg bg-teal px-5 py-3 font-medium text-navy-950 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-          >
+          <Button type="submit" disabled={loading || !topic.trim()} className="sm:px-7 sm:py-3">
             {loading ? "Building…" : "Build board"}
-          </button>
+          </Button>
         </div>
-        <div className="flex flex-wrap gap-5 text-sm text-ink-dim">
+        <div className="flex flex-wrap gap-5 text-sm text-muted-foreground">
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={enrich}
               onChange={(e) => setEnrich(e.target.checked)}
               disabled={loading}
-              className="accent-teal"
+              className="accent-primary"
             />
             Corpus enrichment
           </label>
@@ -133,7 +128,7 @@ export default function Build() {
               checked={useLlm}
               onChange={(e) => setUseLlm(e.target.checked)}
               disabled={loading}
-              className="accent-teal"
+              className="accent-primary"
             />
             LLM explorer
           </label>
@@ -143,11 +138,7 @@ export default function Build() {
       {!submitted && !loading && (
         <div className="flex flex-wrap gap-2">
           {HINTS.map((h) => (
-            <button
-              key={h}
-              onClick={() => void run(h)}
-              className="rounded-full border border-navy-700/60 bg-navy-900/40 px-3 py-1.5 font-mono text-xs text-ink-dim transition-colors hover:border-teal/50 hover:text-ink"
-            >
+            <button key={h} onClick={() => void run(h)} className="chip">
               {h}
             </button>
           ))}
@@ -163,42 +154,38 @@ export default function Build() {
       )}
 
       {netError && !loading && (
-        <div className="rounded-lg border border-signal/40 bg-signal/10 p-5 text-sm">
-          <p className="font-medium text-signal">Request failed</p>
-          <p className="mt-1 text-ink-dim">{netError}</p>
-          <p className="mt-2 font-mono text-xs text-ink-faint">
+        <Card className="p-5 text-sm">
+          <p className="font-bold text-primary">Request failed</p>
+          <p className="mt-1 text-muted-foreground">{netError}</p>
+          <p className="mt-2 font-mono text-xs text-muted-foreground">
             Is the engine wrapper running on :8001?
           </p>
-        </div>
+        </Card>
       )}
 
       {resp && !loading && resp.kind === "error" && (
-        <div className="rounded-lg border border-signal/40 bg-signal/10 p-5 text-sm">
-          <p className="font-medium text-signal">Engine error</p>
-          <p className="mt-1 font-mono text-xs text-ink-dim">{resp.error}</p>
-        </div>
+        <Card className="p-5 text-sm">
+          <p className="font-bold text-primary">Engine error</p>
+          <p className="mt-1 font-mono text-xs text-muted-foreground">{resp.error}</p>
+        </Card>
       )}
 
       {resp && !loading && resp.kind === "unavailable" && (
-        <div className="rounded-lg border border-amber-400/40 bg-amber-400/10 p-5 text-sm">
-          <p className="font-medium text-amber-300">Temporarily unavailable</p>
-          <p className="mt-1 text-ink-dim">{resp.reason}</p>
-        </div>
+        <Card className="bg-secondary p-5 text-sm">
+          <p className="font-bold text-foreground">Temporarily unavailable</p>
+          <p className="mt-1 text-muted-foreground">{resp.reason}</p>
+        </Card>
       )}
 
       {resp && !loading && resp.kind === "dossier" && (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-display text-2xl font-bold text-ink">{resp.dossier.title}</h2>
+            <h2 className="font-display text-2xl font-bold text-foreground">{resp.dossier.title}</h2>
             <div className="flex flex-col items-end">
-              <button
-                onClick={() => void onDownloadPdf()}
-                disabled={pdfLoading}
-                className="rounded-lg border border-teal/50 px-4 py-2 text-sm font-medium text-teal transition-colors hover:bg-teal/10 disabled:opacity-50"
-              >
+              <Button variant="outline" onClick={() => void onDownloadPdf()} disabled={pdfLoading}>
                 {pdfLoading ? "Rendering PDF…" : "Download PDF"}
-              </button>
-              {pdfError && <span className="mt-1 text-xs text-signal">{pdfError}</span>}
+              </Button>
+              {pdfError && <span className="mt-1 text-xs text-destructive">{pdfError}</span>}
             </div>
           </div>
           <EvidenceBar summary={resp.dossier.summary} />

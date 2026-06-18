@@ -27,9 +27,9 @@ def test_build_briefing_html_has_exec_navy_tokens_and_content():
     assert "Indications" in doc and "Sources" in doc
     assert "[1]" in doc and "Greenberg, Trauma, p.1102" in doc
     assert "<strong>refractory</strong>" in doc          # markdown bold -> html
-    # Executive-Navy design tokens (replaces the old Signal asserts)
-    assert "Archivo" in doc and "Source+Serif+4" in doc and "IBM+Plex+Mono" in doc
-    assert "#0e7490" in doc                              # deep-teal accent
+    # Neo Brutalism design tokens
+    assert "DM+Sans" in doc and "Space+Mono" in doc
+    assert "#ff3333" in doc                              # red primary accent
     assert "NEURO·CASEBOARD" in doc                 # masthead brand
     assert "Ask · Citation-grounded" in doc         # eyebrow chip
 

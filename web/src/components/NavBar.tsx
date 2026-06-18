@@ -10,17 +10,20 @@ const LINKS = [
 
 export default function NavBar() {
   return (
-    <header className="sticky top-0 z-20 border-b border-navy-700/60 bg-navy-950/80 backdrop-blur">
-      <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-        <NavLink to="/" className="flex items-center gap-2">
-          <span className="text-teal" aria-hidden>
+    <header className="glass-header sticky top-0 z-30">
+      <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3.5">
+        <NavLink to="/" className="group flex items-center gap-2.5">
+          <span
+            className="grid h-7 w-7 place-items-center border-2 border-border bg-primary text-primary-foreground"
+            aria-hidden
+          >
             ◈
           </span>
-          <span className="font-display text-lg font-bold tracking-tight text-ink">
-            Neuro<span className="text-ink-dim">·</span>Caseboard
+          <span className="font-display text-lg font-bold tracking-tight text-foreground">
+            Neuro<span className="text-primary">·</span>Caseboard
           </span>
         </NavLink>
-        <ul className="flex items-center gap-1">
+        <ul className="flex items-center gap-1.5">
           {LINKS.map((l) => (
             <li key={l.to}>
               <NavLink
@@ -28,10 +31,10 @@ export default function NavBar() {
                 end={l.end}
                 className={({ isActive }) =>
                   cn(
-                    "rounded-md px-3 py-1.5 font-mono text-xs uppercase tracking-wider transition-colors",
+                    "border-2 px-3 py-1.5 font-mono text-[11px] font-bold uppercase tracking-[0.14em] transition-colors",
                     isActive
-                      ? "bg-teal/10 text-teal"
-                      : "text-ink-dim hover:bg-navy-800 hover:text-ink",
+                      ? "border-border bg-primary text-primary-foreground"
+                      : "border-transparent text-muted-foreground hover:border-border hover:bg-secondary hover:text-foreground",
                   )
                 }
               >

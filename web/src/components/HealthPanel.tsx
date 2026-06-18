@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { getHealth, type Health } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { Card, Badge } from "@/components/ui"
 
 type Row = { key: string; label: string; ok: boolean; detail?: string | null }
 
@@ -9,7 +10,7 @@ function rowsFromHealth(h: Health): Row[] {
     { key: "engine", label: "Engine", ok: h.engine, detail: h.detail.engine.error },
     {
       key: "synth",
-      label: "Synthesis (Vertex)",
+      label: "Synthesis · Vertex",
       ok: h.synth,
       detail: h.synth
         ? `${h.detail.synth.provider} · ${h.detail.synth.project ?? "no project"}`
@@ -29,7 +30,7 @@ function rowsFromHealth(h: Health): Row[] {
     },
     {
       key: "ncbi",
-      label: "PubMed literature (NCBI key)",
+      label: "PubMed literature · NCBI key",
       ok: h.ncbi_key,
       detail: h.detail.literature.detail,
     },
@@ -40,8 +41,8 @@ function Dot({ ok }: { ok: boolean }) {
   return (
     <span
       className={cn(
-        "inline-block h-2.5 w-2.5 shrink-0 rounded-full",
-        ok ? "bg-teal shadow-[0_0_8px_var(--color-teal)]" : "bg-signal",
+        "inline-block h-2.5 w-2.5 shrink-0 border-2 border-border",
+        ok ? "bg-[var(--color-success)]" : "bg-primary",
       )}
       aria-hidden
     />
@@ -68,25 +69,21 @@ export default function HealthPanel() {
   }, [])
 
   return (
-    <section className="rounded-xl border border-navy-700/60 bg-navy-900/60 p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-mono text-xs uppercase tracking-widest text-ink-faint">
-          Engine availability
-        </h2>
-        <span className="font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+    <Card className="p-5">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="eyebrow">Engine availability</h2>
+        <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
           /api/health
         </span>
       </div>
 
-      {loading && (
-        <p className="font-mono text-sm text-ink-dim">probing engine…</p>
-      )}
+      {loading && <p className="font-mono text-sm text-muted-foreground">probing engine…</p>}
 
       {error && !loading && (
-        <div className="rounded-md border border-signal/40 bg-signal/10 p-3 text-sm text-ink">
-          <p className="font-medium text-signal">API unreachable</p>
-          <p className="mt-1 text-ink-dim">{error}</p>
-          <p className="mt-2 font-mono text-xs text-ink-faint">
+        <div className="border-2 border-border bg-secondary p-4 text-sm">
+          <p className="font-bold text-foreground">API unreachable</p>
+          <p className="mt-1 text-muted-foreground">{error}</p>
+          <p className="mt-2 font-mono text-xs text-muted-foreground">
             Is the engine wrapper running on :8001? Start it with the dev command.
           </p>
         </div>
@@ -97,31 +94,24 @@ export default function HealthPanel() {
           {rowsFromHealth(health).map((r) => (
             <li
               key={r.key}
-              className="flex items-start gap-3 rounded-md bg-navy-850/60 px-3 py-2"
+              className="flex items-start gap-3 border-2 border-border bg-card px-3.5 py-2.5"
             >
-              <span className="mt-1.5">
+              <span className="mt-1">
                 <Dot ok={r.ok} />
               </span>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-ink">{r.label}</span>
-                  <span
-                    className={cn(
-                      "font-mono text-[10px] uppercase tracking-wider",
-                      r.ok ? "text-teal" : "text-signal",
-                    )}
-                  >
-                    {r.ok ? "available" : "absent"}
-                  </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-sm font-bold text-foreground">{r.label}</span>
+                  <Badge tone={r.ok ? "success" : "signal"}>{r.ok ? "available" : "absent"}</Badge>
                 </div>
                 {r.detail && (
-                  <p className="truncate font-mono text-xs text-ink-faint">{r.detail}</p>
+                  <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{r.detail}</p>
                 )}
               </div>
             </li>
           ))}
         </ul>
       )}
-    </section>
+    </Card>
   )
 }

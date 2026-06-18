@@ -27,16 +27,17 @@ VERIFY_BANNER = ("Confidential — clinical decision support only; "
                  "the surgeon verifies every recommendation.")
 _CASE_EXTRA_CSS = """
 .verify-banner{ position:fixed; bottom:0; left:0; right:0; padding:3px 14mm;
-  font-family:var(--mono); font-size:7pt; letter-spacing:.02em; color:#7a5a14;
-  background:rgba(169,120,27,.10); border-top:1px solid rgba(169,120,27,.35); text-align:center; }
+  font-family:var(--mono); font-size:7pt; font-weight:700; letter-spacing:.02em; color:#000;
+  background:var(--yellow); border-top:2px solid #000; text-align:center; }
 .content{ padding-bottom:14mm; }
-.litblock{ margin:3mm 0 1mm; }
-.litblock .lh{ font-family:var(--ui); font-weight:700; font-size:9.5pt; color:var(--accent);
+.litblock{ margin:3mm 0 1mm; border:2px solid #000; border-left:5px solid var(--blue);
+  padding:3mm 4mm; box-shadow:3px 3px 0 0 #000; }
+.litblock .lh{ font-family:var(--ui); font-weight:700; font-size:9.5pt; color:var(--blue);
   letter-spacing:.02em; text-transform:uppercase; }
-.litblock .ln{ font-family:var(--read); font-size:9.6pt; color:#33424f; margin:1mm 0; }
-.litblock .lc{ font-family:var(--read); font-size:8.6pt; color:#56616c; padding:.6mm 0; }
-.litblock .lc .k{ font-family:var(--mono); font-size:7pt; color:var(--accent); margin-right:2mm; }
-.litblock a{ color:var(--accent); text-decoration:none; }
+.litblock .ln{ font-family:var(--read); font-size:9.6pt; color:#000; margin:1mm 0; }
+.litblock .lc{ font-family:var(--read); font-size:8.6pt; color:var(--muted); padding:.6mm 0; }
+.litblock .lc .k{ font-family:var(--mono); font-size:7pt; font-weight:700; color:var(--blue); margin-right:2mm; }
+.litblock a{ color:var(--blue); text-decoration:none; }
 """
 
 

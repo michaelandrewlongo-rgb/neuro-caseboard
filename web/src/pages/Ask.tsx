@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { askQuestion, type AskResponse } from "@/lib/api"
+import { Button, Card, Eyebrow } from "@/components/ui"
 import AskLoader from "@/components/ask/AskLoader"
 import AnswerView from "@/components/ask/AnswerView"
 import FigureGrid from "@/components/ask/FigureGrid"
@@ -48,13 +49,11 @@ export default function Ask() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <p className="font-mono text-xs uppercase tracking-[0.3em] text-teal">
-          Ask · Citation-grounded
-        </p>
-        <h1 className="mt-2 font-display text-4xl font-bold tracking-tight text-ink">
+        <Eyebrow accent>Ask · Citation-grounded</Eyebrow>
+        <h1 className="mt-3 font-display text-4xl font-bold tracking-tight text-foreground">
           Ask the corpus
         </h1>
-        <p className="mt-2 max-w-2xl text-ink-dim">
+        <p className="mt-2 max-w-2xl text-muted-foreground">
           Cited answers from your neurosurgery textbooks, augmented with contemporary PubMed
           literature. Decision-support only — verify against primary sources.
         </p>
@@ -72,27 +71,19 @@ export default function Ask() {
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder='e.g. "blood supply of the lateral medulla"'
-          className="flex-1 rounded-lg border border-navy-700/60 bg-navy-900/60 px-4 py-3 text-ink placeholder:text-ink-faint focus:border-teal/60 focus:outline-none"
+          className="field flex-1"
           disabled={loading}
           autoFocus
         />
-        <button
-          type="submit"
-          disabled={loading || !question.trim()}
-          className="rounded-lg bg-teal px-5 py-3 font-medium text-navy-950 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-        >
+        <Button type="submit" disabled={loading || !question.trim()} className="sm:px-7 sm:py-3">
           {loading ? "Asking…" : "Ask"}
-        </button>
+        </Button>
       </form>
 
       {!submitted && !loading && (
         <div className="flex flex-wrap gap-2">
           {HINTS.map((h) => (
-            <button
-              key={h}
-              onClick={() => void run(h)}
-              className="rounded-full border border-navy-700/60 bg-navy-900/40 px-3 py-1.5 font-mono text-xs text-ink-dim transition-colors hover:border-teal/50 hover:text-ink"
-            >
+            <button key={h} onClick={() => void run(h)} className="chip">
               {h}
             </button>
           ))}
@@ -102,13 +93,13 @@ export default function Ask() {
       {loading && <AskLoader />}
 
       {netError && !loading && (
-        <div className="rounded-lg border border-signal/40 bg-signal/10 p-5 text-sm">
-          <p className="font-medium text-signal">Request failed</p>
-          <p className="mt-1 text-ink-dim">{netError}</p>
-          <p className="mt-2 font-mono text-xs text-ink-faint">
+        <Card className="p-5 text-sm">
+          <p className="font-bold text-primary">Request failed</p>
+          <p className="mt-1 text-muted-foreground">{netError}</p>
+          <p className="mt-2 font-mono text-xs text-muted-foreground">
             Is the engine wrapper running on :8001?
           </p>
-        </div>
+        </Card>
       )}
 
       {resp && !loading && <ResultView resp={resp} onPickVariant={(q) => void run(q)} />}
@@ -125,40 +116,40 @@ function ResultView({
 }) {
   if (resp.kind === "error") {
     return (
-      <div className="rounded-lg border border-signal/40 bg-signal/10 p-5 text-sm">
-        <p className="font-medium text-signal">Engine error</p>
-        <p className="mt-1 font-mono text-xs text-ink-dim">{resp.error}</p>
-      </div>
+      <Card className="p-5 text-sm">
+        <p className="font-bold text-primary">Engine error</p>
+        <p className="mt-1 font-mono text-xs text-muted-foreground">{resp.error}</p>
+      </Card>
     )
   }
 
   if (resp.kind === "unavailable") {
     return (
-      <div className="rounded-lg border border-amber-400/40 bg-amber-400/10 p-5 text-sm">
-        <p className="font-medium text-amber-300">Temporarily unavailable</p>
-        <p className="mt-1 text-ink-dim">{resp.reason}</p>
-        <p className="mt-2 font-mono text-xs text-ink-faint">Try again in a moment.</p>
-      </div>
+      <Card className="bg-secondary p-5 text-sm">
+        <p className="font-bold text-foreground">Temporarily unavailable</p>
+        <p className="mt-1 text-muted-foreground">{resp.reason}</p>
+        <p className="mt-2 font-mono text-xs text-muted-foreground">Try again in a moment.</p>
+      </Card>
     )
   }
 
   if (resp.kind === "clarification") {
     return (
-      <div className="rounded-xl border border-navy-700/60 bg-navy-900/50 p-6">
-        <p className="font-medium text-ink">This question maps to several distinct topics.</p>
-        <p className="mt-1 text-sm text-ink-dim">Pick the variant you meant:</p>
+      <Card className="p-6">
+        <p className="font-medium text-foreground">This question maps to several distinct topics.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Pick the variant you meant:</p>
         <div className="mt-4 flex flex-col gap-2">
           {resp.variants.map((v) => (
             <button
               key={v.label}
               onClick={() => onPickVariant(v.rewrite || v.label)}
-              className="rounded-lg border border-navy-700/60 bg-navy-850/60 px-4 py-3 text-left text-sm text-ink transition-colors hover:border-teal/50"
+              className="rounded-lg border border-border bg-muted px-4 py-3 text-left text-sm text-foreground transition-colors hover:border-primary"
             >
               {v.label}
             </button>
           ))}
         </div>
-      </div>
+      </Card>
     )
   }
 

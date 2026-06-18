@@ -23,20 +23,20 @@ DEFAULT_EYEBROW = "Ask · Citation-grounded"
 # Q&A-only selectors layered on the shared Executive-Navy sheet (masthead, eyebrow chip, title,
 # rule, section headers, figures and footer all come from EXEC_NAVY_CSS).
 ASK_CSS = """
-.answer{ font-family:var(--read); font-size:11pt; line-height:1.55; color:#1e2a36; max-width:165mm; }
+.answer{ font-family:var(--read); font-size:11pt; line-height:1.55; color:#000; max-width:165mm; }
 .answer p{ margin:0 0 2.6mm; }
 .answer ul{ margin:0 0 3mm; padding-left:6mm; } .answer li{ margin:0 0 1.2mm; }
-.answer strong{ color:#0c2233; font-weight:600; }
-.answer h2{ font-family:var(--ui); font-weight:700; font-size:13pt; color:var(--ink);
-  letter-spacing:-.01em; margin:6mm 0 2mm; padding-top:3mm; border-top:1px solid var(--line); }
-.answer h3{ font-family:var(--ui); font-weight:600; font-size:10.5pt; color:var(--accent);
+.answer strong{ color:#000; font-weight:700; }
+.answer h2{ font-family:var(--ui); font-weight:700; font-size:13pt; color:#000;
+  letter-spacing:-.01em; margin:6mm 0 2mm; padding-top:3mm; border-top:2px solid #000; }
+.answer h3{ font-family:var(--ui); font-weight:700; font-size:10.5pt; color:var(--accent);
   margin:4mm 0 1.5mm; }
-.sources{ border:1px solid var(--line); border-radius:10px; padding:1mm 4mm; max-width:165mm;
-  box-shadow:0 1px 2px rgba(16,32,48,.04); }
-.src{ font-family:var(--read); font-size:9.6pt; color:#33424f; padding:1.8mm 0;
-  border-top:1px solid var(--line-soft); }
+.sources{ border:2px solid #000; border-radius:0; padding:1mm 4mm; max-width:165mm;
+  box-shadow:3px 3px 0 0 #000; }
+.src{ font-family:var(--read); font-size:9.6pt; color:#000; padding:1.8mm 0;
+  border-top:2px solid #000; }
 .src:first-child{ border-top:none; }
-.src .n, .src .ln{ font-family:var(--mono); font-size:7pt; color:var(--accent); font-weight:600;
+.src .n, .src .ln{ font-family:var(--mono); font-size:7pt; color:var(--accent); font-weight:700;
   margin-right:2mm; }
 .src a{ color:var(--accent); text-decoration:none; }
 .litmeta{ color:var(--muted); }

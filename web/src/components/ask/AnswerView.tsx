@@ -1,26 +1,31 @@
 import ReactMarkdown, { type Components } from "react-markdown"
 import remarkGfm from "remark-gfm"
+import { citify } from "@/lib/citations"
+import { Card } from "@/components/ui"
 
-// Clinical reading surface: legible, static (no animated text), dark-theme markdown. The engine's
-// inline [n] / [L#] citation markers are preserved verbatim and resolve to the Sources / Literature
-// panels below.
+// Clinical reading surface: a calm Source Serif 4 column. Inline [n] / [L#] markers become
+// footnote-style chips; everything else stays static and legible (no animated clinical text).
 const components: Components = {
   h2: ({ children }) => (
-    <h2 className="mt-6 mb-2 font-display text-xl font-bold text-ink">{children}</h2>
+    <h2 className="mt-7 mb-3 font-display text-xl font-bold text-foreground">{children}</h2>
   ),
   h3: ({ children }) => (
-    <h3 className="mt-5 mb-2 font-display text-base font-semibold tracking-wide text-teal">
+    <h3 className="mt-6 mb-2 font-display text-sm font-bold uppercase tracking-[0.14em] text-primary">
       {children}
     </h3>
   ),
-  p: ({ children }) => <p className="my-3 leading-relaxed text-ink">{children}</p>,
-  ul: ({ children }) => <ul className="my-3 ml-5 list-disc space-y-1.5 text-ink">{children}</ul>,
-  ol: ({ children }) => <ol className="my-3 ml-5 list-decimal space-y-1.5 text-ink">{children}</ol>,
-  li: ({ children }) => <li className="leading-relaxed marker:text-ink-faint">{children}</li>,
-  strong: ({ children }) => <strong className="font-semibold text-ink">{children}</strong>,
-  em: ({ children }) => <em className="italic text-ink-dim">{children}</em>,
+  p: ({ children }) => <p className="reading my-4">{citify(children)}</p>,
+  ul: ({ children }) => (
+    <ul className="reading my-4 ml-5 list-disc space-y-2 marker:text-muted-foreground">{children}</ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="reading my-4 ml-5 list-decimal space-y-2 marker:text-muted-foreground">{children}</ol>
+  ),
+  li: ({ children }) => <li className="leading-[1.7]">{citify(children)}</li>,
+  strong: ({ children }) => <strong className="font-semibold text-foreground">{citify(children)}</strong>,
+  em: ({ children }) => <em className="italic text-muted-foreground">{children}</em>,
   code: ({ children }) => (
-    <code className="rounded bg-navy-800 px-1.5 py-0.5 font-mono text-[0.85em] text-teal">
+    <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em] text-primary">
       {children}
     </code>
   ),
@@ -29,7 +34,7 @@ const components: Components = {
       href={href}
       target="_blank"
       rel="noreferrer noopener"
-      className="text-teal underline decoration-teal/40 underline-offset-2 hover:decoration-teal"
+      className="text-primary underline decoration-primary underline-offset-2 hover:decoration-primary"
     >
       {children}
     </a>
@@ -38,10 +43,10 @@ const components: Components = {
 
 export default function AnswerView({ text }: { text: string }) {
   return (
-    <article className="rounded-xl border border-navy-700/60 bg-navy-900/40 p-6">
+    <Card className="p-6 sm:p-8">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {text}
       </ReactMarkdown>
-    </article>
+    </Card>
   )
 }

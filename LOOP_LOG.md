@@ -262,3 +262,26 @@ local-first, honest degradation, engine reused (imported, never reimplemented). 
   to clear the 500 kB chunk warning; per-figure lightbox. Engine entry points used (forwarded, never
   reimplemented): `qa.answer_question`, `pipeline.build_dossier`/`render_case_pdf`,
   `neuro_core.cards_query`, `neuro_core.config.load_config`.
+
+- **Style overhaul (2026-06-18) — Neo Brutalism GUI (web + PDFs).** After reviewing design samples
+  (5 hand-built mockups + 8 rendered tweakcn presets), the user chose **Neo Brutalism** (tweakcn preset)
+  as the product GUI. Re-themed the design system to shadcn semantic tokens driven by the preset: white
+  ground, black 2px borders, red `#ff3333` primary / yellow secondary / blue accent, square corners,
+  hard offset shadows, DM Sans + Space Mono. Status semantics kept legible (green=supported/available,
+  amber=verify, red/black=absent/danger — since red is the brand primary). Migration: rewrote
+  `index.css` (tokens + brutalist `.surface`/`.field`/`.chip` + `*{border-radius:0}`) and `ui.tsx`
+  (Card/Button/Badge/Stat with press-effect shadows); scripted ~211 utility substitutions across 19
+  components (`navy/teal/ink/signal` → `background/card/muted/primary/foreground/...`); hand-fixed the
+  tint→solid contrast collapses (status panels, citation chips, literature block, nav active). **PDF
+  parity (per request):** restyled the single shared print stylesheet `EXEC_NAVY_CSS` (exec_navy.py) +
+  the two extras (`ASK_CSS` briefing, `_CASE_EXTRA_CSS` caseboard) to the same brutalist tokens — class
+  structure unchanged — and installed Python Playwright + Chromium so the HTML→PDF path is active (the
+  sanctioned `briefing` extra; fpdf2 remains the offline/CI fallback).
+  - **Verified:** web build 0 type errors; headless Chromium — Home / Ask / Cards render brutalist,
+    console-clean. Real HTML→PDF dossier renders brutalist (red logo, yellow eyebrow chip, green/amber/
+    red evidence metrics, black-bordered claim cards w/ hard shadows + status markers, yellow verify
+    banner). Engine untouched except the PDF stylesheets; **full suite 442 passed / 1 skipped** after
+    updating 3 PDF token tests (`test_exec_navy`/`test_briefing_pdf`/`test_caseboard_pdf`) from the old
+    teal/Archivo asserts to red/DM-Sans — the design contract moved, intentionally.
+  - **Note:** the fpdf2 offline fallback (`render_pdf.py`) keeps its older code-drawn look; only the
+    HTML→PDF path (now the default with Chromium installed) is brutalist.

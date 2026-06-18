@@ -7,7 +7,7 @@ import Cards from "@/pages/Cards"
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-navy-950 text-ink">
+    <div className="min-h-screen text-foreground">
       <NavBar />
       <main className="mx-auto max-w-5xl px-6 py-10">
         <Routes>

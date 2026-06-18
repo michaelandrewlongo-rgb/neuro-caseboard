@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import BlurText from "@/components/BlurText"
+import { Card } from "@/components/ui"
 
 const STEPS = [
   "Searching your textbook corpus…",
@@ -8,8 +9,8 @@ const STEPS = [
   "Scanning recent PubMed literature…",
 ]
 
-/** Slow-call loader: a react-bits BlurText status line (animation in the chrome, never in the
-    clinical text) cycling over real pipeline stages, plus shimmer placeholders. */
+/** Slow-call loader: a react-bits BlurText status line (animation in the chrome) cycling real
+    pipeline stages, plus shimmer placeholders. */
 export default function AskLoader() {
   const [i, setI] = useState(0)
   useEffect(() => {
@@ -18,34 +19,25 @@ export default function AskLoader() {
   }, [])
 
   return (
-    <section className="rounded-xl border border-navy-700/60 bg-navy-900/50 p-6">
+    <Card className="p-6">
       <div className="flex items-center gap-3">
-        <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-teal shadow-[0_0_8px_var(--color-teal)]" />
+        <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
         <BlurText
           key={i}
           text={STEPS[i]}
           animateBy="words"
           delay={40}
-          className="font-mono text-sm text-teal"
+          className="font-mono text-sm text-primary"
         />
       </div>
-
       <div className="mt-6 flex flex-col gap-3" aria-hidden>
-        {[
-          "w-11/12",
-          "w-full",
-          "w-10/12",
-          "w-9/12",
-          "w-full",
-          "w-7/12",
-        ].map((w, idx) => (
-          <div key={idx} className={`h-3 ${w} animate-pulse rounded bg-navy-700/50`} />
+        {["w-11/12", "w-full", "w-10/12", "w-9/12", "w-full", "w-7/12"].map((w, idx) => (
+          <div key={idx} className={`h-3 ${w} animate-pulse rounded bg-muted`} />
         ))}
       </div>
-
-      <p className="mt-5 font-mono text-xs text-ink-faint">
+      <p className="mt-5 font-mono text-xs text-muted-foreground">
         Usually 30–80 seconds — retrieval, citation-grounded synthesis, and a live literature lookup.
       </p>
-    </section>
+    </Card>
   )
 }

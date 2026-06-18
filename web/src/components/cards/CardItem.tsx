@@ -1,34 +1,31 @@
-import type { Card } from "@/lib/api"
+import type { Card as CardData } from "@/lib/api"
+import { Card, Badge } from "@/components/ui"
 
-export default function CardItem({ card, index }: { card: Card; index: number }) {
+export default function CardItem({ card, index }: { card: CardData; index: number }) {
   const images = card.images.filter((im) => im.image_available && im.image_url)
   return (
-    <article className="rounded-xl border border-navy-700/60 bg-navy-900/50 p-5">
+    <Card className="p-5">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="font-mono text-xs text-ink-faint">[{index + 1}]</span>
-        <span className="rounded-full bg-navy-800 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-ink-dim">
-          {card.deck}
-        </span>
-        {card.tags && (
-          <span className="font-mono text-[10px] text-ink-faint">{card.tags}</span>
-        )}
+        <span className="font-mono text-xs text-muted-foreground">[{index + 1}]</span>
+        <Badge tone="neutral">{card.deck}</Badge>
+        {card.tags && <span className="font-mono text-[10px] text-muted-foreground">{card.tags}</span>}
       </div>
 
       {card.flagged.length > 0 && (
-        <div className="mb-3 rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-300">
+        <div className="mb-3 border-2 border-border bg-secondary px-3 py-2 text-xs font-medium text-foreground">
           ⚠ Flagged in your deck as unverified ({card.flagged.join(", ")}) — not source-checked.
         </div>
       )}
 
       {card.question_text && (
-        <p className="text-ink">
-          <span className="font-mono text-xs uppercase tracking-wider text-teal">Q.</span>{" "}
+        <p className="reading">
+          <span className="mr-1 font-mono text-xs uppercase tracking-wider text-primary">Q.</span>
           {card.question_text}
         </p>
       )}
       {card.answer_text && (
-        <p className="mt-2 whitespace-pre-wrap text-ink-dim">
-          <span className="font-mono text-xs uppercase tracking-wider text-ink-faint">A.</span>{" "}
+        <p className="reading mt-2 whitespace-pre-wrap !text-muted-foreground">
+          <span className="mr-1 font-mono text-xs uppercase tracking-wider text-muted-foreground">A.</span>
           {card.answer_text}
         </p>
       )}
@@ -41,11 +38,11 @@ export default function CardItem({ card, index }: { card: Card; index: number })
               src={im.image_url!}
               alt={`card ${index + 1} media ${i + 1}`}
               loading="lazy"
-              className="w-full rounded-lg border border-navy-700/60 bg-navy-950/60 object-contain"
+              className="w-full rounded-lg border border-border bg-background object-contain"
             />
           ))}
         </div>
       )}
-    </article>
+    </Card>
   )
 }
