@@ -20,7 +20,7 @@ from fpdf import FPDF
 
 from caseprep.core.contracts import ArtifactRef
 from neuro_caseboard.fpdf_base import register_fonts, ascii_fallback
-from neuro_caseboard.model import Dossier, MARK, ASCII_MARK
+from neuro_caseboard.model import Dossier, MARK, ASCII_MARK, fallback_notice
 
 _COLORS = {"supported": (0, 128, 0), "verify": (180, 95, 0)}
 _BLACK = (0, 0, 0)
@@ -67,6 +67,14 @@ def render_pdf(dossier: Dossier, out_path) -> ArtifactRef:
     pdf.set_text_color(*_BLACK)
     pdf.multi_cell(0, 9, t(dossier.title), new_x="LMARGIN", new_y="NEXT")
     pdf.ln(1)
+
+    notice = fallback_notice(dossier.provenance)
+    if notice:
+        pdf.set_font(fam, "B", 9)
+        pdf.set_text_color(180, 95, 0)            # amber, matches the verify marker
+        pdf.multi_cell(0, 4.8, t("FALLBACK — " + notice), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(*_BLACK)
+        pdf.ln(1)
 
     # ── legend (#4) ──
     pdf.set_font(fam, "B", 10)

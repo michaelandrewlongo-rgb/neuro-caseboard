@@ -123,3 +123,26 @@ def test_markdown_banner_present_only_when_degraded():
     ok = Dossier(provenance=Provenance(source="llm_generated", degraded=False), **base)
     assert FALLBACK_BANNER in render_markdown(degraded)
     assert FALLBACK_BANNER not in render_markdown(ok)
+
+
+# ---------------------------------------------------------------------------
+# Task 5: PDF fallback banners (exec-Navy HTML + fpdf2 clinical)
+# ---------------------------------------------------------------------------
+
+def test_exec_html_banner_present_only_when_degraded():
+    from neuro_caseboard.caseboard_pdf import build_caseboard_html
+    base = dict(title="Case Board — acdf", summary=EvidenceSummary(to_verify=1))
+    degraded = Dossier(provenance=Provenance(source="deterministic", degraded=True), **base)
+    ok = Dossier(provenance=Provenance(source="llm_generated", degraded=False), **base)
+    assert "fallback-banner" in build_caseboard_html(degraded)
+    assert "fallback-banner" not in build_caseboard_html(ok)
+
+
+def test_fpdf_renderer_handles_degraded(tmp_path):
+    # fpdf2 binary output is not text-greppable; assert it renders a valid PDF without crashing
+    # when degraded (the banner code path is exercised).
+    from neuro_caseboard.render_pdf import render_pdf
+    d = Dossier(title="Case Board — acdf", summary=EvidenceSummary(to_verify=1),
+                provenance=Provenance(source="deterministic", degraded=True))
+    art = render_pdf(d, tmp_path / "x.pdf")
+    assert art.path.read_bytes()[:5].startswith(b"%PDF")
