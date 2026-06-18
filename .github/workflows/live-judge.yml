@@ -1,0 +1,94 @@
+name: live-judge
+
+# NOT a required gate, and NEVER part of the per-PR required CI (`ci.yml`). This is the keyed
+# nightly run of the live BLIND judges — the real quality signal that the offline `quality_gate.py`
+# cannot measure (it needs a billed/credentialed LLM + vision provider). It runs on the held-out
+# **eval** split, uploads the dated reports as artifacts, and is purely informational: it never
+# blocks a PR. Without the secrets it NO-OPS cleanly (a green, do-nothing run), so forks and the
+# nightly schedule never fail for lack of credentials.
+#
+# Tracked against `eval/LIVE_BASELINE.json` (informational). The image judge keeps its `--budget`
+# hard-stop. See docs/ci.md.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 7 * * *" # nightly 07:23 UTC
+
+permissions:
+  contents: read
+
+env:
+  CASEPREP_REF: 8b1d8fd0488c16ff68721c6dc29041862517b392
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  live-judge:
+    name: live blind judges (text + image, eval split)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CASEBOARD_LLM_PROVIDER: ${{ secrets.CASEBOARD_LLM_PROVIDER }}
+      GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # Secrets-gated: with no provider configured this is a clean, green no-op (the live judges are
+      # a keyed step). Every downstream step is conditioned on `configured == 'true'`.
+      - name: Gate on credentials (skip cleanly when unconfigured)
+        id: gate
+        run: |
+          if [ -z "${CASEBOARD_LLM_PROVIDER}" ] || [ -z "${GOOGLE_CLOUD_PROJECT}" ]; then
+            echo "No LLM/vision provider secrets configured — the live judges are the keyed nightly"
+            echo "step (informational, never blocks). Skipping."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install caseprep (pinned) + package[dev,vertex]
+        if: steps.gate.outputs.configured == 'true'
+        run: ./ci/install.sh ".[dev,vertex]"
+
+      - name: Authenticate to Google Cloud (ADC for Vertex)
+        if: steps.gate.outputs.configured == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
+
+      - name: Compute the held-out eval-split case ids
+        if: steps.gate.outputs.configured == 'true'
+        id: ids
+        run: |
+          IDS=$(python - <<'PY'
+          import json, pathlib
+          cases = json.loads(pathlib.Path("eval/cases.json").read_text())["cases"]
+          print(",".join(c["id"] for c in cases if c.get("split") == "eval"))
+          PY
+          )
+          echo "ids=$IDS" >> "$GITHUB_OUTPUT"
+          echo "eval split: $IDS"
+
+      - name: Live blind TEXT judge (eval split)
+        if: steps.gate.outputs.configured == 'true'
+        run: python eval/live_text_judge.py --ids "${{ steps.ids.outputs.ids }}" --tag nightly
+
+      - name: Live blind IMAGE judge (eval split, vertex, budget-capped)
+        if: steps.gate.outputs.configured == 'true'
+        run: |
+          python eval/live_image_judge.py --backend vertex \
+            --ids "${{ steps.ids.outputs.ids }}" --budget 3.0 --tag nightly
+
+      - name: Upload dated judge reports
+        if: steps.gate.outputs.configured == 'true'
+        uses: actions/upload-artifact@v5
+        with:
+          name: live-judge-reports
+          path: |
+            eval/CASE_TEXT_JUDGE_REPORT_*.md
+            eval/CASE_IMAGE_JUDGE_REPORT_*.md
+          if-no-files-found: warn

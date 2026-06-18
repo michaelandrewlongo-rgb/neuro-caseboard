@@ -1,0 +1,62 @@
+{
+  "section_coverage_det": {
+    "value": 1.0,
+    "direction": "min"
+  },
+  "section_coverage_gt": {
+    "value": 1.0,
+    "direction": "min"
+  },
+  "facet_coverage": {
+    "value": 1.0,
+    "direction": "min"
+  },
+  "intake_side_acc": {
+    "value": 1.0,
+    "direction": "min"
+  },
+  "intake_level_acc": {
+    "value": 1.0,
+    "direction": "min"
+  },
+  "intake_goal_acc": {
+    "value": 1.0,
+    "direction": "min"
+  },
+  "lit_coverage": {
+    "value": 1.0,
+    "direction": "min"
+  },
+  "corpus_n_coverage": {
+    "value": 1.0,
+    "direction": "min"
+  },
+  "figure_archetype_acc": {
+    "value": 1.0,
+    "direction": "min"
+  },
+  "figure_side_acc": {
+    "value": 1.0,
+    "direction": "min"
+  },
+  "figure_byte_stable": {
+    "value": 1.0,
+    "direction": "min"
+  },
+  "figure_guard_reject": {
+    "value": 1.0,
+    "direction": "min"
+  },
+  "figure_plate_preferred": {
+    "value": 1.0,
+    "direction": "min"
+  },
+  "near_dup_rate": {
+    "value": 0.0,
+    "direction": "max"
+  },
+  "red_flag_contamination": {
+    "value": 0.0,
+    "direction": "max"
+  }
+}

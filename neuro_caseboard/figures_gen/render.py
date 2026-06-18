@@ -216,3 +216,45 @@ def render_spec_to_file(spec, path, **kw) -> str:
     data = render_spec(spec, **kw)
     Path(path).write_bytes(data)
     return str(path)
+
+
+# --------------------------------------------------------------------------- WS-4 retrieved plate
+
+_REF_BANNER = "REFERENCE PLATE — NOT THIS PATIENT'S IMAGING"
+
+
+def render_plate(src_path, out_path, *, citation: str = "", labels=(), width: int = 900) -> str:
+    """Annotate a RETRIEVED textbook plate: scale it to a standard width and draw a mandatory
+    reference banner (so neither the reader nor the image judge mistakes it for the patient's own
+    imaging), the corpus citation, and optional structure labels. PIL only — no new dependency.
+    Deterministic given the same source image + arguments.
+
+    Distinct from `render_spec` (the schematic renderer, frozen): this overlays a real plate; it
+    never synthesizes anatomy."""
+    plate = Image.open(src_path).convert("RGB")
+    scale = width / plate.width
+    body_h = max(1, int(plate.height * scale))
+    plate = plate.resize((width, body_h))
+
+    band = 34          # top reference banner
+    foot = 26 if citation else 0
+    img = Image.new("RGB", (width, band + body_h + foot), _BG)
+    d = ImageDraw.Draw(img)
+    # top reference banner (amber caution, like the schematic banner) — honesty about the source
+    d.rectangle([0, 0, width, band], fill=_BANNER_BG)
+    f_band = _font(15, bold=True)
+    d.text((10, 8), _REF_BANNER, font=f_band, fill=(255, 255, 255))
+    img.paste(plate, (0, band))
+    # optional structure labels along the top of the plate body
+    f_small = _font(13)
+    for i, lab in enumerate(labels or ()):
+        d.text((10, band + 6 + 18 * i), f"• {_fit(d, str(lab), f_small, width - 20)}",
+               font=f_small, fill=_INK)
+    if citation:
+        d.text((10, band + body_h + 5), _fit(d, f"Reference: {citation}", f_small, width - 20),
+               font=f_small, fill=_MUTED)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    Path(out_path).write_bytes(buf.getvalue())
+    return str(out_path)
