@@ -29,3 +29,5 @@ eval/_fig_specs/
 # GUI council capture artifacts (regenerable)
 gui-council/shots/
 gui-council/axe/
+# local throwaway venvs
+.testvenv/

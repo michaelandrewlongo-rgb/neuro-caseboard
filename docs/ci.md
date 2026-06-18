@@ -2,24 +2,25 @@
 
 This repo's CI is built around one principle: **the per-PR gate exercises only the offline
 default path** — no API keys, no GPU, no textbook corpus, no private index, no external
-service at test time. The only network use is at *install* time (PyPI wheels + one pinned
-git dependency). Heavier, environment-dependent checks are split into a separate,
-non-blocking workflow.
+service at test time. The only network use is at *install* time (PyPI wheels). Heavier,
+environment-dependent checks are split into a separate, non-blocking workflow.
 
-> Design rationale and tradeoffs: `docs/superpowers/specs/2026-06-14-ci-system-design.md`.
+> Design rationale and tradeoffs: `docs/superpowers/specs/2026-06-14-ci-system-design.md`
+> (written when caseprep was an external pinned dependency; it is now vendored in-tree).
 
-## The one external dependency: caseprep
+## caseprep is vendored in-tree
 
-`caseprep` is a sibling library (public repo
-`github.com/michaelandrewlongo-rgb/caseprep`) imported at module top by the pipeline/CLI.
-It is **not** declared in `pyproject.toml` (so the local `pip install -e ../caseprep`
-workflow is preserved), so every environment must install it first. CI installs it from a
-**pinned commit** via the `CASEPREP_REF` workflow variable, so runs are reproducible.
+`caseprep` lives in this repo at [`vendor/caseprep/`](../vendor/caseprep/), brought in with
+`git subtree` (full history preserved). Its package (`vendor/caseprep/caseprep`) is mapped to
+the top-level `caseprep` import name (via `package-dir`) and imported by the pipeline/CLI — no
+external folder, no editable sibling install, no pinned commit. It sits under `vendor/` rather
+than `./caseprep` so the directory name can't shadow the `caseprep` import when the repo root is
+on `sys.path`. A clean clone plus `pip install -e .[dev]` gets everything, and caseprep's own
+tests run as part of this repo's suite (`testpaths` includes `vendor/caseprep/tests`).
 
-- To bump it: change `CASEPREP_REF` in `.github/workflows/ci.yml` **and**
-  `.github/workflows/optional-integration.yml` **and** the default in `ci/install.sh`.
-- The shared installer `ci/install.sh "<target>"` installs the pinned caseprep, then the
-  given pip target (e.g. `".[dev]"` or `dist/*.whl`).
+- The shared installer `ci/install.sh "<target>"` just installs the given pip target
+  (e.g. `".[dev]"` or `dist/*.whl`); caseprep comes with it.
+- To pull upstream caseprep changes later: `git subtree pull --prefix=vendor/caseprep <remote> <ref>`.
 
 ## Required workflow — `.github/workflows/ci.yml`
 
@@ -30,7 +31,7 @@ candidates**.
 |-----|----------------|--------------------|
 | **`sanity`** | Every `.py` under `neuro_caseboard/`, `neuro_core/`, `app/`, `tests/`, `eval/` byte-compiles (catches syntax errors fast); `pyproject.toml` is valid TOML; no unresolved merge-conflict markers. | Pure syntax/text checks; no heavy install; first-failure signal in <30 s. |
 | **`test`** (Python 3.10 + 3.12) | The real core behavior — `model`/`compile`/`render_md`/`render_pdf`/`dedup`/`captions`/`guard`/`pipeline`/`cli` plus `neuro_core` retrieval & figure logic — the offline on-disk **LanceDB integration** tests, and the **CLI artifact smoke** (`tests/test_cli_smoke.py`). Regression protection. | All ML backends are dependency-injected/faked and heavy libs import lazily, so the suite is offline/CPU/no-download. `PYTHONHASHSEED=0`. |
-| **`package`** | `python -m build` produces a valid sdist+wheel; `twine check` passes; a **clean venv** install of just the wheel (declared deps resolve from PyPI) + pinned caseprep yields importable modules and a working `caseboard --help`. | This is the install/dependency/entry-point gate — it is what catches a future undeclared top-level import or broken metadata. |
+| **`package`** | `python -m build` produces a valid sdist+wheel; `twine check` passes; a **clean venv** install of just the wheel (declared deps resolve from PyPI; caseprep is bundled in the wheel) yields importable modules and a working `caseboard --help`. | This is the install/dependency/entry-point gate — it is what catches a future undeclared top-level import or broken metadata. |
 
 ### The CLI artifact smoke (what it specifically guards)
 
@@ -99,7 +100,6 @@ These need GPUs, billed API keys, or the private textbook corpus, so they are in
 
 ```bash
 ci/local-ci.sh                       # full mirror: sanity -> tests -> package smoke
-USE_LOCAL_CASEPREP=1 ci/local-ci.sh  # faster: install caseprep from ../caseprep instead of git
 ```
 
 The mirror builds a throwaway venv **without** system site-packages, so globally-installed
@@ -130,9 +130,9 @@ Leave `optional-integration` **unchecked** (manual/scheduled).
 
 | Tier | Packages | Declared where | In required CI? |
 |------|----------|----------------|-----------------|
-| core | fpdf2, pillow, pymupdf, lancedb, numpy | `[project].dependencies` | yes |
-| external | caseprep | pinned git (`CASEPREP_REF`) | yes (installed first) |
-| dev | pytest, pdfplumber | `[dev]` extra | yes |
+| core | fpdf2, pillow, pymupdf, httpx, lancedb, numpy + caseprep's deps (mcp, fastapi, uvicorn, requests, pandas, pydantic, markdown) | `[project].dependencies` | yes |
+| vendored | caseprep (in-tree at `vendor/caseprep/`) | `git subtree`, mapped via `package-dir` | yes (bundled) |
+| dev | pytest, pytest-asyncio, pdfplumber | `[dev]` extra | yes |
 | llm / vertex | anthropic / google-genai | `[llm]` / `[vertex]` extras | no (local/runtime) |
 | briefing | playwright | `[briefing]` extra | optional workflow |
 | web | streamlit | `[web]` extra | no (syntax-checked only) |

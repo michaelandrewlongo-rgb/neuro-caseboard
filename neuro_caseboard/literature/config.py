@@ -76,7 +76,7 @@ def load_literature_config() -> LiteratureConfig:
     return LiteratureConfig(
         enabled=_flag(os.environ.get("LITERATURE_RETRIEVAL", "true")),
         recency_years=int(os.environ.get("LITERATURE_RECENCY_YEARS", "7")),
-        k=int(os.environ.get("LITERATURE_K", "8")),
+        k=int(os.environ.get("LITERATURE_K", "12")),
         cache_ttl_days=int(os.environ.get("LITERATURE_CACHE_TTL_DAYS", "14")),
         ncbi_api_key=(os.environ.get("NCBI_API_KEY")
                       or os.environ.get("NCBI_API_KEY_2") or "").strip(),

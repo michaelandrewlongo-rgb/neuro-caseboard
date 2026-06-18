@@ -1,0 +1,9 @@
+{
+  "output_exists": true,
+  "diagnosis_preserves_abutment_uncertainty": true,
+  "no_superior_sagittal_sinus_meningioma_overcall": true,
+  "operative_no_main_approach_placeholder": true,
+  "operative_has_likely_parasagittal_craniotomy": true,
+  "no_mep_ssep_neuromonitoring": true,
+  "passed": true
+}

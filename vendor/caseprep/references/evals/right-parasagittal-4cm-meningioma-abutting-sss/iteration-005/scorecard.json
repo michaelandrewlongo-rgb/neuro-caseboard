@@ -1,0 +1,23 @@
+{
+  "score": 84,
+  "grade_basis": "morning-of-case surgical usefulness for right parasagittal 4cm meningioma abutting SSS",
+  "overall_usefulness": "operatively useful with correct venous-preservation framing, but limited by missing patient-specific imaging, placeholders, and non-quantitative evidence extraction",
+  "evidence_usefulness": "good bottom-line synthesis; directly supports abutment-vs-invasion caution, MRV/CTV confirmation, bridging/cortical vein preservation, and planned residual when venous risk is high",
+  "does_evidence_change_caseprep_usefulness": true,
+  "evidence_effect": "positive: converts sources into an actionable venous-preservation strategy rather than a raw bibliography",
+  "top_defects": [
+    "No patient-specific imaging details: AP location, SSS patency/narrowing, actual abutment vs invasion, venous lacunae, and dominant bridging veins remain unknown.",
+    "Multiple generic placeholders remain in case summary, approach matrix, checklists, symptoms/exam, anticoagulation, consent, and team questions.",
+    "Operative plan is directionally correct but lacks concrete incision/craniotomy/burr-hole/dural-opening strategy around the sinus and bridging veins.",
+    "Immediate SSS bleeding rescue logic is correct but too high-level; lacks practical repair/packing sequence and air embolism/venous pressure contingencies.",
+    "Evidence section cites relevant studies but lacks extracted numeric outcomes or concrete study-level takeaways for morbidity, recurrence, venous infarct, sinus thrombosis, or radiosurgery control.",
+    "Evidence provenance is internally inconsistent: README/appendix report one source while evidence tables list multiple curated sources."
+  ],
+  "strengths": [
+    "Does not overcall SSS invasion from 'abutting SSS'.",
+    "Centers MRV/CTV-defined sinus and venous anatomy before deciding extent of resection.",
+    "Correctly prioritizes cortical/bridging vein preservation and planned residual over unsafe radicality.",
+    "Includes relevant stop points for unclear sinus plane, dominant vein compromise, venous congestion, and uncontrolled venous bleeding.",
+    "Avoids irrelevant mandatory MEP/SSEP and overbuilt Sindou-style default management."
+  ]
+}

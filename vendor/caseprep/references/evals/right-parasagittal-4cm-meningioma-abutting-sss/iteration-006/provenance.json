@@ -1,0 +1,54 @@
+[
+  {
+    "field_path": "profile",
+    "source_ids": [],
+    "value_status": "generated",
+    "generated_by": "caseprep.core.profile_classifier",
+    "notes": "Profile classified deterministically from topic and hint."
+  },
+  {
+    "field_path": "retrieval",
+    "source_ids": [
+      "pmid-33618045"
+    ],
+    "value_status": "cited",
+    "generated_by": "caseprep.core.retrievers",
+    "notes": "Normalized evidence returned by core retrievers."
+  },
+  {
+    "field_path": "sections",
+    "source_ids": [
+      "pmid-33618045"
+    ],
+    "value_status": "cited",
+    "generated_by": "caseprep.synthesis.section_synthesis",
+    "notes": "Section drafts grouped from normalized evidence."
+  },
+  {
+    "field_path": "sections.anatomy-relevant-structures",
+    "source_ids": [
+      "pmid-33618045"
+    ],
+    "value_status": "cited",
+    "generated_by": "caseprep.synthesis.section_synthesis",
+    "notes": "Section draft cites evidence IDs for Anatomy / Relevant Structures."
+  },
+  {
+    "field_path": "case.evidence.curated_pack.parasagittal_sss",
+    "source_ids": [
+      "pmid-30171502",
+      "pmid-16607555",
+      "pmid-20950085",
+      "pmid-23330997",
+      "pmid-33618045",
+      "pmid-40025371",
+      "pmid-9733295",
+      "pmid-37496660",
+      "pmid-37987849",
+      "pmid-33544790"
+    ],
+    "value_status": "cited",
+    "generated_by": "caseprep.schema.parasagittal_sss_evidence_pack",
+    "notes": "Deterministic curated parasagittal/SSS meningioma evidence pack rendered separately from live retrieval counts; 10 PubMed-indexed sources."
+  }
+]

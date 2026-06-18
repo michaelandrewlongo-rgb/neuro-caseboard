@@ -21,22 +21,39 @@ dependencies = [
     # visual_embed import numpy at module top. Both are CPU-only PyPI wheels (no GPU).
     "lancedb>=0.5",
     "numpy>=1.24",
+    # --- caseprep's runtime deps (caseprep is now vendored in-tree at ./vendor/caseprep; see
+    # the note below). PyMuPDF / httpx / fpdf2 are already required above; these add what the
+    # caseprep parser, MCP server, web surface, scoring and contracts need so its full test
+    # suite runs from this one install.
+    "mcp>=1.0",
+    "fastapi>=0.100",
+    "uvicorn>=0.30",
+    "requests>=2.34.2",
+    "pandas>=2.3.3",
+    "pydantic>=2.13.4",
+    "markdown>=3.10.2",
 ]
 
 # neuro_core (the retrieval/figure engine, formerly the textbook-rag repo) now lives in this
 # repo as a first-class package and is imported directly — no sys.path hack.
 #
-# caseprep remains an EXTERNAL dependency, not declared here so the local editable workflow
-# (`pip install -e ../caseprep`) is preserved. It is a hard import-time dependency of the
-# pipeline/CLI, so any environment (including CI) must install it first, e.g.:
-#   pip install "caseprep @ git+https://github.com/michaelandrewlongo-rgb/caseprep.git@<sha>"
-# CI pins a commit via the CASEPREP_REF workflow variable for reproducibility.
+# caseprep is ALSO vendored in-tree now: its full repo lives at ./vendor/caseprep (brought in
+# with `git subtree`, history preserved), and the importable package is ./vendor/caseprep/caseprep
+# — mapped to the top-level `caseprep` import name via [tool.setuptools.package-dir] below, so
+# every `from caseprep ...` import resolves with no external folder and no editable sibling
+# install. It lives under vendor/ (not ./caseprep) so the directory name can't shadow the
+# `caseprep` import when the repo root is on sys.path. Runs from a clean clone; no external pin.
 #
 # (Large index/ and assets/ dirs stay on disk, located via neuro_core.config /
 # TEXTBOOK_INDEX_DIR; they are never required for the offline default path or for CI.)
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "pdfplumber>=0.11"]
+# pytest-asyncio: caseprep's test suite marks ~110 cases with @pytest.mark.asyncio
+# (explicit/strict mode), so the plugin must be present for them to actually run.
+dev = ["pytest>=7", "pytest-asyncio>=0.23", "pdfplumber>=0.11"]
+# caseprep's optional semantic retriever (corpus_topology). The retriever module itself is
+# discovered at runtime via $CORPUS_CLUSTERING_PATH; these are only its heavy backends.
+semantic = ["sentence-transformers>=2.2", "psycopg[binary]>=3.1", "pgvector>=0.2"]
 # LLM-backed Explorer (case-specific question generation for any procedure).
 # Needs ANTHROPIC_API_KEY at runtime; falls back to the deterministic Explorer without it.
 llm = ["anthropic>=0.40"]
@@ -54,16 +71,55 @@ models = ["sentence-transformers>=2.2", "open-clip-torch>=2.20"]
 
 [project.scripts]
 caseboard = "neuro_caseboard.cli:main"
+# Vendored caseprep's own entry points, kept working now that it lives in-tree.
+caseprep = "caseprep.cli:main"
+caseprep-mcp = "caseprep.mcp_server:run"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["neuro_caseboard*", "neuro_core*"]
+# The vendored caseprep package sits at ./vendor/caseprep/caseprep; package-dir maps the
+# `caseprep` import name to that directory so it stays top-level importable with no import
+# rewrites. setuptools' packages.find with two `where` roots mis-resolves this nested layout
+# (it doubles the path), so the package list is explicit.
+# After a `git subtree pull` of caseprep, refresh the caseprep entries with:
+#   python -c "from setuptools import find_packages as f; print('\n'.join(sorted(f('vendor/caseprep', include=['caseprep*']))))"
+[tool.setuptools]
+packages = [
+    "neuro_caseboard",
+    "neuro_caseboard.figures_gen",
+    "neuro_caseboard.literature",
+    "neuro_core",
+    "neuro_core.scripts",
+    "caseprep",
+    "caseprep.adapters",
+    "caseprep.audit",
+    "caseprep.compile",
+    "caseprep.confidence",
+    "caseprep.core",
+    "caseprep.enrichment",
+    "caseprep.evaluation",
+    "caseprep.evidence_packs",
+    "caseprep.explorer",
+    "caseprep.export",
+    "caseprep.image_bank",
+    "caseprep.integrations",
+    "caseprep.intent",
+    "caseprep.renderers",
+    "caseprep.retrievers",
+    "caseprep.synthesis",
+]
+
+[tool.setuptools.package-dir]
+"caseprep" = "vendor/caseprep/caseprep"
 
 [tool.setuptools.package-data]
 neuro_caseboard = ["assets/fonts/*.ttf"]
+# caseprep ships its web UI template as package data.
+caseprep = ["static/*.html"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# Both this repo's tests and the vendored caseprep tests run as one suite. caseprep's tests
+# collect as top-level modules (its tests/__init__.py is dropped on vendoring) so they don't
+# collide with this repo's `tests` package (e.g. both have a test_cli.py).
+testpaths = ["tests", "vendor/caseprep/tests"]
 # Ensure local package source takes precedence over any editable install when running
 # tests from a git worktree.
 pythonpath = ["."]

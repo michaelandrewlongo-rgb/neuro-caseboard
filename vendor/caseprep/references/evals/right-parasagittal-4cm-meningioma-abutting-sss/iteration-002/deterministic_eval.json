@@ -1,0 +1,17 @@
+{
+  "case_id": "right-parasagittal-4cm-meningioma-abutting-sss",
+  "iteration": 2,
+  "output_path": "/tmp/caseprep-live-right-parasagittal-4cm-meningioma-sss-v2",
+  "checks": {
+    "case_build_exit_code": 0,
+    "family": "tumor_convexity_meningioma",
+    "profile": "supratentorial_tumor",
+    "degraded": false,
+    "source_counts": {
+      "pubmed": 1
+    },
+    "focused_tests": "python3 -m pytest tests/test_case_parser.py tests/test_procedure_taxonomy.py tests/test_renderers.py tests/test_core_builder.py -q => 59 passed",
+    "full_tests": "python3 -m pytest -q => 290 passed"
+  },
+  "passed": true
+}

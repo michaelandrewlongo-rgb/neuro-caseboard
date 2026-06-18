@@ -119,7 +119,7 @@ def test_rewrite_pubmed_query_falls_back_to_none():
     assert rewrite_pubmed_query("q", _Synth(RuntimeError("model down"))) is None
 
 
-def test_retrieve_requests_25_candidates():
+def test_retrieve_requests_40_candidates():
     captured = {}
 
     class C(_FakeClient):
@@ -128,7 +128,7 @@ def test_retrieve_requests_25_candidates():
             return await super().search(query, max_results=max_results, filter_type=filter_type)
 
     asyncio.run(LiteratureRetriever(C(), k=8).retrieve("distal MCA occlusion"))
-    assert captured["max_results"] == 25
+    assert captured["max_results"] == 40
 
 
 def test_relevance_gates_high_tier_low_relevance():

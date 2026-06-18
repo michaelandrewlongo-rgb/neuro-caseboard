@@ -1,0 +1,32 @@
+[
+  {
+    "prompt": "retrosig for acoustic",
+    "intent_type": "operative_briefing",
+    "subtype": "approach"
+  },
+  {
+    "prompt": "technique for ACDF",
+    "intent_type": "operative_briefing",
+    "subtype": "technique"
+  },
+  {
+    "prompt": "endo vs open MCA aneurysm outcomes",
+    "intent_type": "literature_review",
+    "subtype": "comparative_outcomes"
+  },
+  {
+    "prompt": "incidence of pseudoarthrosis after TLIF",
+    "intent_type": "literature_review",
+    "subtype": "incidence"
+  },
+  {
+    "prompt": "risk factors for shunt failure",
+    "intent_type": "literature_review",
+    "subtype": "risk_factors"
+  },
+  {
+    "prompt": "positioning and exposure for C1-2 schwannoma",
+    "intent_type": "operative_briefing",
+    "subtype": "approach"
+  }
+]
