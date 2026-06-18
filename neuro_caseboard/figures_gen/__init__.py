@@ -27,20 +27,34 @@ def _caption(spec) -> str:
     return f"{_SCHEMATIC_PREFIX}: {title}." if not cap else f"{_SCHEMATIC_PREFIX}: {cap}"
 
 
-def generate_case_figures(case, out_dir, *, complete_fn=None, start_index: int = 1) -> list:
-    """Author -> guard -> render case schematics; return `FigureItem`s (schematic-captioned).
+def generate_case_figures(case, out_dir, *, complete_fn=None, figret=None,
+                          start_index: int = 1) -> list:
+    """Author -> guard -> render case figures; return `FigureItem`s.
 
     Deterministic and offline by default (PIL core dep). `complete_fn` injects the LLM author for
     tests / live use; without it the deterministic author is used. Specs that contradict the case
     (wrong side/level/region) are dropped by the guard and never rendered.
+
+    WS-4: when a figure retriever (`figret`) is available, the abstract `anatomy_map` schematic is
+    replaced by an annotated crop of a RETRIEVED real textbook plate (guard-checked, labeled as a
+    reference image). With no figret the `anatomy_map` falls back to its deterministic schematic and
+    the corridor schematic is byte-identical to before.
     """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     specs = filter_specs(build_figure_specs(case, complete_fn=complete_fn), case)
     items: list[FigureItem] = []
-    for i, spec in enumerate(specs, start_index):
+    i = start_index
+    for spec in specs:
+        if spec.archetype == "anatomy_map" and figret is not None:
+            from neuro_caseboard.figures_gen.plate import build_plate_figure
+            plate = build_plate_figure(case, figret, out, i)
+            if plate is not None:
+                items.append(plate)
+                i += 1
+                continue                               # retrieved plate replaces the schematic
         path = out / f"case-fig-{i:02d}.png"
-        render_spec_to_file(spec, path)
+        render_spec_to_file(spec, path)                # deterministic schematic (corridor frozen)
         items.append(FigureItem(
             fig_id=f"S{i}",
             image_path=str(path),
@@ -50,4 +64,5 @@ def generate_case_figures(case, out_dir, *, complete_fn=None, start_index: int =
                        + (f", {spec.side} side" if spec.side else "")
                        + (f", level {spec.level}" if spec.level else "")),
         ))
+        i += 1
     return items

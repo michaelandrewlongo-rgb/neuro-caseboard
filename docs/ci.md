@@ -56,6 +56,33 @@ heavy optional surfaces that *can* run on a hosted runner:
 | **`briefing-pdf`** | The `briefing` extra installs and Playwright/Chromium renders the Signal-styled PDF from a Q&A-shaped result. | Installs Chromium; minutes; uploads the PDF as an artifact. |
 | **`models-smoke`** | The `models` extra installs and the lazy embedding seam works against a **real** backend (a small model actually embeds). | Downloads a model from Hugging Face; network; minutes. |
 
+## Keyed nightly workflow — `.github/workflows/live-judge.yml`
+
+`workflow_dispatch` (manual) + a nightly schedule (07:23 UTC). **Not** a required gate and it
+**never blocks a PR** — it is the keyed run of the live BLIND judges, the real quality signal that
+the offline `eval/quality_gate.py` cannot measure (it needs a credentialed LLM + vision provider).
+
+| Step | What it does |
+|------|--------------|
+| **gate** | If `CASEBOARD_LLM_PROVIDER` + `GOOGLE_CLOUD_PROJECT` secrets are absent, the job is a clean, green **no-op** (every later step is skipped). So forks and the nightly schedule never fail for lack of credentials. |
+| **text judge** | `eval/live_text_judge.py` on the held-out **eval** split — an attending-examiner persona grades each dossier vs `cases.json` `must_cover` / `red_flags`. |
+| **image judge** | `eval/live_image_judge.py --backend vertex --budget 3.0` on the eval split — a vision model opens each rendered PNG and grades conceptual correctness + case-specificity. Keeps its `--budget` hard-stop. |
+| **artifacts** | The dated `CASE_TEXT_JUDGE_REPORT_*` / `CASE_IMAGE_JUDGE_REPORT_*` reports upload via `actions/upload-artifact@v5`. |
+
+Secrets (repository → Settings → Secrets): `CASEBOARD_LLM_PROVIDER` (e.g. `vertex`),
+`GOOGLE_CLOUD_PROJECT`, `GOOGLE_CREDENTIALS` (service-account JSON for ADC), and optionally
+`OPENROUTER_API_KEY`. Run it by hand from the Actions tab (**Run workflow**) or let the nightly cron
+fire. Metrics are tracked informationally against `eval/LIVE_BASELINE.json` (prior measured scores +
+this loop's targets); backfill the measured numbers there after a keyed run.
+
+To run the judges locally instead (same as the workflow, eval split):
+
+```bash
+IDS=$(python -c "import json;print(','.join(c['id'] for c in json.load(open('eval/cases.json'))['cases'] if c['split']=='eval'))")
+CASEBOARD_LLM_PROVIDER=vertex GOOGLE_CLOUD_PROJECT=<proj> python3 eval/live_text_judge.py --ids "$IDS" --tag local
+CASEBOARD_LLM_PROVIDER=vertex GOOGLE_CLOUD_PROJECT=<proj> python3 eval/live_image_judge.py --backend vertex --ids "$IDS" --budget 3.0 --tag local
+```
+
 ### Documented local-only (cannot run in hosted CI)
 
 These need GPUs, billed API keys, or the private textbook corpus, so they are intentionally

@@ -44,7 +44,8 @@ Rules: STATE the fact as an assertion the surgeon will confirm — do not quiz. 
 specific to THIS case (its side/level/pathology/goal/comorbidities). Do NOT invent a specific you \
 are unsure of — hedge to a correct general statement instead (a wrong named vessel is worse than a \
 general one). Do NOT include content from a different operation or subspecialty. Cover EVERY \
-section with at least one card.
+section, and within each section EVERY listed facet (section_key above), with at least one card — \
+the per-section facet list is your completeness checklist.
 
 COMPLETENESS — be exhaustive; a sparse dossier fails. Emit MULTIPLE cards per section (aim for \
 20-30 cards total, weighted toward Operative Plan, Risks, and Surgical Technique); never collapse \
@@ -134,16 +135,18 @@ def deterministic_case_manifest(case: CaseContext) -> QuestionManifest:
     cards.append(_card("01-clinical-summary.md", "presentation",
                        case.presentation or f"Summarize the clinical presentation for {topic}.",
                        "Anchors the dossier to this patient."))
-    if case.imaging:
-        cards.append(_card("01-clinical-summary.md", "key_findings",
-                           f"Key imaging/exam finding: {case.imaging}",
-                           "Defines the operative target."))
+    # WS-3: the facet checklist is the section's slot vocabulary — cover EVERY facet, even when the
+    # case data is sparse, with a generic (non-fabricating) prompt rather than dropping the card.
+    cards.append(_card("01-clinical-summary.md", "key_findings",
+                       (f"Key imaging/exam finding: {case.imaging}" if case.imaging
+                        else f"State the key imaging and exam findings for {topic}."),
+                       "Defines the operative target."))
     cards.append(_card("01-clinical-summary.md", "working_diagnosis",
                        f"Working diagnosis: {path}.", "Frames the operative question."))
-    if case.functional_status:
-        cards.append(_card("01-clinical-summary.md", "functional_baseline",
-                           f"Functional baseline: {case.functional_status}",
-                           "Sets the goal and risk tolerance."))
+    cards.append(_card("01-clinical-summary.md", "functional_baseline",
+                       (f"Functional baseline: {case.functional_status}" if case.functional_status
+                        else f"State the functional baseline relevant to {topic}."),
+                       "Sets the goal and risk tolerance."))
 
     # 02 Clinical Reasoning — generic indication logic composed from the case.
     cards += [

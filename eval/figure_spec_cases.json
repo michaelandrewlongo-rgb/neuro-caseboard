@@ -1,5 +1,5 @@
 {
-  "_note": "WS-4 generated-schematic eval. Each case gives the CaseContext fields + the expected archetype and the side/level the schematic must encode (case-specificity). Scored by eval/figure_spec_eval.py (offline, deterministic author + PIL renderer). The blind image-opening judge (>=8/10 conceptual + case-specificity) is deferred to a keyed/visual run; this harness renders real PNGs to eval/_fig_specs/ for that judge.",
+  "_note": "WS-4 generated-schematic eval, extended in WS-1. Each case gives the CaseContext fields + the expected archetype and the side/level the schematic must encode (case-specificity), and a `split` (tune|eval) mirroring eval/cases.json. Scored by eval/figure_spec_eval.py and eval/quality_gate.py (offline, deterministic author + PIL renderer). The blind image-opening judge (>=8/10 conceptual + case-specificity) is deferred to a keyed/visual run; this harness renders real PNGs to eval/_fig_specs/ for that judge.",
   "cases": [
     {
       "id": "spine_acdf_c56",
@@ -9,7 +9,8 @@
                "surgical_goal": "decompression"},
       "expect_archetype": "spine_level",
       "expect_side": "left",
-      "expect_level": "C5-6"
+      "expect_level": "C5-6",
+      "split": "eval"
     },
     {
       "id": "functional_awake_glioma",
@@ -18,7 +19,8 @@
                "procedure": "awake craniotomy", "surgical_goal": "maximal safe resection"},
       "expect_archetype": "corridor",
       "expect_side": "left",
-      "expect_level": ""
+      "expect_level": "",
+      "split": "eval"
     },
     {
       "id": "vascular_mca_clip",
@@ -28,7 +30,52 @@
                "surgical_goal": "clip ligation"},
       "expect_archetype": "vessel_config",
       "expect_side": "left",
-      "expect_level": ""
+      "expect_level": "",
+      "split": "tune"
+    },
+    {
+      "id": "spine_lumbar_microdisc_l5s1",
+      "subspecialty": "Spine",
+      "case": {"laterality": "left", "level": "L5-S1",
+               "pathology": "lumbar disc herniation", "procedure": "microdiscectomy",
+               "surgical_goal": "decompression"},
+      "expect_archetype": "spine_level",
+      "expect_side": "left",
+      "expect_level": "L5-S1",
+      "split": "eval"
+    },
+    {
+      "id": "spine_thoracic_intradural_meningioma_t6",
+      "subspecialty": "Spine",
+      "case": {"laterality": "left", "level": "T6",
+               "pathology": "intradural meningioma", "procedure": "laminectomy",
+               "surgical_goal": "resection"},
+      "expect_archetype": "spine_level",
+      "expect_side": "left",
+      "expect_level": "T6",
+      "split": "eval"
+    },
+    {
+      "id": "endovascular_mca_thrombectomy",
+      "subspecialty": "Vascular",
+      "case": {"laterality": "left", "location": "MCA M1 segment",
+               "pathology": "large vessel occlusion", "procedure": "mechanical thrombectomy",
+               "surgical_goal": "recanalization"},
+      "expect_archetype": "vessel_config",
+      "expect_side": "left",
+      "expect_level": "",
+      "split": "eval"
+    },
+    {
+      "id": "neurooncology_gbm_temporal",
+      "subspecialty": "Neuro-oncology",
+      "case": {"laterality": "right", "location": "right temporal lobe",
+               "pathology": "glioblastoma", "procedure": "craniotomy for tumor resection",
+               "surgical_goal": "maximal safe resection"},
+      "expect_archetype": "corridor",
+      "expect_side": "right",
+      "expect_level": "",
+      "split": "eval"
     }
   ]
 }

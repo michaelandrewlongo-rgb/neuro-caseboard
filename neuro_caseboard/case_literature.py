@@ -24,12 +24,20 @@ LIT_SECTIONS = {
 
 
 def section_query(heading: str, case) -> str | None:
-    """The PubMed query for a literature-bearing section, or None if the section takes no
-    literature. Built from the case's own topic + a generic per-section focus token."""
+    """The PubMed query for a literature-bearing section, or None if the section takes no literature.
+
+    Built from the case's **semantic** fields (pathology + procedure) + a generic per-section focus
+    token — NOT the full `to_topic()`. PubMed esearch ANDs every token, so prepending case GEOMETRY
+    (laterality + the level/location token) over-specifies the query and collapses recall to zero
+    (observed live: "right thoracolumbar adult degenerative scoliosis coronal deformity correction
+    indications outcomes" -> 0 records; dropping the geometry -> 8). Falls back to `to_topic()` only
+    when both semantic fields are empty (e.g., the no-LLM deterministic floor)."""
     focus = LIT_SECTIONS.get(heading)
     if focus is None:
         return None
-    return f"{case.to_topic()} {focus}".strip()
+    semantic = " ".join(p for p in (case.pathology, case.procedure) if p).strip()
+    base = semantic or case.to_topic()
+    return f"{base} {focus}".strip()
 
 
 def attach_case_literature(dossier, case, *, client=None, synth_client=None,

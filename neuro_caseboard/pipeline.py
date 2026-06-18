@@ -134,7 +134,8 @@ def _fig_query(question: str, topic: str) -> str:
 
 
 def _collect_figures(manifest, topic, retriever=None, *, figret=None,
-                     max_total: int = 8, per_card: int = 1):
+                     max_total: int = 8, per_card: int = 1,
+                     eligible_files=frozenset({"03-anatomy-at-risk.md"})):
     """Gather figure-bearing evidence (textbook page images + captions) for the cards.
 
     Returns ``(card_evidence, page_texts)`` where card_evidence maps a card's question to
@@ -154,7 +155,9 @@ def _collect_figures(manifest, topic, retriever=None, *, figret=None,
             break
         # figures earn their place on anatomy claims (named structures/landmarks/vessels),
         # not on generic operative steps like positioning/closure that pull OR-setup noise.
-        if getattr(card, "target_file", "") != "03-anatomy-at-risk.md":
+        # WS-2: the eligible-target-file set is taxonomy-driven (build path keeps the anatomy-at-risk
+        # file; the case path passes its operative/technique/structures/figure surfaces).
+        if getattr(card, "target_file", "") not in eligible_files:
             continue
         try:
             if figret is not None:
@@ -202,7 +205,8 @@ def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
 
 def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=None,
                        lit_client=None, lit_synth_client=None, lit_cache=None,
-                       figures_dir=None, fig_complete_fn=None):
+                       figures_dir=None, fig_complete_fn=None, retriever=None,
+                       fig_retriever=None):
     """Case path: a CaseContext -> the 8-section case Dossier.
 
     Mirrors build_dossier but authors over the eight case surfaces (build_case_manifest) and
@@ -224,13 +228,17 @@ def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=No
     topic = case.to_topic()
     manifest = prune_offtarget(manifest, topic)        # anti-bleed (LOOP_PROMPT §6)
 
-    retriever = build_retriever() if enrich else None
+    # WS-2: an injected retriever (tests / the quality gate) drives corpus enrichment
+    # deterministically; otherwise build the real corpus retriever when enriching.
+    retriever = retriever if retriever is not None else (build_retriever() if enrich else None)
     enriched = enrich_manifest(manifest, topic=topic, retriever=retriever, top_n=3)
     audited = audit_manifest(enriched, topic=topic)
     evidence = _sources_from_audited(audited)
     card_evidence, page_texts = ({}, {})
     if retriever is not None and _figures_enabled():
-        card_evidence, page_texts = _collect_figures(manifest, topic, retriever)
+        from neuro_caseboard.case_sections import CASE_FIGURE_FILES
+        card_evidence, page_texts = _collect_figures(manifest, topic, retriever,
+                                                     eligible_files=CASE_FIGURE_FILES)
     dossier = compile_case_dossier(audited, case=case, evidence=evidence,
                                    card_evidence=card_evidence, page_texts=page_texts)
 
@@ -246,7 +254,13 @@ def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=No
     # "Case Figures" section as FigureItems alongside any retrieved plates.
     if figures_dir is not None:
         from neuro_caseboard.figures_gen import generate_case_figures
-        items = generate_case_figures(case, figures_dir, complete_fn=fig_complete_fn)
+        # WS-4: pass a figure retriever so the structures-at-risk map can use a retrieved real plate;
+        # None offline (no figure corpus) -> deterministic schematics (corridor byte-identical).
+        figret = fig_retriever
+        if figret is None and enrich and _figures_enabled():
+            from neuro_caseboard.retrieve import build_figure_retriever
+            figret = build_figure_retriever()
+        items = generate_case_figures(case, figures_dir, complete_fn=fig_complete_fn, figret=figret)
         if items:
             fig_sec = next((s for s in dossier.sections if s.heading == "Case Figures"), None)
             if fig_sec is None:
