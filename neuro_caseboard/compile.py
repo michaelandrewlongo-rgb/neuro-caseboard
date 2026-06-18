@@ -18,6 +18,7 @@ from neuro_caseboard.model import (
     Dossier,
     EvidenceSummary,
     FigureItem,
+    Provenance,
     Section,
 )
 from neuro_caseboard.textops import scrub_question, split_compound
@@ -72,6 +73,7 @@ def _compile(
     page_texts=None,
     corpus_inline: bool = False,
     corpus_eligible=frozenset(),
+    provenance=None,
 ) -> Dossier:
     """Core compiler shared by the build (3-section) and case (8-section) paths. The section
     set is data, not branches: `headings`/`order`/`intros_by_tf` parameterize the taxonomy;
@@ -189,7 +191,8 @@ def _compile(
     )
 
     return Dossier(title=title, summary=summary, sections=sections,
-                   appendix=Appendix(entries=appendix_entries))
+                   appendix=Appendix(entries=appendix_entries),
+                   provenance=provenance or Provenance())
 
 
 def compile_dossier(
@@ -199,13 +202,15 @@ def compile_dossier(
     evidence=None,
     card_evidence=None,
     page_texts=None,
+    provenance=None,
 ) -> Dossier:
     """Build (3-section) compiler — unchanged behavior. Anatomy at Risk / Operative Plan /
     Risk and Rescue, titled "Case Board — <topic>"."""
     title = f"Case Board — {topic}" if topic else "Case Board"
     return _compile(audited_manifest, title=title, headings=_HEADINGS, order=_ORDER,
                     intros_by_tf=_INTRO_BY_TF, evidence=evidence,
-                    card_evidence=card_evidence, page_texts=page_texts)
+                    card_evidence=card_evidence, page_texts=page_texts,
+                    provenance=provenance)
 
 
 def compile_case_dossier(
@@ -215,6 +220,7 @@ def compile_case_dossier(
     evidence=None,
     card_evidence=None,
     page_texts=None,
+    provenance=None,
 ) -> Dossier:
     """Case (8-section) compiler — the eight surfaces of LOOP_PROMPT §0 in order, titled
     "Case Dossier — <case.to_topic()>". Same evidence axis, markers, dedup, and appendix as
@@ -225,4 +231,5 @@ def compile_case_dossier(
     return _compile(audited_manifest, title=title, headings=CASE_HEADINGS, order=CASE_ORDER,
                     intros_by_tf=CASE_INTROS, evidence=evidence,
                     card_evidence=card_evidence, page_texts=page_texts,
-                    corpus_inline=True, corpus_eligible=CORPUS_ELIGIBLE_FILES)
+                    corpus_inline=True, corpus_eligible=CORPUS_ELIGIBLE_FILES,
+                    provenance=provenance)
