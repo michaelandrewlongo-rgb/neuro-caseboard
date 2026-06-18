@@ -20,7 +20,6 @@ permissions:
   contents: read
 
 env:
-  CASEPREP_REF: 8b1d8fd0488c16ff68721c6dc29041862517b392
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
 
 jobs:
@@ -35,7 +34,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Install caseprep (pinned) + package[dev,briefing]
+      - name: Install package[dev,briefing]
         run: ./ci/install.sh ".[dev,briefing]"
       - name: Install Chromium for Playwright
         run: python -m playwright install --with-deps chromium
@@ -74,7 +73,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Install caseprep (pinned) + package[dev,models]
+      - name: Install package[dev,models]
         run: ./ci/install.sh ".[dev,models]"
       - name: Embed a string with a small real model
         env:
