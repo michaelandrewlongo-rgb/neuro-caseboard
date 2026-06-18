@@ -35,7 +35,12 @@ class _SanitizingCorpus:
     the MATCH parser. caseprep passes the raw question (which contains '?', '/', '(',
     '->', '>=') straight into FTS5; we reduce it to bare informative terms first."""
 
-    def __init__(self, inner, *, max_terms: int = 12):
+    # Keep this LOW: the corpus FTS5 MATCH treats space-separated terms as AND, so more
+    # terms = stricter = fewer results. Empirically (real corpus) a 6-term AND already
+    # over-constrains many card queries; raising it reduces recall, not increases it. Real
+    # corpus-recall breadth comes from better query CONTENT (curated terms / OR axes), not a
+    # higher term cap. (Reverts the max_terms bump from plan C.1 after empirical recall test.)
+    def __init__(self, inner, *, max_terms: int = 6):
         self._inner = inner
         self._max_terms = max_terms
 
