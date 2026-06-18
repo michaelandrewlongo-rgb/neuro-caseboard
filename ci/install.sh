@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Install this package with whatever pip target/extras you pass. Used by CI and reproducible
-# locally. caseprep is vendored in-tree (./caseprep) and ships inside this package, so there
+# locally. caseprep is vendored in-tree (./vendor/caseprep) and ships inside this package, so there
 # is no separate sibling/pinned install step anymore.
 #
 #   ci/install.sh ".[dev]"          # editable-ish source install with the dev extra

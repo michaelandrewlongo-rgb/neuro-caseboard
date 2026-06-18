@@ -4,7 +4,7 @@
 #
 #   ci/local-ci.sh                 # full mirror: sanity -> tests -> package smoke
 #
-# caseprep is vendored in-tree (./caseprep), so there is no external sibling install.
+# caseprep is vendored in-tree (./vendor/caseprep), so there is no external sibling install.
 #
 # The venv is created WITHOUT --system-site-packages, so heavy libs you have installed
 # globally (torch, sentence-transformers, open-clip) cannot leak in and mask a real gap.
