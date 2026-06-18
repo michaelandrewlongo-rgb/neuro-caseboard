@@ -146,3 +146,30 @@ def test_fpdf_renderer_handles_degraded(tmp_path):
                 provenance=Provenance(source="deterministic", degraded=True))
     art = render_pdf(d, tmp_path / "x.pdf")
     assert art.path.read_bytes()[:4] == b"%PDF"
+
+
+# ---------------------------------------------------------------------------
+# Task 6: CLI provenance line + Streamlit warning
+# ---------------------------------------------------------------------------
+
+def test_cli_build_prints_provenance(monkeypatch, capsys, tmp_path):
+    import neuro_caseboard.cli as cli
+    from neuro_caseboard.model import Section, Claim
+
+    d = Dossier(title="Case Board — acdf",
+                summary=EvidenceSummary(to_verify=1),
+                sections=[Section(heading="Operative Plan",
+                                  claims=[Claim(text="t", why="w", status="verify")])],
+                provenance=Provenance(source="deterministic", degraded=True,
+                                      reason="llm_error", detail="RuntimeError"))
+    monkeypatch.setattr(cli, "generate",
+                        lambda *a, **k: (d, {"markdown": tmp_path / "case-board.md"}))
+
+    class _Args:
+        topic = "acdf"; output = str(tmp_path); pdf = False; no_enrich = True; no_llm = False
+
+    rc = cli._run_build(_Args())
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Explorer: deterministic fallback" in out
+    assert FALLBACK_BANNER in out                        # loud notice when degraded

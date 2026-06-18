@@ -18,6 +18,7 @@ import streamlit as st
 
 import signal_theme as sig
 from neuro_caseboard.board_view import board_view
+from neuro_caseboard.model import fallback_notice
 from neuro_caseboard.pipeline import (
     build_dossier, build_case_dossier, render_case_pdf, render_ask_pdf, _slug)
 from neuro_caseboard.topic_extract import extract_board_topic
@@ -138,6 +139,9 @@ elif mode == "Build board":
         with st.spinner("Building board…"):
             dossier = build_dossier(topic, enrich=enrich, use_llm=None if use_llm else False)
             view = board_view(dossier)
+            notice = fallback_notice(dossier.provenance)
+            if notice:
+                st.warning(notice)
         st.session_state["last_board"] = {
             "topic": topic,
             "claims": [c.text for s in dossier.sections for c in s.claims],
