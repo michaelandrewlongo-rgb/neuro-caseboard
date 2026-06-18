@@ -46,6 +46,10 @@ def _caseboard_argv():
 def test_caseboard_build_offline_produces_md_and_pdf(tmp_path):
     out = tmp_path / "board"
     env = {k: v for k, v in os.environ.items() if k not in _SCRUB}
+    # The textbook lane now auto-enables when a LanceDB index is present (build_retriever,
+    # plan C.3), so merely unsetting CASEPREP_TEXTBOOK would make this smoke machine-dependent.
+    # Pin it off so the deterministic corpus-free offline fallback is what gets proven.
+    env["CASEPREP_TEXTBOOK"] = "0"
 
     proc = subprocess.run(
         [*_caseboard_argv(), "build", "C5-6 corpectomy", "--no-llm", "--pdf", "-o", str(out)],

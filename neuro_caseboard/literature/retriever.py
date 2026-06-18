@@ -120,7 +120,7 @@ class LiteratureRetriever:
         self._k = k
         self._recency_years = recency_years
 
-    async def retrieve(self, question: str, *, candidates: int = 25,
+    async def retrieve(self, question: str, *, candidates: int = 40,
                        current_year: int | None = None,
                        query: str | None = None) -> list[LiteratureRecord]:
         current_year = current_year or _dt.date.today().year
@@ -128,7 +128,18 @@ class LiteratureRetriever:
         # back to the token-dump of the whole question. The latter AND-conjuncts every
         # word at PubMed, which tanks recall on natural-language questions.
         term = query or build_query_terms(question)
-        axes = [(term, None), (term, "systematic_review")]
+        # Fan out across clinical question types (plan B.1) so the pool covers therapy,
+        # evidence syntheses, etiology/risk, diagnosis and prognosis — not just the plain
+        # query + systematic reviews. Filters refine by pub-type/MeSH WITHIN the same topic
+        # query (CLINICAL_FILTERS), so this broadens recall without drifting off topic;
+        # pmids are deduped and relevance still gates final selection below.
+        axes = [
+            (term, None),
+            (term, "systematic_review"),
+            (term, "etiology"),
+            (term, "diagnosis"),
+            (term, "prognosis"),
+        ]
         pmids: list[str] = []
         seen: set[str] = set()
         for q, ft in axes:

@@ -35,6 +35,11 @@ class _SanitizingCorpus:
     the MATCH parser. caseprep passes the raw question (which contains '?', '/', '(',
     '->', '>=') straight into FTS5; we reduce it to bare informative terms first."""
 
+    # Keep this LOW: the corpus FTS5 MATCH treats space-separated terms as AND, so more
+    # terms = stricter = fewer results. Empirically (real corpus) a 6-term AND already
+    # over-constrains many card queries; raising it reduces recall, not increases it. Real
+    # corpus-recall breadth comes from better query CONTENT (curated terms / OR axes), not a
+    # higher term cap. (Reverts the max_terms bump from plan C.1 after empirical recall test.)
     def __init__(self, inner, *, max_terms: int = 6):
         self._inner = inner
         self._max_terms = max_terms
@@ -209,7 +214,14 @@ def build_figure_retriever(*, index_dir=None):
 def build_retriever(*, enable_corpus: bool = True, enable_textbook=None):
     """Compose the available retrieval lanes, or return None when none are available."""
     if enable_textbook is None:
-        enable_textbook = os.environ.get("CASEPREP_TEXTBOOK", "0") == "1"
+        explicit = os.environ.get("CASEPREP_TEXTBOOK")
+        if explicit is not None:
+            enable_textbook = explicit == "1"
+        else:
+            # Auto-enable the textbook lane when the LanceDB index is present so the board
+            # also draws on textbook content (no GPU, reuses the existing index). Stays off
+            # when the index is absent or when CASEPREP_TEXTBOOK is set explicitly. (plan C.3)
+            enable_textbook = os.path.isdir(_default_index_dir())
     lanes = []
     if enable_corpus:
         c = _corpus_lane()

@@ -193,7 +193,7 @@ def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
     """Run the full pipeline and return a compiled Dossier."""
     manifest, _profile = build_manifest(topic, use_llm=use_llm)
     retriever = build_retriever() if enrich else None
-    enriched = enrich_manifest(manifest, topic=topic, retriever=retriever, top_n=3)
+    enriched = enrich_manifest(manifest, topic=topic, retriever=retriever, top_n=6)
     audited = audit_manifest(enriched, topic=topic)
     evidence = _sources_from_audited(audited)
     card_evidence, page_texts = ({}, {})
@@ -231,7 +231,7 @@ def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=No
     # WS-2: an injected retriever (tests / the quality gate) drives corpus enrichment
     # deterministically; otherwise build the real corpus retriever when enriching.
     retriever = retriever if retriever is not None else (build_retriever() if enrich else None)
-    enriched = enrich_manifest(manifest, topic=topic, retriever=retriever, top_n=3)
+    enriched = enrich_manifest(manifest, topic=topic, retriever=retriever, top_n=6)
     audited = audit_manifest(enriched, topic=topic)
     evidence = _sources_from_audited(audited)
     card_evidence, page_texts = ({}, {})

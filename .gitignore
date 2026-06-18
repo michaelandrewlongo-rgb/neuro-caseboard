@@ -19,3 +19,6 @@ out/
 eval/_outputs/
 # regenerable generated-schematic render artifacts (WS-4 eval)
 eval/_fig_specs/
+
+# local throwaway venvs
+.testvenv/

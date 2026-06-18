@@ -102,6 +102,7 @@ hygiene), `test` (the full offline suite on Python 3.10 + 3.12, including the
 a clean install + the `caseboard` entry point work). Heavier checks (Playwright briefing PDF,
 real CPU embeddings) live in a manual `optional-integration` workflow.
 
-`caseprep` is the one external dependency; CI installs it from a pinned commit and it is not
-in `pyproject` core deps, so local dev keeps using `pip install -e ../caseprep`. Reproduce
-the whole required pipeline locally with `ci/local-ci.sh`. Full details: **[docs/ci.md](docs/ci.md)**.
+`caseprep` is vendored in-tree at [`vendor/caseprep/`](vendor/caseprep/) (brought in with `git subtree`,
+history preserved) and ships inside this package, so a clean clone needs no external folder or
+pinned install — a single `pip install -e .[dev]` gets everything. Reproduce the whole required
+pipeline locally with `ci/local-ci.sh`. Full details: **[docs/ci.md](docs/ci.md)**.
