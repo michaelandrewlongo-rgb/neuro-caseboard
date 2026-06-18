@@ -1,4 +1,6 @@
-"""PDF renderer for a Dossier (fpdf2).
+"""PDF renderer for a Dossier (fpdf2) — the offline fallback when the HTML→PDF (Playwright)
+path is unavailable. Styled to match the web GUI / HTML PDFs: "Neo Brutalism" — white ground,
+black 2px borders, red/yellow accents, square corners, hard offset shadows, green/amber status.
 
 Owns defects #1 (broken glyphs) and #4 (legend), and lays out the structured fixes:
 - Embeds DejaVuSans (regular/bold/oblique) so ✓ ⚠ — etc. render as real glyphs, never
@@ -22,9 +24,12 @@ from caseprep.core.contracts import ArtifactRef
 from neuro_caseboard.fpdf_base import register_fonts, ascii_fallback
 from neuro_caseboard.model import Dossier, MARK, ASCII_MARK
 
-_COLORS = {"supported": (0, 128, 0), "verify": (180, 95, 0)}
+# Neo Brutalism palette.
+_COLORS = {"supported": (26, 161, 26), "verify": (217, 119, 6)}   # green / amber
 _BLACK = (0, 0, 0)
-_GRAY = (90, 90, 90)
+_GRAY = (51, 51, 51)
+_RED = (255, 51, 51)
+_YELLOW = (255, 255, 0)
 
 # Standing confidentiality / clinician-verify banner on every page (LOOP_PROMPT §6).
 VERIFY_BANNER = ("Confidential — clinical decision support only; "
@@ -32,26 +37,36 @@ VERIFY_BANNER = ("Confidential — clinical decision support only; "
 
 
 class _CaseboardPDF(FPDF):
-    """fpdf2 with a standing per-page confidentiality/verify footer banner."""
+    """fpdf2 with a standing per-page confidentiality/verify footer banner (yellow, brutalist)."""
 
     fam = "Helvetica"
     uni = False
 
     def footer(self):
-        self.set_y(-12)
-        self.set_draw_color(200, 200, 200)
-        self.set_line_width(0.2)
-        self.line(self.l_margin, self.get_y(), self.w - self.r_margin, self.get_y())
-        self.set_font(self.fam, "I", 7)
-        self.set_text_color(120, 120, 120)
-        msg = VERIFY_BANNER if self.uni else ascii_fallback(VERIFY_BANNER)
-        self.cell(0, 8, msg, align="C")
+        self.set_y(-14)
+        x0, y0, w = self.l_margin, self.get_y(), self.w - self.l_margin - self.r_margin
+        self.set_fill_color(*_YELLOW)
+        self.set_draw_color(*_BLACK)
+        self.set_line_width(0.5)
+        self.rect(x0, y0, w, 7, style="DF")
+        self.set_font(self.fam, "B", 7)
         self.set_text_color(*_BLACK)
+        self.set_xy(x0, y0 + 1.3)
+        msg = VERIFY_BANNER if self.uni else ascii_fallback(VERIFY_BANNER)
+        self.cell(w, 4.4, msg, align="C")
+
+
+def _rule(pdf, width=0.7):
+    """A thick black brutalist horizontal rule at the current y."""
+    pdf.set_draw_color(*_BLACK)
+    pdf.set_line_width(width)
+    y = pdf.get_y()
+    pdf.line(pdf.l_margin, y, pdf.w - pdf.r_margin, y)
 
 
 def render_pdf(dossier: Dossier, out_path) -> ArtifactRef:
     pdf = _CaseboardPDF(format="A4")
-    pdf.set_auto_page_break(True, margin=20)   # room for the footer banner
+    pdf.set_auto_page_break(True, margin=22)   # room for the footer banner
     pdf.add_page()
     fam, uni = register_fonts(pdf)
     pdf.fam, pdf.uni = fam, uni                 # the footer uses these
@@ -62,11 +77,27 @@ def render_pdf(dossier: Dossier, out_path) -> ArtifactRef:
     def glyph(status: str) -> str:
         return (MARK if uni else ASCII_MARK).get(status, "")
 
+    # ── masthead ──
+    pdf.set_fill_color(*_RED)
+    pdf.set_draw_color(*_BLACK)
+    pdf.set_line_width(0.4)
+    pdf.rect(pdf.l_margin, pdf.get_y() + 0.5, 4.5, 4.5, style="DF")   # red square mark
+    pdf.set_xy(pdf.l_margin + 6.5, pdf.get_y())
+    pdf.set_font(fam, "B", 12)
+    pdf.set_text_color(*_BLACK)
+    pdf.cell(0, 5.5, t("NEURO·CASEBOARD"), new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+    pdf.set_font(fam, "B", 8)
+    pdf.set_text_color(*_RED)
+    pdf.cell(0, 4, t("BUILD · PRE-OP DOSSIER"), new_x="LMARGIN", new_y="NEXT")
+
     # ── title ──
     pdf.set_font(fam, "B", 18)
     pdf.set_text_color(*_BLACK)
     pdf.multi_cell(0, 9, t(dossier.title), new_x="LMARGIN", new_y="NEXT")
     pdf.ln(1)
+    _rule(pdf, 0.8)
+    pdf.ln(4)
 
     # ── legend (#4) ──
     pdf.set_font(fam, "B", 10)
@@ -114,11 +145,13 @@ def render_pdf(dossier: Dossier, out_path) -> ArtifactRef:
 
 
 def _render_section(pdf, fam, t, glyph, sec) -> None:
-    if pdf.get_y() > pdf.h - 45:
+    if pdf.get_y() > pdf.h - 50:
         pdf.add_page()
     pdf.set_font(fam, "B", 13)
     pdf.set_text_color(*_BLACK)
     pdf.multi_cell(0, 7, t(sec.heading), new_x="LMARGIN", new_y="NEXT")
+    _rule(pdf, 0.6)
+    pdf.ln(2)
     if sec.intro:
         pdf.set_font(fam, "I", 9)
         pdf.set_text_color(*_GRAY)
@@ -149,6 +182,17 @@ def _render_section(pdf, fam, t, glyph, sec) -> None:
 
 
 def _render_claim(pdf, fam, t, glyph, c) -> None:
+    # Brutalist claim card: black border + hard offset shadow + status-colored left bar.
+    if pdf.get_y() > pdf.h - 55:
+        pdf.add_page()
+    base = pdf.l_margin
+    w = pdf.w - pdf.r_margin - base
+    y0 = pdf.get_y()
+
+    pdf.set_left_margin(base + 6)
+    pdf.set_x(base + 6)
+    pdf.ln(1.6)                                   # top padding
+
     pdf.set_font(fam, "B", 10)
     pdf.set_text_color(*_COLORS.get(c.status, _BLACK))
     pdf.write(5.5, t(glyph(c.status) + " "))
@@ -160,16 +204,34 @@ def _render_claim(pdf, fam, t, glyph, c) -> None:
     pdf.write(5.5, t(c.text + figref))
     pdf.ln(6)
     if c.why:
+        pdf.set_font(fam, "B", 7)
+        pdf.set_text_color(*_RED)
+        pdf.set_x(base + 10)
+        pdf.write(4.6, t("WHY  "))
         pdf.set_font(fam, "I", 9)
         pdf.set_text_color(*_GRAY)
-        pdf.set_x(pdf.l_margin + 6)
-        pdf.multi_cell(0, 4.6, t("Why: " + c.why), new_x="LMARGIN", new_y="NEXT")
+        pdf.multi_cell(0, 4.6, t(c.why), new_x="LMARGIN", new_y="NEXT")
         pdf.set_text_color(*_BLACK)
     for item in c.sub_items:
         pdf.set_font(fam, "", 10)
-        pdf.set_x(pdf.l_margin + 6)
+        pdf.set_x(base + 10)
         pdf.multi_cell(0, 5, t("[ ]  " + item), new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(1.5)
+    pdf.ln(1.6)                                   # bottom padding
+    pdf.set_left_margin(base)
+
+    y1 = pdf.get_y()
+    if y1 > y0:                                   # only box when it didn't page-break
+        h = y1 - y0
+        pdf.set_draw_color(*_BLACK)
+        pdf.set_line_width(0.7)                   # hard offset shadow (L)
+        pdf.line(base + w + 0.9, y0 + 0.9, base + w + 0.9, y1 + 0.9)
+        pdf.line(base + 0.9, y1 + 0.9, base + w + 0.9, y1 + 0.9)
+        pdf.set_line_width(0.4)                   # border
+        pdf.rect(base, y0, w, h, style="D")
+        pdf.set_fill_color(*_COLORS.get(c.status, _BLACK))
+        pdf.rect(base, y0, 2.2, h, style="F")     # status left bar
+    pdf.set_y(y1)
+    pdf.ln(3)
 
 
 def _render_figure(pdf, fam, t, fig) -> None:
@@ -180,9 +242,12 @@ def _render_figure(pdf, fam, t, fig) -> None:
             pdf.image(fig.image_path, w=min(pdf.epw, 110))
         except Exception:
             pass
+    pdf.set_font(fam, "B", 8)
+    pdf.set_text_color(*_RED)
+    pdf.write(4, t(f"Fig {fig.fig_id} "))
     pdf.set_font(fam, "I", 8)
     pdf.set_text_color(*_GRAY)
-    pdf.multi_cell(0, 4, t(f"Fig {fig.fig_id} — {fig.caption}"), new_x="LMARGIN", new_y="NEXT")
+    pdf.multi_cell(0, 4, t(f"— {fig.caption}"), new_x="LMARGIN", new_y="NEXT")
     if fig.relevance:
         pdf.multi_cell(0, 4, t(fig.relevance), new_x="LMARGIN", new_y="NEXT")
     if fig.claim_ref:
@@ -202,13 +267,15 @@ def _render_literature(pdf, fam, t, lit) -> None:
     pdf.multi_cell(0, 5.5, t("Contemporary Literature"), new_x="LMARGIN", new_y="NEXT")
     pdf.set_font(fam, "", 9)
     pdf.multi_cell(0, 4.6, t(lit.narrative), new_x="LMARGIN", new_y="NEXT")
-    pdf.set_text_color(*_GRAY)
     pdf.set_font(fam, "", 8)
     for c in getattr(lit, "citations", []) or []:
         link = f"https://doi.org/{c.doi}" if getattr(c, "doi", "") else getattr(c, "url", "")
         meta = " ".join(p for p in (c.journal, str(c.year or "")) if p)
         tail = (f" — {meta}" if meta else "") + (f" · {link}" if link else "")
-        pdf.multi_cell(0, 4.2, t(f"[L{c.n}] {c.title}{tail}"), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(*_RED)
+        pdf.write(4.2, t(f"[L{c.n}] "))
+        pdf.set_text_color(*_GRAY)
+        pdf.multi_cell(0, 4.2, t(f"{c.title}{tail}"), new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(*_BLACK)
     pdf.ln(1.5)
 
@@ -219,7 +286,8 @@ def _render_appendix(pdf, fam, t, appendix) -> None:
     pdf.set_text_color(*_BLACK)
     pdf.multi_cell(0, 7, t("Appendix — evidence sources & off-target claims"),
                    new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(1)
+    _rule(pdf, 0.6)
+    pdf.ln(2)
     for e in appendix.entries:
         pdf.set_font(fam, "B", 11)
         pdf.multi_cell(0, 6, t(e.heading), new_x="LMARGIN", new_y="NEXT")

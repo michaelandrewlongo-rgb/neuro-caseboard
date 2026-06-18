@@ -291,7 +291,7 @@ def render_case_pdf(dossier, topic, path):
     """Render the case-board PDF — the single source of truth for every ``build`` pathway
     (CLI ``caseboard build --pdf`` and the Streamlit Build lane).
 
-    Default is the Executive-Navy design that matches the web console (``caseboard_pdf``,
+    Default is the Neo Brutalism design that matches the web console (``caseboard_pdf``,
     HTML->PDF via Playwright/Chromium). Falls back to the offline fpdf2 renderer when the exec
     renderer is unavailable (e.g. no Chromium in CI) or when ``CASEBOARD_PDF_STYLE=clinical`` is
     set. Returns the written path."""
@@ -305,7 +305,7 @@ def render_case_pdf(dossier, topic, path):
             if not _exec_renderer_unavailable(e):
                 raise  # a real bug in the exec renderer — surface it, don't mask it
             logging.getLogger(__name__).warning(
-                "Executive-Navy PDF renderer unavailable (%r); using the clinical fpdf2 "
+                "Neo Brutalism PDF renderer unavailable (%r); using the clinical fpdf2 "
                 "fallback.", e)
     art = render_pdf(dossier, path)
     return Path(art.path)
@@ -315,7 +315,7 @@ def render_ask_pdf(result, question, path):
     """Render the ask (Q&A) PDF — the single source of truth for every ``ask`` pathway
     (CLI ``caseboard ask --pdf`` and the Streamlit Ask lane).
 
-    Default is the Executive-Navy briefing that matches the web console (``briefing_pdf``,
+    Default is the Neo Brutalism briefing that matches the web console (``briefing_pdf``,
     HTML->PDF via Playwright/Chromium). Falls back to the offline fpdf2 renderer when the exec
     renderer is unavailable (e.g. no Chromium in CI) or when ``CASEBOARD_PDF_STYLE=clinical`` is
     set. Returns the written path."""
@@ -329,7 +329,7 @@ def render_ask_pdf(result, question, path):
             if not _exec_renderer_unavailable(e):
                 raise  # a real bug in the exec renderer — surface it, don't mask it
             logging.getLogger(__name__).warning(
-                "Executive-Navy ask PDF renderer unavailable (%r); using the clinical fpdf2 "
+                "Neo Brutalism ask PDF renderer unavailable (%r); using the clinical fpdf2 "
                 "fallback.", e)
     from neuro_caseboard.briefing_pdf import render_briefing_clinical_pdf
     render_briefing_clinical_pdf(result, path, title=question)
@@ -355,7 +355,7 @@ def generate_case(dictation: str, *, output_dir, pdf: bool = False, enrich: bool
     """Build the case dossier from a free-text dictation and write case-dossier.md
     (+ case-dossier.pdf) to output_dir, with generated schematics rendered into the same dir.
 
-    The PDF reuses ``render_case_pdf`` (Executive-Navy, fpdf2 fallback), so it carries the standing
+    The PDF reuses ``render_case_pdf`` (Neo Brutalism, fpdf2 fallback), so it carries the standing
     confidentiality/verify banner on every page. ``use_llm=False`` forces the deterministic intake +
     authors (offline). Returns ``(case, dossier, artifacts)``."""
     from neuro_caseboard.intake import parse_dictation, deterministic_parse
