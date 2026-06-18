@@ -348,5 +348,9 @@ local-first, honest degradation, engine reused (imported, never reimplemented). 
     banner). Engine untouched except the PDF stylesheets; **full suite 442 passed / 1 skipped** after
     updating 3 PDF token tests (`test_exec_navy`/`test_briefing_pdf`/`test_caseboard_pdf`) from the old
     teal/Archivo asserts to red/DM-Sans — the design contract moved, intentionally.
-  - **Note:** the fpdf2 offline fallback (`render_pdf.py`) keeps its older code-drawn look; only the
-    HTML→PDF path (now the default with Chromium installed) is brutalist.
+  - **Follow-up (2026-06-18):** brought the remaining two renderers into the brutalist palette so
+    every pipeline output matches — the **fpdf2 offline fallback** (`render_pdf.py`: red masthead, thick
+    black rules, boxed claim cards with status left-bars + hard offset shadows, red WHY labels, yellow
+    verify banner) and the **generated case schematics** (`figures_gen/render.py`: red corridor / blue
+    target / black structures / purple vessels, black frame + node outlines, yellow black-bordered
+    banners — teal accent removed). Tests stay green (byte-stability + content assertions hold).
