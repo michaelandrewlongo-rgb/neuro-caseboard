@@ -531,7 +531,7 @@ def render_briefing_html(
     <nav class="rail" id="rail">
       <div class="t">Briefing Index</div>
       <div id="railItems"></div>
-      {"<div class=\"legend\">Highlighted terms link to reference figures &mdash; hover to preview, click to expand.</div>" if nfig else ""}
+      {'<div class="legend">Highlighted terms link to reference figures &mdash; hover to preview, click to expand.</div>' if nfig else ''}
     </nav>
     <main><div class="doc reveal" id="doc">{body_html}</div></main>
   </div>
