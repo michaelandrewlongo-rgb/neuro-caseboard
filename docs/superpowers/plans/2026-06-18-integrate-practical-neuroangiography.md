@@ -244,3 +244,17 @@ pytest. No new dependencies.
 - Adding a stem→title citation registry (the project intentionally has none; citations derive from
   the filename stem + PDF bookmarks).
 - Any change to existing index/build behavior for books that already index cleanly.
+
+## Review Findings
+
+Fresh-eyes review of the PR #15 diff (loop REVIEW phase, 2026-06-18). The code is clean and
+well-tested; no [MUST] (correctness/security) findings.
+
+- [SHOULD] `tests/neuro_core/test_runbook_consistency.py:12` — `pathlib.Path("docs/runbooks/integrating-a-textbook.md")` is cwd-relative; it passes only because every real invocation has cwd = repo root. Resolve the path from `__file__` (repo root) so the test is location-independent.
+- [NIT] `neuro_core/ingest.py` `probe_book` — a non-existent PDF path raises a raw `fitz` error rather than a friendly "file not found" from the preflight. (Acceptable; recorded.)
+- [NIT] `neuro_core/scripts/probe_book.py` — `--corpus` on an empty corpus dir prints nothing and exits 0 silently. (Acceptable; recorded.)
+- [NIT] `docs/runbooks/integrating-a-textbook.md` Step 6 — "see `docs/runbooks/` notes" is a dangling reference. (Cosmetic; recorded.)
+
+### Review tasks (triaged from MUST/SHOULD)
+
+- [x] review: make `tests/neuro_core/test_runbook_consistency.py` resolve the runbook path relative to the repo root (from `__file__`), not cwd, so it passes regardless of pytest's invocation directory.
