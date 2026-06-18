@@ -110,3 +110,16 @@ def test_build_dossier_degraded_sets_provenance(monkeypatch):
 
     d2 = build_dossier("awake left temporal glioma", enrich=False, use_llm=False)
     assert d2.provenance.degraded is False
+
+
+# ---------------------------------------------------------------------------
+# Task 4: Markdown fallback banner
+# ---------------------------------------------------------------------------
+
+def test_markdown_banner_present_only_when_degraded():
+    from neuro_caseboard.render_md import render_markdown
+    base = dict(title="Case Board — acdf", summary=EvidenceSummary(to_verify=1))
+    degraded = Dossier(provenance=Provenance(source="deterministic", degraded=True), **base)
+    ok = Dossier(provenance=Provenance(source="llm_generated", degraded=False), **base)
+    assert FALLBACK_BANNER in render_markdown(degraded)
+    assert FALLBACK_BANNER not in render_markdown(ok)

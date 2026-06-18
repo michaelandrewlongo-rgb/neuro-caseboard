@@ -7,7 +7,7 @@ scans first and the rationale sits on its own line.
 
 from __future__ import annotations
 
-from neuro_caseboard.model import Dossier, MARK
+from neuro_caseboard.model import Dossier, MARK, fallback_notice
 
 
 def _legend() -> str:
@@ -21,7 +21,11 @@ def _summary(s) -> str:
 
 
 def render_markdown(dossier: Dossier) -> str:
-    L: list[str] = [f"# {dossier.title}", "", _legend(), "", _summary(dossier.summary), ""]
+    L: list[str] = [f"# {dossier.title}", ""]
+    notice = fallback_notice(dossier.provenance)
+    if notice:
+        L += [f"> ⚠ **Fallback —** {notice}", ""]
+    L += [_legend(), "", _summary(dossier.summary), ""]
 
     has_appendix = not dossier.appendix.is_empty()
     if has_appendix:
