@@ -39,7 +39,7 @@
 
 ---
 
-### Task 1: Feedback model + JSON persistence
+### Task 1: Feedback model + JSON persistence — ✅ DONE (VERIFY #5: 96 pass / 0 fail; commit 57c012b)
 
 **Files:** Create `neuro_caseboard/feedback.py`; Test `tests/rehearsal/test_feedback.py`.
 
