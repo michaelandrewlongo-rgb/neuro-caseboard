@@ -163,6 +163,7 @@ DIRECTIONS = {
     "figure_byte_stable": "min",
     "figure_guard_reject": "min",
     "figure_plate_preferred": "min",
+    "attribution_precision": "min",
     "near_dup_rate": "max",
     "red_flag_contamination": "max",
 }
@@ -234,6 +235,7 @@ def compute_metrics(data: EvalData) -> dict:
     lit_ok = corpus_n_ok = facet_ok = 0
     near_dup_total = 0
     contamination = 0
+    attr_kept = attr_considered = 0
 
     for d in data.dictations:
         gt = d["ground_truth"]
@@ -288,6 +290,12 @@ def compute_metrics(data: EvalData) -> dict:
         )
         corpus_n_ok += (n_elig == len(CORPUS_ELIGIBLE))
 
+        for h in CORPUS_ELIGIBLE:
+            for c in getattr(elig.get(h), "claims", []) or []:
+                attr_considered += 1
+                if _CORPUS_CITE.search(_LIT_CITE.sub("", c.text)):
+                    attr_kept += 1
+
         # --- near-dup residual (both contexts share the same dedup pass) ---
         near_dup_total += _residual_near_dup_pairs(gt_dossier)
 
@@ -321,6 +329,7 @@ def compute_metrics(data: EvalData) -> dict:
         "intake_goal_acc": _frac(goal_ok, n),
         "lit_coverage": _frac(lit_ok, n),
         "corpus_n_coverage": _frac(corpus_n_ok, n),
+        "attribution_precision": _frac(attr_kept, attr_considered),
         "figure_archetype_acc": _frac(fa, nf),
         "figure_side_acc": _frac(fs, nf),
         "figure_byte_stable": _frac(fb, nf),

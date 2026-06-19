@@ -31,6 +31,10 @@
     "value": 1.0,
     "direction": "min"
   },
+  "attribution_precision": {
+    "value": 1.0,
+    "direction": "min"
+  },
   "figure_archetype_acc": {
     "value": 1.0,
     "direction": "min"

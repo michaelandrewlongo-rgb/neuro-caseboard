@@ -21,12 +21,13 @@ from caseprep.explorer.question_manifest import (
     _merge_cards,
 )
 from caseprep.enrichment.corpus_enricher import enrich_manifest
-from caseprep.audit.card_auditor import audit_manifest
+from caseprep.audit.card_auditor import audit_manifest, accepted_papers
 from caseprep.core.contracts import EvidenceRecord
 
 from neuro_caseboard.retrieve import build_retriever
 from neuro_caseboard.guard import prune_offtarget
-from neuro_caseboard.compile import compile_dossier
+from neuro_caseboard.compile import compile_dossier, compile_case_dossier
+from neuro_caseboard.entailment import get_default_verifier
 from neuro_caseboard.render_md import render_markdown
 from neuro_caseboard.render_pdf import render_pdf
 
@@ -76,7 +77,7 @@ def _deterministic_manifest(topic: str, profile: str):
     return QuestionManifest(procedure_family=key or profile or "generic", cards=cards)
 
 
-def build_manifest(topic: str, *, use_llm=None):
+def build_manifest(topic: str, *, use_llm=None, prefs=None):
     """Build the question manifest for *topic*.
 
     Clinical depth comes from the LLM Explorer (case-specific cards for any procedure)
@@ -110,14 +111,21 @@ def build_manifest(topic: str, *, use_llm=None):
     else:
         manifest = _deterministic_manifest(topic, profile)
 
-    return prune_offtarget(manifest, topic), profile
+    pruned = prune_offtarget(manifest, topic)
+    if prefs:
+        from neuro_caseboard.preferences import apply_preferences
+        pruned = apply_preferences(pruned, profile, prefs)
+    return pruned, profile
 
 
 def _sources_from_audited(audited, *, limit: int = 15):
+    # Only Auditor-accepted papers may become an exported source. ``c.papers`` also holds
+    # papers the Auditor flagged as off-target (``contradicting_paper_ids``) — exporting those
+    # leaks an off-target source even when the card itself was never quarantined.
     seen: set[str] = set()
     out: list[EvidenceRecord] = []
     for c in audited.cards:
-        for p in c.papers or []:
+        for p in accepted_papers(c):
             title = (p.get("title") or "").strip()
             if title and title not in seen:
                 seen.add(title)
@@ -189,9 +197,9 @@ def _figures_enabled() -> bool:
     return os.environ.get("CASEBOARD_TEXTBOOK_FIGURES", "1") != "0"
 
 
-def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
+def build_dossier(topic: str, *, enrich: bool = True, use_llm=None, prefs=None):
     """Run the full pipeline and return a compiled Dossier."""
-    manifest, _profile = build_manifest(topic, use_llm=use_llm)
+    manifest, _profile = build_manifest(topic, use_llm=use_llm, prefs=prefs)
     retriever = build_retriever() if enrich else None
     enriched = enrich_manifest(manifest, topic=topic, retriever=retriever, top_n=6)
     audited = audit_manifest(enriched, topic=topic)
@@ -206,7 +214,7 @@ def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
 def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=None,
                        lit_client=None, lit_synth_client=None, lit_cache=None,
                        figures_dir=None, fig_complete_fn=None, retriever=None,
-                       fig_retriever=None):
+                       fig_retriever=None, prefs=None):
     """Case path: a CaseContext -> the 8-section case Dossier.
 
     Mirrors build_dossier but authors over the eight case surfaces (build_case_manifest) and
@@ -220,13 +228,15 @@ def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=No
     failure leaves those sections without a literature block and never affects the rest.
     """
     from neuro_caseboard.case_author import build_case_manifest, deterministic_case_manifest
-    from neuro_caseboard.compile import compile_case_dossier
 
     if use_llm is None:
         use_llm = llm_enabled()
     manifest = build_case_manifest(case) if use_llm else deterministic_case_manifest(case)
     topic = case.to_topic()
     manifest = prune_offtarget(manifest, topic)        # anti-bleed (LOOP_PROMPT §6)
+    if prefs:
+        from neuro_caseboard.preferences import apply_preferences
+        manifest = apply_preferences(manifest, classify_profile(topic), prefs)
 
     # WS-2: an injected retriever (tests / the quality gate) drives corpus enrichment
     # deterministically; otherwise build the real corpus retriever when enriching.
@@ -240,7 +250,8 @@ def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=No
         card_evidence, page_texts = _collect_figures(manifest, topic, retriever,
                                                      eligible_files=CASE_FIGURE_FILES)
     dossier = compile_case_dossier(audited, case=case, evidence=evidence,
-                                   card_evidence=card_evidence, page_texts=page_texts)
+                                   card_evidence=card_evidence, page_texts=page_texts,
+                                   verifier=get_default_verifier())
 
     if literature is None:
         from neuro_caseboard.literature.config import load_literature_config
