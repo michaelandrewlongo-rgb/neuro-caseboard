@@ -21,7 +21,7 @@ from caseprep.explorer.question_manifest import (
     _merge_cards,
 )
 from caseprep.enrichment.corpus_enricher import enrich_manifest
-from caseprep.audit.card_auditor import audit_manifest
+from caseprep.audit.card_auditor import audit_manifest, accepted_papers
 from caseprep.core.contracts import EvidenceRecord
 
 from neuro_caseboard.retrieve import build_retriever
@@ -114,10 +114,13 @@ def build_manifest(topic: str, *, use_llm=None):
 
 
 def _sources_from_audited(audited, *, limit: int = 15):
+    # Only Auditor-accepted papers may become an exported source. ``c.papers`` also holds
+    # papers the Auditor flagged as off-target (``contradicting_paper_ids``) — exporting those
+    # leaks an off-target source even when the card itself was never quarantined.
     seen: set[str] = set()
     out: list[EvidenceRecord] = []
     for c in audited.cards:
-        for p in c.papers or []:
+        for p in accepted_papers(c):
             title = (p.get("title") or "").strip()
             if title and title not in seen:
                 seen.add(title)
