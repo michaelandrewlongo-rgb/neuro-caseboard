@@ -71,6 +71,48 @@ class AuditedManifest:
         }
 
 
+# ── accepted / rejected partition ────────────────────────────────────────────
+#
+# The single gate every consumer must use before turning a card's retrieved papers into
+# citations, "supported" grounding, or appendix entries. A card that is marked ``supported``
+# can still carry an off-target paper in ``contradicting_paper_ids`` (supported wins when a
+# card has both supporting AND contradicting papers), so the card stays in the primary dossier
+# — it is NOT quarantined. Exporting *all* of ``card.papers`` therefore leaks the off-target
+# source. These accessors project the Auditor's own id partition back onto the paper dicts so
+# the leak cannot happen: only ``accepted_papers`` may be cited; ``rejected_papers`` belong in
+# a separate appendix section.
+
+
+def _paper_id(paper: Any) -> Any:
+    """The id the Auditor keyed on (``paper.get("id", "")``), duck-typed for dict or object."""
+    if isinstance(paper, dict):
+        return paper.get("id", "")
+    return getattr(paper, "id", "")
+
+
+def rejected_papers(card: Any) -> list:
+    """Papers the Auditor flagged as contradicting the case's clinical domain (off-target).
+
+    These must never become a citation or "supported" grounding; they belong in a separate
+    appendix section. Returns the paper dicts (a subset of ``card.papers``)."""
+    rejected_ids = set(getattr(card, "contradicting_paper_ids", None) or [])
+    if not rejected_ids:
+        return []
+    return [p for p in (getattr(card, "papers", None) or []) if _paper_id(p) in rejected_ids]
+
+
+def accepted_papers(card: Any) -> list:
+    """Papers the Auditor did NOT flag as contradicting — the only papers eligible to create
+    a citation or "supported" grounding.
+
+    Accepted = ``card.papers`` minus ``rejected_papers`` (i.e. the supporting papers plus the
+    still-uncertain ``needs_review`` middle). Using the precise ``contradicting_paper_ids``
+    signal — rather than a stricter "supporting only" rule — removes exactly the leaked
+    off-target papers while leaving already-correct retrieved citations untouched."""
+    rejected_ids = set(getattr(card, "contradicting_paper_ids", None) or [])
+    return [p for p in (getattr(card, "papers", None) or []) if _paper_id(p) not in rejected_ids]
+
+
 # ── domain lexicon ───────────────────────────────────────────────────────────
 
 # Positive signals: terms that indicate the paper is in a specific clinical

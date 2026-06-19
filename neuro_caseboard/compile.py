@@ -23,6 +23,7 @@ from neuro_caseboard.model import (
 from neuro_caseboard.textops import scrub_question, split_compound
 from neuro_caseboard.captions import complete_caption, relevance_line
 from neuro_caseboard.dedup import dedup_sections
+from caseprep.audit.card_auditor import accepted_papers, rejected_papers
 
 _HEADINGS = {
     "03-anatomy-at-risk.md": "Anatomy at Risk",
@@ -143,9 +144,11 @@ def _compile(
                 claim.figure_ids.append(fid)
             # WS-2: inline corpus [n] on the operative/technique/structures surfaces — each marker
             # resolves to a numbered Evidence Sources entry (no fabrication, [n] disjoint from [L#]).
+            # Only Auditor-accepted papers may anchor a citation; an off-target paper that merely
+            # sorted first must never become the source a [n] points at.
             if corpus_inline and tf in corpus_eligible:
                 marks = []
-                for p in (getattr(c, "papers", None) or [])[:2]:
+                for p in accepted_papers(c)[:2]:
                     cite = (p.get("title") or "").strip() if isinstance(p, dict) else ""
                     if cite:
                         marks.append(_cite_index(cite))
@@ -180,6 +183,19 @@ def _compile(
                 citations.append(cite)
     if citations:
         appendix_entries.append(AppendixEntry(heading="Evidence Sources", sources=citations))
+
+    # Rejected sources: papers the Auditor flagged as off-target (contradicting the case's
+    # clinical domain). They are deliberately kept OUT of the citations above and surfaced here
+    # so provenance is complete without ever lending a wrong-domain paper a citation.
+    rejected_titles: list[str] = []
+    for c in cards:
+        for p in rejected_papers(c):
+            title = (p.get("title") or "").strip() if isinstance(p, dict) else ""
+            if title and title not in rejected_titles:
+                rejected_titles.append(title)
+    if rejected_titles:
+        appendix_entries.append(
+            AppendixEntry(heading="Rejected Sources (off-target)", sources=rejected_titles))
 
     # #2 single evidence axis (no confidence); one clean partition
     summary = EvidenceSummary(
