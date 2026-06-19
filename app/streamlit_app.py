@@ -20,6 +20,7 @@ import signal_theme as sig
 from figure_gallery import figure_card
 from ask_session import (is_new_submission, mark_answered, reset_conversation,
                          apply_pending_clear)
+from ask_confidence import grade_answer, summarize, STATUS_LABEL, STATUS_MARK
 from neuro_caseboard.board_view import board_view
 from neuro_caseboard.pipeline import (
     build_dossier, build_case_dossier, render_case_pdf, render_ask_pdf, _slug)
@@ -104,6 +105,20 @@ if mode == "Ask":
         label = f'answer: "{q}"'
         record(_store, [from_figure(f) for f in result.figures], label)
         st.markdown(sig.citation_chips(result.answer), unsafe_allow_html=True)
+        # Per-claim confidence (BACKLOG P2 #4): textbook sources from result.citations,
+        # literature sources from result.literature.citations; both expose `.n`.
+        source_lane = {getattr(c, "n", 0): "textbook" for c in result.citations}
+        if result.literature and result.literature.citations:
+            for c in result.literature.citations:
+                source_lane.setdefault(getattr(c, "n", 0), "literature")
+        graded = grade_answer(result.answer, source_lane)
+        if graded:
+            counts = summarize(graded)
+            sig.section("Claim confidence", "CONF")
+            st.caption(" · ".join(f"{STATUS_MARK[s]} {STATUS_LABEL[s]}: {n}"
+                                  for s, n in counts.items()))
+            for c in graded:
+                st.markdown(f"{STATUS_MARK[c.status]} **{STATUS_LABEL[c.status]}** — {c.text}")
         if result.figures:
             sig.section("Figures", "FIG")
             cols = st.columns(min(3, len(result.figures)))
