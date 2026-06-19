@@ -445,11 +445,12 @@ class BuildRequest(BaseModel):
     topic: str
     enrich: bool = True
     use_llm: bool = True
+    use_prefs: bool = True
 
 
-def _do_build(topic: str, enrich: bool, use_llm: bool):
+def _do_build(topic: str, enrich: bool, use_llm: bool, prefs=None):
     from neuro_caseboard.pipeline import build_dossier
-    return build_dossier(topic, enrich=enrich, use_llm=None if use_llm else False)
+    return build_dossier(topic, enrich=enrich, use_llm=None if use_llm else False, prefs=prefs)
 
 
 @app.post("/api/build")
@@ -459,8 +460,12 @@ def build(req: BuildRequest):
         return JSONResponse(status_code=422, content={"kind": "error", "error": "empty topic"})
 
     from neuro_core.gpu_guard import GpuNotReadyError
+    prefs = None
+    if req.use_prefs:
+        from neuro_caseboard.preferences import load_preferences, default_store_path
+        prefs = load_preferences(default_store_path()) or None
     try:
-        dossier = _do_build(topic, req.enrich, req.use_llm)
+        dossier = _do_build(topic, req.enrich, req.use_llm, prefs)
     except GpuNotReadyError as e:
         return JSONResponse(status_code=503,
                             content={"kind": "unavailable", "reason": f"GPU not ready: {e}"})
@@ -515,6 +520,69 @@ def build_pdf(req: BuildPdfRequest):
                             content={"error": f"PDF render failed: {type(e).__name__}: {e}"})
     return FileResponse(pdf_path, media_type="application/pdf",
                         filename=f"{_slug(topic)}-caseboard.pdf")
+
+
+# ---------------------------------------------------------------------------------------------
+# Rehearsal: surgeon marks the board (wrong/missing/important) -> distil into profile-keyed
+# operative preferences (persisted) -> rebuild the board with them applied. GET /api/preferences
+# surfaces what is remembered (provenance: action, pattern, weight, source cases). Same engine
+# calls as the CLI/Streamlit; never fabricates a board.
+# ---------------------------------------------------------------------------------------------
+
+class FeedbackMarkIn(BaseModel):
+    mark: str
+    text: str
+    section: str = ""
+    note: str = ""
+
+
+class FeedbackRequest(BaseModel):
+    topic: str
+    profile: str = ""
+    enrich: bool = False
+    use_llm: bool = False
+    items: list[FeedbackMarkIn]
+
+
+@app.post("/api/feedback")
+def feedback(req: FeedbackRequest):
+    topic = (req.topic or "").strip()
+    if not topic:
+        return JSONResponse(status_code=422, content={"kind": "error", "error": "empty topic"})
+    if not req.items:
+        return JSONResponse(status_code=422, content={"kind": "error", "error": "no marks"})
+
+    from neuro_caseboard.pipeline import classify_profile
+    from neuro_caseboard.feedback import CaseFeedback, FeedbackItem, target_file_for_heading
+    from neuro_caseboard.preferences import (
+        distill, load_preferences, save_preferences, default_store_path,
+    )
+    profile = req.profile or classify_profile(topic)
+    items = [FeedbackItem(mark=m.mark, text=m.text,
+                          target_file=target_file_for_heading(m.section), note=m.note)
+             for m in req.items]
+    fb = CaseFeedback(topic=topic, profile=profile, items=items)
+    store = default_store_path()
+    prefs = distill(fb, load_preferences(store))
+    save_preferences(prefs, store)
+
+    from neuro_core.gpu_guard import GpuNotReadyError
+    try:
+        dossier = _do_build(topic, req.enrich, req.use_llm, prefs)
+    except GpuNotReadyError as e:
+        return JSONResponse(status_code=503, content={"kind": "unavailable", "reason": f"GPU not ready: {e}"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"kind": "error", "error": f"{type(e).__name__}: {e}"})
+    return {"kind": "dossier", "topic": topic, "profile": profile,
+            "remembered": len(prefs), "dossier": _dossier_dict(dossier)}
+
+
+@app.get("/api/preferences")
+def preferences() -> dict:
+    from dataclasses import asdict
+    from neuro_caseboard.preferences import load_preferences, default_store_path
+    prefs = load_preferences(default_store_path())
+    return {"kind": "preferences", "count": len(prefs), "preferences": [asdict(p) for p in prefs]}
 
 
 # ---------------------------------------------------------------------------------------------

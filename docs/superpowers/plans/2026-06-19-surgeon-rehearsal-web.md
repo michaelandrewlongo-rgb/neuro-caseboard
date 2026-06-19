@@ -484,7 +484,7 @@ git commit -m "feat(rehearsal): conservative apply_preferences (de-emphasize<2, 
 
 ---
 
-### Task 4: Thread `prefs` through the pipeline
+### Task 4: Thread `prefs` through the pipeline — ✅ DONE (VERIFY #9: 109 pass / 0 fail; commit 0575e2a)
 
 **Files:** Modify `neuro_caseboard/pipeline.py`; Test `tests/rehearsal/test_pipeline_prefs.py`.
 
