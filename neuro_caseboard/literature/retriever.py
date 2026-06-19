@@ -4,6 +4,8 @@ import datetime as _dt
 import re
 from dataclasses import dataclass, field
 
+from neuro_caseboard.literature.standardize import standardize_records
+
 _STOP = {
     "the", "and", "for", "with", "this", "that", "from", "are", "any", "its",
     "what", "which", "when", "best", "first", "line", "is", "of", "to", "in",
@@ -119,6 +121,8 @@ class LiteratureRetriever:
         self._client = client
         self._k = k
         self._recency_years = recency_years
+        # Set by retrieve(): explains thin coverage (BACKLOG P2 #7) for the caller to surface.
+        self.last_coverage_note = ""
 
     async def retrieve(self, question: str, *, candidates: int = 40,
                        current_year: int | None = None,
@@ -167,4 +171,8 @@ class LiteratureRetriever:
             return (bucket, pub_tier(r.pub_types), recent, -(r.year or 0))
 
         records.sort(key=rank_key)
-        return records[:self._k]
+        # P2 #7: apply a quality floor to the relevance-ranked pool (drop low-tier off-topic
+        # padding) and record a coverage note when literature is thin — relevance still gates order.
+        aug = standardize_records(records, k=self._k, tier_fn=pub_tier)
+        self.last_coverage_note = aug.note
+        return aug.records
