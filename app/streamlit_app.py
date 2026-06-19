@@ -22,6 +22,7 @@ from ask_session import (is_new_submission, mark_answered, reset_conversation,
                          apply_pending_clear)
 from ask_confidence import grade_answer, summarize, STATUS_LABEL, STATUS_MARK
 from quant_support import extract_metrics, unquantified_comparisons, summarize as quant_summarize
+from progress import ProgressTracker, out_of_scope
 from neuro_caseboard.board_view import board_view
 from neuro_caseboard.pipeline import (
     build_dossier, build_case_dossier, render_case_pdf, render_ask_pdf, _slug)
@@ -93,8 +94,12 @@ if mode == "Ask":
     # Answer once per distinct submission: a rerun from any OTHER widget (the Prepare-PDF box,
     # the Build button) must re-render the stored answer, not re-invoke the engine on a stale q.
     if q and is_new_submission(st.session_state, q):
+        # P3 #8: time the engine call so we can show elapsed latency (60-90s is normal).
+        _tracker = ProgressTracker()
         with st.spinner("Searching textbooks + recent literature…"):
             st.session_state["ask_result"] = answer_question(q)  # current query ONLY — no history
+        _tracker.complete()
+        st.session_state["ask_elapsed"] = _tracker.elapsed()
         mark_answered(st.session_state, q)
     result = st.session_state.get("ask_result")
     if q and result is not None:
@@ -104,6 +109,13 @@ if mode == "Ask":
             sig.variants([v.label for v in result.variants])
             st.stop()
         label = f'answer: "{q}"'
+        # P3 #8: elapsed-time feedback + early out-of-scope signal (low corpus overlap).
+        _elapsed = st.session_state.get("ask_elapsed")
+        if _elapsed is not None:
+            st.caption(f"Answered in {_elapsed:.1f}s")
+        if out_of_scope(len(result.citations), len(result.figures)):
+            st.warning("Low corpus overlap — this question may be outside the indexed textbooks; "
+                       "the answer leans on general/literature sources. Verify carefully.")
         record(_store, [from_figure(f) for f in result.figures], label)
         st.markdown(sig.citation_chips(result.answer), unsafe_allow_html=True)
         # Per-claim confidence (BACKLOG P2 #4): textbook sources from result.citations,
