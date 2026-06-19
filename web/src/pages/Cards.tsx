@@ -611,9 +611,12 @@ function CardsResult({
         </p>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-          {displayCards.map((c, i) => (
-            <CardItem key={c.id || i} card={c} index={i} total={displayCards.length} />
-          ))}
+          {displayCards.map((c) => {
+            const origIdx = allCards.indexOf(c)
+            return (
+              <CardItem key={c.id || origIdx} card={c} index={origIdx} total={allCards.length} />
+            )
+          })}
 
           {/* Dashed "+ N more below threshold" tile */}
           {mayHaveMore && (

@@ -15,7 +15,7 @@
  * data), NO tooltip renders and NO derivation text is fabricated.
  */
 
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useId, useRef, useState } from "react"
 import { cn } from "../../lib/utils"
 
 /** Per-metric provenance data. Forward-compatible scaffolding — no engine fields emit this yet. */
@@ -55,6 +55,7 @@ function ProvenancePopover({
 }: ProvenancePopoverProps) {
   const [open, setOpen] = useState(false)
   const btnRef = useRef<HTMLButtonElement>(null)
+  const tooltipId = useId()
 
   const show = useCallback(() => setOpen(true), [])
   const hide = useCallback(() => setOpen(false), [])
@@ -91,7 +92,7 @@ function ProvenancePopover({
         onFocus={show}
         onBlur={hide}
         onKeyDown={handleKeyDown}
-        aria-haspopup="true"
+        aria-describedby={open ? tooltipId : undefined}
         aria-expanded={open}
         aria-label={`${label} — show derivation`}
       >
@@ -105,6 +106,7 @@ function ProvenancePopover({
 
       {/* Glass popover — pointer-events-none so it never traps focus */}
       <div
+        id={tooltipId}
         role="tooltip"
         aria-hidden={!open}
         className="pointer-events-none absolute bottom-[calc(100%+8px)] left-0 z-50 w-56"

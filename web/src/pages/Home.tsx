@@ -210,9 +210,9 @@ export default function Home() {
               </svg>
             </Link>
 
-            {/* Ghost button — static anchor, no navigation */}
-            <span
-              role="button"
+            {/* Ghost button — static, no navigation; real <button> for keyboard access */}
+            <button
+              type="button"
               className="inline-flex cursor-default items-center gap-2 font-sans font-medium"
               style={{
                 background: "transparent",
@@ -223,9 +223,10 @@ export default function Home() {
                 padding: "0.72rem 1.25rem",
               }}
               aria-label="How grounding works — coming soon"
+              onClick={() => undefined}
             >
               How grounding works
-            </span>
+            </button>
           </div>
         </div>
 

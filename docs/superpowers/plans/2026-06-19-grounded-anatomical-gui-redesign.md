@@ -137,3 +137,21 @@ Shared primitives in `web/src/components/ui.tsx` may gain palette-aware variants
 - **Type consistency:** `RiskRadar({axes,size,withMit})` and `EvidenceGauge({rings,size})` signatures are identical everywhere they appear (Tasks 3/4/6/7). `PlanningMetrics` created in Task 4, extended in Task 5. New components (`CitationAudit`, `StructuresRadar`, `CircleOfWillis`) each created once.
 - **Ordering:** tokens (1) precede all surfaces; charts (3) precede consumers (4/6/7); Circle-of-Willis keyframes added in Task 1 are consumed in Task 8.
 - **Granularity:** 10 implementation checkboxes (Tasks 1–7, 8a, 8b, 9) = 10 IMPLEMENT increments, each independently build+lint-gated.
+
+---
+
+## Review Findings (PR #32, 2026-06-19)
+
+- [SHOULD] web/src/pages/Ask.tsx — `text-primary-ink` (removed var) on error label → colorless; `bg-secondary` on "unavailable" state shows teal (conflates with positive accent).
+- [SHOULD] web/src/pages/Build.tsx — same removed-var error-label regression; `bg-secondary` teal on "temporarily unavailable" state.
+- [SHOULD] web/src/components/ui.tsx — Eyebrow `accent` appends `!text-primary-ink` (removed) → Ask eyebrow teal not crimson; `Card`/`Button` reference removed `shadow-card`/`--shadow-brutal-sm`.
+- [SHOULD] web/src/components/build/EvidenceBar.tsx — restyled but orphaned (Build.tsx replaced it inline); dead file.
+- [SHOULD] web/src/pages/Home.tsx — "How grounding works" `role="button"` on a `<span>` with no `tabIndex`/keyboard handler → not keyboard-reachable (a11y constraint).
+- [NIT] web/src/components/build/PlanningMetrics.tsx — tooltip trigger uses `aria-haspopup="true"`; should use `aria-describedby` (or omit).
+- [NIT] web/src/pages/Cards.tsx — `matchTier` uses index within the filtered list, so the first card always becomes "TOP MATCH" after a deck filter; tier labels reset per filter.
+
+### Review tasks
+- [x] review: replace removed-CSS-var references with correct dark-theme tokens across `Ask.tsx`, `Build.tsx`, `ui.tsx` — error labels readable (use a destructive/signal token), Ask eyebrow renders crimson, "unavailable" state no longer teal `bg-secondary`, drop `shadow-card`/`--shadow-brutal-sm` refs.
+- [x] review: remove the orphaned `web/src/components/build/EvidenceBar.tsx` (no longer imported anywhere).
+- [x] review: make "How grounding works" keyboard-reachable in `Home.tsx` (use a real `<button>` or add `tabIndex={0}` + key handler).
+- [x] review: fix NITs — `PlanningMetrics` tooltip `aria-haspopup`→`aria-describedby`; `Cards` `matchTier` should rank by original score, not filtered index.

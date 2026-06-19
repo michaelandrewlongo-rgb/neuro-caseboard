@@ -224,7 +224,7 @@ export default function Build() {
 
       {netError && !loading && (
         <Card className="p-5 text-sm">
-          <p className="font-bold text-primary-ink">Request failed</p>
+          <p className="font-bold text-destructive">Request failed</p>
           <p className="mt-1 text-muted-foreground">{netError}</p>
           <p className="mt-2 font-mono text-xs text-muted-foreground">
             Is the engine wrapper running on :8001?
@@ -234,13 +234,13 @@ export default function Build() {
 
       {resp && !loading && resp.kind === "error" && (
         <Card className="p-5 text-sm">
-          <p className="font-bold text-primary-ink">Engine error</p>
+          <p className="font-bold text-destructive">Engine error</p>
           <p className="mt-1 font-mono text-xs text-muted-foreground">{resp.error}</p>
         </Card>
       )}
 
       {resp && !loading && resp.kind === "unavailable" && (
-        <Card className="bg-secondary p-5 text-sm">
+        <Card className="bg-muted p-5 text-sm">
           <p className="font-bold text-foreground">Temporarily unavailable</p>
           <p className="mt-1 text-muted-foreground">{resp.reason}</p>
         </Card>
