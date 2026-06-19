@@ -728,7 +728,7 @@ git commit -m "feat(rehearsal,api): /api/feedback + /api/preferences + use_prefs
 
 ---
 
-### Task 6: Web — Rehearsal mode (mark the board, remember, re-render)
+### Task 6: Web — Rehearsal mode (mark the board, remember, re-render) — ✅ DONE (npm run build clean: tsc+vite exit 0; commit 4328fc9)
 
 **Files:** Modify `web/src/lib/api.ts`, `web/src/components/build/DossierView.tsx`, `web/src/pages/Build.tsx`; Create `web/src/components/build/RememberedPanel.tsx`.
 
@@ -1059,7 +1059,7 @@ git commit -m "feat(rehearsal,web): rehearsal mode — mark the board, remember,
 
 ---
 
-### Task 7: End-to-end browser observation + runbook
+### Task 7: End-to-end browser observation + runbook — ✅ DONE (real-uvicorn HTTP smoke: feedback→board+zenith, prefs add/spine, fresh build inherits; 110 pytest green; runbook written)
 
 **Files:** Create `docs/runbooks/2026-06-19-surgeon-in-the-loop.md`; (verification artifact) a Playwright screenshot.
 
