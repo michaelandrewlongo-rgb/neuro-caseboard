@@ -59,3 +59,58 @@ def test_after_reset_the_same_question_answers_again():
     reset_conversation(state)
     # New conversation: q1 is a fresh submission again.
     assert is_new_submission(state, "q1") is True
+
+
+def test_ask_lane_calls_engine_with_current_query_only(monkeypatch):
+    """End-to-end app guard: asking a question calls answer_question with EXACTLY that string —
+    never a history-concatenated prompt — and the app boots with no exception. Hermetic: the
+    engine is stubbed, so no corpus/LLM/network is touched."""
+    import pytest
+    pytest.importorskip("streamlit")  # web extra absent in required .[dev] CI → skip, don't abort
+    import neuro_caseboard.qa as qa
+    calls = []
+
+    class _Res:  # minimal QAResult stand-in
+        answer = "stub answer"
+        citations = []
+        figures = []
+        literature = None
+
+    def _fake_answer(question, **kw):
+        calls.append(question)
+        return _Res()
+
+    monkeypatch.setattr(qa, "answer_question", _fake_answer)
+
+    from streamlit.testing.v1 import AppTest
+    app_py = str(APP_DIR / "streamlit_app.py")
+    at = AppTest.from_file(app_py, default_timeout=30)
+    at.session_state["ask_q"] = "borders of the cavernous sinus"
+    at.run()
+    assert len(at.exception) == 0
+    assert calls == ["borders of the cavernous sinus"]
+
+
+def test_ask_lane_answers_once_then_reuses_stored_result(monkeypatch):
+    """A second rerun with the SAME question (e.g. user ticks the Prepare-PDF box) must NOT
+    re-invoke the engine — the stored answer is re-rendered instead."""
+    import pytest
+    pytest.importorskip("streamlit")
+    import neuro_caseboard.qa as qa
+    calls = []
+
+    class _Res:
+        answer = "stub answer"
+        citations = []
+        figures = []
+        literature = None
+
+    monkeypatch.setattr(qa, "answer_question", lambda question, **kw: (calls.append(question) or _Res()))
+
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(APP_DIR / "streamlit_app.py"), default_timeout=30)
+    at.session_state["ask_q"] = "Wallenberg syndrome findings"
+    at.run()
+    at.run()  # a second rerun with the same q
+    assert len(at.exception) == 0
+    assert calls == ["Wallenberg syndrome findings"]  # answered exactly once
