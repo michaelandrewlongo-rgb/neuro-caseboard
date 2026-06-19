@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from neuro_caseboard.feedback import CaseFeedback
+from caseprep.explorer.question_manifest import QuestionCard, QuestionManifest
 
 ACTIONS = ("suppress", "elevate", "add")
 _MARK_ACTION = {"wrong": "suppress", "important": "elevate", "missing": "add"}
@@ -92,3 +93,50 @@ def load_preferences(path) -> list[Preference]:
     if not p.exists():
         return []
     return [Preference(**d) for d in json.loads(p.read_text(encoding="utf-8"))]
+
+
+def _card_signature(card: QuestionCard) -> str:
+    return _key_terms(f"{card.question} {card.why_it_matters}")
+
+
+def _matches(pattern: str, card: QuestionCard) -> bool:
+    pat = set(pattern.split())
+    return bool(pat) and pat <= set(_card_signature(card).split())
+
+
+def apply_preferences(manifest: QuestionManifest, profile: str,
+                      prefs: list[Preference] | None) -> QuestionManifest:
+    """Re-express stored preferences against a fresh manifest. Profile-scoped. Conservative:
+    a ``suppress`` pref with weight>=2 REMOVES matching cards; weight<2 only DE-EMPHASIZES them
+    (stable-move to the END of their target_file group — content retained). ``add`` injects when
+    absent; ``elevate`` moves matching cards to the front. Order: suppress -> add -> elevate. New
+    frozen manifest; input unchanged."""
+    if not prefs:
+        return manifest
+    active = [p for p in prefs if p.profile in ("", profile)]
+    if not active:
+        return manifest
+    cards = list(manifest.cards)
+
+    remove = [p.pattern for p in active if p.action == "suppress" and p.weight >= 2]
+    if remove:
+        cards = [c for c in cards if not any(_matches(pat, c) for pat in remove)]
+
+    deemph = [p.pattern for p in active if p.action == "suppress" and p.weight < 2]
+    if deemph:
+        def _d(c): return any(_matches(pat, c) for pat in deemph)
+        cards = [c for c in cards if not _d(c)] + [c for c in cards if _d(c)]
+
+    for p in [p for p in active if p.action == "add"]:
+        if not any(_matches(p.pattern, c) for c in cards):
+            cards.append(QuestionCard(target_file=p.target_file, section_key=p.section_key,
+                                      question=p.text, why_it_matters=p.why or _default_why("add"),
+                                      compiler_slot=p.compiler_slot))
+
+    elev = [p.pattern for p in active if p.action == "elevate"]
+    if elev:
+        def _e(c): return any(_matches(pat, c) for pat in elev)
+        cards = [c for c in cards if _e(c)] + [c for c in cards if not _e(c)]
+
+    return QuestionManifest(procedure_family=getattr(manifest, "procedure_family", "generic"), cards=cards)
+

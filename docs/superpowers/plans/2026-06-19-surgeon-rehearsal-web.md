@@ -173,7 +173,7 @@ git commit -m "feat(rehearsal): surgeon board-feedback model + JSON persistence"
 
 ---
 
-### Task 2: Preference model + distillation
+### Task 2: Preference model + distillation — ✅ DONE (VERIFY #7: 100 pass / 0 fail; commit fcb8f0d)
 
 **Files:** Create `neuro_caseboard/preferences.py`; Test `tests/rehearsal/test_preferences_distill.py`.
 
