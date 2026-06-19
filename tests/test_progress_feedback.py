@@ -53,3 +53,29 @@ def test_out_of_scope_only_when_no_sources_or_figures():
     assert out_of_scope(0, 0) is True
     assert out_of_scope(2, 0) is False
     assert out_of_scope(0, 1) is False
+
+
+def test_ask_lane_shows_elapsed_and_out_of_scope(monkeypatch):
+    """Ask lane shows an elapsed-time caption and an out-of-scope warning when the answer has no
+    corpus sources. Hermetic: engine stubbed."""
+    import pytest
+    pytest.importorskip("streamlit")
+    import neuro_caseboard.qa as qa
+
+    class _Res:
+        answer = "General guidance with no textbook citations."
+        citations = []
+        figures = []
+        literature = None
+
+    monkeypatch.setattr(qa, "answer_question", lambda question, **kw: _Res())
+
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(APP_DIR / "streamlit_app.py"), default_timeout=30)
+    at.session_state["ask_q"] = "an obscure out-of-domain question"
+    at.run()
+    assert len(at.exception) == 0
+    captions = " ".join(c.value for c in at.caption)
+    warnings = " ".join(w.value for w in at.warning)
+    assert "Answered in" in captions
+    assert "Low corpus overlap" in warnings
