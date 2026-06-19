@@ -16,6 +16,7 @@ def test_feedback_remembers_and_updates_board(tmp_path, monkeypatch):
     assert r.status_code == 200
     body = r.json()
     assert body["kind"] == "dossier" and body["remembered"] >= 1
+    assert body["build_id"]                                   # rebuilt board cached → Download PDF matches the screen
     assert "zenith" in json.dumps(body["dossier"])           # board updated immediately
 
     pr = client.get("/api/preferences").json()
@@ -30,3 +31,14 @@ def test_feedback_remembers_and_updates_board(tmp_path, monkeypatch):
     b2 = client.post("/api/build", json={
         "topic": "C3-4 ACDF", "enrich": False, "use_llm": False, "use_prefs": False}).json()
     assert "zenith" not in json.dumps(b2["dossier"])
+
+
+def test_feedback_rejects_invalid_mark(monkeypatch, tmp_path):
+    # An unknown mark is a client error → clean 422, not an uncaught 500 (honest degradation).
+    monkeypatch.setenv("CASEBOARD_PREFS_STORE", str(tmp_path / "prefs.json"))
+    client = TestClient(app)
+    r = client.post("/api/feedback", json={
+        "topic": "C5-6 corpectomy", "enrich": False, "use_llm": False,
+        "items": [{"mark": "bogus", "text": "x"}]})
+    assert r.status_code == 422
+    assert r.json()["kind"] == "error"

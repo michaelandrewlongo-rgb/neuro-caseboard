@@ -558,9 +558,13 @@ def feedback(req: FeedbackRequest):
         distill, load_preferences, save_preferences, default_store_path,
     )
     profile = req.profile or classify_profile(topic)
-    items = [FeedbackItem(mark=m.mark, text=m.text,
-                          target_file=target_file_for_heading(m.section), note=m.note)
-             for m in req.items]
+    try:
+        items = [FeedbackItem(mark=m.mark, text=m.text,
+                              target_file=target_file_for_heading(m.section), note=m.note)
+                 for m in req.items]
+    except ValueError as e:
+        # Honest degradation: a malformed mark is a client error, not a 500.
+        return JSONResponse(status_code=422, content={"kind": "error", "error": str(e)})
     fb = CaseFeedback(topic=topic, profile=profile, items=items)
     store = default_store_path()
     prefs = distill(fb, load_preferences(store))
@@ -573,7 +577,10 @@ def feedback(req: FeedbackRequest):
         return JSONResponse(status_code=503, content={"kind": "unavailable", "reason": f"GPU not ready: {e}"})
     except Exception as e:
         return JSONResponse(status_code=500, content={"kind": "error", "error": f"{type(e).__name__}: {e}"})
-    return {"kind": "dossier", "topic": topic, "profile": profile,
+    # Cache the rebuilt board so a later PDF export matches what the surgeon now sees (the board WITH
+    # the marks applied), not the pre-feedback board.
+    build_id = _cache_dossier(topic, req.enrich, req.use_llm, dossier)
+    return {"kind": "dossier", "build_id": build_id, "topic": topic, "profile": profile,
             "remembered": len(prefs), "dossier": _dossier_dict(dossier)}
 
 

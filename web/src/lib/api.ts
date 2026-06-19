@@ -239,7 +239,7 @@ export interface FeedbackItemIn {
 }
 
 export type FeedbackResponse =
-  | { kind: "dossier"; topic: string; profile: string; remembered: number; dossier: Dossier }
+  | { kind: "dossier"; build_id: string; topic: string; profile: string; remembered: number; dossier: Dossier }
   | { kind: "unavailable"; reason: string }
   | { kind: "error"; error: string }
 

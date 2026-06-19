@@ -1109,6 +1109,31 @@ git commit -m "docs(rehearsal): surgeon-in-the-loop runbook + e2e observation"
 
 ---
 
+## Review Findings (REVIEW #12 — self-review + CI/qlty signal)
+
+**CI:** full GitHub Actions suite GREEN — `test (py3.10)`, `test (py3.12)`, `package`, `sanity` all pass.
+CodeRabbit pending; qlty 32 advisory issues (non-blocking, on qlty.sh). **0 MUST.**
+
+- **[SHOULD]** `api/server.py` `/api/feedback` — `FeedbackItem(mark=...)` is constructed OUTSIDE the try
+  block; an invalid `mark` raises an uncaught `ValueError` → HTTP 500 instead of a clean 422 (violates the
+  file's honest-degradation contract).
+- **[SHOULD]** `web/src/pages/Build.tsx` `remember()` — after rehearsal, `setResp` reuses the OLD `build_id`
+  and `/api/feedback` does not cache its rebuilt dossier, so **Download PDF exports the stale pre-feedback
+  board**, not what is on screen (clinical-artifact mismatch).
+- **[SHOULD]** `RememberedPanel` — `remembered` is the cumulative store size, not what was just learned;
+  "Remembered N operative preferences" is misleading after repeated rehearsals.
+- **[NIT]** `preferences.py` `apply_preferences` — de-emphasize/elevate comments say "target_file group"
+  but the code does a whole-list stable partition (functionally equivalent since the compiler pins section
+  order); tighten the comment.
+- **[NIT]** `api/server.py` `default_store_path` — default is CWD-relative; fine for a local single-user tool.
+
+### Review tasks (triaged MUST/SHOULD → addressed in REVIEW_FIX)
+- [x] review: `/api/feedback` returns HTTP 422 on an invalid mark (validate against `MARKS`) + a TestClient test
+- [x] review: `/api/feedback` caches its rebuilt dossier and returns a `build_id`; `Build.tsx`/`api.ts` use it so Download PDF reflects the updated board
+- [x] review: clarify `RememberedPanel` wording so the count reads as cumulative active memory, not "just learned N"
+
+---
+
 ## Self-Review
 
 **1. Spec coverage.**

@@ -65,7 +65,8 @@ export default function Build() {
     setRemembered(null)
     const r = await submitFeedback(resp.topic, marks, { enrich, use_llm: useLlm })
     if (r.kind === "dossier") {
-      setResp({ kind: "dossier", build_id: resp.build_id, topic: r.topic, dossier: r.dossier })
+      // Use the rebuilt board's own build_id so Download PDF exports THIS board, not the pre-feedback one.
+      setResp({ kind: "dossier", build_id: r.build_id, topic: r.topic, dossier: r.dossier })
       setRemembered(r.remembered)
       setMarks([])
     } else {
