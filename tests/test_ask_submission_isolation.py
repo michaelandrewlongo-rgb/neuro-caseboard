@@ -10,7 +10,7 @@ APP_DIR = Path(__file__).resolve().parent.parent / "app"
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
-from ask_session import (is_new_submission, mark_answered, reset_conversation,
+from ask_session import (is_new_submission, mark_answered, reset_conversation,  # noqa: E402
                          apply_pending_clear)
 
 
