@@ -51,17 +51,23 @@ python3 -c "import lancedb, collections as C; db=lancedb.connect('/home/michael/
 # 7. Restart the server (it caches the index at startup) and check /ask + /figures
 ```
 
-## Results — fill in after the runtime build
+## Results — runtime build completed 2026-06-19
 
-| table | rows for `Practical neuroangiography` | notes |
-|---|---|---|
-| `chunks` | _TBD_ | expect ≈ pages-with-text (≈519) |
-| `figures` | _TBD_ | expect **<** rendered-PNG count (text-less plates excluded — normal) |
+Indexed **incrementally** (only this book embedded, not the whole corpus) via the new `--book`
+path — `CORPUS_DIR=/home/michael/textbook_pdfs python -m neuro_core.scripts.build_index --book "Practical neuroangiography"` — in **~1 min 47 s** (686 chunks embedded in 74 s + 381 figure pages). See PR #16 (incremental "add new books only" indexing).
 
-- Real query check: _TBD_ — confirm an in-domain answer cites `Practical neuroangiography` and
-  attaches one of its figures with a correct chapter/page.
-- Eval gates (`run_eval`, `figure_eval`): _TBD_ — if a gate flips because this book legitimately
-  outranks the prior expected source, investigate before editing the gate YAML.
+| table | rows for `Practical neuroangiography` | table total (16→17 books) | notes |
+|---|---|---|---|
+| `chunks` | **686** | 28,022 → **28,708** (+686) | other 16 books' rows untouched |
+| `figures` | **381** | 7,667 → **8,048** (+381) | whole-page mode → one row per figure page |
+
+- Real query check: **PASS** — `text_search("digital subtraction angiography catheter technique")`
+  surfaces the book at p71 (ch *3 Spinal Angiography: Technical Aspects*); `"vertebral artery
+  origin angiographic anatomy"` at p230 (ch *15 The Arteries of the Posterior Fossa*). Chapter/page
+  from bookmarks are correct.
+- Live index backed up to `index.bak-2026-06-18` before the write (still present; remove once the
+  app is confirmed good).
+- Eval gates (`run_eval`, `figure_eval`) + server restart / `/ask` browser check: operator's to run.
 
 ## What this loop delivered (tracked, offline-testable)
 
