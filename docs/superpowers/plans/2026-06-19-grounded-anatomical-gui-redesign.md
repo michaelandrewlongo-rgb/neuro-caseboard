@@ -86,7 +86,7 @@ Shared primitives in `web/src/components/ui.tsx` may gain palette-aware variants
 **Files:** Modify `web/src/components/build/PlanningMetrics.tsx` (from Task 4). Reference README §Interactions "Planning-metric provenance tooltips".
 **Consumes:** Task 4 `PlanningMetrics`; per-metric provenance data in `BuildResponse` (derivation sentence + source chips) — if a field is absent, degrade gracefully (no tooltip), do not fabricate.
 
-- [ ] **Task 5 — Add the hover/focus popover.** Each metric row `position:relative; cursor:help` with a dotted-underline label; on hover **and keyboard focus** a glass popover (`rgba(13,17,24,.97)`, 1px border, blur, `opacity .16s`) appears above it with a `DERIVATION` mono eyebrow, the derivation sentence, and source chips (`[n]`, counts, ranges). Keyboard-accessible (focusable trigger, ESC/blur dismiss; Radix/Floating-UI or accessible CSS). Honor `prefers-reduced-motion`.
+- [x] **Task 5 — Add the hover/focus popover.** Each metric row `position:relative; cursor:help` with a dotted-underline label; on hover **and keyboard focus** a glass popover (`rgba(13,17,24,.97)`, 1px border, blur, `opacity .16s`) appears above it with a `DERIVATION` mono eyebrow, the derivation sentence, and source chips (`[n]`, counts, ranges). Keyboard-accessible (focusable trigger, ESC/blur dismiss; Radix/Floating-UI or accessible CSS). Honor `prefers-reduced-motion`.
 
 ---
 
