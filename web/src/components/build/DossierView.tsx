@@ -1,5 +1,15 @@
+import { useState } from "react"
 import type { Dossier, DossierClaim, DossierFigure, DossierSection } from "@/lib/api"
 import { Card } from "@/components/ui"
+
+export type ClaimMark = "wrong" | "important"
+
+interface Rehearsal {
+  rehearsal?: boolean
+  markOf?: (heading: string, claim: DossierClaim) => ClaimMark | null
+  onMark?: (heading: string, claim: DossierClaim, mark: ClaimMark) => void
+  onMissing?: (heading: string, text: string) => void
+}
 
 function StatusMark({ status }: { status: DossierClaim["status"] }) {
   const ok = status === "supported"
@@ -12,7 +22,8 @@ function StatusMark({ status }: { status: DossierClaim["status"] }) {
   )
 }
 
-function Claim({ claim }: { claim: DossierClaim }) {
+function Claim({ claim, heading, r }: { claim: DossierClaim; heading: string; r: Rehearsal }) {
+  const active = r.markOf?.(heading, claim) ?? null
   return (
     <li className="flex gap-3">
       <StatusMark status={claim.status} />
@@ -47,8 +58,53 @@ function Claim({ claim }: { claim: DossierClaim }) {
             ))}
           </ul>
         )}
+        {r.rehearsal && (
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => r.onMark?.(heading, claim, "wrong")}
+              className={`border-2 border-border px-2 py-0.5 font-mono text-[11px] ${active === "wrong" ? "bg-destructive text-destructive-foreground" : "bg-card text-muted-foreground"}`}
+            >
+              ✗ wrong
+            </button>
+            <button
+              type="button"
+              onClick={() => r.onMark?.(heading, claim, "important")}
+              className={`border-2 border-border px-2 py-0.5 font-mono text-[11px] ${active === "important" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground"}`}
+            >
+              ★ important
+            </button>
+          </div>
+        )}
       </div>
     </li>
+  )
+}
+
+function MissingInput({ heading, onMissing }: { heading: string; onMissing: (h: string, t: string) => void }) {
+  const [text, setText] = useState("")
+  return (
+    <form
+      className="mt-3 flex gap-2"
+      onSubmit={(e) => {
+        e.preventDefault()
+        const t = text.trim()
+        if (t) {
+          onMissing(heading, t)
+          setText("")
+        }
+      }}
+    >
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder={`Missing from ${heading}…`}
+        className="field flex-1 !py-1.5 text-sm"
+      />
+      <button type="submit" className="border-2 border-border bg-secondary px-2 py-1 font-mono text-[11px]">
+        + missing
+      </button>
+    </form>
   )
 }
 
@@ -88,7 +144,7 @@ function FigureCard({ fig }: { fig: DossierFigure }) {
   )
 }
 
-function Section({ section }: { section: DossierSection }) {
+function Section({ section, r }: { section: DossierSection; r: Rehearsal }) {
   return (
     <Card className="p-6">
       <h2 className="font-display text-xl font-bold text-foreground">{section.heading}</h2>
@@ -96,10 +152,11 @@ function Section({ section }: { section: DossierSection }) {
       {section.claims.length > 0 && (
         <ul className="mt-5 flex flex-col gap-4">
           {section.claims.map((c, i) => (
-            <Claim key={i} claim={c} />
+            <Claim key={i} claim={c} heading={section.heading} r={r} />
           ))}
         </ul>
       )}
+      {r.rehearsal && r.onMissing && <MissingInput heading={section.heading} onMissing={r.onMissing} />}
       {section.figures.length > 0 && (
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
           {section.figures.map((f) => (
@@ -111,12 +168,12 @@ function Section({ section }: { section: DossierSection }) {
   )
 }
 
-export default function DossierView({ dossier }: { dossier: Dossier }) {
+export default function DossierView({ dossier, ...r }: { dossier: Dossier } & Rehearsal) {
   const appendix = dossier.appendix.entries
   return (
     <div className="flex flex-col gap-5">
       {dossier.sections.map((s, i) => (
-        <Section key={i} section={s} />
+        <Section key={i} section={s} r={r} />
       ))}
 
       {appendix.length > 0 && (

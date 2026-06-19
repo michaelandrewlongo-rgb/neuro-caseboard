@@ -76,7 +76,7 @@ def _deterministic_manifest(topic: str, profile: str):
     return QuestionManifest(procedure_family=key or profile or "generic", cards=cards)
 
 
-def build_manifest(topic: str, *, use_llm=None):
+def build_manifest(topic: str, *, use_llm=None, prefs=None):
     """Build the question manifest for *topic*.
 
     Clinical depth comes from the LLM Explorer (case-specific cards for any procedure)
@@ -110,7 +110,11 @@ def build_manifest(topic: str, *, use_llm=None):
     else:
         manifest = _deterministic_manifest(topic, profile)
 
-    return prune_offtarget(manifest, topic), profile
+    pruned = prune_offtarget(manifest, topic)
+    if prefs:
+        from neuro_caseboard.preferences import apply_preferences
+        pruned = apply_preferences(pruned, profile, prefs)
+    return pruned, profile
 
 
 def _sources_from_audited(audited, *, limit: int = 15):
@@ -192,9 +196,9 @@ def _figures_enabled() -> bool:
     return os.environ.get("CASEBOARD_TEXTBOOK_FIGURES", "1") != "0"
 
 
-def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
+def build_dossier(topic: str, *, enrich: bool = True, use_llm=None, prefs=None):
     """Run the full pipeline and return a compiled Dossier."""
-    manifest, _profile = build_manifest(topic, use_llm=use_llm)
+    manifest, _profile = build_manifest(topic, use_llm=use_llm, prefs=prefs)
     retriever = build_retriever() if enrich else None
     enriched = enrich_manifest(manifest, topic=topic, retriever=retriever, top_n=6)
     audited = audit_manifest(enriched, topic=topic)
@@ -209,7 +213,7 @@ def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
 def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=None,
                        lit_client=None, lit_synth_client=None, lit_cache=None,
                        figures_dir=None, fig_complete_fn=None, retriever=None,
-                       fig_retriever=None):
+                       fig_retriever=None, prefs=None):
     """Case path: a CaseContext -> the 8-section case Dossier.
 
     Mirrors build_dossier but authors over the eight case surfaces (build_case_manifest) and
@@ -230,6 +234,9 @@ def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=No
     manifest = build_case_manifest(case) if use_llm else deterministic_case_manifest(case)
     topic = case.to_topic()
     manifest = prune_offtarget(manifest, topic)        # anti-bleed (LOOP_PROMPT §6)
+    if prefs:
+        from neuro_caseboard.preferences import apply_preferences
+        manifest = apply_preferences(manifest, classify_profile(topic), prefs)
 
     # WS-2: an injected retriever (tests / the quality gate) drives corpus enrichment
     # deterministically; otherwise build the real corpus retriever when enriching.
