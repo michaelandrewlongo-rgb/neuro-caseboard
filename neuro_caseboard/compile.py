@@ -201,9 +201,11 @@ def _compile(
     rejected_titles: list[str] = []
     for c in cards:
         for p in rejected_papers(c):
-            title = (p.get("title") or "").strip() if isinstance(p, dict) else ""
-            if title and title not in rejected_titles:
-                rejected_titles.append(title)
+            # NB: use a distinct name — `title` is the dossier-title parameter; reusing it here
+            # clobbered the dossier title with the last rejected paper's title (cross-domain label leak).
+            rtitle = (p.get("title") or "").strip() if isinstance(p, dict) else ""
+            if rtitle and rtitle not in rejected_titles:
+                rejected_titles.append(rtitle)
     if rejected_titles:
         appendix_entries.append(
             AppendixEntry(heading="Rejected Sources (off-target)", sources=rejected_titles))
