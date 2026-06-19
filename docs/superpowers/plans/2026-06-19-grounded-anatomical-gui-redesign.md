@@ -126,7 +126,7 @@ Shared primitives in `web/src/components/ui.tsx` may gain palette-aware variants
 **Files:** Modify `web/src/components/PipelineLoader.tsx`, `web/src/components/ask/AskLoader.tsx`, `web/src/components/HealthPanel.tsx`. Reference README §"Loading / error / degradation" + §Interactions.
 **Consumes:** Task 1 tokens/keyframes; existing loader/health props (unchanged).
 
-- [ ] **Task 9 — Re-skin + a11y.** Re-skin `PipelineLoader`, `AskLoader`, `HealthPanel` to the palette (glass panels, mono eyebrows, accent dots) while preserving the honest "unavailable / not built / error" copy and behavior. Audit all keyframe animations added across the redesign for a `@media (prefers-reduced-motion: reduce)` guard. Confirm interactive elements (nav pills, filter segments, provenance tooltips, CTAs) are keyboard-reachable with visible focus rings (`--color-ring`), and that status pills keep `sr-only` text labels.
+- [x] **Task 9 — Re-skin + a11y.** Re-skin `PipelineLoader`, `AskLoader`, `HealthPanel` to the palette (glass panels, mono eyebrows, accent dots) while preserving the honest "unavailable / not built / error" copy and behavior. Audit all keyframe animations added across the redesign for a `@media (prefers-reduced-motion: reduce)` guard. Confirm interactive elements (nav pills, filter segments, provenance tooltips, CTAs) are keyboard-reachable with visible focus rings (`--color-ring`), and that status pills keep `sr-only` text labels.
 
 ---
 
