@@ -1,7 +1,13 @@
 """Feedback model + JSON round-trip + heading→target_file resolver."""
 import pytest
+
 from neuro_caseboard.feedback import (
-    MARKS, FeedbackItem, CaseFeedback, save_feedback, load_feedback, target_file_for_heading,
+    MARKS,
+    CaseFeedback,
+    FeedbackItem,
+    load_feedback,
+    save_feedback,
+    target_file_for_heading,
 )
 
 

@@ -1,5 +1,5 @@
 """prefs threaded through the offline build: default no-op; add injects; reinforced suppress removes."""
-from neuro_caseboard.pipeline import build_manifest, build_dossier
+from neuro_caseboard.pipeline import build_dossier, build_manifest
 from neuro_caseboard.preferences import Preference, _key_terms
 
 

@@ -13,8 +13,9 @@ import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from neuro_caseboard.feedback import CaseFeedback
 from caseprep.explorer.question_manifest import QuestionCard, QuestionManifest
+
+from neuro_caseboard.feedback import CaseFeedback
 
 ACTIONS = ("suppress", "elevate", "add")
 _MARK_ACTION = {"wrong": "suppress", "important": "elevate", "missing": "add"}
@@ -108,9 +109,10 @@ def apply_preferences(manifest: QuestionManifest, profile: str,
                       prefs: list[Preference] | None) -> QuestionManifest:
     """Re-express stored preferences against a fresh manifest. Profile-scoped. Conservative:
     a ``suppress`` pref with weight>=2 REMOVES matching cards; weight<2 only DE-EMPHASIZES them
-    (stable-move to the END of their target_file group — content retained). ``add`` injects when
-    absent; ``elevate`` moves matching cards to the front. Order: suppress -> add -> elevate. New
-    frozen manifest; input unchanged."""
+    (stable-move to the END of the card list — content retained; the compiler pins section order, so a
+    de-emphasized card simply renders last within its own section). ``add`` injects when absent;
+    ``elevate`` moves matching cards to the front. Order: suppress -> add -> elevate. New frozen
+    manifest; input unchanged."""
     if not prefs:
         return manifest
     active = [p for p in prefs if p.profile in ("", profile)]

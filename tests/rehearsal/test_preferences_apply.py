@@ -1,6 +1,7 @@
 """Apply preferences to a manifest: conservative suppress, plus add/elevate/profile-scope."""
 from caseprep.explorer.question_manifest import QuestionCard, QuestionManifest
-from neuro_caseboard.preferences import Preference, apply_preferences, _key_terms
+
+from neuro_caseboard.preferences import Preference, _key_terms, apply_preferences
 
 
 def _card(q):

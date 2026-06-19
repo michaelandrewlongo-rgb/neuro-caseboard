@@ -1,7 +1,10 @@
 """Distil marks into reusable, reinforced, profile-keyed preferences."""
 from neuro_caseboard.feedback import CaseFeedback, FeedbackItem
 from neuro_caseboard.preferences import (
-    distill, save_preferences, load_preferences, _key_terms,
+    _key_terms,
+    distill,
+    load_preferences,
+    save_preferences,
 )
 
 
