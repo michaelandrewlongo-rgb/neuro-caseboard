@@ -124,3 +124,13 @@ def test_gate_fails_when_metric_below_baseline(tmp_path):
     p = tmp_path / "BAD_BASELINE.json"
     p.write_text(json.dumps(bad))
     assert qg.main(["--baseline", str(p)]) == 1
+
+
+from eval.quality_gate import compute_metrics, load_split, DIRECTIONS
+
+
+def test_attribution_precision_present_and_perfect_offline():
+    m = compute_metrics(load_split("eval"))
+    assert "attribution_precision" in m
+    assert DIRECTIONS["attribution_precision"] == "min"
+    assert m["attribution_precision"] == 1.0
