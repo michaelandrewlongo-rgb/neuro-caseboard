@@ -6,6 +6,8 @@ import AnswerView from "@/components/ask/AnswerView"
 import FigureGrid from "@/components/ask/FigureGrid"
 import SourcesList from "@/components/ask/SourcesList"
 import LiteratureBlock from "@/components/ask/LiteratureBlock"
+import { CitationAudit } from "@/components/ask/CitationAudit"
+import { StructuresRadar } from "@/components/ask/StructuresRadar"
 
 const HINTS = [
   "borders of the cavernous sinus",
@@ -67,7 +69,7 @@ export default function Ask() {
         {liveMsg}
       </div>
       <header>
-        <Eyebrow accent>Ask · Citation-grounded</Eyebrow>
+        <Eyebrow accent>ASK · CITED ANSWER ENGINE</Eyebrow>
         <h1 className="mt-3 font-display text-4xl font-bold tracking-tight text-foreground">
           Ask the corpus
         </h1>
@@ -105,6 +107,29 @@ export default function Ask() {
               {h}
             </button>
           ))}
+        </div>
+      )}
+
+      {resp?.kind === "answer" && !loading && (
+        <div className="flex flex-col gap-4">
+          {/* Status line — honest counts derived from real AskResponse fields */}
+          <p
+            className="font-mono text-[11px] uppercase tracking-[0.14em]"
+            style={{ color: "#6fc0b8" }}
+          >
+            {(() => {
+              const g = resp.citations.length
+              const l = resp.literature?.citations.length ?? 0
+              const t = g + l
+              if (t === 0) return "No citations in this response"
+              return `${g} of ${t} citations from grounded corpus${l > 0 ? ` · ${l} from literature` : ""}`
+            })()}
+          </p>
+          {/* Telemetry row — Citation Audit (real data) + Structures Radar (not available) */}
+          <div className="grid grid-cols-2 gap-4">
+            <CitationAudit citations={resp.citations} literature={resp.literature} />
+            <StructuresRadar answer={resp.answer} />
+          </div>
         </div>
       )}
 
