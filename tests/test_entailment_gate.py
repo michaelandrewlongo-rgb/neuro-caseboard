@@ -1,3 +1,5 @@
+import pytest
+
 from neuro_caseboard.entailment import LexicalVerifier, should_cite
 from neuro_caseboard.entailment import get_default_verifier
 
@@ -12,6 +14,26 @@ def test_lexical_rejects_when_disjoint():
     v = LexicalVerifier()
     premise = "Lumbar pedicle screw trajectories follow the convergent sagittal angle."
     assert v.entails(premise, "Preserve the recurrent artery of Heubner.") is False
+
+
+def test_lexical_rejects_long_offtopic_premise_sharing_few_tokens():
+    # A 60+ word off-topic (spine/orthopedic) premise that incidentally shares only ~2 generic
+    # tokens ("artery", "preserve") with the neurovascular hypothesis must NOT count as entailment:
+    # the shared tokens are too small a fraction of either side to support the claim.
+    v = LexicalVerifier()
+    premise = (
+        "The orthopedic spine surgeon planned a multilevel lumbar pedicle screw construct and "
+        "reviewed each vertebral level, noting the convergent sagittal trajectory through the pars "
+        "interarticularis, the facet joints, the disc spaces, the ligamentum flavum, and the "
+        "segmental musculature, electing to preserve the dorsal fascia while a small incidental "
+        "epidural artery was cauterized within the routine posterior decompression and instrumented "
+        "fusion."
+    )
+    hypothesis = "Preserve the recurrent artery of Heubner during careful microsurgical dissection."
+    assert len(premise.split()) >= 60
+    # Recall clears the bar (~0.25) but the shared tokens are a tiny fraction of the long premise
+    # (precision ~0.04) -> not entailment.
+    assert v.entails(premise, hypothesis) is False
 
 
 def test_should_cite_abstains_keep_on_thin_premise():
@@ -81,6 +103,59 @@ def test_pipeline_passes_verifier_through(monkeypatch):
     def spy(*a, **k):
         captured["verifier"] = k.get("verifier")
         return real(*a, **k)
+    monkeypatch.delenv("CASEBOARD_NLI_MODEL", raising=False)
     monkeypatch.setattr(pipe, "compile_case_dossier", spy)
     pipe.build_case_dossier(_case(), enrich=False, use_llm=False, literature=False)
     assert isinstance(captured["verifier"], ClaimVerifier)
+    assert isinstance(captured["verifier"], LexicalVerifier)
+
+
+# --------------------------------------------------------------------------- NLIVerifier (stubbed)
+# These exercise NLIVerifier without importing sentence_transformers, by injecting a tiny stub model
+# that exposes `.config.id2label` and `.predict` — the contract the lazy CrossEncoder satisfies.
+
+from neuro_caseboard.entailment import NLIVerifier
+
+
+class _StubModel:
+    """Minimal CrossEncoder stand-in: fixed id2label + fixed per-pair raw scores (logits)."""
+
+    def __init__(self, id2label, scores):
+        self.config = SimpleNamespace(id2label=id2label)
+        self._scores = scores
+
+    def predict(self, pairs):
+        return [self._scores for _ in pairs]
+
+
+_MNLI = {0: "CONTRADICTION", 1: "NEUTRAL", 2: "ENTAILMENT"}
+
+
+def test_nli_entail_index_read_from_id2label():
+    # MNLI order is [contradiction, neutral, entailment]; entailment is index 2, NOT 1.
+    model = _StubModel(_MNLI, scores=[0.1, 0.2, 5.0])  # logits peak at index 2
+    v = NLIVerifier(model=model)
+    assert v._entail_index == 2
+    assert v.entails("some premise span", "some hypothesis claim") is True
+
+
+def test_nli_does_not_treat_neutral_index_as_entailed():
+    # A strong NEUTRAL (index 1) peak must read as NOT entailed (the bug the id2label fix closes).
+    model = _StubModel(_MNLI, scores=[0.1, 5.0, 0.2])
+    v = NLIVerifier(model=model)
+    assert v.entails("p", "h") is False
+
+
+def test_nli_confidence_threshold_rejects_below_threshold():
+    # Entailment is the argmax but only ~0.35 of the mass: below the 0.5 gate -> not entailed.
+    model = _StubModel(_MNLI, scores=[2.0, 1.9, 2.1])
+    v = NLIVerifier(model=model, entail_threshold=0.5)
+    assert v.entails("p", "h") is False
+    # A lower threshold accepts the same split (argmax is still entailment).
+    assert NLIVerifier(model=model, entail_threshold=0.3).entails("p", "h") is True
+
+
+def test_nli_rejects_unusable_label_space():
+    # A scalar/regression head (single label) is rejected so get_default_verifier() can fall back.
+    with pytest.raises(ValueError):
+        NLIVerifier(model=_StubModel({0: "LABEL_0"}, scores=[1.0]))
