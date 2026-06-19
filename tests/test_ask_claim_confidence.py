@@ -59,3 +59,31 @@ def test_summarize_counts_by_status():
 def test_status_label_and_mark_cover_all_five_statuses():
     for s in ("consensus", "single-source", "conflict", "literature-only", "unsupported"):
         assert s in STATUS_LABEL and s in STATUS_MARK
+
+
+def test_ask_lane_renders_claim_confidence(monkeypatch):
+    """The Ask lane grades the engine answer and renders per-claim markers + a summary, with no
+    exception. Hermetic: engine stubbed, no corpus/LLM/network."""
+    import pytest
+    pytest.importorskip("streamlit")
+    import neuro_caseboard.qa as qa
+
+    class _Cite:
+        def __init__(self, n): self.n = n
+
+    class _Res:
+        answer = "PICA supplies the lateral medulla [1][2]. Some surgeons prefer a lateral approach."
+        citations = [_Cite(1), _Cite(2)]
+        figures = []
+        literature = None
+
+    monkeypatch.setattr(qa, "answer_question", lambda question, **kw: _Res())
+
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(APP_DIR / "streamlit_app.py"), default_timeout=30)
+    at.session_state["ask_q"] = "blood supply of the lateral medulla"
+    at.run()
+    assert len(at.exception) == 0
+    blob = " ".join(m.value for m in at.markdown)
+    assert "consensus" in blob.lower()            # the summary line
+    assert "not found in corpus" in blob.lower()  # the unsupported claim is shown, not dropped
