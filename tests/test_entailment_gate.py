@@ -71,3 +71,16 @@ def test_entailing_span_keeps_citation():
             case=_case(), verifier=LexicalVerifier())
     c = _claims(d)[0]
     assert "[1]" in c.text and c.status == "supported"
+
+
+def test_pipeline_passes_verifier_through(monkeypatch):
+    import neuro_caseboard.pipeline as pipe
+    from neuro_caseboard.entailment import ClaimVerifier
+    captured = {}
+    real = pipe.compile_case_dossier
+    def spy(*a, **k):
+        captured["verifier"] = k.get("verifier")
+        return real(*a, **k)
+    monkeypatch.setattr(pipe, "compile_case_dossier", spy)
+    pipe.build_case_dossier(_case(), enrich=False, use_llm=False, literature=False)
+    assert isinstance(captured["verifier"], ClaimVerifier)
