@@ -18,6 +18,8 @@ import streamlit as st
 
 import signal_theme as sig
 from figure_gallery import figure_card
+from ask_session import (is_new_submission, mark_answered, reset_conversation,
+                         apply_pending_clear)
 from neuro_caseboard.board_view import board_view
 from neuro_caseboard.pipeline import (
     build_dossier, build_case_dossier, render_case_pdf, render_ask_pdf, _slug)
@@ -51,6 +53,9 @@ if "seed_question" in st.session_state:
     st.session_state["ask_q"] = st.session_state.pop("seed_question")
 if "seed_topic" in st.session_state:
     st.session_state["build_topic"] = st.session_state.pop("seed_topic")
+# A "New conversation" click on the previous run requested an Ask-input clear; apply it here,
+# before the ask_q widget is instantiated (same deferred-mutation rule as the seeds above).
+apply_pending_clear(st.session_state)
 
 # Session-scoped cross-feature evidence store: EvidenceRef.key -> set of feature labels.
 _store = st.session_state.setdefault("session_evidence", {})
@@ -78,9 +83,19 @@ if mode == "Ask":
     if not q:
         sig.example_hints(["blood supply of the lateral medulla", "Wallenberg syndrome findings",
                            "borders of the cavernous sinus", "watershed infarct territories"])
-    if q:
+    col_new, _ = st.columns([1, 4])
+    with col_new:
+        if st.button("New conversation", help="Clear the question, answer, and cross-references"):
+            reset_conversation(st.session_state)
+            st.rerun()
+    # Answer once per distinct submission: a rerun from any OTHER widget (the Prepare-PDF box,
+    # the Build button) must re-render the stored answer, not re-invoke the engine on a stale q.
+    if q and is_new_submission(st.session_state, q):
         with st.spinner("Searching textbooks + recent literature…"):
-            result = answer_question(q)
+            st.session_state["ask_result"] = answer_question(q)  # current query ONLY — no history
+        mark_answered(st.session_state, q)
+    result = st.session_state.get("ask_result")
+    if q and result is not None:
         from neuro_core.query import Clarification
         if isinstance(result, Clarification):
             st.warning("This question maps to several distinct topics. Re-ask naming one variant:")
