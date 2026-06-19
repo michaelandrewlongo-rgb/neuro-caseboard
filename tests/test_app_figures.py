@@ -63,3 +63,15 @@ def test_multiple_figures_get_distinct_enlarge_buttons(tmp_path):
     assert len(at.exception) == 0
     enlarge = [btn for btn in at.button if "Enlarge" in btn.label]
     assert len(enlarge) == 2
+
+
+def test_app_boots_headlessly_after_refactor():
+    """The full app still imports and renders in the default (Ask) lane with no input.
+
+    Guards the four-site figure_card refactor: a bad import or signature mismatch surfaces as
+    an AppTest exception. No query is fired (ask box empty), so no corpus/LLM is touched.
+    """
+    app_py = str(APP_DIR / "streamlit_app.py")
+    at = AppTest.from_file(app_py, default_timeout=30).run()
+    assert len(at.exception) == 0
+    assert at.radio[0].options == ["Ask", "Build board", "Case", "Cards"]
