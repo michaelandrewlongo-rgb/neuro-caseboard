@@ -342,7 +342,7 @@ git commit -m "feat(rehearsal): distil marks into reinforced, profile-keyed pref
 
 ---
 
-### Task 3: Apply preferences (conservative guardrails)
+### Task 3: Apply preferences (conservative guardrails) — ✅ DONE (VERIFY #8: 106 pass / 0 fail; commit a6c85f5)
 
 **Files:** Modify `neuro_caseboard/preferences.py` (append); Test `tests/rehearsal/test_preferences_apply.py`.
 
