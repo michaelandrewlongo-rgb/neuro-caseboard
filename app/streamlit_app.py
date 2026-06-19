@@ -21,6 +21,7 @@ from figure_gallery import figure_card
 from ask_session import (is_new_submission, mark_answered, reset_conversation,
                          apply_pending_clear)
 from ask_confidence import grade_answer, summarize, STATUS_LABEL, STATUS_MARK
+from quant_support import extract_metrics, unquantified_comparisons, summarize as quant_summarize
 from neuro_caseboard.board_view import board_view
 from neuro_caseboard.pipeline import (
     build_dossier, build_case_dossier, render_case_pdf, render_ask_pdf, _slug)
@@ -119,6 +120,22 @@ if mode == "Ask":
                                   for s, n in counts.items()))
             for c in graded:
                 st.markdown(f"{STATUS_MARK[c.status]} **{STATUS_LABEL[c.status]}** — {c.text}")
+        # Quantitative decision support (BACKLOG P2 #6): surface numbers literally present in the
+        # answer (never fabricated) and flag comparative claims that lack any number.
+        metrics = extract_metrics(result.answer)
+        flags = unquantified_comparisons(result.answer)
+        if metrics or flags:
+            sig.section("By the numbers", "QTY")
+            if metrics:
+                st.caption(" · ".join(f"{k}: {n}" for k, n in quant_summarize(metrics).items()))
+                for m in metrics:
+                    st.markdown(f"**{m.value}** — {m.clause}")
+            else:
+                st.caption("No quantitative outcomes found in this answer.")
+            if flags:
+                st.warning("Comparative claims without numbers (verify against primary sources):")
+                for f in flags:
+                    st.markdown(f"⚠ {f}")
         if result.figures:
             sig.section("Figures", "FIG")
             cols = st.columns(min(3, len(result.figures)))
