@@ -6,8 +6,14 @@ corpus / LLM / network is touched. `app/` is a bare-import script dir, so we put
 import sys
 from pathlib import Path
 
+import pytest
 from PIL import Image
-from streamlit.testing.v1 import AppTest
+
+# streamlit ships only in the `web` extra; required CI installs `.[dev]` (no streamlit) and
+# collects the whole suite, so a bare module-level import would abort collection for everyone.
+# Skip this UI-only module cleanly when streamlit is absent; it still runs in local/app envs.
+pytest.importorskip("streamlit")
+from streamlit.testing.v1 import AppTest  # noqa: E402  (must follow the importorskip guard)
 
 APP_DIR = Path(__file__).resolve().parent.parent / "app"
 if str(APP_DIR) not in sys.path:
