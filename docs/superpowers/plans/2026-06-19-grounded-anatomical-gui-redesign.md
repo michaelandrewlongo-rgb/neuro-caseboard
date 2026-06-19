@@ -66,7 +66,7 @@ Shared primitives in `web/src/components/ui.tsx` may gain palette-aware variants
 - `RiskRadar({ axes, size, withMit }: { axes: {k:string; risk:number; mit?:number}[]; size:number; withMit?:boolean })` — polar `angle(i)=-π/2+i·2π/n`, point `=center+cos/sin·R·(value/100)`, `R=size/2−30`; 4 grid rings `rgba(255,255,255,.07)`, spokes, risk polygon (radial crimson fill, stroke `#d8413a`, drop-shadow), optional dashed teal mitigation polygon, value dots, mono axis labels at `R·1.16`.
 - `EvidenceGauge({ rings, size }: { rings: {r:number; frac:number; color:string; glow:string}[]; size:number })` — concentric; each ring = track circle (`rgba(255,255,255,.06)`, width 9) + value arc via `stroke-dasharray:\`${C*frac} ${C}\``, `transform: rotate(-90 cx cy)`, round linecap, `drop-shadow(0 0 5px glow)`. Center label = absolutely-positioned HTML overlay via a `label`/`children` prop, NOT baked into the SVG.
 
-- [ ] **Task 3 — Port both SVG generators** as typed, dependency-free React components with the exact signatures above. No external chart lib. Keep them pure (props in, SVG out); center label via prop/children overlay. They must compile even before they have call sites.
+- [x] **Task 3 — Port both SVG generators** as typed, dependency-free React components with the exact signatures above. No external chart lib. Keep them pure (props in, SVG out); center label via prop/children overlay. They must compile even before they have call sites.
 
 ---
 
