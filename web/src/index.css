@@ -1,67 +1,53 @@
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 /* ============================================================================================
-   "Neo Brutalism" — tweakcn preset applied as the product GUI. White ground, black ink + black
-   borders, red primary, yellow secondary, blue accent, square corners, hard offset shadows,
-   DM Sans + Space Mono. shadcn semantic tokens so the theme is one swappable layer.
+   "Grounded Anatomical" — Dark premium clinical-telemetry theme.
+   Warm charcoal ground (#0e0b0c) with anatomical palette:
+   arterial crimson · venous teal · tissue ochre · clinical sage · muted plum.
+   Geist (display/UI) + JetBrains Mono (labels/data/mono). Rounded corners.
    ============================================================================================ */
 @theme {
-  --font-sans: "DM Sans", system-ui, sans-serif;
-  --font-display: "DM Sans", system-ui, sans-serif;
-  --font-serif: "DM Sans", system-ui, sans-serif;
-  --font-mono: "Space Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-sans: "Geist", system-ui, sans-serif;
+  --font-display: "Geist", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  /* shadcn semantic palette (neo-brutalism, light) */
-  --color-background: #ffffff;
-  --color-foreground: #000000;
-  --color-card: #ffffff;
-  --color-card-foreground: #000000;
-  --color-popover: #ffffff;
-  --color-popover-foreground: #000000;
-  --color-primary: #ff3333;
-  /* Black (not white) on the bright red fill clears WCAG AA — white-on-#ff3333 is only 3.6:1,
-     black-on-#ff3333 is 5.8:1. Keeps the loud red blocks; just flips their label ink. */
-  --color-primary-foreground: #000000;
-  --color-secondary: #ffff00;
-  --color-secondary-foreground: #000000;
-  --color-muted: #f0f0f0;
-  --color-muted-foreground: #333333;
-  --color-accent: #0066ff;
-  --color-accent-foreground: #ffffff;
-  --color-destructive: #000000;
+  /* Grounded Anatomical dark palette — exact hex */
+  --color-background: #0e0b0c;
+  --color-foreground: #f1ece6;
+  --color-card: #14100f;            /* solid fallback; real cards use the glass gradient */
+  --color-card-foreground: #f1ece6;
+  --color-popover: #14100f;
+  --color-popover-foreground: #f1ece6;
+  --color-primary: #d8413a;         /* arterial crimson */
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #3f9690;       /* venous teal */
+  --color-secondary-foreground: #04110f;
+  --color-accent: #d89a3f;          /* tissue ochre */
+  --color-accent-foreground: #0e0b0c;
+  --color-muted: rgba(255,255,255,0.04);
+  --color-muted-foreground: #978d86;
+  --color-destructive: #c0564f;
   --color-destructive-foreground: #ffffff;
-  --color-border: #000000;
-  --color-input: #000000;
-  --color-ring: #ff3333;
+  --color-border: rgba(255,255,255,0.09);
+  --color-input: rgba(255,255,255,0.09);
+  --color-ring: #d8413a;
 
-  /* status semantics (red is the brand primary, so good != red) */
-  --color-success: #1aa11a;
-  --color-amber: #d97706;
-  --color-signal: #ff3333;
+  /* Status semantics */
+  --color-success: #5fa86f;         /* supported / good */
+  --color-amber:   #d89a3f;         /* to-verify */
+  --color-signal:  #c0564f;         /* quarantined / destructive / brick */
 
-  /* "Ink" variants — the same hues darkened to clear WCAG AA as TEXT on white (≥4.5:1).
-     The bright tokens above stay for FILLS (which carry black text). Use text-*-ink for any
-     colored lettering on a light surface so the brand stays loud without failing contrast. */
-  --color-primary-ink: #c8102e; /* red text   — 5.9:1 on white */
-  --color-success-ink: #15803d; /* green text — 5.0:1 on white */
-  --color-amber-ink: #b45309;   /* amber text — 5.0:1 on white */
-
-  /* square corners everywhere */
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --radius-xl: 0px;
-  --radius-2xl: 0px;
-
-  /* hard offset shadows — the brutalist signature (no blur) */
-  --shadow-brutal-sm: 2px 2px 0 0 #000;
-  --shadow-card: 4px 4px 0 0 #000;
-  --shadow-raised: 6px 6px 0 0 #000;
+  /* Rounded corners — old theme forced squares; these replace the zero-radius overrides */
+  --radius-sm: 8px;
+  --radius-md: 11px;
+  --radius-lg: 16px;
+  --radius-xl: 18px;
 }
 
 @layer base {
   :root {
-    color-scheme: light;
+    color-scheme: dark;
   }
   html,
   body,
@@ -70,61 +56,78 @@
   }
   body {
     margin: 0;
-    background: var(--color-background);
+    background-color: var(--color-background);
+    /* Ambient radial glows: crimson · teal · ochre */
+    background-image:
+      radial-gradient(ellipse 80vw 60vh at 20% 10%, rgba(190,45,50,.13), transparent),
+      radial-gradient(ellipse 70vw 55vh at 80% 90%, rgba(60,120,116,.08), transparent),
+      radial-gradient(ellipse 60vw 50vh at 60% 40%, rgba(175,120,55,.06), transparent);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
-  * {
-    border-radius: 0 !important;
-  }
   ::selection {
-    background: var(--color-secondary);
-    color: #000;
+    background: rgba(216,65,58,.28);
+    color: #fff;
   }
-  /* bold brutalist focus ring */
+  /* Crimson focus ring */
   :where(a, button, input, [tabindex]):focus-visible {
-    outline: 3px solid var(--color-primary);
+    outline: 2px solid var(--color-ring);
     outline-offset: 2px;
   }
 }
 
 @layer components {
   .eyebrow {
-    @apply font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-primary-ink;
+    @apply font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-secondary;
   }
   .reading {
     @apply text-[1.02rem] leading-[1.7] text-foreground;
   }
-  /* raised surface: white card, 2px black border, hard offset shadow */
+  /* Glass surface: subtle gradient + 1px light border + backdrop blur */
   .surface {
-    @apply border-2 border-border bg-card shadow-card;
+    background: linear-gradient(160deg, rgba(255,255,255,.05), rgba(255,255,255,.012));
+    border: 1px solid rgba(255,255,255,.09);
+    backdrop-filter: blur(14px);
+    border-radius: var(--radius-lg);
   }
   .site-header {
-    @apply border-b-2 border-border bg-background;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+    background: rgba(14,11,12,.8);
+    backdrop-filter: blur(14px);
   }
-  /* form input */
+  /* Form input */
   .field {
-    @apply w-full border-2 border-input bg-card px-4 py-3 text-foreground transition-none;
+    @apply w-full border border-border bg-card px-4 py-3 text-foreground transition-colors;
     @apply placeholder:text-muted-foreground focus:outline-none;
+    border-radius: var(--radius-md);
   }
   .field:focus {
-    border-color: var(--color-primary);
-    box-shadow: var(--shadow-card);
+    border-color: var(--color-ring);
+    box-shadow: 0 0 0 1px var(--color-ring);
   }
-  /* example "chip" buttons */
+  /* Chip / pill buttons */
   .chip {
-    @apply border-2 border-border bg-card px-3 py-1.5 font-mono text-xs font-bold text-foreground;
-    @apply transition-colors hover:bg-secondary;
+    @apply border border-border bg-muted px-3 py-1.5 font-mono text-xs font-bold text-muted-foreground;
+    @apply transition-colors hover:border-secondary hover:text-secondary;
+    border-radius: var(--radius-sm);
   }
+  /* Tabular-numbers helper */
   .tnum {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
   }
 }
 
-/* staggered page-load reveal */
+/* ============================================================
+   Shared @keyframes
+   Each animation is guarded: defined only under
+   (prefers-reduced-motion: no-preference), and the .reveal
+   helper is disabled under (prefers-reduced-motion: reduce).
+   ============================================================ */
+
+/* --- Section entrance animations --- */
 @keyframes signal-rise {
   from {
     opacity: 0;
@@ -135,18 +138,76 @@
     transform: translateY(0);
   }
 }
+
+@keyframes nl-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --- Status-dot pulse --- */
+@keyframes pulse {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%       { opacity: .55; transform: scale(.88); }
+}
+
+/* --- ECG / EKG line horizontal scroll --- */
+@keyframes scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* --- Circle-of-Willis animations --- */
+@keyframes nl-flow {
+  0%   { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -120; }
+}
+
+@keyframes nl-node {
+  0%, 100% { transform: scale(1);    opacity: .85; }
+  50%       { transform: scale(1.18); opacity: 1; }
+}
+
+@keyframes nl-sweep {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes nl-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-6px); }
+}
+
+/* Reveal helper — uses signal-rise */
 .reveal {
   opacity: 0;
   animation: signal-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
+
+/* ============================================================
+   Reduced-motion guard — disable ALL looping/entrance
+   animations when the user prefers reduced motion.
+   ============================================================ */
 @media (prefers-reduced-motion: reduce) {
   .reveal {
     animation: none;
     opacity: 1;
   }
-  /* Stop the continuous loaders (shimmer skeletons + pulsing status dot). These rules are
-     unlayered, so they win over Tailwind's layered `.animate-pulse` without !important. */
+  /* Stop Tailwind's built-in animate-pulse helper */
   .animate-pulse {
     animation: none;
+  }
+  /* Kill every keyframe animation and transition globally */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
