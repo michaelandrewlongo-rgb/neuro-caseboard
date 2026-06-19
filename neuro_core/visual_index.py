@@ -2,15 +2,19 @@ from pathlib import Path
 
 import lancedb
 
-from .index import Hit
+from .index import Hit, _replace_books, _table_names
 
 FIGURES_TABLE = "figures"
 
 
 def build_visual_index(figure_pages, embedder, index_dir, batch_size=64,
-                       on_progress=None):
+                       on_progress=None, mode="overwrite"):
     """figure_pages: list of dicts with keys book, chapter, page, figure_path,
-    caption. Embeds each figure_path PNG and writes the `figures` LanceDB table."""
+    caption. Embeds each figure_path PNG and writes the `figures` LanceDB table.
+
+    ``mode="append"`` adds only ``figure_pages`` to the existing table, first
+    deleting any rows for the same books (idempotent), then compacting. If the table
+    does not exist yet, append behaves like an initial build."""
     db = lancedb.connect(str(index_dir))
     paths = [fp["figure_path"] for fp in figure_pages]
     vectors = []
@@ -32,6 +36,13 @@ def build_visual_index(figure_pages, embedder, index_dir, batch_size=64,
             "caption": fp.get("caption") or "",
             "vector": [float(x) for x in v],
         })
+    if mode == "append" and FIGURES_TABLE in _table_names(db):
+        tbl = db.open_table(FIGURES_TABLE)
+        _replace_books(tbl, (fp["book"] for fp in figure_pages))
+        if rows:
+            tbl.add(rows)
+        tbl.optimize()        # compact + prune old versions so deletes free disk
+        return tbl
     return db.create_table(FIGURES_TABLE, data=rows, mode="overwrite")
 
 

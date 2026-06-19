@@ -29,7 +29,35 @@ def reciprocal_rank_fusion(rankings, k=60):
     return sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
 
 
-def build_index(chunks, embedder, index_dir, batch_size=256, on_progress=None):
+def _table_names(db):
+    """Set of table names, robust across LanceDB versions: 0.33's ``list_tables()``
+    returns a ``ListTablesResponse`` (``.tables=[...]``); older versions return a list."""
+    lt = db.list_tables()
+    return set(getattr(lt, "tables", lt))
+
+
+def _sql_str(value):
+    """Quote a string for a LanceDB SQL filter, escaping embedded single quotes."""
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def _replace_books(tbl, books):
+    """Idempotency for append: drop existing rows for the given books so a re-run
+    replaces them instead of duplicating. ``books`` is an iterable of book stems."""
+    for book in sorted(set(books)):
+        tbl.delete(f"book = {_sql_str(book)}")
+
+
+def build_index(chunks, embedder, index_dir, batch_size=256, on_progress=None,
+                mode="overwrite"):
+    """Build (or extend) the ``chunks`` table.
+
+    ``mode="overwrite"`` (default) rebuilds the table from ``chunks`` alone.
+    ``mode="append"`` embeds only ``chunks`` and adds them to the existing table,
+    first deleting any rows for the same books (idempotent), then compacting so the
+    delete/append history does not pile up on disk. If the table does not exist yet,
+    append behaves like an initial build.
+    """
     db = lancedb.connect(str(index_dir))
     texts = [c.text for c in chunks]
     vectors = []
@@ -50,7 +78,14 @@ def build_index(chunks, embedder, index_dir, batch_size=256, on_progress=None):
             "caption": c.caption or "",
             "figure_path": c.figure_path or "",
         })
-    tbl = db.create_table(TABLE, data=rows, mode="overwrite")
+    if mode == "append" and TABLE in _table_names(db):
+        tbl = db.open_table(TABLE)
+        _replace_books(tbl, (c.book for c in chunks))
+        if rows:
+            tbl.add(rows)
+        tbl.optimize()        # compact + prune old versions so deletes free disk
+    else:
+        tbl = db.create_table(TABLE, data=rows, mode="overwrite")
     tbl.create_fts_index("text", replace=True)
     return tbl
 
