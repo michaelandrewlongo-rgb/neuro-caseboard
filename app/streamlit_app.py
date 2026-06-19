@@ -17,6 +17,7 @@ from pathlib import Path
 import streamlit as st
 
 import signal_theme as sig
+from figure_gallery import figure_card
 from neuro_caseboard.board_view import board_view
 from neuro_caseboard.pipeline import (
     build_dossier, build_case_dossier, render_case_pdf, render_ask_pdf, _slug)
@@ -91,11 +92,11 @@ if mode == "Ask":
         if result.figures:
             sig.section("Figures", "FIG")
             cols = st.columns(min(3, len(result.figures)))
-            for col, f in zip(cols, result.figures):
+            for i, (col, f) in enumerate(zip(cols, result.figures)):
                 with col:
-                    st.image(f.image_path,
-                             caption=f"[{f.source_n}] {f.book}, p.{f.page} — {f.caption}",
-                             use_container_width=True)
+                    figure_card(f.image_path,
+                                caption=f"[{f.source_n}] {f.book}, p.{f.page} — {f.caption}",
+                                key=f"ask_{i}")
                     _badge(from_figure(f).key, label)
         sig.section("Sources", "SRC")
         sig.sources_panel(result.citations)
@@ -162,11 +163,11 @@ elif mode == "Build board":
         if view.figures:
             sig.section("Figures", "FIG")
             cols = st.columns(min(3, len(view.figures)))
-            for col, fig in zip(cols, view.figures):
+            for i, (col, fig) in enumerate(zip(cols, view.figures)):
                 with col:
-                    st.image(fig.image_path,
-                             caption=f"[{fig.fig_id}] {fig.caption} — {fig.citation}",
-                             use_container_width=True)
+                    figure_card(fig.image_path,
+                                caption=f"[{fig.fig_id}] {fig.caption} — {fig.citation}",
+                                key=f"build_{i}")
                     _badge(from_figure_item(fig).key, label)
         st.markdown(sig.citation_chips(view.markdown), unsafe_allow_html=True)
 
@@ -227,9 +228,9 @@ elif mode == "Case":
             if view.figures:
                 sig.section("Case schematics", "FIG")
                 cols = st.columns(min(2, len(view.figures)))
-                for col, fig in zip(cols, view.figures):
+                for i, (col, fig) in enumerate(zip(cols, view.figures)):
                     with col:
-                        st.image(fig.image_path, caption=fig.caption, use_container_width=True)
+                        figure_card(fig.image_path, caption=fig.caption, key=f"case_{i}")
             st.markdown(sig.citation_chips(view.markdown), unsafe_allow_html=True)
 
 elif mode == "Cards":
@@ -269,8 +270,8 @@ elif mode == "Cards":
                 st.markdown(f"**A.** {c.answer_text}")
                 if c.tags:
                     st.caption(f"tags: {c.tags}")
-                for p in c.image_paths:
+                for j, p in enumerate(c.image_paths):
                     try:
-                        st.image(p, use_container_width=True)
+                        figure_card(p, key=f"cards_{i}_{j}")
                     except Exception:
                         st.caption(f"(image unavailable: {p})")
