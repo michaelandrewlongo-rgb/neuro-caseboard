@@ -26,7 +26,8 @@ from caseprep.core.contracts import EvidenceRecord
 
 from neuro_caseboard.retrieve import build_retriever
 from neuro_caseboard.guard import prune_offtarget
-from neuro_caseboard.compile import compile_dossier
+from neuro_caseboard.compile import compile_dossier, compile_case_dossier
+from neuro_caseboard.entailment import get_default_verifier
 from neuro_caseboard.render_md import render_markdown
 from neuro_caseboard.render_pdf import render_pdf
 
@@ -227,7 +228,6 @@ def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=No
     failure leaves those sections without a literature block and never affects the rest.
     """
     from neuro_caseboard.case_author import build_case_manifest, deterministic_case_manifest
-    from neuro_caseboard.compile import compile_case_dossier
 
     if use_llm is None:
         use_llm = llm_enabled()
@@ -250,7 +250,8 @@ def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=No
         card_evidence, page_texts = _collect_figures(manifest, topic, retriever,
                                                      eligible_files=CASE_FIGURE_FILES)
     dossier = compile_case_dossier(audited, case=case, evidence=evidence,
-                                   card_evidence=card_evidence, page_texts=page_texts)
+                                   card_evidence=card_evidence, page_texts=page_texts,
+                                   verifier=get_default_verifier())
 
     if literature is None:
         from neuro_caseboard.literature.config import load_literature_config

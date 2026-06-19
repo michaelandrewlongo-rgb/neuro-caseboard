@@ -124,3 +124,56 @@ def test_gate_fails_when_metric_below_baseline(tmp_path):
     p = tmp_path / "BAD_BASELINE.json"
     p.write_text(json.dumps(bad))
     assert qg.main(["--baseline", str(p)]) == 1
+
+
+from eval.quality_gate import compute_metrics, load_split, DIRECTIONS
+
+
+def test_attribution_precision_present_and_perfect_offline():
+    m = compute_metrics(load_split("eval"))
+    assert "attribution_precision" in m
+    assert DIRECTIONS["attribution_precision"] == "min"
+    assert m["attribution_precision"] == 1.0
+
+
+# --------------------------------------------------------------------------- reject-path guard
+# The offline gate's attribution_precision is pinned at 1.0 because _FakeCorpus spans are thin
+# (abstain->keep). This dedicated test proves the *same counting logic the gate uses* registers a
+# withhold when a corpus-eligible claim's accepted paper carries a SUBSTANTIAL disjoint span — i.e.
+# the metric can drop below 1.0 on a real reject — without perturbing the committed baseline.
+
+from types import SimpleNamespace
+from neuro_caseboard.compile import compile_case_dossier
+from neuro_caseboard.case_sections import CORPUS_ELIGIBLE_FILES
+from neuro_caseboard.case_context import CaseContext
+from neuro_caseboard.entailment import LexicalVerifier
+
+
+def _qg_kept_fraction(dossier):
+    """attr_kept / attr_considered using the gate's exact [n]-vs-[L#] counting (quality_gate)."""
+    kept = considered = 0
+    for s in dossier.sections:
+        for c in s.claims:
+            considered += 1
+            if qg._CORPUS_CITE.search(qg._LIT_CITE.sub("", c.text)):
+                kept += 1
+    return kept, considered
+
+
+def test_attribution_precision_drops_below_one_on_real_reject():
+    tf = sorted(CORPUS_ELIGIBLE_FILES)[0]
+    paper = {"title": "Off-topic spine paper",
+             "text_snippet": "Lumbar pedicle screw trajectories follow the convergent sagittal "
+                             "angle through the pars interarticularis and the facet joints."}
+    card = SimpleNamespace(target_file=tf,
+                           question="Preserve the recurrent artery of Heubner during dissection.",
+                           why_it_matters="", compiler_slot="", section_key="op",
+                           audit_status="supported", audit_reason="", papers=[paper])
+    case = CaseContext(laterality="left", location="MCA bifurcation", pathology="aneurysm",
+                       procedure="pterional clipping", surgical_goal="clip ligation")
+    d = compile_case_dossier(SimpleNamespace(cards=[card]), case=case, verifier=LexicalVerifier())
+
+    kept, considered = _qg_kept_fraction(d)
+    assert considered >= 1, "the corpus-eligible claim must be counted as considered"
+    assert kept < considered, "the gate's counting must register the withheld citation"
+    assert kept / considered < 1.0
