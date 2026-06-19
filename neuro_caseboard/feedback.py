@@ -51,7 +51,7 @@ class CaseFeedback:
                 "items": [asdict(i) for i in self.items]}
 
     @classmethod
-    def from_dict(cls, d: dict) -> "CaseFeedback":
+    def from_dict(cls, d: dict) -> CaseFeedback:
         return cls(topic=d.get("topic", ""), profile=d.get("profile", ""),
                    items=[FeedbackItem(**i) for i in d.get("items", [])])
 
