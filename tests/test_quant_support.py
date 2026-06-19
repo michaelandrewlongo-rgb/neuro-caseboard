@@ -43,3 +43,29 @@ def test_summarize_counts_by_kind():
     metrics = [Metric("a", "85%", "percent"), Metric("b", "n=10", "count"),
                Metric("c", "90%", "percent")]
     assert summarize(metrics) == {"percent": 2, "count": 1}
+
+
+def test_ask_lane_renders_by_the_numbers(monkeypatch):
+    """The Ask lane surfaces extracted metrics and flags unquantified comparisons, no exception.
+    Hermetic: engine stubbed."""
+    import pytest
+    pytest.importorskip("streamlit")
+    import neuro_caseboard.qa as qa
+
+    class _Res:
+        answer = ("Complete occlusion in 85% of patients (n=240). "
+                  "Flow diverters achieve higher occlusion than coiling.")
+        citations = []
+        figures = []
+        literature = None
+
+    monkeypatch.setattr(qa, "answer_question", lambda question, **kw: _Res())
+
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(APP_DIR / "streamlit_app.py"), default_timeout=30)
+    at.session_state["ask_q"] = "flow diverter vs coiling occlusion rates"
+    at.run()
+    assert len(at.exception) == 0
+    blob = " ".join(m.value for m in at.markdown)
+    assert "85%" in blob                      # extracted metric surfaced
+    assert "higher occlusion" in blob         # unquantified comparison flagged
