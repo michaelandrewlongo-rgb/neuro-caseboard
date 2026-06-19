@@ -25,6 +25,7 @@ from neuro_caseboard.captions import complete_caption, relevance_line
 from neuro_caseboard.dedup import dedup_sections
 from caseprep.audit.card_auditor import accepted_papers, rejected_papers
 from neuro_caseboard.entailment import should_cite, LexicalVerifier
+from neuro_caseboard.evidence_grade import GradeSignals, grade as _grade
 
 _HEADINGS = {
     "03-anatomy-at-risk.md": "Anatomy at Risk",
@@ -165,6 +166,14 @@ def _compile(
                     claim.text = f"{claim.text} " + "".join(f"[{m}]" for m in marks)
                 elif considered:
                     claim.status = "verify"   # had candidates but the gate withheld them all
+            # P2 #5: attach a fine evidence category alongside the coarse status. Additive —
+            # claim.status and EvidenceSummary counts are untouched, so renderers/counts don't
+            # regress; conflict/preference signals default off until their provenance is threaded.
+            claim.grade = _grade(GradeSignals(
+                audit_status=c.audit_status,
+                n_sources=len(accepted_papers(c)),
+                cited=claim.text.rstrip().endswith("]"),
+            ))
             claims.append(claim)
 
         if claims or figures:
