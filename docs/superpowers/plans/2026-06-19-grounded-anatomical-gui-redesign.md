@@ -107,7 +107,7 @@ Shared primitives in `web/src/components/ui.tsx` may gain palette-aware variants
 **Files:** Modify `web/src/pages/Cards.tsx`, `web/src/components/cards/CardItem.tsx`. Reference README §"3 · Cards".
 **Consumes:** `charts/EvidenceGauge` (Task 3); existing `CardsResponse` + query/`k` in `lib/api.ts` (unchanged).
 
-- [ ] **Task 7 — Rebuild Cards.** Hero (eyebrow `CARDS · BOARD-REVIEW DECK`, H1 "Search your card bank", subtitle, search + crimson "Search" + deck filter chips ALL DECKS-teal / SANS / ABNS / ★ HIGH-YIELD-ochre). Deck telemetry `1fr/1.1fr/1fr`: **Match strength** `EvidenceGauge` single teal ring (center "0.xx · COSINE" from real top score); **Deck coverage** bars (Tumor sage / Functional teal / Vascular ochre / Spine brick); **Deck status** tiles. Matched cards `grid 1fr/1fr`: each `CardItem` with teal deck badge, ★HIGH-YIELD ochre, match score (sage/ochre by strength), PROMPT, ANSWER (sage label), tag chips; plus a dashed "+ N more below threshold" tile. Map to real `CardsResponse`; preserve empty/error states.
+- [x] **Task 7 — Rebuild Cards.** Hero (eyebrow `CARDS · BOARD-REVIEW DECK`, H1 "Search your card bank", subtitle, search + crimson "Search" + deck filter chips ALL DECKS-teal / SANS / ABNS / ★ HIGH-YIELD-ochre). Deck telemetry `1fr/1.1fr/1fr`: **Match strength** `EvidenceGauge` single teal ring (center "0.xx · COSINE" from real top score); **Deck coverage** bars (Tumor sage / Functional teal / Vascular ochre / Spine brick); **Deck status** tiles. Matched cards `grid 1fr/1fr`: each `CardItem` with teal deck badge, ★HIGH-YIELD ochre, match score (sage/ochre by strength), PROMPT, ANSWER (sage label), tag chips; plus a dashed "+ N more below threshold" tile. Map to real `CardsResponse`; preserve empty/error states.
 
 ---
 
