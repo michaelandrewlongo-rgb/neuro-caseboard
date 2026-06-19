@@ -1,4 +1,5 @@
 from neuro_caseboard.entailment import LexicalVerifier, should_cite
+from neuro_caseboard.entailment import get_default_verifier
 
 
 def test_lexical_entails_when_overlap_high():
@@ -21,3 +22,8 @@ def test_should_cite_abstains_keep_on_thin_premise():
 def test_should_cite_withholds_on_substantial_disjoint_premise():
     premise = "Lumbar pedicle screw trajectories follow the convergent sagittal angle through the pars."
     assert should_cite(premise, "Preserve the recurrent artery of Heubner.", LexicalVerifier()) is False
+
+
+def test_default_verifier_is_lexical_without_model_env(monkeypatch):
+    monkeypatch.delenv("CASEBOARD_NLI_MODEL", raising=False)
+    assert isinstance(get_default_verifier(), LexicalVerifier)

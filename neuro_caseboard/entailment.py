@@ -48,3 +48,34 @@ def should_cite(premise: str, hypothesis: str, verifier: ClaimVerifier) -> bool:
     if len(_content_tokens(premise)) < min_tok:
         return True
     return bool(verifier.entails(premise, hypothesis))
+
+
+import os
+
+# MNLI cross-encoder label order is [contradiction, entailment, neutral]; index 1 == entailment.
+_ENTAIL_INDEX = 1
+
+
+class NLIVerifier:
+    """Off-the-shelf cross-encoder NLI backend (inference-only; lazily imported). Premise =
+    retrieved corpus span; hypothesis = the claim. Production path only — the test suite must never
+    trigger the import."""
+
+    def __init__(self, model_name: str) -> None:
+        from sentence_transformers import CrossEncoder  # lazy: heavy, optional dep
+        self._model = CrossEncoder(model_name)
+
+    def entails(self, premise: str, hypothesis: str) -> bool:
+        scores = self._model.predict([(premise, hypothesis)])[0]
+        return int(max(range(len(scores)), key=lambda i: scores[i])) == _ENTAIL_INDEX
+
+
+def get_default_verifier() -> ClaimVerifier:
+    """NLIVerifier when CASEBOARD_NLI_MODEL is set and the backend imports; else LexicalVerifier."""
+    model = os.environ.get("CASEBOARD_NLI_MODEL")
+    if model:
+        try:
+            return NLIVerifier(model)
+        except Exception:
+            pass
+    return LexicalVerifier()
