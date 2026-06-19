@@ -578,7 +578,7 @@ git commit -m "feat(rehearsal): apply prefs in build_manifest/build_dossier/buil
 
 ---
 
-### Task 5: API — `/api/feedback`, `/api/preferences`, `use_prefs` on `/api/build`
+### Task 5: API — `/api/feedback`, `/api/preferences`, `use_prefs` on `/api/build` — ✅ DONE (VERIFY #10: 110 pass / 0 fail; commit 156b902)
 
 **Files:** Modify `api/server.py`; Test `tests/rehearsal/test_api_feedback.py`.
 

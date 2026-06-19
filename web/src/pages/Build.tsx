@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState } from "react"
-import { buildDossier, fetchBuildPdf, type BuildResponse } from "@/lib/api"
+import {
+  buildDossier,
+  fetchBuildPdf,
+  submitFeedback,
+  type BuildResponse,
+  type FeedbackItemIn,
+  type DossierClaim,
+} from "@/lib/api"
 import { Button, Card, Eyebrow } from "@/components/ui"
 import PipelineLoader from "@/components/PipelineLoader"
 import EvidenceBar from "@/components/build/EvidenceBar"
-import DossierView from "@/components/build/DossierView"
+import DossierView, { type ClaimMark } from "@/components/build/DossierView"
+import RememberedPanel from "@/components/build/RememberedPanel"
 
 const HINTS = [
   "left retrosigmoid vestibular schwannoma",
@@ -30,6 +38,40 @@ export default function Build() {
   const [pdfLoading, setPdfLoading] = useState(false)
   const [pdfError, setPdfError] = useState<string | null>(null)
   const ctrlRef = useRef<AbortController | null>(null)
+
+  const [rehearsal, setRehearsal] = useState(false)
+  const [marks, setMarks] = useState<FeedbackItemIn[]>([])
+  const [remembered, setRemembered] = useState<number | null>(null)
+
+  const onMark = (heading: string, claim: DossierClaim, mark: ClaimMark) =>
+    setMarks((prev) => {
+      const isClaim = (x: FeedbackItemIn) =>
+        x.section === heading && x.text === claim.text && (x.mark === "wrong" || x.mark === "important")
+      const without = prev.filter((x) => !isClaim(x))
+      const had = prev.some((x) => isClaim(x) && x.mark === mark)
+      return had ? without : [...without, { mark, text: claim.text, section: heading }]
+    })
+  const markOf = (heading: string, claim: DossierClaim): ClaimMark | null => {
+    const m = marks.find(
+      (x) => x.section === heading && x.text === claim.text && (x.mark === "wrong" || x.mark === "important"),
+    )
+    return (m?.mark as ClaimMark) ?? null
+  }
+  const onMissing = (heading: string, text: string) =>
+    setMarks((prev) => [...prev, { mark: "missing", text, section: heading }])
+
+  async function remember() {
+    if (resp?.kind !== "dossier" || !marks.length) return
+    setRemembered(null)
+    const r = await submitFeedback(resp.topic, marks, { enrich, use_llm: useLlm })
+    if (r.kind === "dossier") {
+      setResp({ kind: "dossier", build_id: resp.build_id, topic: r.topic, dossier: r.dossier })
+      setRemembered(r.remembered)
+      setMarks([])
+    } else {
+      setNetError(r.kind === "unavailable" ? r.reason : r.error)
+    }
+  }
 
   useEffect(() => () => ctrlRef.current?.abort(), [])
 
@@ -197,15 +239,41 @@ export default function Build() {
         <div className="flex flex-col gap-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-2xl font-bold text-foreground">{resp.dossier.title}</h2>
-            <div className="flex flex-col items-end">
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={rehearsal}
+                  onChange={(e) => setRehearsal(e.target.checked)}
+                  className="accent-primary"
+                />
+                Rehearsal mode
+              </label>
               <Button variant="outline" onClick={() => void onDownloadPdf()} disabled={pdfLoading}>
                 {pdfLoading ? "Rendering PDF…" : "Download PDF"}
               </Button>
-              {pdfError && <span className="mt-1 text-xs text-destructive">{pdfError}</span>}
             </div>
           </div>
+          {pdfError && <span className="text-xs text-destructive">{pdfError}</span>}
+          {rehearsal && (
+            <div className="flex flex-wrap items-center gap-3">
+              <Button onClick={() => void remember()} disabled={!marks.length}>
+                Remember {marks.length || ""} mark{marks.length === 1 ? "" : "s"} &amp; update board
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Mark claims ✗ wrong / ★ important, or add a missing consideration per section.
+              </span>
+            </div>
+          )}
+          {remembered !== null && <RememberedPanel remembered={remembered} />}
           <EvidenceBar summary={resp.dossier.summary} />
-          <DossierView dossier={resp.dossier} />
+          <DossierView
+            dossier={resp.dossier}
+            rehearsal={rehearsal}
+            markOf={markOf}
+            onMark={onMark}
+            onMissing={onMissing}
+          />
         </div>
       )}
     </div>

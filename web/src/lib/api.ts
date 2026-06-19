@@ -157,13 +157,13 @@ export type BuildResponse =
 
 export async function buildDossier(
   topic: string,
-  opts: { enrich: boolean; use_llm: boolean },
+  opts: { enrich: boolean; use_llm: boolean; use_prefs?: boolean },
   signal?: AbortSignal,
 ): Promise<BuildResponse> {
   const res = await fetch("/api/build", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ topic, enrich: opts.enrich, use_llm: opts.use_llm }),
+    body: JSON.stringify({ topic, enrich: opts.enrich, use_llm: opts.use_llm, use_prefs: opts.use_prefs ?? true }),
     signal,
   })
   const data = (await res.json().catch(() => null)) as BuildResponse | null
@@ -226,4 +226,54 @@ export async function searchCards(
   const data = (await res.json().catch(() => null)) as CardsResponse | null
   if (data && typeof data === "object" && "kind" in data) return data
   return { kind: "error", error: `Unexpected response (${res.status})` }
+}
+
+// ----- Rehearsal: feedback + remembered preferences -----------------------------------------
+
+export type FeedbackMark = "wrong" | "missing" | "important"
+export interface FeedbackItemIn {
+  mark: FeedbackMark
+  text: string
+  section?: string
+  note?: string
+}
+
+export type FeedbackResponse =
+  | { kind: "dossier"; topic: string; profile: string; remembered: number; dossier: Dossier }
+  | { kind: "unavailable"; reason: string }
+  | { kind: "error"; error: string }
+
+export async function submitFeedback(
+  topic: string,
+  items: FeedbackItemIn[],
+  opts: { enrich: boolean; use_llm: boolean },
+  signal?: AbortSignal,
+): Promise<FeedbackResponse> {
+  const res = await fetch("/api/feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ topic, items, enrich: opts.enrich, use_llm: opts.use_llm }),
+    signal,
+  })
+  const data = (await res.json().catch(() => null)) as FeedbackResponse | null
+  if (data && typeof data === "object" && "kind" in data) return data
+  return { kind: "error", error: `Unexpected response (${res.status})` }
+}
+
+export interface PreferenceOut {
+  profile: string
+  action: string
+  pattern: string
+  text: string
+  why: string
+  weight: number
+  sources: string[]
+}
+
+export async function getPreferences(
+  signal?: AbortSignal,
+): Promise<{ count: number; preferences: PreferenceOut[] }> {
+  const res = await fetch("/api/preferences", { signal })
+  if (!res.ok) throw new Error(`/api/preferences returned ${res.status}`)
+  return (await res.json()) as { count: number; preferences: PreferenceOut[] }
 }
