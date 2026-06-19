@@ -20,7 +20,7 @@
 
 ---
 
-- [ ] **Task 0 — `ClaimVerifier` interface + dependency-free `LexicalVerifier`** (commit marker: `loop step 0: …`)
+- [x] **Task 0 — `ClaimVerifier` interface + dependency-free `LexicalVerifier`** (commit marker: `loop step 0: …`)
 
   **Files:** Create `neuro_caseboard/entailment.py`; Test `tests/test_entailment_gate.py`.
 
@@ -113,7 +113,7 @@
 
 ---
 
-- [ ] **Task 1 — Optional lazy `NLIVerifier` + `get_default_verifier()` factory** (commit marker: `loop step 1: …`)
+- [x] **Task 1 — Optional lazy `NLIVerifier` + `get_default_verifier()` factory** (commit marker: `loop step 1: …`)
 
   **Files:** Modify `neuro_caseboard/entailment.py`; Test `tests/test_entailment_gate.py`.
 
@@ -171,7 +171,7 @@
 
 ---
 
-- [ ] **Task 2 — Gate the `[n]` citation binding in `compile.py`** (commit marker: `loop step 2: …`)
+- [x] **Task 2 — Gate the `[n]` citation binding in `compile.py`** (commit marker: `loop step 2: …`)
 
   **Files:** Modify `neuro_caseboard/compile.py` (the `_compile` signature, the corpus-`[n]` block at lines ~149-156, and the `compile_dossier`/`compile_case_dossier` signatures); Test `tests/test_entailment_gate.py`.
 
@@ -251,7 +251,7 @@
 
 ---
 
-- [ ] **Task 3 — `attribution_precision` metric in the offline quality gate** (commit marker: `loop step 3: …`)
+- [x] **Task 3 — `attribution_precision` metric in the offline quality gate** (commit marker: `loop step 3: …`)
 
   **Files:** Modify `eval/quality_gate.py` (`compute_metrics` + `DIRECTIONS`); Modify `eval/BASELINE.json` (regenerate); Test `tests/test_quality_gate.py`.
 
@@ -289,7 +289,7 @@
 
 ---
 
-- [ ] **Task 4 — Wire the default verifier into the production build path + document** (commit marker: `loop step 4: …`)
+- [x] **Task 4 — Wire the default verifier into the production build path + document** (commit marker: `loop step 4: …`)
 
   **Files:** Modify `neuro_caseboard/pipeline.py` (the `build_case_dossier` → `compile_case_dossier` call); Modify `README.md`; Test `tests/test_entailment_gate.py`.
 
