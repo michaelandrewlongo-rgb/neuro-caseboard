@@ -118,3 +118,35 @@ def coverage_from_records(records):
 
 def coverage_report(corpus_dir):
     return coverage_from_records(list(iter_corpus(corpus_dir)))
+
+
+MIN_TEXT_COVERAGE = 0.6  # below this, treat the PDF as scanned (no usable text layer)
+
+
+def _probe_verdict(coverage, pages, min_coverage=MIN_TEXT_COVERAGE):
+    """Pure go/no-go decision for a candidate corpus PDF."""
+    if pages == 0:
+        return False, "no pages extracted (unreadable or empty PDF)"
+    if coverage < min_coverage:
+        return False, (f"text coverage {coverage:.2f} < {min_coverage:.2f} — likely scanned "
+                       "(no text layer); this pipeline does not OCR, indexing yields empty chunks")
+    return True, f"text coverage {coverage:.2f} OK"
+
+
+def probe_book(pdf_path, min_coverage=MIN_TEXT_COVERAGE):
+    """Cheap preflight (no render, no GPU) before an expensive index build.
+
+    Encodes the #1 textbook-integration failure mode: silently indexing a scanned book
+    that has no text layer (the pipeline does not OCR, so it would yield empty chunks).
+    Returns a dict with the coverage stats plus an ``ok``/``reason`` verdict.
+    """
+    recs = extract_pages(pdf_path, render=False)
+    cov = coverage_from_records(recs)
+    book = next(iter(cov), Path(pdf_path).stem)
+    s = cov.get(book, {"pages": 0, "pages_with_text": 0, "coverage": 0.0,
+                       "pages_with_figures": 0})
+    chapters = len({r.chapter for r in recs if getattr(r, "chapter", None)})
+    ok, reason = _probe_verdict(s["coverage"], s["pages"], min_coverage)
+    return {"book": book, "pages": s["pages"], "pages_with_text": s["pages_with_text"],
+            "coverage": s["coverage"], "pages_with_figures": s["pages_with_figures"],
+            "chapters": chapters, "ok": ok, "reason": reason}
