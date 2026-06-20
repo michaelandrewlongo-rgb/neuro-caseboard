@@ -15,7 +15,7 @@ import datetime as dt
 import html
 
 from neuro_caseboard.exec_navy import EXEC_NAVY_CSS, inline, img_data_uri
-from neuro_caseboard.model import Dossier
+from neuro_caseboard.model import Dossier, fallback_notice
 
 _STATUS_LABEL = {"supported": "Corpus-supported", "verify": "To verify"}
 
@@ -37,6 +37,13 @@ _CASE_EXTRA_CSS = """
 .litblock .lc .k{ font-family:var(--mono); font-size:7pt; font-weight:700; color:var(--blue); margin-right:2mm; }
 .litblock a{ color:var(--blue); text-decoration:none; }
 """
+
+# CSS injected only when the dossier is degraded so the class name never appears in normal output.
+_FALLBACK_BANNER_CSS = (
+    '.fallback-banner{ margin:3mm 0 1mm; padding:2.5mm 3.5mm; border-left:4px solid #a9781b;'
+    '  background:rgba(169,120,27,.10); font-family:var(--ui); font-size:9.5pt; color:#7a5a14; }'
+    '.fallback-banner b{ text-transform:uppercase; letter-spacing:.04em; margin-right:2mm; }'
+)
 
 
 def _literature_html(lit) -> str:
@@ -94,10 +101,13 @@ def build_caseboard_html(dossier: Dossier, *, subtitle: str = "", today: str | N
     today = today or dt.date.today().isoformat()
     s = dossier.summary
     keys = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
+    notice = fallback_notice(dossier.provenance)
 
     out = [
         "<!doctype html><html><head><meta charset='utf-8'><style>",
-        EXEC_NAVY_CSS, _CASE_EXTRA_CSS, "</style></head><body>",
+        EXEC_NAVY_CSS, _CASE_EXTRA_CSS,
+        _FALLBACK_BANNER_CSS if notice else "",
+        "</style></head><body>",
         f'<div class="verify-banner">{html.escape(VERIFY_BANNER)}</div>',
         '<div class="masthead"><div class="mh-brand"><span class="sq"></span>NEURO·CASEBOARD</div>',
         '<div class="mh-eyebrow">Neuro·Caseboard · pre-operative dossier</div></div>',
@@ -107,6 +117,8 @@ def build_caseboard_html(dossier: Dossier, *, subtitle: str = "", today: str | N
     ]
     if subtitle:
         out.append(f'<div class="standfirst">{html.escape(subtitle)}</div>')
+    if notice:
+        out.append(f'<div class="fallback-banner"><b>Fallback</b>{html.escape(notice)}</div>')
     out.append('<div class="rule"></div>')
     out.append(_evidence_bar(s))
     out.append(
