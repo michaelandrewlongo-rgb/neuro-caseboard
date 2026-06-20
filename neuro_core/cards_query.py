@@ -17,6 +17,7 @@ from typing import List
 from .config import load_config
 from .embed import Embedder
 from .rerank import Reranker
+from .cards_precision import refine
 from .cards_index import CardsIndex, CardHit
 
 
@@ -52,6 +53,7 @@ class CardsEngine:
         self.embedder = embedder
         self.cards_index = cards_index
         self.reranker = reranker
+        self.last_note = ""  # P4 #12: precision note (e.g. nothing matched precisely enough)
 
     def query(self, question, k=None, rerank=True):
         # `k` is the DISPLAY count the caller wants (CLI -k / Streamlit slider).
@@ -66,7 +68,11 @@ class CardsEngine:
             hits = self.reranker.rerank(question, hits, k)
         else:
             hits = hits[:k]
-        return CardResult(query=question, cards=hits)
+        # P4 #12: tighten precision — drop anatomical-level mismatches (e.g. a C6-7 card for a
+        # C5-6 query) and apply a small exact-term boost, then cap at the display count.
+        refined = refine(hits, question, k=k, exact_weight=0.05)
+        self.last_note = refined.note
+        return CardResult(query=question, cards=refined.cards)
 
 
 _cards_engine = None

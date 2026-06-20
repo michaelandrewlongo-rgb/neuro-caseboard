@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useReducer, useRef, useState } from "react"
 import { searchCards, type Card, type CardsResponse } from "@/lib/api"
+import { cardsQueryReducer, initialCardsQuery } from "@/lib/cardsQuery"
 import { EvidenceGauge } from "@/components/charts/EvidenceGauge"
 import PipelineLoader from "@/components/PipelineLoader"
 import CardItem from "@/components/cards/CardItem"
@@ -79,8 +80,8 @@ const DECK_FILTER_OPTIONS: { key: DeckFilter; label: string; ochre?: boolean }[]
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function Cards() {
-  const [question, setQuestion] = useState("")
-  const [submitted, setSubmitted] = useState<string | null>(null)
+  // BACKLOG P4 #11: single source of truth for the query box (visible input == internal state).
+  const [{ question, submitted }, dispatch] = useReducer(cardsQueryReducer, initialCardsQuery)
   const [k, setK] = useState(6)
   const [loading, setLoading] = useState(false)
   const [resp, setResp] = useState<CardsResponse | null>(null)
@@ -96,8 +97,8 @@ export default function Cards() {
     ctrlRef.current?.abort()
     const ctrl = new AbortController()
     ctrlRef.current = ctrl
-    setSubmitted(text)
-    setQuestion(text)
+    dispatch({ type: "selectChip", text }) // sync the visible input to the run query
+    dispatch({ type: "submit" }) // submitted is derived from question — they cannot diverge
     setResp(null)
     setNetError(null)
     setLoading(true)
@@ -168,7 +169,7 @@ export default function Cards() {
             <input
               type="text"
               value={question}
-              onChange={(e) => setQuestion(e.target.value)}
+              onChange={(e) => dispatch({ type: "type", text: e.target.value })}
               placeholder='e.g. "cavernous sinus contents"'
               className="field flex-1"
               disabled={loading}

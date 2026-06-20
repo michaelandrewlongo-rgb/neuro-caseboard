@@ -216,3 +216,17 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ============================================================
+   Background-tab guard (BACKLOG P3 #10) — when the document is
+   hidden, pause every decorative animation so a backgrounded
+   console stays resource-bounded and reaches an idle state.
+   `data-doc-hidden` is toggled from App.tsx on visibilitychange.
+   `!important` overrides the inline `animation` styles the
+   redesign sets on decorative chrome.
+   ============================================================ */
+html[data-doc-hidden] *,
+html[data-doc-hidden] *::before,
+html[data-doc-hidden] *::after {
+  animation-play-state: paused !important;
+}

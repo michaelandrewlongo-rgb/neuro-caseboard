@@ -16,7 +16,8 @@ export default function SourcesList({ citations }: { citations: Citation[] }) {
           return (
             <li
               key={c.n ?? c.location}
-              className="flex gap-3 rounded-[var(--radius-md)] px-3.5 py-2.5"
+              id={`src-textbook-${c.n}`}
+              className="flex scroll-mt-20 gap-3 rounded-[var(--radius-md)] px-3.5 py-2.5"
               style={{
                 background: "rgba(63,150,144,.07)",
                 border: "1px solid rgba(63,150,144,.18)",
