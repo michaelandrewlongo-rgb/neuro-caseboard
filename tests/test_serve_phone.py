@@ -77,3 +77,19 @@ def test_wsl_portproxy_ps1_exists_and_is_consistent():
     assert "Remove-NetFirewallRule" in text
     # Auto-detect the WSL IP rather than hardcoding it.
     assert "wsl" in text.lower() and "hostname -I" in text
+
+
+def test_runbook_doc_exists_and_references_helpers():
+    doc = _Path("docs/SERVE_ON_PHONE.md")
+    assert doc.is_file(), "docs/SERVE_ON_PHONE.md must exist"
+    text = doc.read_text()
+    assert "scripts/serve-phone.sh" in text
+    assert "scripts/wsl-portproxy.ps1" in text
+    assert "8001" in text
+    assert "mirrored" in text.lower()          # the recommended WSL path
+    assert "tailscale" in text.lower() or "cloudflared" in text.lower()  # off-network fallback
+
+
+def test_vite_config_enables_lan_host():
+    cfg = _Path("web/vite.config.ts").read_text()
+    assert "host: true" in cfg
