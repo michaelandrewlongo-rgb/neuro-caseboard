@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 /* ============================================================================================
@@ -229,4 +229,49 @@ html[data-doc-hidden] *,
 html[data-doc-hidden] *::before,
 html[data-doc-hidden] *::after {
   animation-play-state: paused !important;
+}
+
+/* ============================================================
+   Neurosurgery·Signal landing (pages/Home.tsx) — monochrome
+   black + DTI-spectrum front door. Recreated from the design
+   reference docs/design/neuro-pages-latest/Neuro Landing.dc.html.
+   Scoped `.nl-*` hover helpers stand in for the prototype's
+   `style-hover` attribute so the JSX stays declarative. All hover
+   transitions are auto-neutralised by the reduced-motion guard above.
+   ============================================================ */
+
+/* Header / in-page nav links */
+.nl-nav-link {
+  color: #8a8a8a;
+  transition: color 0.16s;
+}
+.nl-nav-link:hover {
+  color: #ededed;
+}
+
+/* Solid (white) CTA — header + hero + final */
+.nl-btn-solid {
+  transition: background 0.18s, transform 0.18s;
+}
+.nl-btn-solid:hover {
+  background: #ffffff;
+  transform: translateY(-2px);
+}
+
+/* Ghost CTA */
+.nl-btn-ghost {
+  transition: background 0.18s, border-color 0.18s;
+}
+.nl-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* "Three ways in" pathway cards */
+.nl-card {
+  transition: transform 0.2s, border-color 0.2s;
+}
+.nl-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255, 255, 255, 0.28);
 }
