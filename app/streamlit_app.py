@@ -23,6 +23,8 @@ from ask_session import (is_new_submission, mark_answered, reset_conversation,
 from ask_confidence import grade_answer, summarize, STATUS_LABEL, STATUS_MARK
 from quant_support import extract_metrics, unquantified_comparisons, summarize as quant_summarize
 from progress import ProgressTracker, out_of_scope
+from ask_errors import (classify_error, log_failure, not_yet_failed, note_failure,
+                        clear_failure)
 from neuro_caseboard.board_view import board_view
 from neuro_caseboard.pipeline import (
     build_dossier, build_case_dossier, render_case_pdf, render_ask_pdf, _slug)
@@ -93,16 +95,30 @@ if mode == "Ask":
             st.rerun()
     # Answer once per distinct submission: a rerun from any OTHER widget (the Prepare-PDF box,
     # the Build button) must re-render the stored answer, not re-invoke the engine on a stale q.
-    if q and is_new_submission(st.session_state, q):
+    # P3 #9: attempt once per distinct, not-already-failed submission. A failed q awaits an explicit
+    # Retry (the per-q marker prevents an auto-retry storm) while the query stays preserved.
+    if q and is_new_submission(st.session_state, q) and not_yet_failed(st.session_state, q):
         # P3 #8: time the engine call so we can show elapsed latency (60-90s is normal).
         _tracker = ProgressTracker()
-        with st.spinner("Searching textbooks + recent literature…"):
-            st.session_state["ask_result"] = answer_question(q)  # current query ONLY — no history
-        _tracker.complete()
-        st.session_state["ask_elapsed"] = _tracker.elapsed()
-        mark_answered(st.session_state, q)
+        try:
+            with st.spinner("Searching textbooks + recent literature…"):
+                result = answer_question(q)  # current query ONLY — no history
+        except Exception as _e:  # noqa: BLE001 — surface ANY engine failure as an actionable error
+            log_failure("answer_question", _e)
+            note_failure(st.session_state, q, classify_error(_e)[1])
+        else:
+            st.session_state["ask_result"] = result
+            clear_failure(st.session_state)
+            _tracker.complete()
+            st.session_state["ask_elapsed"] = _tracker.elapsed()
+            mark_answered(st.session_state, q)  # success only -> reruns re-render, don't re-answer
+    if st.session_state.get("ask_error"):
+        st.error(st.session_state["ask_error"])
+        if st.button("Retry", help="Re-run the search — your question is preserved"):
+            clear_failure(st.session_state)
+            st.rerun()
     result = st.session_state.get("ask_result")
-    if q and result is not None:
+    if q and result is not None and not st.session_state.get("ask_error"):
         from neuro_core.query import Clarification
         if isinstance(result, Clarification):
             st.warning("This question maps to several distinct topics. Re-ask naming one variant:")
