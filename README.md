@@ -58,6 +58,17 @@ unchanged). Set `NCBI_API_KEY` (or `NCBI_API_KEY_2`) for the higher rate limit.
 Env flags: `LITERATURE_RETRIEVAL` (default on), `LITERATURE_RECENCY_YEARS` (7),
 `LITERATURE_K` (8), `LITERATURE_CACHE_TTL_DAYS` (14), `LITERATURE_CACHE_DIR`.
 
+### Citation entailment gate
+
+Before a corpus citation is attached to a claim, the cited corpus span must
+*entail* the claim — checked with an off-the-shelf NLI model (`CASEBOARD_NLI_MODEL`
+selects the model; if unset, a deterministic lexical-overlap fallback is used, so
+the gate runs fully offline). A claim whose every candidate citation fails the gate
+is downgraded to **needs-verification** rather than carrying an unsupported marker.
+Citations are only ever *withheld*, never fabricated — the gate can drop a weak
+citation but can never invent one. The offline quality gate tracks
+`attribution_precision` so regressions in citation faithfulness are caught.
+
 ## Clinical depth — the Explorer
 
 The *presentation* fixes generalise across all of neurosurgery, but the *clinical content*

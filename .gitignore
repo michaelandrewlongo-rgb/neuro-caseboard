@@ -31,3 +31,4 @@ gui-council/shots/
 gui-council/axe/
 # local throwaway venvs
 .testvenv/
+.project-loop/

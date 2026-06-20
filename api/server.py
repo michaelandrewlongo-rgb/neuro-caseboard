@@ -11,7 +11,18 @@ textbook index, cards bank, NCBI key) by probing the engine's real config. The P
 (added in later milestones) forward the engine's real result OR its real error — never a
 fabricated dossier/citation/card.
 
-Run (from the repo root): uvicorn api.server:app --port 8000 --reload
+Serving the web UI: this app also serves the built React/Vite console (web/dist) at "/", so a
+single process is the whole product — the redesigned GUI at "/", the engine at "/api/*". Build
+the SPA first, then run the server:
+
+    npm --prefix web run build          # produces web/dist (the redesigned console)
+    uvicorn api.server:app --port 8001  # → GUI at http://127.0.0.1:8001/
+
+If web/dist is absent, "/" returns an honest 503 ("web UI not built …") and the API still works.
+For development use `npm run dev` instead (Vite hot-reload on :5173 proxying /api here). The dist
+location can be overridden with NEURO_CASEBOARD_WEB_DIST.
+
+Run (from the repo root): uvicorn api.server:app --port 8001 --reload
 """
 
 from __future__ import annotations
@@ -445,11 +456,12 @@ class BuildRequest(BaseModel):
     topic: str
     enrich: bool = True
     use_llm: bool = True
+    use_prefs: bool = True
 
 
-def _do_build(topic: str, enrich: bool, use_llm: bool):
+def _do_build(topic: str, enrich: bool, use_llm: bool, prefs=None):
     from neuro_caseboard.pipeline import build_dossier
-    return build_dossier(topic, enrich=enrich, use_llm=None if use_llm else False)
+    return build_dossier(topic, enrich=enrich, use_llm=None if use_llm else False, prefs=prefs)
 
 
 @app.post("/api/build")
@@ -459,8 +471,12 @@ def build(req: BuildRequest):
         return JSONResponse(status_code=422, content={"kind": "error", "error": "empty topic"})
 
     from neuro_core.gpu_guard import GpuNotReadyError
+    prefs = None
+    if req.use_prefs:
+        from neuro_caseboard.preferences import load_preferences, default_store_path
+        prefs = load_preferences(default_store_path()) or None
     try:
-        dossier = _do_build(topic, req.enrich, req.use_llm)
+        dossier = _do_build(topic, req.enrich, req.use_llm, prefs)
     except GpuNotReadyError as e:
         return JSONResponse(status_code=503,
                             content={"kind": "unavailable", "reason": f"GPU not ready: {e}"})
@@ -515,6 +531,76 @@ def build_pdf(req: BuildPdfRequest):
                             content={"error": f"PDF render failed: {type(e).__name__}: {e}"})
     return FileResponse(pdf_path, media_type="application/pdf",
                         filename=f"{_slug(topic)}-caseboard.pdf")
+
+
+# ---------------------------------------------------------------------------------------------
+# Rehearsal: surgeon marks the board (wrong/missing/important) -> distil into profile-keyed
+# operative preferences (persisted) -> rebuild the board with them applied. GET /api/preferences
+# surfaces what is remembered (provenance: action, pattern, weight, source cases). Same engine
+# calls as the CLI/Streamlit; never fabricates a board.
+# ---------------------------------------------------------------------------------------------
+
+class FeedbackMarkIn(BaseModel):
+    mark: str
+    text: str
+    section: str = ""
+    note: str = ""
+
+
+class FeedbackRequest(BaseModel):
+    topic: str
+    profile: str = ""
+    enrich: bool = False
+    use_llm: bool = False
+    items: list[FeedbackMarkIn]
+
+
+@app.post("/api/feedback")
+def feedback(req: FeedbackRequest):
+    topic = (req.topic or "").strip()
+    if not topic:
+        return JSONResponse(status_code=422, content={"kind": "error", "error": "empty topic"})
+    if not req.items:
+        return JSONResponse(status_code=422, content={"kind": "error", "error": "no marks"})
+
+    from neuro_caseboard.pipeline import classify_profile
+    from neuro_caseboard.feedback import CaseFeedback, FeedbackItem, target_file_for_heading
+    from neuro_caseboard.preferences import (
+        distill, load_preferences, save_preferences, default_store_path,
+    )
+    profile = req.profile or classify_profile(topic)
+    try:
+        items = [FeedbackItem(mark=m.mark, text=m.text,
+                              target_file=target_file_for_heading(m.section), note=m.note)
+                 for m in req.items]
+    except ValueError as e:
+        # Honest degradation: a malformed mark is a client error, not a 500.
+        return JSONResponse(status_code=422, content={"kind": "error", "error": str(e)})
+    fb = CaseFeedback(topic=topic, profile=profile, items=items)
+    store = default_store_path()
+    prefs = distill(fb, load_preferences(store))
+    save_preferences(prefs, store)
+
+    from neuro_core.gpu_guard import GpuNotReadyError
+    try:
+        dossier = _do_build(topic, req.enrich, req.use_llm, prefs)
+    except GpuNotReadyError as e:
+        return JSONResponse(status_code=503, content={"kind": "unavailable", "reason": f"GPU not ready: {e}"})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"kind": "error", "error": f"{type(e).__name__}: {e}"})
+    # Cache the rebuilt board so a later PDF export matches what the surgeon now sees (the board WITH
+    # the marks applied), not the pre-feedback board.
+    build_id = _cache_dossier(topic, req.enrich, req.use_llm, dossier)
+    return {"kind": "dossier", "build_id": build_id, "topic": topic, "profile": profile,
+            "remembered": len(prefs), "dossier": _dossier_dict(dossier)}
+
+
+@app.get("/api/preferences")
+def preferences() -> dict:
+    from dataclasses import asdict
+    from neuro_caseboard.preferences import load_preferences, default_store_path
+    prefs = load_preferences(default_store_path())
+    return {"kind": "preferences", "count": len(prefs), "preferences": [asdict(p) for p in prefs]}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -580,3 +666,48 @@ def cards(req: CardsRequest):
 def ping() -> dict:
     """Liveness check that touches nothing — proves the server itself is up."""
     return {"ok": True}
+
+
+# --- Static web SPA (single-process local deploy) --------------------------------------
+# Serve the built React/Vite app (web/dist) so `uvicorn api.server:app` is the whole product:
+# the redesigned console at "/", the engine at "/api/*". In dev you'd run `npm run dev` instead
+# (Vite hot-reload + /api proxy); this catch-all just makes the *built* app the default the
+# server hands out. The dist path is resolved per-request from NEURO_CASEBOARD_WEB_DIST (env)
+# so deployments can relocate it and tests can point at a fixture.
+
+def _web_dist() -> Path:
+    """Resolve the built-SPA directory (override with NEURO_CASEBOARD_WEB_DIST)."""
+    override = os.environ.get("NEURO_CASEBOARD_WEB_DIST")
+    if override:
+        return Path(override)
+    return Path(__file__).resolve().parent.parent / "web" / "dist"
+
+
+# Declared LAST so every explicit route above (all "/api/*", plus FastAPI's own "/docs",
+# "/openapi.json") matches first; only non-API, non-doc paths fall through to the SPA.
+@app.get("/{full_path:path}")
+def _serve_spa(full_path: str):
+    # Never let the SPA catch-all answer an unknown /api/* path — a typo'd endpoint must stay
+    # an honest JSON 404, not silently render the HTML shell.
+    if full_path == "api" or full_path.startswith("api/"):
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
+
+    dist = _web_dist()
+    index = dist / "index.html"
+    if not index.is_file():
+        # Honest degradation: the server (API) is up, but the web UI hasn't been built.
+        return JSONResponse(status_code=503, content={
+            "kind": "unavailable",
+            "reason": "web UI not built — run `npm --prefix web run build` "
+                      "(or `npm run dev` for hot-reload during development)",
+        })
+
+    # Serve a real built file when the path points at one (assets, favicon, …); otherwise fall
+    # back to index.html so client-side routes (/ask, /build, /cards) work on a hard refresh.
+    if full_path:
+        candidate = (dist / full_path).resolve()
+        dist_root = dist.resolve()
+        # Path-traversal guard: the resolved file must stay inside the dist directory.
+        if candidate.is_file() and (candidate == dist_root or dist_root in candidate.parents):
+            return FileResponse(candidate)
+    return FileResponse(index)

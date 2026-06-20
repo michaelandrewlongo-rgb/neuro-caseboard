@@ -17,6 +17,14 @@ from pathlib import Path
 import streamlit as st
 
 import signal_theme as sig
+from figure_gallery import figure_card
+from ask_session import (is_new_submission, mark_answered, reset_conversation,
+                         apply_pending_clear)
+from ask_confidence import grade_answer, summarize, STATUS_LABEL, STATUS_MARK
+from quant_support import extract_metrics, unquantified_comparisons, summarize as quant_summarize
+from progress import ProgressTracker, out_of_scope
+from ask_errors import (classify_error, log_failure, not_yet_failed, note_failure,
+                        clear_failure)
 from neuro_caseboard.board_view import board_view
 from neuro_caseboard.pipeline import (
     build_dossier, build_case_dossier, render_case_pdf, render_ask_pdf, _slug)
@@ -50,6 +58,9 @@ if "seed_question" in st.session_state:
     st.session_state["ask_q"] = st.session_state.pop("seed_question")
 if "seed_topic" in st.session_state:
     st.session_state["build_topic"] = st.session_state.pop("seed_topic")
+# A "New conversation" click on the previous run requested an Ask-input clear; apply it here,
+# before the ask_q widget is instantiated (same deferred-mutation rule as the seeds above).
+apply_pending_clear(st.session_state)
 
 # Session-scoped cross-feature evidence store: EvidenceRef.key -> set of feature labels.
 _store = st.session_state.setdefault("session_evidence", {})
@@ -77,25 +88,90 @@ if mode == "Ask":
     if not q:
         sig.example_hints(["blood supply of the lateral medulla", "Wallenberg syndrome findings",
                            "borders of the cavernous sinus", "watershed infarct territories"])
-    if q:
-        with st.spinner("Searching textbooks + recent literature…"):
-            result = answer_question(q)
+    col_new, _ = st.columns([1, 4])
+    with col_new:
+        if st.button("New conversation", help="Clear the question, answer, and cross-references"):
+            reset_conversation(st.session_state)
+            st.rerun()
+    # Answer once per distinct submission: a rerun from any OTHER widget (the Prepare-PDF box,
+    # the Build button) must re-render the stored answer, not re-invoke the engine on a stale q.
+    # P3 #9: attempt once per distinct, not-already-failed submission. A failed q awaits an explicit
+    # Retry (the per-q marker prevents an auto-retry storm) while the query stays preserved.
+    if q and is_new_submission(st.session_state, q) and not_yet_failed(st.session_state, q):
+        # P3 #8: time the engine call so we can show elapsed latency (60-90s is normal).
+        _tracker = ProgressTracker()
+        try:
+            with st.spinner("Searching textbooks + recent literature…"):
+                result = answer_question(q)  # current query ONLY — no history
+        except Exception as _e:  # noqa: BLE001 — surface ANY engine failure as an actionable error
+            log_failure("answer_question", _e)
+            note_failure(st.session_state, q, classify_error(_e)[1])
+        else:
+            st.session_state["ask_result"] = result
+            clear_failure(st.session_state)
+            _tracker.complete()
+            st.session_state["ask_elapsed"] = _tracker.elapsed()
+            mark_answered(st.session_state, q)  # success only -> reruns re-render, don't re-answer
+    if st.session_state.get("ask_error"):
+        st.error(st.session_state["ask_error"])
+        if st.button("Retry", help="Re-run the search — your question is preserved"):
+            clear_failure(st.session_state)
+            st.rerun()
+    result = st.session_state.get("ask_result")
+    if q and result is not None and not st.session_state.get("ask_error"):
         from neuro_core.query import Clarification
         if isinstance(result, Clarification):
             st.warning("This question maps to several distinct topics. Re-ask naming one variant:")
             sig.variants([v.label for v in result.variants])
             st.stop()
         label = f'answer: "{q}"'
+        # P3 #8: elapsed-time feedback + early out-of-scope signal (low corpus overlap).
+        _elapsed = st.session_state.get("ask_elapsed")
+        if _elapsed is not None:
+            st.caption(f"Answered in {_elapsed:.1f}s")
+        if out_of_scope(len(result.citations), len(result.figures)):
+            st.warning("Low corpus overlap — this question may be outside the indexed textbooks; "
+                       "the answer leans on general/literature sources. Verify carefully.")
         record(_store, [from_figure(f) for f in result.figures], label)
         st.markdown(sig.citation_chips(result.answer), unsafe_allow_html=True)
+        # Per-claim confidence (BACKLOG P2 #4): textbook sources from result.citations,
+        # literature sources from result.literature.citations; both expose `.n`.
+        source_lane = {getattr(c, "n", 0): "textbook" for c in result.citations}
+        if result.literature and result.literature.citations:
+            for c in result.literature.citations:
+                source_lane.setdefault(getattr(c, "n", 0), "literature")
+        graded = grade_answer(result.answer, source_lane)
+        if graded:
+            counts = summarize(graded)
+            sig.section("Claim confidence", "CONF")
+            st.caption(" · ".join(f"{STATUS_MARK[s]} {STATUS_LABEL[s]}: {n}"
+                                  for s, n in counts.items()))
+            for c in graded:
+                st.markdown(f"{STATUS_MARK[c.status]} **{STATUS_LABEL[c.status]}** — {c.text}")
+        # Quantitative decision support (BACKLOG P2 #6): surface numbers literally present in the
+        # answer (never fabricated) and flag comparative claims that lack any number.
+        metrics = extract_metrics(result.answer)
+        flags = unquantified_comparisons(result.answer)
+        if metrics or flags:
+            sig.section("By the numbers", "QTY")
+            if metrics:
+                st.caption(" · ".join(f"{k}: {n}" for k, n in quant_summarize(metrics).items()))
+                for m in metrics:
+                    st.markdown(f"**{m.value}** — {m.clause}")
+            else:
+                st.caption("No quantitative outcomes found in this answer.")
+            if flags:
+                st.warning("Comparative claims without numbers (verify against primary sources):")
+                for f in flags:
+                    st.markdown(f"⚠ {f}")
         if result.figures:
             sig.section("Figures", "FIG")
             cols = st.columns(min(3, len(result.figures)))
-            for col, f in zip(cols, result.figures):
+            for i, (col, f) in enumerate(zip(cols, result.figures)):
                 with col:
-                    st.image(f.image_path,
-                             caption=f"[{f.source_n}] {f.book}, p.{f.page} — {f.caption}",
-                             use_container_width=True)
+                    figure_card(f.image_path,
+                                caption=f"[{f.source_n}] {f.book}, p.{f.page} — {f.caption}",
+                                key=f"ask_{i}")
                     _badge(from_figure(f).key, label)
         sig.section("Sources", "SRC")
         sig.sources_panel(result.citations)
@@ -162,11 +238,11 @@ elif mode == "Build board":
         if view.figures:
             sig.section("Figures", "FIG")
             cols = st.columns(min(3, len(view.figures)))
-            for col, fig in zip(cols, view.figures):
+            for i, (col, fig) in enumerate(zip(cols, view.figures)):
                 with col:
-                    st.image(fig.image_path,
-                             caption=f"[{fig.fig_id}] {fig.caption} — {fig.citation}",
-                             use_container_width=True)
+                    figure_card(fig.image_path,
+                                caption=f"[{fig.fig_id}] {fig.caption} — {fig.citation}",
+                                key=f"build_{i}")
                     _badge(from_figure_item(fig).key, label)
         st.markdown(sig.citation_chips(view.markdown), unsafe_allow_html=True)
 
@@ -227,9 +303,9 @@ elif mode == "Case":
             if view.figures:
                 sig.section("Case schematics", "FIG")
                 cols = st.columns(min(2, len(view.figures)))
-                for col, fig in zip(cols, view.figures):
+                for i, (col, fig) in enumerate(zip(cols, view.figures)):
                     with col:
-                        st.image(fig.image_path, caption=fig.caption, use_container_width=True)
+                        figure_card(fig.image_path, caption=fig.caption, key=f"case_{i}")
             st.markdown(sig.citation_chips(view.markdown), unsafe_allow_html=True)
 
 elif mode == "Cards":
@@ -269,8 +345,8 @@ elif mode == "Cards":
                 st.markdown(f"**A.** {c.answer_text}")
                 if c.tags:
                     st.caption(f"tags: {c.tags}")
-                for p in c.image_paths:
+                for j, p in enumerate(c.image_paths):
                     try:
-                        st.image(p, use_container_width=True)
+                        figure_card(p, key=f"cards_{i}_{j}")
                     except Exception:
                         st.caption(f"(image unavailable: {p})")
