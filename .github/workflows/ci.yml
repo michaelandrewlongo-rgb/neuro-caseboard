@@ -2,7 +2,7 @@ name: CI
 
 # Required PR gate. Everything here is offline, deterministic, and fast: no API keys,
 # no GPU, no textbook corpus, no private index, no external service at test time.
-# (The only network use is install-time: PyPI wheels + the pinned caseprep git ref.)
+# (The only network use is install-time: PyPI wheels. caseprep is vendored in-tree.)
 
 on:
   pull_request:
@@ -18,8 +18,6 @@ permissions:
   contents: read
 
 env:
-  # The one external sibling dependency, pinned for reproducibility. Bump deliberately.
-  CASEPREP_REF: 8b1d8fd0488c16ff68721c6dc29041862517b392
   PYTHONHASHSEED: "0"
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
   PIP_NO_PYTHON_VERSION_WARNING: "1"
@@ -70,13 +68,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: pyproject.toml
-      - name: Install caseprep (pinned) + package[dev]
+      - name: Install package[dev]
         run: ./ci/install.sh ".[dev]"
       - name: Show resolved environment (debug aid; assert no heavy ML libs leaked in)
         run: |
           python - <<'PY'
           import importlib.metadata as m
-          for p in ["neuro-caseboard","caseprep","lancedb","numpy","pymupdf","fpdf2","pillow","pdfplumber","pytest"]:
+          for p in ["neuro-caseboard","lancedb","numpy","pymupdf","fpdf2","pillow","pdfplumber","pytest"]:
               try: print(f"{p:18s} {m.version(p)}")
               except Exception: print(f"{p:18s} MISSING")
           for p in ["torch","sentence-transformers","open-clip-torch"]:
@@ -95,8 +93,9 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # PROVES: packaging metadata is valid, the wheel builds, and a CLEAN install of just the
-  # wheel (declared deps only, resolved from PyPI) + caseprep yields importable modules and
-  # a working `caseboard` entry point. This is the install/dependency/entry-point gate —
+  # wheel (declared deps only, resolved from PyPI; caseprep is bundled in the wheel) yields
+  # importable modules and a working `caseboard` entry point. The install/dependency/entry-point
+  # gate —
   # it is what catches a future undeclared top-level import.
   # ---------------------------------------------------------------------------
   package:
@@ -113,7 +112,7 @@ jobs:
           python -m build
       - name: Validate distribution metadata
         run: python -m twine check dist/*
-      - name: Clean-room install of the wheel (+ pinned caseprep) and import every surface
+      - name: Clean-room install of the wheel and import every surface
         run: |
           python -m venv .ci-venv
           # shellcheck disable=SC1091
@@ -126,6 +125,9 @@ jobs:
               "neuro_caseboard.render_md", "neuro_caseboard.compile", "neuro_caseboard.board_view",
               "neuro_caseboard.briefing_pdf", "neuro_caseboard.retrieve",
               "neuro_core.query", "neuro_core.index", "neuro_core.figure_retriever",
+              # vendored caseprep must be bundled in the wheel and importable clean-room:
+              "caseprep.core.contracts", "caseprep.explorer.question_manifest",
+              "caseprep.retrievers.corpus", "caseprep.audit.card_auditor",
           ]
           for name in mods:
               importlib.import_module(name)

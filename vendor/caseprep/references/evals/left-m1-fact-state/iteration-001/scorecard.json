@@ -1,0 +1,35 @@
+{
+  "case_id": "left-m1-fact-state",
+  "iteration": 1,
+  "output_path": "/tmp/caseprep-live-left-m1-fact-state-v2",
+  "overall_score": 77,
+  "pass_threshold": 75,
+  "passed": true,
+  "category_scores": {
+    "technique_operative_workflow": 20,
+    "anatomy_dangerous_structures": 16,
+    "complications_rescue_plans": 12,
+    "alternatives_decision_boundaries": 7,
+    "evidence_quality_relevance": 8,
+    "case_specificity": 6,
+    "readability_usability": 4,
+    "provenance_citation_support": 4
+  },
+  "deterministic_eval_passed": true,
+  "deterministic_checks": [
+    "targeted fact-state checks: 21 passed",
+    "parser/render/builder/canonical tests: 83 passed",
+    "full suite before artifact fix: 397 passed",
+    "post-fix full suite: 400 passed",
+    "live artifact sanity checks passed"
+  ],
+  "primary_remaining_failures": [
+    "Late-window quantitative selection criteria are underdeveloped for LKW 10h with CTP mismatch.",
+    "Supplied combined technique is not converted into a crisp default first-pass procedural sequence.",
+    "Dossier says missing critical facts are none while safety-critical unknowns still remain visible elsewhere.",
+    "Rescue playbooks are clinically relevant but not procedural enough.",
+    "Evidence is strong but not consistently translated into bedside decision rules."
+  ],
+  "stop_reason": "blind_review_passed_threshold_with_non_blocking_improvement_items",
+  "next_fix": "Separate safety-critical unknowns from extracted core case facts, then add late-window EVT eligibility and supplied-technique procedural sequence modules."
+}

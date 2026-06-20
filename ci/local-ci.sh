@@ -3,8 +3,8 @@
 # be debugged on your machine with one command. Mirrors .github/workflows/ci.yml.
 #
 #   ci/local-ci.sh                 # full mirror: sanity -> tests -> package smoke
-#   USE_LOCAL_CASEPREP=1 ci/local-ci.sh   # install caseprep from ../caseprep (-e) — faster,
-#                                          # for iterating; CI uses the pinned git ref.
+#
+# caseprep is vendored in-tree (./vendor/caseprep), so there is no external sibling install.
 #
 # The venv is created WITHOUT --system-site-packages, so heavy libs you have installed
 # globally (torch, sentence-transformers, open-clip) cannot leak in and mask a real gap.
@@ -27,13 +27,7 @@ python -m compileall -q neuro_caseboard neuro_core app tests eval
 python -c "import tomllib, pathlib; tomllib.loads(pathlib.Path('pyproject.toml').read_text()); print('pyproject OK')"
 
 echo "==> [2/3] install + full offline test suite"
-if [ "${USE_LOCAL_CASEPREP:-0}" = "1" ] && [ -d "$REPO/../caseprep" ]; then
-  python -m pip install --upgrade pip >/dev/null
-  python -m pip install -e "$REPO/../caseprep"
-  python -m pip install -e ".[dev]"
-else
-  ./ci/install.sh ".[dev]"
-fi
+./ci/install.sh ".[dev]"
 python -m pytest -p no:cacheprovider --durations=10
 echo "==> [2b/3] quality-regression gate (eval split, offline/deterministic)"
 python eval/quality_gate.py
@@ -48,13 +42,7 @@ rm -rf "$PKGVENV"
 python3 -m venv "$PKGVENV"
 # shellcheck disable=SC1091
 source "$PKGVENV/bin/activate"
-if [ "${USE_LOCAL_CASEPREP:-0}" = "1" ] && [ -d "$REPO/../caseprep" ]; then
-  python -m pip install --upgrade pip >/dev/null
-  python -m pip install -e "$REPO/../caseprep"
-  python -m pip install dist/*.whl
-else
-  ./ci/install.sh dist/*.whl
-fi
+./ci/install.sh dist/*.whl
 python -c "import neuro_caseboard.cli, neuro_caseboard.pipeline, neuro_core.query, neuro_core.index, neuro_caseboard.retrieve; print('ALL SURFACES IMPORTED')"
 caseboard --help >/dev/null && echo "entry point OK"
 

@@ -15,8 +15,12 @@ DEFAULTS = {
     "GPU_MIN_FREE_MIB": "10000",
     "CHUNK_MAX_WORDS": "600",
     "CHUNK_OVERLAP_WORDS": "80",
-    "RETRIEVE_K": "20",
-    "RERANK_K": "6",
+    # Breadth: widen the pre-rerank candidate pool and the number of passages that reach
+    # synthesis. The cross-encoder (rerank.py) already scores the whole pool and the
+    # synthesizer has no token cap, so more passages => more comprehensive grounded answers
+    # at marginal cost. (Plan section A.1: 20->40 / 6->12.)
+    "RETRIEVE_K": "40",
+    "RERANK_K": "12",
     "EMBED_DEVICE": "auto",
     "SYNTH_PROVIDER": "vertex",
     "GOOGLE_CLOUD_PROJECT": "",

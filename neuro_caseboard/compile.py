@@ -24,6 +24,9 @@ from neuro_caseboard.model import (
 from neuro_caseboard.textops import scrub_question, split_compound
 from neuro_caseboard.captions import complete_caption, relevance_line
 from neuro_caseboard.dedup import dedup_sections
+from caseprep.audit.card_auditor import accepted_papers, rejected_papers
+from neuro_caseboard.entailment import should_cite, LexicalVerifier
+from neuro_caseboard.evidence_grade import GradeSignals, grade as _grade
 
 _HEADINGS = {
     "03-anatomy-at-risk.md": "Anatomy at Risk",
@@ -74,6 +77,7 @@ def _compile(
     corpus_inline: bool = False,
     corpus_eligible=frozenset(),
     provenance=None,
+    verifier=None,
 ) -> Dossier:
     """Core compiler shared by the build (3-section) and case (8-section) paths. The section
     set is data, not branches: `headings`/`order`/`intros_by_tf` parameterize the taxonomy;
@@ -87,6 +91,7 @@ def _compile(
     evidence = list(evidence or [])
     card_evidence = card_evidence or {}
     page_texts = page_texts or {}
+    v = verifier or LexicalVerifier()
     cards = list(audited_manifest.cards)
 
     # WS-2: ordered, de-duplicated corpus citations for inline [n] (case path only).
@@ -145,14 +150,32 @@ def _compile(
                 claim.figure_ids.append(fid)
             # WS-2: inline corpus [n] on the operative/technique/structures surfaces — each marker
             # resolves to a numbered Evidence Sources entry (no fabrication, [n] disjoint from [L#]).
+            # Only Auditor-accepted papers may anchor a citation; an off-target paper that merely
+            # sorted first must never become the source a [n] points at.
             if corpus_inline and tf in corpus_eligible:
+                hypothesis = f"{claim.text} {claim.why}".strip()
+                considered = 0
                 marks = []
-                for p in (getattr(c, "papers", None) or [])[:2]:
+                for p in accepted_papers(c)[:2]:
                     cite = (p.get("title") or "").strip() if isinstance(p, dict) else ""
-                    if cite:
+                    snippet = (p.get("text_snippet") or "") if isinstance(p, dict) else ""
+                    if not cite:
+                        continue
+                    considered += 1
+                    if should_cite(snippet, hypothesis, v):
                         marks.append(_cite_index(cite))
                 if marks:
                     claim.text = f"{claim.text} " + "".join(f"[{m}]" for m in marks)
+                elif considered:
+                    claim.status = "verify"   # had candidates but the gate withheld them all
+            # P2 #5: attach a fine evidence category alongside the coarse status. Additive —
+            # claim.status and EvidenceSummary counts are untouched, so renderers/counts don't
+            # regress; conflict/preference signals default off until their provenance is threaded.
+            claim.grade = _grade(GradeSignals(
+                audit_status=c.audit_status,
+                n_sources=len(accepted_papers(c)),
+                cited=claim.text.rstrip().endswith("]"),
+            ))
             claims.append(claim)
 
         if claims or figures:
@@ -183,6 +206,21 @@ def _compile(
     if citations:
         appendix_entries.append(AppendixEntry(heading="Evidence Sources", sources=citations))
 
+    # Rejected sources: papers the Auditor flagged as off-target (contradicting the case's
+    # clinical domain). They are deliberately kept OUT of the citations above and surfaced here
+    # so provenance is complete without ever lending a wrong-domain paper a citation.
+    rejected_titles: list[str] = []
+    for c in cards:
+        for p in rejected_papers(c):
+            # NB: use a distinct name — `title` is the dossier-title parameter; reusing it here
+            # clobbered the dossier title with the last rejected paper's title (cross-domain label leak).
+            rtitle = (p.get("title") or "").strip() if isinstance(p, dict) else ""
+            if rtitle and rtitle not in rejected_titles:
+                rejected_titles.append(rtitle)
+    if rejected_titles:
+        appendix_entries.append(
+            AppendixEntry(heading="Rejected Sources (off-target)", sources=rejected_titles))
+
     # #2 single evidence axis (no confidence); one clean partition
     summary = EvidenceSummary(
         supported=sum(1 for c in cards if c.audit_status == "supported"),
@@ -203,6 +241,7 @@ def compile_dossier(
     card_evidence=None,
     page_texts=None,
     provenance=None,
+    verifier=None,
 ) -> Dossier:
     """Build (3-section) compiler — unchanged behavior. Anatomy at Risk / Operative Plan /
     Risk and Rescue, titled "Case Board — <topic>"."""
@@ -210,7 +249,7 @@ def compile_dossier(
     return _compile(audited_manifest, title=title, headings=_HEADINGS, order=_ORDER,
                     intros_by_tf=_INTRO_BY_TF, evidence=evidence,
                     card_evidence=card_evidence, page_texts=page_texts,
-                    provenance=provenance)
+                    provenance=provenance, verifier=verifier)
 
 
 def compile_case_dossier(
@@ -221,6 +260,7 @@ def compile_case_dossier(
     card_evidence=None,
     page_texts=None,
     provenance=None,
+    verifier=None,
 ) -> Dossier:
     """Case (8-section) compiler — the eight surfaces of LOOP_PROMPT §0 in order, titled
     "Case Dossier — <case.to_topic()>". Same evidence axis, markers, dedup, and appendix as
@@ -232,4 +272,4 @@ def compile_case_dossier(
                     intros_by_tf=CASE_INTROS, evidence=evidence,
                     card_evidence=card_evidence, page_texts=page_texts,
                     corpus_inline=True, corpus_eligible=CORPUS_ELIGIBLE_FILES,
-                    provenance=provenance)
+                    provenance=provenance, verifier=verifier)

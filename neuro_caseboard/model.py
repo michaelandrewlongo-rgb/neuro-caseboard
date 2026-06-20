@@ -50,10 +50,11 @@ class FigureItem:
 class Claim:
     text: str                         # claim / question, scrubbed (#5: separate from why)
     why: str = ""                     # rationale, rendered on its own indented line (#5)
-    status: str = "supported"         # "supported" | "verify"
+    status: str = "supported"         # "supported" | "verify" (coarse marker; renderers consume)
     sub_items: list[str] = field(default_factory=list)   # checkbox sub-items (#6)
     figure_ids: list[str] = field(default_factory=list)  # linked figures (#7 cross-link)
     raw: str | None = None            # original source text used for dedup (#9)
+    grade: str = ""                   # fine evidence category (P2 #5, neuro_caseboard.evidence_grade)
 
     @property
     def dedup_text(self) -> str:

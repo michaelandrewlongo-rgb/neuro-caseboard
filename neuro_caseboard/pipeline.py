@@ -21,12 +21,13 @@ from caseprep.explorer.question_manifest import (
     _merge_cards,
 )
 from caseprep.enrichment.corpus_enricher import enrich_manifest
-from caseprep.audit.card_auditor import audit_manifest
+from caseprep.audit.card_auditor import audit_manifest, accepted_papers
 from caseprep.core.contracts import EvidenceRecord
 
 from neuro_caseboard.retrieve import build_retriever
 from neuro_caseboard.guard import prune_offtarget
-from neuro_caseboard.compile import compile_dossier
+from neuro_caseboard.compile import compile_dossier, compile_case_dossier
+from neuro_caseboard.entailment import get_default_verifier
 from neuro_caseboard.render_md import render_markdown
 from neuro_caseboard.render_pdf import render_pdf
 from neuro_caseboard.model import Provenance
@@ -79,7 +80,7 @@ def _deterministic_manifest(topic: str, profile: str):
     return QuestionManifest(procedure_family=key or profile or "generic", cards=cards)
 
 
-def _resolve_manifest(topic: str, *, use_llm=None):
+def _resolve_manifest(topic: str, *, use_llm=None, prefs=None):
     """Decide LLM-vs-deterministic and report provenance.
 
     The provenance reason is fixed HERE, at the decision point — never re-derived downstream
@@ -126,10 +127,14 @@ def _resolve_manifest(topic: str, *, use_llm=None):
             _log.warning("LLM Explorer fell back to the deterministic lane (reason=%s%s).",
                          reason, f", detail={detail}" if detail else "")
 
-    return prune_offtarget(manifest, topic), profile, provenance
+    pruned = prune_offtarget(manifest, topic)
+    if prefs:
+        from neuro_caseboard.preferences import apply_preferences
+        pruned = apply_preferences(pruned, profile, prefs)
+    return pruned, profile, provenance
 
 
-def build_manifest(topic: str, *, use_llm=None):
+def build_manifest(topic: str, *, use_llm=None, prefs=None):
     """Backward-compatible ``(manifest, profile)`` wrapper around :func:`_resolve_manifest`.
 
     Clinical depth comes from the LLM Explorer when a key is available; otherwise the
@@ -137,15 +142,18 @@ def build_manifest(topic: str, *, use_llm=None):
     Existing callers keep their 2-tuple; the dossier path uses ``_resolve_manifest`` directly
     for the provenance flag.
     """
-    manifest, profile, _prov = _resolve_manifest(topic, use_llm=use_llm)
+    manifest, profile, _prov = _resolve_manifest(topic, use_llm=use_llm, prefs=prefs)
     return manifest, profile
 
 
 def _sources_from_audited(audited, *, limit: int = 15):
+    # Only Auditor-accepted papers may become an exported source. ``c.papers`` also holds
+    # papers the Auditor flagged as off-target (``contradicting_paper_ids``) — exporting those
+    # leaks an off-target source even when the card itself was never quarantined.
     seen: set[str] = set()
     out: list[EvidenceRecord] = []
     for c in audited.cards:
-        for p in c.papers or []:
+        for p in accepted_papers(c):
             title = (p.get("title") or "").strip()
             if title and title not in seen:
                 seen.add(title)
@@ -217,11 +225,11 @@ def _figures_enabled() -> bool:
     return os.environ.get("CASEBOARD_TEXTBOOK_FIGURES", "1") != "0"
 
 
-def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
+def build_dossier(topic: str, *, enrich: bool = True, use_llm=None, prefs=None):
     """Run the full pipeline and return a compiled Dossier."""
-    manifest, _profile, provenance = _resolve_manifest(topic, use_llm=use_llm)
+    manifest, _profile, provenance = _resolve_manifest(topic, use_llm=use_llm, prefs=prefs)
     retriever = build_retriever() if enrich else None
-    enriched = enrich_manifest(manifest, topic=topic, retriever=retriever, top_n=3)
+    enriched = enrich_manifest(manifest, topic=topic, retriever=retriever, top_n=6)
     audited = audit_manifest(enriched, topic=topic)
     evidence = _sources_from_audited(audited)
     card_evidence, page_texts = ({}, {})
@@ -235,7 +243,7 @@ def build_dossier(topic: str, *, enrich: bool = True, use_llm=None):
 def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=None,
                        lit_client=None, lit_synth_client=None, lit_cache=None,
                        figures_dir=None, fig_complete_fn=None, retriever=None,
-                       fig_retriever=None):
+                       fig_retriever=None, prefs=None):
     """Case path: a CaseContext -> the 8-section case Dossier.
 
     Mirrors build_dossier but authors over the eight case surfaces (build_case_manifest) and
@@ -249,18 +257,20 @@ def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=No
     failure leaves those sections without a literature block and never affects the rest.
     """
     from neuro_caseboard.case_author import build_case_manifest, deterministic_case_manifest
-    from neuro_caseboard.compile import compile_case_dossier
 
     if use_llm is None:
         use_llm = llm_enabled()
     manifest = build_case_manifest(case) if use_llm else deterministic_case_manifest(case)
     topic = case.to_topic()
     manifest = prune_offtarget(manifest, topic)        # anti-bleed (LOOP_PROMPT §6)
+    if prefs:
+        from neuro_caseboard.preferences import apply_preferences
+        manifest = apply_preferences(manifest, classify_profile(topic), prefs)
 
     # WS-2: an injected retriever (tests / the quality gate) drives corpus enrichment
     # deterministically; otherwise build the real corpus retriever when enriching.
     retriever = retriever if retriever is not None else (build_retriever() if enrich else None)
-    enriched = enrich_manifest(manifest, topic=topic, retriever=retriever, top_n=3)
+    enriched = enrich_manifest(manifest, topic=topic, retriever=retriever, top_n=6)
     audited = audit_manifest(enriched, topic=topic)
     evidence = _sources_from_audited(audited)
     card_evidence, page_texts = ({}, {})
@@ -269,7 +279,8 @@ def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=No
         card_evidence, page_texts = _collect_figures(manifest, topic, retriever,
                                                      eligible_files=CASE_FIGURE_FILES)
     dossier = compile_case_dossier(audited, case=case, evidence=evidence,
-                                   card_evidence=card_evidence, page_texts=page_texts)
+                                   card_evidence=card_evidence, page_texts=page_texts,
+                                   verifier=get_default_verifier())
 
     if literature is None:
         from neuro_caseboard.literature.config import load_literature_config
@@ -320,7 +331,7 @@ def render_case_pdf(dossier, topic, path):
     """Render the case-board PDF — the single source of truth for every ``build`` pathway
     (CLI ``caseboard build --pdf`` and the Streamlit Build lane).
 
-    Default is the Executive-Navy design that matches the web console (``caseboard_pdf``,
+    Default is the Neo Brutalism design that matches the web console (``caseboard_pdf``,
     HTML->PDF via Playwright/Chromium). Falls back to the offline fpdf2 renderer when the exec
     renderer is unavailable (e.g. no Chromium in CI) or when ``CASEBOARD_PDF_STYLE=clinical`` is
     set. Returns the written path."""
@@ -334,7 +345,7 @@ def render_case_pdf(dossier, topic, path):
             if not _exec_renderer_unavailable(e):
                 raise  # a real bug in the exec renderer — surface it, don't mask it
             logging.getLogger(__name__).warning(
-                "Executive-Navy PDF renderer unavailable (%r); using the clinical fpdf2 "
+                "Neo Brutalism PDF renderer unavailable (%r); using the clinical fpdf2 "
                 "fallback.", e)
     art = render_pdf(dossier, path)
     return Path(art.path)
@@ -344,7 +355,7 @@ def render_ask_pdf(result, question, path):
     """Render the ask (Q&A) PDF — the single source of truth for every ``ask`` pathway
     (CLI ``caseboard ask --pdf`` and the Streamlit Ask lane).
 
-    Default is the Executive-Navy briefing that matches the web console (``briefing_pdf``,
+    Default is the Neo Brutalism briefing that matches the web console (``briefing_pdf``,
     HTML->PDF via Playwright/Chromium). Falls back to the offline fpdf2 renderer when the exec
     renderer is unavailable (e.g. no Chromium in CI) or when ``CASEBOARD_PDF_STYLE=clinical`` is
     set. Returns the written path."""
@@ -358,7 +369,7 @@ def render_ask_pdf(result, question, path):
             if not _exec_renderer_unavailable(e):
                 raise  # a real bug in the exec renderer — surface it, don't mask it
             logging.getLogger(__name__).warning(
-                "Executive-Navy ask PDF renderer unavailable (%r); using the clinical fpdf2 "
+                "Neo Brutalism ask PDF renderer unavailable (%r); using the clinical fpdf2 "
                 "fallback.", e)
     from neuro_caseboard.briefing_pdf import render_briefing_clinical_pdf
     render_briefing_clinical_pdf(result, path, title=question)
@@ -384,7 +395,7 @@ def generate_case(dictation: str, *, output_dir, pdf: bool = False, enrich: bool
     """Build the case dossier from a free-text dictation and write case-dossier.md
     (+ case-dossier.pdf) to output_dir, with generated schematics rendered into the same dir.
 
-    The PDF reuses ``render_case_pdf`` (Executive-Navy, fpdf2 fallback), so it carries the standing
+    The PDF reuses ``render_case_pdf`` (Neo Brutalism, fpdf2 fallback), so it carries the standing
     confidentiality/verify banner on every page. ``use_llm=False`` forces the deterministic intake +
     authors (offline). Returns ``(case, dossier, artifacts)``."""
     from neuro_caseboard.intake import parse_dictation, deterministic_parse

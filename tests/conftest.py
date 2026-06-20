@@ -13,3 +13,6 @@ def _literature_lane_off_by_default(monkeypatch):
     ``LiteratureConfig``, both of which bypass this env var.
     """
     monkeypatch.setenv("LITERATURE_RETRIEVAL", "false")
+    # Keep the suite hermetic: never auto-load a developer's local .env into the
+    # controlled test environment (config._load_dotenv_once honors this opt-out).
+    monkeypatch.setenv("NEURO_CASEBOARD_SKIP_DOTENV", "1")

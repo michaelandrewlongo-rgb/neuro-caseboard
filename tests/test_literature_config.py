@@ -9,7 +9,7 @@ def test_defaults_when_env_empty(monkeypatch):
     cfg = load_literature_config()
     assert cfg.enabled is True
     assert cfg.recency_years == 7
-    assert cfg.k == 8
+    assert cfg.k == 12
     assert cfg.cache_ttl_days == 14
     assert cfg.ncbi_api_key == ""
 

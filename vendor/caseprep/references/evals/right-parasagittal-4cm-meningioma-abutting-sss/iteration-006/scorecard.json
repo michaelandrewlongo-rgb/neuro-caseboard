@@ -1,0 +1,16 @@
+{
+  "iteration": 6,
+  "score": 88,
+  "verdict": "PASS",
+  "grade_basis": "evidence provenance cleanup and study-level quantitative takeaways for right parasagittal 4cm meningioma abutting SSS",
+  "overall_usefulness": "evidence section remains clinically useful and is clearer about curated-pack provenance versus live retrieval counts",
+  "evidence_usefulness": "quantitative study-level takeaways materially improve the section for operative planning, recurrence counseling frame, and venous-risk discussion",
+  "does_evidence_change_caseprep_usefulness": true,
+  "commit_appropriate": true,
+  "constraints_verified": {
+    "abutting_not_overcalled_as_invasion": true,
+    "no_mandatory_mep_ssep": true,
+    "no_large_sindou_matrix": true,
+    "curated_pack_provenance_in_provenance_json": true
+  }
+}
