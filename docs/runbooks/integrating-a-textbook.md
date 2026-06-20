@@ -46,12 +46,22 @@ stat -c%s "<source>/<book>.pdf" "$CORPUS_DIR/<book>.pdf"   # sizes must match
 
 ## Step 3 — Build the text index (system Python, GPU)
 
+**Preferred — append a single book (~1.5 min for a 500-page book):**
+```bash
+CORPUS_DIR=/home/michael/textbook_pdfs INDEX_DIR=/home/michael/neuro-textbook-rag/index \
+  python -m neuro_core.scripts.build_index --book "<stem>"
+```
+`--book` indexes only the named PDF stem and appends to existing tables (idempotent: re-running
+replaces that book's rows rather than duplicating them). `--new-only` instead indexes every PDF
+in `CORPUS_DIR` not already in the `chunks` table — useful after dropping in multiple new books.
+
+**Full rebuild (only if you need to re-embed the entire corpus):**
 ```bash
 CORPUS_DIR=/home/michael/textbook_pdfs python -m neuro_core.scripts.build_index
 ```
-Rebuilds the `chunks` table with `mode="overwrite"` (no duplication) and re-embeds the **whole**
-corpus (not incremental). Figure rendering skips already-rendered PNGs, so only the new book's
-pages render.
+Rebuilds the `chunks` table with `mode="overwrite"` and re-embeds the **whole** corpus. Figure
+rendering skips already-rendered PNGs, so only new pages render. Default (no flags) is always
+overwrite — don't use it just to add one book.
 
 ## Step 4 — Build the visual lane STANDALONE (critical)
 
