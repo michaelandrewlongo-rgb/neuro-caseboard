@@ -1,0 +1,6 @@
+# Error log — 1 non-completed record(s)
+
+## SPINE-02 — status=not_gradable attempts=1
+question: Should motion-preserving procedures—cervical or lumbar disc replacement, facet replacement, and tethering—replace fusion in selected patients?
+selected_variant: Cervical
+error_details: 'engine returned an empty/None answer'

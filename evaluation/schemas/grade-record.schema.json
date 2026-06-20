@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "neuro-caseboard/evaluation/grade-record",
+  "title": "Grade record",
+  "description": "One grading record per answer (JSONL), per the nsgy-grader.txt rubric.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "question_id", "score", "letter_grade", "clinical_usability", "reason",
+    "got_right", "minor_incompleteness", "important_inaccuracies",
+    "safety_critical_errors", "outdated_claims", "missing_content",
+    "overabsolute_claims", "evidence_anchors", "confidence"
+  ],
+  "properties": {
+    "question_id": {"type": "string"},
+    "question": {"type": "string"},
+    "score": {"type": ["integer", "null"], "minimum": 0, "maximum": 100},
+    "letter_grade": {"type": "string", "enum": ["A", "B", "C", "D", "F", "Not gradable"]},
+    "clinical_usability": {
+      "type": "string",
+      "enum": ["usable", "usable with correction", "not reliable", "unsafe", "not gradable"]
+    },
+    "reason": {"type": "string"},
+    "got_right": {"type": "array", "items": {"type": "string"}},
+    "minor_incompleteness": {"type": "array", "items": {"type": "string"}},
+    "important_inaccuracies": {"type": "array", "items": {"type": "string"}},
+    "safety_critical_errors": {"type": "array", "items": {"type": "string"}},
+    "outdated_claims": {"type": "array", "items": {"type": "string"}},
+    "missing_content": {"type": "array", "items": {"type": "string"}},
+    "overabsolute_claims": {"type": "array", "items": {"type": "string"}},
+    "evidence_anchors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {"type": "string"},
+          "url": {"type": ["string", "null"]},
+          "date": {"type": ["string", "null"]},
+          "access_date": {"type": ["string", "null"]},
+          "verification_status": {
+            "type": "string",
+            "enum": ["verified", "verification_unavailable", "contradicted"]
+          }
+        }
+      }
+    },
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "grader_model": {"type": ["string", "null"]},
+    "grader_prompt_hash": {"type": ["string", "null"]},
+    "grader_evidence_date": {"type": ["string", "null"]},
+    "grader_settings": {"type": ["object", "null"]},
+    "raw_grader_output": {"type": ["string", "null"]}
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "n": 67,
+  "completion_rate": 0.9851,
+  "status_counts": {
+    "completed": 66,
+    "not_gradable": 1
+  },
+  "latency_overall": {
+    "min": 30.6,
+    "max": 135.9,
+    "mean": 54.8,
+    "median": 47.0,
+    "p95": 99.6,
+    "total_minutes": 61.2
+  },
+  "latency_by_domain": {
+    "Brain Tumor Surgery": {
+      "n": 9,
+      "median": 47.4,
+      "max": 70.9
+    },
+    "Functional Neurosurgery": {
+      "n": 10,
+      "median": 44.1,
+      "max": 62.7
+    },
+    "General Neurosurgery": {
+      "n": 11,
+      "median": 48.2,
+      "max": 99.6
+    },
+    "Neurointerventional Surgery": {
+      "n": 8,
+      "median": 79.5,
+      "max": 135.9
+    },
+    "Open Cerebrovascular Surgery": {
+      "n": 10,
+      "median": 49.2,
+      "max": 104.0
+    },
+    "Spine Surgery": {
+      "n": 9,
+      "median": 47.0,
+      "max": 81.9
+    },
+    "Trauma Neurosurgery": {
+      "n": 10,
+      "median": 40.8,
+      "max": 87.3
+    }
+  },
+  "disambiguations": 6
+}
