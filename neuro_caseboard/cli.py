@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from neuro_caseboard.pipeline import generate, generate_case, render_ask_pdf, _slug
+from neuro_caseboard.model import fallback_notice
 
 
 def _answer_question(question, force=False):
@@ -62,6 +63,11 @@ def _run_build(args) -> int:
     print(f"  {len(dossier.sections)} sections · "
           f"{s.supported} corpus-supported · {s.to_verify} to verify · "
           f"{s.quarantined} quarantined")
+    prov = dossier.provenance
+    print(f"  Explorer: {prov.source_label}")
+    notice = fallback_notice(prov)
+    if notice:
+        print(f"  ⚠ {notice}")
     return 0
 
 

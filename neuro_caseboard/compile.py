@@ -18,6 +18,7 @@ from neuro_caseboard.model import (
     Dossier,
     EvidenceSummary,
     FigureItem,
+    Provenance,
     Section,
 )
 from neuro_caseboard.textops import scrub_question, split_compound
@@ -75,6 +76,7 @@ def _compile(
     page_texts=None,
     corpus_inline: bool = False,
     corpus_eligible=frozenset(),
+    provenance=None,
     verifier=None,
 ) -> Dossier:
     """Core compiler shared by the build (3-section) and case (8-section) paths. The section
@@ -227,7 +229,8 @@ def _compile(
     )
 
     return Dossier(title=title, summary=summary, sections=sections,
-                   appendix=Appendix(entries=appendix_entries))
+                   appendix=Appendix(entries=appendix_entries),
+                   provenance=provenance or Provenance())
 
 
 def compile_dossier(
@@ -237,6 +240,7 @@ def compile_dossier(
     evidence=None,
     card_evidence=None,
     page_texts=None,
+    provenance=None,
     verifier=None,
 ) -> Dossier:
     """Build (3-section) compiler — unchanged behavior. Anatomy at Risk / Operative Plan /
@@ -245,7 +249,7 @@ def compile_dossier(
     return _compile(audited_manifest, title=title, headings=_HEADINGS, order=_ORDER,
                     intros_by_tf=_INTRO_BY_TF, evidence=evidence,
                     card_evidence=card_evidence, page_texts=page_texts,
-                    verifier=verifier)
+                    provenance=provenance, verifier=verifier)
 
 
 def compile_case_dossier(
@@ -255,6 +259,7 @@ def compile_case_dossier(
     evidence=None,
     card_evidence=None,
     page_texts=None,
+    provenance=None,
     verifier=None,
 ) -> Dossier:
     """Case (8-section) compiler — the eight surfaces of LOOP_PROMPT §0 in order, titled
@@ -267,4 +272,4 @@ def compile_case_dossier(
                     intros_by_tf=CASE_INTROS, evidence=evidence,
                     card_evidence=card_evidence, page_texts=page_texts,
                     corpus_inline=True, corpus_eligible=CORPUS_ELIGIBLE_FILES,
-                    verifier=verifier)
+                    provenance=provenance, verifier=verifier)

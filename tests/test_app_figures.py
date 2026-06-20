@@ -95,6 +95,7 @@ def test_app_boots_headlessly_after_refactor():
 # (the fakes return lightweight objects pointing at a real temp PNG).
 
 import types  # noqa: E402
+from neuro_caseboard.model import Provenance  # noqa: E402
 
 APP_PY = str(APP_DIR / "streamlit_app.py")
 
@@ -142,7 +143,8 @@ def _install_fake_engine(monkeypatch, img: str):
     # Build + Case lanes: build_dossier / build_case_dossier -> dossier; board_view -> view
     monkeypatch.setattr(
         pipeline, "build_dossier",
-        lambda *a, **k: types.SimpleNamespace(sections=[]), raising=True)
+        lambda *a, **k: types.SimpleNamespace(sections=[], provenance=Provenance()),
+        raising=True)
     monkeypatch.setattr(
         pipeline, "build_case_dossier",
         lambda *a, **k: types.SimpleNamespace(

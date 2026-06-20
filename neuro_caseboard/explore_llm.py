@@ -23,6 +23,7 @@ Any failure degrades gracefully (ontology floor for the plan; draft kept if crit
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 
@@ -42,6 +43,8 @@ _SLOTS_BY_FILE = {
     "04-operative-plan.md": _OPERATIVE_SLOTS,
     "05-risk-and-rescue.md": _RISK_SLOTS,
 }
+
+_log = logging.getLogger(__name__)
 
 _ANTHROPIC_DEFAULT = "claude-opus-4-8"
 _OPENROUTER_AUTHOR = "openai/gpt-4o"       # cheap, big-token author call
@@ -425,9 +428,21 @@ def author_cards(topic: str, themes: list[str], author_fn):
             f"for EACH theme):\n{checklist}")
     try:
         raw = json.loads(_extract_json(author_fn(_AUTHOR_SYSTEM, user)))
-    except Exception:
+    except Exception as exc:
+        _log.warning("author stage could not parse model output (%s); the LLM Explorer "
+                     "will fall back to the deterministic lane.", type(exc).__name__)
         return None
-    return _coerce_cards(raw)
+    raw_count = len(raw.get("cards", []) or [])
+    cards = _coerce_cards(raw)
+    dropped = raw_count - len(cards)
+    if raw_count and dropped:
+        # A high drop rate after a successful call is the schema/vocabulary-drift signature
+        # (cards rejected by _coerce_cards), distinct from a model outage. PHI-safe: counts
+        # only — never card text. No control-flow change: we still return `cards`.
+        level = logging.WARNING if (len(cards) < _MIN_CARDS <= raw_count) else logging.DEBUG
+        _log.log(level, "author stage: %d/%d cards rejected by schema coercion "
+                 "(kept %d, min %d).", dropped, raw_count, len(cards), _MIN_CARDS)
+    return cards
 
 
 def _apply_fixes(cards, fixes):
