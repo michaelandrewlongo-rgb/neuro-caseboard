@@ -1,6 +1,7 @@
 import { useState } from "react"
 import type { ReactNode } from "react"
 import type { Dossier, DossierClaim, DossierFigure, DossierSection } from "@/lib/api"
+import { summarizeDossier } from "@/lib/quant"
 
 export type ClaimMark = "wrong" | "important"
 export type ClaimFilter = "all" | "supported" | "verify" | "quarantine"
@@ -446,6 +447,12 @@ export default function DossierView({
   const appendix = dossier.appendix.entries
   const railEmpty = allFigures.length === 0 && allCrossRefs.length === 0 && appendix.length === 0
 
+  // BACKLOG P5 #15: quantitative outcome summary — numbers literally present in the dossier's
+  // claims (rates, denominators, CIs, p-values, follow-up). Never fabricated.
+  const { metrics: quantMetrics, counts: quantCounts } = summarizeDossier(
+    dossier.sections.flatMap((s) => s.claims.map((c) => `${c.text} ${c.why}`)),
+  )
+
   return (
     <div
       className="grid gap-6"
@@ -453,6 +460,28 @@ export default function DossierView({
     >
       {/* ── Main column: section cards ── */}
       <div className="flex min-w-0 flex-col gap-4">
+        {/* By the numbers — quantitative outcome summary (P5 #15) */}
+        {quantMetrics.length > 0 && (
+          <section className="surface p-4" aria-label="Quantitative outcome summary">
+            <p className="eyebrow mb-2">By the numbers</p>
+            <p className="mb-3 font-mono text-[11px] text-muted-foreground">
+              {Object.entries(quantCounts)
+                .map(([k, n]) => `${k}: ${n}`)
+                .join("  ·  ")}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {quantMetrics.map((m, i) => (
+                <span
+                  key={i}
+                  className="rounded-md px-2 py-0.5 font-mono text-xs font-semibold"
+                  style={{ background: "rgba(63,150,144,.12)", color: "#6fc0b8" }}
+                >
+                  {m.value}
+                </span>
+              ))}
+            </div>
+          </section>
+        )}
         {dossier.sections.map((s, i) => (
           <SectionCard key={i} section={s} sectionIdx={i} r={r} filter={filter} />
         ))}
