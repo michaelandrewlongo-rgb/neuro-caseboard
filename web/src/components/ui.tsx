@@ -50,11 +50,12 @@ export function Button({
 }
 
 // ---- Badge / status chip --------------------------------------------------------------------
-// Black text on the saturated fills (green/amber/red) clears WCAG AA; blue needs white.
+// Bright DTI fills (green/amber/red) carry near-black text per the two-token contrast model;
+// the neutral tone is a dark panel with light text.
 const BADGE_TONES = {
-  success: "bg-success text-foreground",
-  amber: "bg-amber text-foreground",
-  signal: "bg-primary text-foreground",
+  success: "bg-success text-[#0a0a0a]",
+  amber: "bg-amber text-[#0a0a0a]",
+  signal: "bg-signal text-[#0a0a0a]",
   accent: "bg-accent text-accent-foreground",
   neutral: "bg-card text-foreground",
 } as const
@@ -94,13 +95,13 @@ export function Eyebrow({
   children: ReactNode
   accent?: boolean
 }) {
-  return <p className={cn("eyebrow", accent && "!text-[#ff7363]", className)}>{children}</p>
+  return <p className={cn("eyebrow", accent && "!text-[#6b93ff]", className)}>{children}</p>
 }
 
 // ---- Stat (metric) --------------------------------------------------------------------------
 const STAT_VALUE_TONES = {
-  success: "text-[#74c084]",   /* sage bright — on-dark */
-  amber: "text-[#e0a86a]",     /* ochre on-dark */
+  success: "text-[#34e07f]",   /* sage bright — on-dark */
+  amber: "text-[#ffc94d]",     /* ochre on-dark */
   signal: "text-destructive",  /* brick/critical */
   accent: "text-accent",
   neutral: "text-foreground",

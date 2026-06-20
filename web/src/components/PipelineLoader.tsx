@@ -30,7 +30,7 @@ export default function PipelineLoader({
       {/* Teal mono eyebrow */}
       <p
         className="mb-3 font-mono text-[10px] font-bold uppercase tracking-[0.18em]"
-        style={{ color: "#6fc0b8" }}
+        style={{ color: "#6b93ff" }}
         aria-hidden
       >
         Processing · Pipeline
@@ -41,8 +41,8 @@ export default function PipelineLoader({
         <span
           className="inline-block h-2 w-2 shrink-0 rounded-full"
           style={{
-            background: "#d8413a",
-            boxShadow: "0 0 8px rgba(216,65,58,.7)",
+            background: "#6b93ff",
+            boxShadow: "0 0 8px rgba(107,147,255,.7)",
             animation: "pulse 2.4s ease-in-out infinite",
           }}
           aria-hidden
