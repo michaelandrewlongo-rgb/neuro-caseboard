@@ -4,9 +4,9 @@ import { splitCitations, PROVENANCE_LABEL, type Provenance } from "@/lib/provena
 // Distinct pill colours by provenance: teal = textbook corpus [n], plum = PubMed [L#],
 // ochre = personal card [C#]. Each pill links to its matching source-list entry (jump-to-source).
 const PILL_STYLE: Record<Provenance, { background: string; color: string }> = {
-  textbook: { background: "rgba(63,150,144,.12)", color: "#6fc0b8" },
-  literature: { background: "rgba(150,120,170,.15)", color: "#c4b0d8" },
-  card: { background: "rgba(200,150,90,.15)", color: "#d8b074" },
+  textbook: { background: "rgba(107,147,255,.12)", color: "#6b93ff" },
+  literature: { background: "rgba(255,102,216,.15)", color: "#ff8fe2" },
+  card: { background: "rgba(255,201,77,.15)", color: "#ffc94d" },
 }
 
 function chipify(text: string): ReactNode[] {

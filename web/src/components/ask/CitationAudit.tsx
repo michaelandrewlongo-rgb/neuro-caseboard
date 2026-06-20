@@ -29,14 +29,14 @@ export function CitationAudit({ citations, literature }: CitationAuditProps) {
     {
       r: 68,
       frac: total > 0 ? grounded / total : 0,
-      color: "#5fa86f",
-      glow: "#5fa86f",
+      color: "#34e07f",
+      glow: "#34e07f",
     },
     {
       r: 50,
       frac: total > 0 ? toLit / total : 0,
-      color: "#d89a3f",
-      glow: "#d89a3f",
+      color: "#ffc94d",
+      glow: "#ffc94d",
     },
   ]
 
@@ -44,7 +44,7 @@ export function CitationAudit({ citations, literature }: CitationAuditProps) {
     <div className="surface p-5 flex flex-col gap-4" aria-label="Citation audit">
       <p
         className="font-mono text-[11px] font-bold uppercase tracking-[0.18em]"
-        style={{ color: "#ff7363" }}
+        style={{ color: "#6b93ff" }}
       >
         Citation Audit
       </p>
@@ -54,13 +54,13 @@ export function CitationAudit({ citations, literature }: CitationAuditProps) {
             <div className="flex flex-col items-center">
               <span
                 className="tnum font-mono text-[17px] font-bold leading-none"
-                style={{ color: "#f1ece6" }}
+                style={{ color: "#ededed" }}
               >
                 {grounded}/{total}
               </span>
               <span
                 className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.18em]"
-                style={{ color: "#978d86" }}
+                style={{ color: "#8a8a8a" }}
               >
                 GROUNDED
               </span>
@@ -71,25 +71,25 @@ export function CitationAudit({ citations, literature }: CitationAuditProps) {
           <div className="flex items-center gap-2">
             <span
               className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
-              style={{ background: "#5fa86f", boxShadow: "0 0 6px #5fa86f" }}
+              style={{ background: "#34e07f", boxShadow: "0 0 6px #34e07f" }}
             />
-            <span className="font-mono text-[10px] uppercase tracking-[0.12em]" style={{ color: "#a79e98" }}>
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em]" style={{ color: "#a8a8a8" }}>
               Corpus ({grounded})
             </span>
           </div>
           <div className="flex items-center gap-2">
             <span
               className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
-              style={{ background: "#d89a3f", boxShadow: "0 0 6px #d89a3f" }}
+              style={{ background: "#ffc94d", boxShadow: "0 0 6px #ffc94d" }}
             />
-            <span className="font-mono text-[10px] uppercase tracking-[0.12em]" style={{ color: "#a79e98" }}>
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em]" style={{ color: "#a8a8a8" }}>
               Literature ({toLit})
             </span>
           </div>
           {total === 0 && (
             <p
               className="mt-1 font-mono text-[9px] uppercase tracking-[0.1em]"
-              style={{ color: "#766a64" }}
+              style={{ color: "#666666" }}
             >
               No citations in response
             </p>

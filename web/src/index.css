@@ -2,41 +2,43 @@
 @import "tailwindcss";
 
 /* ============================================================================================
-   "Grounded Anatomical" — Dark premium clinical-telemetry theme.
-   Warm charcoal ground (#0e0b0c) with anatomical palette:
-   arterial crimson · venous teal · tissue ochre · clinical sage · muted plum.
-   Geist (display/UI) + JetBrains Mono (labels/data/mono). Rounded corners.
+   "Neurosurgery·Signal" — Pure-black clinical-telemetry theme.
+   Black ground (#000) with #0a0a0a panels and the DTI-spectrum accent set:
+   blue (#6b93ff corpus/accent) · cyan (#34dfe6 active) · green (#34e07f supported) ·
+   amber (#ffc94d to-verify) · red (#ff5a5a quarantined) · magenta (#ff66d8 decks/lit).
+   Primary action is neutral white (#ededed); danger is red — the two were conflated as
+   crimson in the prior theme and are now split. Geist (display/UI) + Geist Mono (labels/data).
    ============================================================================================ */
 @theme {
   --font-sans: "Geist", system-ui, sans-serif;
   --font-display: "Geist", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
 
-  /* Grounded Anatomical dark palette — exact hex */
-  --color-background: #0e0b0c;
-  --color-foreground: #f1ece6;
-  --color-card: #14100f;            /* solid fallback; real cards use the glass gradient */
-  --color-card-foreground: #f1ece6;
-  --color-popover: #14100f;
-  --color-popover-foreground: #f1ece6;
-  --color-primary: #d8413a;         /* arterial crimson */
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #3f9690;       /* venous teal */
-  --color-secondary-foreground: #04110f;
-  --color-accent: #d89a3f;          /* tissue ochre */
-  --color-accent-foreground: #0e0b0c;
+  /* Neurosurgery·Signal dark palette — exact hex */
+  --color-background: #000000;
+  --color-foreground: #ededed;
+  --color-card: #0a0a0a;            /* solid panel; telemetry panels use this flat */
+  --color-card-foreground: #ededed;
+  --color-popover: #0a0a0a;
+  --color-popover-foreground: #ededed;
+  --color-primary: #ededed;         /* neutral/white primary action (Ask/Search/Rehearse) */
+  --color-primary-foreground: #0a0a0a;
+  --color-secondary: #6b93ff;       /* DTI blue — corpus accent, eyebrows, links */
+  --color-secondary-foreground: #04060f;
+  --color-accent: #ffc94d;          /* amber — to-verify */
+  --color-accent-foreground: #0a0a0a;
   --color-muted: rgba(255,255,255,0.04);
-  --color-muted-foreground: #978d86;
-  --color-destructive: #c0564f;
-  --color-destructive-foreground: #ffffff;
+  --color-muted-foreground: #8a8a8a;
+  --color-destructive: #ff5a5a;
+  --color-destructive-foreground: #0a0a0a;
   --color-border: rgba(255,255,255,0.09);
   --color-input: rgba(255,255,255,0.09);
-  --color-ring: #d8413a;
+  --color-ring: #6b93ff;
 
   /* Status semantics */
-  --color-success: #5fa86f;         /* supported / good */
-  --color-amber:   #d89a3f;         /* to-verify */
-  --color-signal:  #c0564f;         /* quarantined / destructive / brick */
+  --color-success: #34e07f;         /* supported / good */
+  --color-amber:   #ffc94d;         /* to-verify */
+  --color-signal:  #ff5a5a;         /* quarantined / destructive / red */
 
   /* Rounded corners — old theme forced squares; these replace the zero-radius overrides */
   --radius-sm: 8px;
@@ -56,22 +58,18 @@
   }
   body {
     margin: 0;
+    /* Flat pure-black console ground — the DTI glow lives only on the landing hero */
     background-color: var(--color-background);
-    /* Ambient radial glows: crimson · teal · ochre */
-    background-image:
-      radial-gradient(ellipse 80vw 60vh at 20% 10%, rgba(190,45,50,.13), transparent),
-      radial-gradient(ellipse 70vw 55vh at 80% 90%, rgba(60,120,116,.08), transparent),
-      radial-gradient(ellipse 60vw 50vh at 60% 40%, rgba(175,120,55,.06), transparent);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
   ::selection {
-    background: rgba(216,65,58,.28);
+    background: rgba(107,147,255,.30);
     color: #fff;
   }
-  /* Crimson focus ring */
+  /* Blue focus ring */
   :where(a, button, input, [tabindex]):focus-visible {
     outline: 2px solid var(--color-ring);
     outline-offset: 2px;
@@ -94,8 +92,8 @@
   }
   .site-header {
     border-bottom: 1px solid rgba(255,255,255,.07);
-    background: rgba(14,11,12,.8);
-    backdrop-filter: blur(14px);
+    background: rgba(0,0,0,.55);
+    backdrop-filter: blur(18px);
   }
   /* Form input */
   .field {

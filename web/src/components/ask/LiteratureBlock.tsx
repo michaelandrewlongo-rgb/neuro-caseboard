@@ -4,14 +4,14 @@ import { citify } from "@/lib/citations"
 import type { Literature } from "@/lib/api"
 
 // Muted plum — contemporary-literature lane accent (per design: only surface that uses plum).
-const PLUM = "#a98bc4"
-const PLUM_BRIGHT = "#c4b0d8"
-const PLUM_BORDER = "rgba(150,120,170,.22)"
-const PLUM_BG = "rgba(150,120,170,.08)"
+const PLUM = "#ff66d8"
+const PLUM_BRIGHT = "#ff8fe2"
+const PLUM_BORDER = "rgba(255,102,216,.22)"
+const PLUM_BG = "rgba(255,102,216,.08)"
 
 const components: Components = {
   p: ({ children }) => (
-    <p className="my-3" style={{ fontSize: "15px", lineHeight: "1.72", color: "#ece7e1" }}>
+    <p className="my-3" style={{ fontSize: "15px", lineHeight: "1.72", color: "#ededed" }}>
       {citify(children)}
     </p>
   ),
@@ -53,7 +53,7 @@ export default function LiteratureBlock({ literature }: { literature: Literature
                 [L{c.n}]
               </span>
               <span className="leading-snug text-muted-foreground">
-                <span style={{ color: "#ece7e1" }}>{c.title}</span> — {c.journal}
+                <span style={{ color: "#ededed" }}>{c.title}</span> — {c.journal}
                 {c.year ? ` ${c.year}` : ""}
                 {" · "}
                 <a

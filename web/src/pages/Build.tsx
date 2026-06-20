@@ -258,7 +258,7 @@ export default function Build() {
           >
             <p
               className="mb-2 font-mono text-[9px] font-bold uppercase tracking-[0.22em]"
-              style={{ color: "#6fc0b8" }}
+              style={{ color: "#6b93ff" }}
             >
               ACTIVE CASEBOARD · PRE-OP DOSSIER · v3
             </p>
@@ -266,7 +266,7 @@ export default function Build() {
               <div className="flex min-w-0 flex-col gap-2">
                 <h2
                   className="font-display text-2xl font-bold leading-tight"
-                  style={{ color: "#f1ece6" }}
+                  style={{ color: "#ededed" }}
                 >
                   {resp.dossier.title}
                 </h2>
@@ -276,9 +276,9 @@ export default function Build() {
                     style={{
                       padding: "3px 10px",
                       borderRadius: "999px",
-                      background: "rgba(63,150,144,.12)",
-                      color: "#6fc0b8",
-                      border: "1px solid rgba(63,150,144,.22)",
+                      background: "rgba(107,147,255,.12)",
+                      color: "#6b93ff",
+                      border: "1px solid rgba(107,147,255,.22)",
                     }}
                   >
                     {resp.topic}
@@ -289,7 +289,7 @@ export default function Build() {
                       padding: "3px 10px",
                       borderRadius: "999px",
                       background: "rgba(255,255,255,.06)",
-                      color: "#a79e98",
+                      color: "#a8a8a8",
                       border: "1px solid rgba(255,255,255,.09)",
                     }}
                   >
@@ -307,7 +307,7 @@ export default function Build() {
                     padding: "7px 15px",
                     borderRadius: "9px",
                     background: "transparent",
-                    color: pdfLoading ? "#766a64" : "#a79e98",
+                    color: pdfLoading ? "#666666" : "#a8a8a8",
                     border: "1px solid rgba(255,255,255,.15)",
                     cursor: pdfLoading ? "default" : "pointer",
                   }}
@@ -321,13 +321,11 @@ export default function Build() {
                   style={{
                     padding: "7px 15px",
                     borderRadius: "9px",
-                    background: rehearsal
-                      ? "rgba(216,65,58,.18)"
-                      : "linear-gradient(135deg,#d8413a,#ff7363)",
-                    color: "#fff",
-                    border: rehearsal ? "1px solid rgba(216,65,58,.35)" : "none",
+                    background: rehearsal ? "rgba(255,255,255,.08)" : "#ededed",
+                    color: rehearsal ? "#ededed" : "#0a0a0a",
+                    border: rehearsal ? "1px solid rgba(255,255,255,.18)" : "none",
                     cursor: "pointer",
-                    boxShadow: rehearsal ? "none" : "0 6px 22px rgba(216,65,58,.32)",
+                    boxShadow: rehearsal ? "none" : "0 6px 22px rgba(0,0,0,.45)",
                   }}
                 >
                   {rehearsal ? "Exit Rehearsal" : "Rehearse"}
@@ -338,7 +336,7 @@ export default function Build() {
 
           {/* PDF error */}
           {pdfError && (
-            <span className="text-xs" style={{ color: "#c0564f" }}>
+            <span className="text-xs" style={{ color: "#ff5a5a" }}>
               {pdfError}
             </span>
           )}
@@ -372,20 +370,20 @@ export default function Build() {
             >
               <p
                 className="font-mono text-[9px] font-bold uppercase tracking-[0.18em]"
-                style={{ color: "#897d77" }}
+                style={{ color: "#8a8a8a" }}
               >
                 Risk Topology
               </p>
               <div className="flex flex-1 flex-col items-center justify-center gap-2 py-6 text-center">
                 <span
                   className="font-mono text-[9px] font-bold uppercase tracking-[0.14em]"
-                  style={{ color: "#766a64" }}
+                  style={{ color: "#666666" }}
                 >
                   Not available
                 </span>
                 <p
                   className="max-w-[16ch] text-[11px] leading-relaxed"
-                  style={{ color: "#897d77" }}
+                  style={{ color: "#8a8a8a" }}
                 >
                   No risk-topology data from engine
                 </p>
@@ -404,7 +402,7 @@ export default function Build() {
             >
               <p
                 className="font-mono text-[9px] font-bold uppercase tracking-[0.18em]"
-                style={{ color: "#6fc0b8" }}
+                style={{ color: "#6b93ff" }}
               >
                 Evidence Integrity
               </p>
@@ -415,33 +413,33 @@ export default function Build() {
                     {
                       r: 54,
                       frac: claimTotal > 0 ? resp.dossier.summary.supported / claimTotal : 0,
-                      color: "#5fa86f",
-                      glow: "#5fa86f",
+                      color: "#34e07f",
+                      glow: "#34e07f",
                     },
                     {
                       r: 40,
                       frac: claimTotal > 0 ? resp.dossier.summary.to_verify / claimTotal : 0,
-                      color: "#d89a3f",
-                      glow: "#d89a3f",
+                      color: "#ffc94d",
+                      glow: "#ffc94d",
                     },
                     {
                       r: 26,
                       frac: claimTotal > 0 ? resp.dossier.summary.quarantined / claimTotal : 0,
-                      color: "#c0564f",
-                      glow: "#c0564f",
+                      color: "#ff5a5a",
+                      glow: "#ff5a5a",
                     },
                   ]}
                 >
                   <div className="text-center">
                     <span
                       className="font-display text-2xl font-bold"
-                      style={{ color: "#f1ece6" }}
+                      style={{ color: "#ededed" }}
                     >
                       {claimTotal}
                     </span>
                     <p
                       className="font-mono text-[8px] uppercase tracking-[0.18em]"
-                      style={{ color: "#897d77" }}
+                      style={{ color: "#8a8a8a" }}
                     >
                       CLAIMS
                     </p>
@@ -450,17 +448,17 @@ export default function Build() {
                 <div className="flex flex-col gap-1.5">
                   {[
                     {
-                      color: "#5fa86f",
+                      color: "#34e07f",
                       label: "Supported",
                       count: resp.dossier.summary.supported,
                     },
                     {
-                      color: "#d89a3f",
+                      color: "#ffc94d",
                       label: "Verify",
                       count: resp.dossier.summary.to_verify,
                     },
                     {
-                      color: "#c0564f",
+                      color: "#ff5a5a",
                       label: "Quarantine",
                       count: resp.dossier.summary.quarantined,
                     },
@@ -471,9 +469,9 @@ export default function Build() {
                         aria-hidden="true"
                         style={{ background: color, boxShadow: `0 0 6px ${color}` }}
                       />
-                      <span className="text-[11px]" style={{ color: "#a79e98" }}>
+                      <span className="text-[11px]" style={{ color: "#a8a8a8" }}>
                         {label}{" "}
-                        <span className="font-mono font-bold" style={{ color: "#f1ece6" }}>
+                        <span className="font-mono font-bold" style={{ color: "#ededed" }}>
                           {count}
                         </span>
                       </span>
@@ -525,16 +523,16 @@ export default function Build() {
                 style={{
                   padding: "5px 12px",
                   borderRadius: "8px",
-                  background: filterActive === key ? "rgba(63,150,144,.18)" : "transparent",
-                  color: filterActive === key ? "#6fc0b8" : "#897d77",
-                  border: `1px solid ${filterActive === key ? "rgba(63,150,144,.35)" : "transparent"}`,
+                  background: filterActive === key ? "rgba(107,147,255,.18)" : "transparent",
+                  color: filterActive === key ? "#6b93ff" : "#8a8a8a",
+                  border: `1px solid ${filterActive === key ? "rgba(107,147,255,.35)" : "transparent"}`,
                   cursor: "pointer",
                 }}
               >
                 {label}{" "}
                 <span
                   className="font-mono"
-                  style={{ color: filterActive === key ? "#6fc0b8" : "#766a64" }}
+                  style={{ color: filterActive === key ? "#6b93ff" : "#666666" }}
                 >
                   ({count})
                 </span>
