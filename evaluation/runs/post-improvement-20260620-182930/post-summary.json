@@ -1,0 +1,127 @@
+{
+  "n_graded": 67,
+  "n_run_records": 67,
+  "overall_score": {
+    "n": 66,
+    "mean": 79.36,
+    "median": 82.0,
+    "stddev": 6.77
+  },
+  "grade_distribution": {
+    "A": 0,
+    "B": 44,
+    "C": 19,
+    "D": 3,
+    "F": 0,
+    "Not gradable": 1
+  },
+  "completion_rate": 0.9851,
+  "error_rate": 0.0149,
+  "unsafe_answer_count": 0,
+  "latency": {
+    "median": 47.0,
+    "p95": 99.6
+  },
+  "evidence_verification": {
+    "total_evidence_anchors": 197,
+    "verified": 0,
+    "verification_unavailable": 197,
+    "verified_fraction": 0.0
+  },
+  "by_domain": {
+    "Brain Tumor Surgery": {
+      "score": {
+        "n": 9,
+        "mean": 79.78,
+        "median": 82,
+        "stddev": 4.16
+      },
+      "grade_distribution": {
+        "B": 6,
+        "C": 3
+      },
+      "unsafe": 0
+    },
+    "Functional Neurosurgery": {
+      "score": {
+        "n": 10,
+        "mean": 76.2,
+        "median": 80.0,
+        "stddev": 9.31
+      },
+      "grade_distribution": {
+        "B": 6,
+        "C": 2,
+        "D": 2
+      },
+      "unsafe": 0
+    },
+    "General Neurosurgery": {
+      "score": {
+        "n": 11,
+        "mean": 77.45,
+        "median": 82,
+        "stddev": 7.69
+      },
+      "grade_distribution": {
+        "B": 6,
+        "C": 5
+      },
+      "unsafe": 0
+    },
+    "Neurointerventional Surgery": {
+      "score": {
+        "n": 8,
+        "mean": 78.5,
+        "median": 82.0,
+        "stddev": 6.75
+      },
+      "grade_distribution": {
+        "B": 5,
+        "C": 3
+      },
+      "unsafe": 0
+    },
+    "Open Cerebrovascular Surgery": {
+      "score": {
+        "n": 10,
+        "mean": 83.9,
+        "median": 85.0,
+        "stddev": 3.56
+      },
+      "grade_distribution": {
+        "B": 9,
+        "C": 1
+      },
+      "unsafe": 0
+    },
+    "Spine Surgery": {
+      "score": {
+        "n": 8,
+        "mean": 81.5,
+        "median": 82.5,
+        "stddev": 3.46
+      },
+      "grade_distribution": {
+        "B": 6,
+        "C": 2,
+        "Not gradable": 1
+      },
+      "unsafe": 0
+    },
+    "Trauma Neurosurgery": {
+      "score": {
+        "n": 10,
+        "mean": 78.7,
+        "median": 80.5,
+        "stddev": 6.1
+      },
+      "grade_distribution": {
+        "B": 6,
+        "C": 3,
+        "D": 1
+      },
+      "unsafe": 0
+    }
+  }
+}
