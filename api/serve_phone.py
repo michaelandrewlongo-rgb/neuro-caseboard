@@ -27,9 +27,13 @@ def parse_hostname_i(output: str) -> list[str]:
     """Extract IPv4 addresses from the space-separated output of `hostname -I`."""
     out: list[str] = []
     for tok in output.split():
-        # IPv4 = four dot-separated decimal octets; this drops IPv6 (which contain ':').
+        # IPv4 = four dot-separated decimal octets in 0-255; drops IPv6 (which contain ':').
         parts = tok.split(".")
-        if len(parts) == 4 and all(p.isdigit() for p in parts):
+        if (
+            len(parts) == 4
+            and all(p.isdigit() for p in parts)
+            and all(0 <= int(p) <= 255 for p in parts)
+        ):
             out.append(tok)
     return out
 
@@ -47,8 +51,17 @@ def phone_urls(ips: list[str], port: int) -> list[str]:
 
 
 def uvicorn_argv(host: str, port: int, app: str = APP) -> list[str]:
-    """argv for launching uvicorn bound to `host`."""
-    return ["uvicorn", app, "--host", host, "--port", str(port)]
+    """argv for launching uvicorn bound to `host`.
+
+    Uses `sys.executable -m uvicorn` so it works even when the `uvicorn` console
+    script is not on PATH (os.execvp would otherwise raise FileNotFoundError).
+    """
+    return [sys.executable, "-m", "uvicorn", app, "--host", host, "--port", str(port)]
+
+
+def select_display_ips(win_ip: str | None, ips: list[str]) -> list[str]:
+    """Prefer the Windows LAN IP for the printed phone URL when under WSL NAT."""
+    return [win_ip] if win_ip else ips
 
 
 def wsl_portproxy_commands(port: int, wsl_ip: str, *, rule_name: str = "Caseboard") -> dict[str, str]:
@@ -80,30 +93,51 @@ def wsl_portproxy_commands(port: int, wsl_ip: str, *, rule_name: str = "Caseboar
 import os
 import socket
 import subprocess
+import sys
 
 
 def local_ipv4_addresses() -> list[str]:
-    """Best-effort primary outbound IPv4 of this host (the WSL VM IP under WSL)."""
+    """Best-effort outbound IPv4(s) of this host (the WSL VM IP under WSL).
+
+    Combines the socket-derived primary outbound IP with any IPv4s reported by
+    `hostname -I`, de-duplicated and order-preserving. Falls back to just the
+    socket result on any error.
+    """
+    socket_ips: list[str] = []
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(("8.8.8.8", 80))  # no packets are sent for UDP connect
-        return [s.getsockname()[0]]
+        socket_ips = [s.getsockname()[0]]
     except OSError:
-        return []
+        socket_ips = []
     finally:
         s.close()
 
+    merged: list[str] = list(socket_ips)
+    try:
+        out = subprocess.run(
+            ["hostname", "-I"], capture_output=True, text=True, timeout=5
+        )
+        for ip in parse_hostname_i(out.stdout):
+            if ip not in merged:
+                merged.append(ip)
+    except (OSError, subprocess.SubprocessError):
+        return socket_ips
+    return merged
+
 
 def windows_lan_ip() -> str | None:
-    """Under WSL (NAT mode), ask Windows for its LAN IPv4 via powershell.exe. None on failure."""
+    """Under WSL (NAT mode), ask Windows for its LAN IPv4 via powershell.exe. None on failure.
+
+    Resolves the source IP that Windows would use to reach the internet (the default
+    route toward 8.8.8.8), so WSL/Hyper-V virtual-adapter IPs are not returned.
+    """
     try:
         out = subprocess.run(
             [
                 "powershell.exe", "-NoProfile", "-Command",
-                "(Get-NetIPAddress -AddressFamily IPv4 | "
-                "Where-Object {$_.PrefixOrigin -ne 'WellKnown' -and "
-                "$_.IPAddress -notlike '169.254.*' -and $_.IPAddress -ne '127.0.0.1'} | "
-                "Select-Object -First 1).IPAddress",
+                "(Find-NetRoute -RemoteIPAddress 8.8.8.8 | "
+                "Select-Object -First 1 -ExpandProperty IPAddress)",
             ],
             capture_output=True, text=True, timeout=10,
         )
@@ -151,8 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     ips = local_ipv4_addresses()
     win_ip = windows_lan_ip() if wsl else None
     wsl_ip = ips[0] if ips else None
-    # Prefer the Windows LAN IP for the printed phone URL when under WSL NAT.
-    display_ips = [win_ip] if win_ip else ips
+    display_ips = select_display_ips(win_ip, ips)
     if not args.no_banner:
         print(reachability_banner(port=args.port, is_wsl_host=wsl, ips=display_ips, wsl_ip=wsl_ip))
     argv2 = uvicorn_argv(args.host, args.port)

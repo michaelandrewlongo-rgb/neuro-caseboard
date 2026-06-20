@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path as _Path
 
 from api import serve_phone as sp
@@ -17,6 +18,7 @@ def test_parse_hostname_i_keeps_ipv4_only():
     assert sp.parse_hostname_i("172.20.1.2 fe80::1 \n") == ["172.20.1.2"]
     assert sp.parse_hostname_i("192.168.1.50 10.0.0.4") == ["192.168.1.50", "10.0.0.4"]
     assert sp.parse_hostname_i("   ") == []
+    assert sp.parse_hostname_i("256.1.1.1 10.0.0.4") == ["10.0.0.4"]  # out-of-range rejected
 
 
 def test_phone_urls_formats_and_dedupes():
@@ -28,9 +30,16 @@ def test_phone_urls_formats_and_dedupes():
 
 def test_uvicorn_argv_binds_all_interfaces():
     argv = sp.uvicorn_argv("0.0.0.0", 8001)
-    assert argv[:2] == ["uvicorn", "api.server:app"]
+    assert argv[0] == sys.executable
+    assert argv[1:3] == ["-m", "uvicorn"]
+    assert argv[3] == "api.server:app"
     assert "--host" in argv and argv[argv.index("--host") + 1] == "0.0.0.0"
     assert "--port" in argv and argv[argv.index("--port") + 1] == "8001"
+
+
+def test_select_display_ips_prefers_windows_ip():
+    assert sp.select_display_ips("192.168.1.50", ["172.20.1.2"]) == ["192.168.1.50"]
+    assert sp.select_display_ips(None, ["172.20.1.2"]) == ["172.20.1.2"]
 
 
 def test_wsl_portproxy_commands_have_consistent_port_and_ip():

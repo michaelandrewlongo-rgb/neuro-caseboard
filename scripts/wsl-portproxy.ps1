@@ -19,7 +19,7 @@ if ($Status) {
 }
 
 if ($Remove) {
-    netsh interface portproxy delete v4tov4 listenaddress=0.0.0.0 listenport=$Port
+    netsh interface portproxy delete v4tov4 listenaddress=0.0.0.0 listenport=$Port 2>$null
     Remove-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
     Write-Host "Removed port-proxy and firewall rule for port $Port."
     exit 0

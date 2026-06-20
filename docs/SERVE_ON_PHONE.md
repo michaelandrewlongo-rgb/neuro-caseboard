@@ -39,8 +39,14 @@ apply. The Vite proxy forwards `/api` server-side, so there is still no CORS.
 
 - **Quick public URL:** `cloudflared tunnel --url http://localhost:8001` → prints a temporary
   `https://*.trycloudflare.com` address (no account needed).
-- **Persistent private:** install Tailscale on the laptop and phone, `tailscale up`, then open
-  `http://<tailscale-100.x-IP>:8001`.
+  **⚠️ WARNING: this server has NO authentication.** Anyone who has the public
+  `*.trycloudflare.com` URL can reach *all* of your data — there is no login, token, or IP
+  allow-list in front of it. Only use a public tunnel **briefly and intentionally**, and stop
+  `cloudflared` (Ctrl-C) the moment you are done. For anything ongoing, use the private
+  Tailscale option below instead.
+- **Persistent private (recommended):** install Tailscale on the laptop and phone, `tailscale up`,
+  then open `http://<tailscale-100.x-IP>:8001`. The connection stays on your private tailnet, so
+  the server is never exposed to the public internet.
 
 ## Troubleshooting
 
