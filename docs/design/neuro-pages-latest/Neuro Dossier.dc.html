@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#000; }
+  *::-webkit-scrollbar { width:10px; height:10px; }
+  *::-webkit-scrollbar-track { background:transparent; }
+  *::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.09); border-radius:6px; border:2px solid transparent; background-clip:padding-box; }
+  *::-webkit-scrollbar-thumb:hover { background:rgba(107,147,255,0.4); background-clip:padding-box; }
+  @keyframes nc-pulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.35;transform:scale(0.82);} }
+  @keyframes nc-rise { from{opacity:0;transform:translateY(14px);} to{opacity:1;transform:translateY(0);} }
+  @keyframes nc-sweep { from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
+  @keyframes nc-glow { 0%,100%{opacity:0.5;} 50%{opacity:1;} }
+  ::selection { background:rgba(107,147,255,0.3); color:#fff; }
+  image-slot { border-radius:11px; overflow:hidden; }
+</style>
+<script src="./image-slot.js"></script>
+</helmet>
+
+<div style="min-height:100vh; background:#000; color:#ededed; font-family:'Geist',system-ui,sans-serif; -webkit-font-smoothing:antialiased; padding:0 0 64px;">
+
+  <!-- ── TOP BAR ───────────────────────────────────────────── -->
+  <header style="position:sticky; top:0; z-index:40; display:flex; align-items:center; gap:24px; padding:14px 30px; background:rgba(0,0,0,0.55); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border-bottom:1px solid rgba(255,255,255,0.07);">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <div style="position:relative; width:30px; height:30px; display:grid; place-items:center; border-radius:9px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.14);">
+        <svg width="18" height="18" viewBox="0 0 100 100" fill="none" stroke="#ededed" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M38,18 C20,20 14,40 22,52 C12,60 16,80 34,82 C44,90 60,88 64,78 C82,78 86,58 78,48 C86,38 80,18 60,18 C54,12 44,12 38,18 Z"></path><path d="M50,16 L50,84" opacity="0.55"></path></svg>
+      </div>
+      <div style="line-height:1;">
+        <div style="font-size:15px; font-weight:600; letter-spacing:-0.01em;">Neurosurgery<span style="color:#666;">·</span>Signal</div>
+        <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.22em; color:#666; margin-top:3px;">TELEMETRY CONSOLE</div>
+      </div>
+    </div>
+
+    <nav style="display:flex; gap:4px; margin-left:8px;">
+      <button onClick="{{ goAsk }}" style="font-family:inherit; font-size:13px; padding:7px 14px; border-radius:8px; cursor:pointer; transition:all .16s; background:{{ nAskBg }}; border:1px solid {{ nAskBd }}; color:{{ nAskFg }};">Ask</button>
+      <button onClick="{{ goDossier }}" style="font-family:inherit; font-size:13px; padding:7px 14px; border-radius:8px; cursor:pointer; transition:all .16s; background:{{ nDosBg }}; border:1px solid {{ nDosBd }}; color:{{ nDosFg }};">Dossier</button>
+      <button onClick="{{ goCards }}" style="font-family:inherit; font-size:13px; padding:7px 14px; border-radius:8px; cursor:pointer; transition:all .16s; background:{{ nCardsBg }}; border:1px solid {{ nCardsBd }}; color:{{ nCardsFg }};">Cards</button>
+    </nav>
+
+    <!-- Ask command bar -->
+    <div style="flex:1; max-width:540px; margin:0 auto;">
+      <div onClick="{{ goAsk }}" style="display:flex; align-items:center; gap:11px; padding:9px 14px; border-radius:11px; background:rgba(255,255,255,0.035); border:1px solid rgba(255,255,255,0.09); cursor:pointer; transition:border-color .2s, box-shadow .2s;" style-hover="border-color:rgba(107,147,255,0.45); box-shadow:0 0 0 3px rgba(107,147,255,0.08);">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2.2"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg>
+        <span style="flex:1; font-size:13px; color:#777;">Ask the corpus — grounded, cited answers…</span>
+        <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#666; padding:3px 7px; border-radius:6px; border:1px solid rgba(255,255,255,0.1);">⌘K</span>
+      </div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:14px;">
+      <div style="display:flex; align-items:center; gap:7px; padding:6px 11px; border-radius:8px; background:rgba(52,224,127,0.09); border:1px solid rgba(52,224,127,0.2);">
+        <span style="width:7px; height:7px; border-radius:50%; background:#34e07f; box-shadow:0 0 8px #34e07f; animation:nc-pulse 2.4s ease-in-out infinite;"></span>
+        <span style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.12em; color:#34e07f;">ENGINE ONLINE</span>
+      </div>
+      <div style="width:32px; height:32px; border-radius:9px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.1); display:grid; place-items:center; font-size:12px; font-weight:600; color:#a8a8a8;">MK</div>
+    </div>
+  </header>
+
+  <div style="max-width:1340px; margin:0 auto; padding:30px 30px 0;">
+
+    <!-- ════════════ ASK VIEW ════════════ -->
+    <div style="display:{{ dAsk }}">
+      <section class="reveal" style="margin-bottom:24px;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+          <span style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.2em; color:#6b93ff;">ASK</span>
+          <span style="width:4px; height:4px; border-radius:50%; background:#555;"></span>
+          <span style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.2em; color:#666;">CITED ANSWER ENGINE</span>
+        </div>
+        <h1 style="margin:0; font-size:34px; line-height:1.08; font-weight:600; letter-spacing:-0.025em;">Ask</h1>
+        <p style="margin:12px 0 22px; max-width:620px; font-size:14.5px; line-height:1.6; color:#8a8a8a;">Cited answers from your resources and the contemporary literature. Decision-support only.</p>
+
+        <div style="display:flex; gap:10px; max-width:780px;">
+          <div style="flex:1; display:flex; align-items:center; gap:12px; padding:14px 18px; border-radius:13px; background:rgba(255,255,255,0.04); border:1px solid rgba(107,147,255,0.32); box-shadow:0 0 0 3px rgba(107,147,255,0.07);">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#777" stroke-width="2.2"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg>
+            <span style="flex:1; font-size:15px; color:#ededed;">What determines facial nerve outcome after vestibular schwannoma resection?</span>
+            <span style="width:2px; height:17px; background:#6b93ff; animation:nc-glow 1.1s ease-in-out infinite;"></span>
+          </div>
+          <button style="display:flex; align-items:center; font-family:inherit; font-size:14px; font-weight:600; color:#0a0a0a; padding:0 24px; border-radius:13px; background:#ededed; border:none; cursor:pointer; transition:transform .18s;">Ask</button>
+        </div>
+      </section>
+
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+        <span style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.16em; color:#34e07f; padding:4px 9px; border-radius:7px; background:rgba(52,224,127,0.1); border:1px solid rgba(52,224,127,0.22);">ANSWER READY</span>
+        <span style="font-size:13px; color:#8a8a8a;">5 of 6 claims grounded to the corpus · 1 flagged to verify · 2 figures attached</span>
+      </div>
+
+      <!-- telemetry row -->
+      <section style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:18px;">
+        <div style="position:relative; padding:20px 22px; border-radius:18px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.09); backdrop-filter:blur(14px); overflow:hidden;">
+          <div style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.18em; color:#666;">CITATION AUDIT · THIS ANSWER</div>
+          <div style="font-size:15px; font-weight:600; margin-top:4px;">Evidence integrity</div>
+          <div style="display:flex; align-items:center; gap:16px; margin-top:8px;">
+            <div style="position:relative; width:150px; height:150px; flex:none;">
+              {{ gaugeAskEl }}
+              <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                <div style="font-size:26px; font-weight:600; line-height:1; letter-spacing:-0.02em;">5<span style="color:#777;">/</span>6</div>
+                <div style="font-family:'Geist Mono',monospace; font-size:8.5px; letter-spacing:0.14em; color:#777; margin-top:4px;">GROUNDED</div>
+              </div>
+            </div>
+            <div style="flex:1 1 150px; min-width:0; display:flex; flex-direction:column; gap:14px;">
+              <div>
+                <div style="display:flex; align-items:center; gap:7px;"><span style="width:8px; height:8px; border-radius:2px; background:#34e07f; box-shadow:0 0 7px rgba(52,224,127,0.6);"></span><span style="font-size:13px; font-weight:600;">5 corroborated by 2+ sources</span></div>
+                <div style="margin-top:4px; font-size:11.5px; line-height:1.5; color:#8a8a8a;">Two or more passages agree — hover any claim to see exactly which.</div>
+              </div>
+              <div>
+                <div style="display:flex; align-items:center; gap:7px;"><span style="width:8px; height:8px; border-radius:2px; background:#ffc94d; box-shadow:0 0 7px rgba(255,201,77,0.6);"></span><span style="font-size:13px; font-weight:600;">1 backed by a single source</span></div>
+                <div style="margin-top:4px; font-size:11.5px; line-height:1.5; color:#8a8a8a;">Rests on one passage — corroborate against the source below before relying on it.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="position:relative; padding:20px 22px; border-radius:18px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.09); backdrop-filter:blur(14px); overflow:hidden;">
+          <div style="position:absolute; inset:0; background:radial-gradient(340px 200px at 100% 0%, rgba(255,90,90,0.1), transparent 70%); pointer-events:none;"></div>
+          <div style="position:relative; display:flex; align-items:flex-start; justify-content:space-between;">
+            <div>
+              <div style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.18em; color:#666;">OUTCOME DETERMINANTS</div>
+              <div style="font-size:15px; font-weight:600; margin-top:4px;">Predictors of facial-nerve outcome</div>
+            </div>
+            <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#ffc94d; padding:4px 9px; border-radius:7px; background:rgba(255,201,77,0.1); border:1px solid rgba(255,201,77,0.22);">SIZE · STRONGEST</span>
+          </div>
+          <div style="position:relative; height:166px; margin-top:4px;">{{ radarAskEl }}</div>
+          <div style="position:relative; display:flex; align-items:center; gap:6px; margin-top:6px; font-family:'Geist Mono',monospace; font-size:9px; color:#777;"><span style="width:9px; height:2px; background:#ff5a5a; display:inline-block;"></span>Relative impact on HB I–II · pooled microsurgical series</div>
+        </div>
+      </section>
+
+      <!-- answer body + rail -->
+      <div style="display:grid; grid-template-columns:1fr 372px; gap:18px; align-items:start;">
+        <main>
+          <article style="padding:26px 28px; border-radius:18px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.08);">
+            <h2 style="margin:0 0 4px; font-size:20px; font-weight:600; letter-spacing:-0.01em;">What determines facial nerve outcome after vestibular schwannoma resection?</h2>
+            <div style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.14em; color:#666; margin-bottom:18px;">SYNTHESISED FROM CORPUS · VERTEX</div>
+            <div style="position:relative; margin:0 0 15px;" onMouseEnter="{{ onCP1 }}" onMouseLeave="{{ onCLeave }}">
+              <p style="margin:0; font-size:15px; line-height:1.72; color:#ededed; cursor:help;">Facial nerve outcome is governed primarily by tumor size, the nerve's plane relative to the capsule, and the use of continuous intraoperative monitoring. In Koos III–IV tumors the nerve is splayed and thinned over the anterosuperior capsule, where it is most vulnerable to traction during dissection.<span style="font-family:'Geist Mono',monospace; font-size:10px; color:#6b93ff; padding:2px 7px; border-radius:5px; background:rgba(107,147,255,0.12); border:1px solid rgba(107,147,255,0.22); margin-left:7px; white-space:nowrap; vertical-align:2px;">2 sources</span></p>
+              <div style="position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:40; padding:13px 15px; border-radius:12px; background:rgba(10,10,10,0.98); border:1px solid rgba(255,255,255,0.14); box-shadow:0 18px 50px rgba(0,0,0,0.6); opacity:{{ cP1 }}; transition:opacity .16s; pointer-events:none;">
+                <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.16em; color:#666; margin-bottom:8px;">WHERE THIS CAME FROM</div>
+                <p style="margin:0 0 11px; font-size:12px; line-height:1.55; color:#cfcfcf;">Aggregated from two corpus sources that agree — an anatomical description, not a statistic.</p>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                  <div style="display:flex; gap:10px;"><span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:600; color:#6b93ff; flex:none; width:96px;">Rhoton</span><span style="font-size:11.5px; line-height:1.4; color:#9a9a9a;">Cranial Anatomy & Surgical Approaches · Ch. 9 CPA · p.412</span></div>
+                  <div style="display:flex; gap:10px;"><span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:600; color:#6b93ff; flex:none; width:96px;">Youmans &amp; Winn</span><span style="font-size:11.5px; line-height:1.4; color:#9a9a9a;">Neurological Surgery · Vol. 2 §148 · p.1203</span></div>
+                </div>
+              </div>
+            </div>
+            <div style="position:relative; margin:0 0 15px;" onMouseEnter="{{ onCP2 }}" onMouseLeave="{{ onCLeave }}">
+              <p style="margin:0; font-size:15px; line-height:1.72; color:#ededed; cursor:help;">Preserving the arachnoid plane and debulking the tumor interior before capsular dissection reduces traction injury. A proximal stimulation threshold ≤0.05 mA at closure correlates with House-Brackmann I–II at one year. Anterior inferior cerebellar artery branches adherent to the capsule must be preserved to avoid ischemic neuropathy.<span style="font-family:'Geist Mono',monospace; font-size:10px; color:#6b93ff; padding:2px 7px; border-radius:5px; background:rgba(107,147,255,0.12); border:1px solid rgba(107,147,255,0.22); margin-left:7px; white-space:nowrap; vertical-align:2px;">2 sources</span></p>
+              <div style="position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:40; padding:13px 15px; border-radius:12px; background:rgba(10,10,10,0.98); border:1px solid rgba(255,255,255,0.14); box-shadow:0 18px 50px rgba(0,0,0,0.6); opacity:{{ cP2 }}; transition:opacity .16s; pointer-events:none;">
+                <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.16em; color:#666; margin-bottom:8px;">WHERE THIS CAME FROM</div>
+                <p style="margin:0 0 11px; font-size:12px; line-height:1.55; color:#cfcfcf;">Two grounded claims here. The ≤0.05 mA threshold ↔ HB I–II correlation is one series' result — an average across that cohort, so verify it. AICA preservation is anatomical consensus.</p>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                  <div style="display:flex; gap:10px;"><span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:600; color:#ffc94d; flex:none; width:96px;">Samii · verify</span><span style="font-size:11.5px; line-height:1.4; color:#9a9a9a;">Surgery of CP Lesions · Ch. 6 Monitoring · p.241 — threshold↔outcome, single series</span></div>
+                  <div style="display:flex; gap:10px;"><span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:600; color:#6b93ff; flex:none; width:96px;">Youmans &amp; Winn</span><span style="font-size:11.5px; line-height:1.4; color:#9a9a9a;">Neurological Surgery · Vol. 2 §148 · p.1203 — AICA preservation</span></div>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:18px; padding:14px 16px; border-radius:12px; background:rgba(255,201,77,0.05); border:1px solid rgba(255,201,77,0.18); display:flex; gap:11px;">
+              <span style="font-family:'Geist Mono',monospace; font-size:9.5px; letter-spacing:0.12em; color:#ffc94d; padding:3px 8px; border-radius:6px; background:rgba(255,201,77,0.12); border:1px solid rgba(255,201,77,0.25); flex:none; height:fit-content;">VERIFY</span>
+              <p style="margin:0; font-size:13px; line-height:1.6; color:rgba(255,201,77,0.66);">One claim — that intraoperative MEP amplitude drop &gt;50% reliably predicts permanent palsy — rests on a single corpus passage. Corroborate against primary series before relying on it.</p>
+            </div>
+          </article>
+        </main>
+
+        <aside style="display:flex; flex-direction:column; gap:18px;">
+          <div style="padding:18px 18px 20px; border-radius:18px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.09); backdrop-filter:blur(14px);">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+              <span style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.16em; color:#666;">FIGURES</span>
+              <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#8a8a8a;">1</span>
+            </div>
+            <figure style="margin:0;">
+              <image-slot id="ask-fig-1" style="display:block; width:100%; height:128px;" shape="rounded" radius="11" placeholder="Drop retrieved figure · facial nerve plane"></image-slot>
+              <figcaption style="margin-top:9px;">
+                <div style="display:flex; align-items:center; gap:7px;"><span style="font-family:'Geist Mono',monospace; font-size:10px; color:#0a0a0a; font-weight:600; padding:2px 7px; border-radius:5px; background:#ededed;">FIG 1</span><span style="font-family:'Geist Mono',monospace; font-size:10px; color:#8a8a8a;">Rhoton · Ch. 9</span></div>
+                <p style="margin:7px 0 0; font-size:12px; line-height:1.5; color:#9a9a9a;">Facial nerve splayed anterosuperiorly over the tumor capsule.</p>
+              </figcaption>
+            </figure>
+          </div>
+
+
+
+        </aside>
+      </div>
+    </div>
+    <!-- ════════════ END ASK VIEW ════════════ -->
+
+    <!-- ════════════ DOSSIER VIEW ════════════ -->
+    <div style="display:{{ dDossier }}">
+    <!-- ── CASE HEADER ───────────────────────────────────────── -->
+    <section class="reveal" style="display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:26px;">
+      <div style="min-width:300px;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+          <span style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.2em; color:#6b93ff;">ACTIVE CASE</span>
+          <span style="width:4px; height:4px; border-radius:50%; background:#555;"></span>
+          <span style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.2em; color:#666;">PRE-OP DOSSIER · v3</span>
+        </div>
+        <h1 style="margin:0; font-size:34px; line-height:1.08; font-weight:600; letter-spacing:-0.025em; max-width:620px; text-wrap:balance;">Left Retrosigmoid Vestibular Schwannoma</h1>
+        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:16px;">
+          <span style="font-family:'Geist Mono',monospace; font-size:11px; padding:5px 10px; border-radius:7px; background:rgba(107,147,255,0.1); border:1px solid rgba(107,147,255,0.22); color:#6b93ff;">KOOS III</span>
+          <span style="font-family:'Geist Mono',monospace; font-size:11px; padding:5px 10px; border-radius:7px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.09); color:#a8a8a8;">2.4 cm · CPA</span>
+          <span style="font-family:'Geist Mono',monospace; font-size:11px; padding:5px 10px; border-radius:7px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.09); color:#a8a8a8;">LEFT</span>
+          <span style="font-family:'Geist Mono',monospace; font-size:11px; padding:5px 10px; border-radius:7px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.09); color:#a8a8a8;">HEARING · AAO-HNS B</span>
+          <span style="font-family:'Geist Mono',monospace; font-size:11px; padding:5px 10px; border-radius:7px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.09); color:#a8a8a8;">ELECTIVE</span>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button style="display:flex; align-items:center; gap:8px; font-family:inherit; font-size:13px; font-weight:500; color:#cfcfcf; padding:11px 16px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); cursor:pointer; transition:all .18s;" style-hover="background:rgba(255,255,255,0.07); border-color:rgba(255,255,255,0.18);">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17V3"></path><path d="m6 11 6 6 6-6"></path><path d="M19 21H5"></path></svg>
+          Export PDF
+        </button>
+        <button style="display:flex; align-items:center; gap:8px; font-family:inherit; font-size:13px; font-weight:600; color:#0a0a0a; padding:11px 18px; border-radius:10px; background:#ededed; border:none; cursor:pointer; transition:transform .18s; transition:transform .18s, box-shadow .18s;" style-hover="transform:translateY(-2px);">
+          <span style="width:7px; height:7px; border-radius:50%; background:#0a0a0a;"></span>
+          Rehearse
+        </button>
+      </div>
+    </section>
+
+    <!-- ── TELEMETRY GRID ────────────────────────────────────── -->
+    <section style="display:grid; grid-template-columns:1.15fr 1fr 1.05fr; gap:18px; margin-bottom:18px;">
+
+      <!-- Radar: risk topology -->
+      <div class="reveal" style="position:relative; padding:20px 22px; border-radius:18px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.09); backdrop-filter:blur(14px); overflow:hidden;">
+        <div style="position:absolute; inset:0; background:radial-gradient(380px 220px at 100% 0%, rgba(255,90,90,0.1), transparent 70%); pointer-events:none;"></div>
+        <div style="position:relative; display:flex; align-items:flex-start; justify-content:space-between;">
+          <div>
+            <div style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.18em; color:#666;">RISK TOPOLOGY</div>
+            <div style="font-size:15px; font-weight:600; margin-top:4px;">Structures at risk</div>
+          </div>
+          <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#ffc94d; padding:4px 9px; border-radius:7px; background:rgba(255,201,77,0.1); border:1px solid rgba(255,201,77,0.22);">POOLED · REPORTED</span>
+        </div>
+        <div style="position:relative; height:248px; margin-top:6px;">
+          {{ radarEl }}
+          <div style="position:absolute; left:6px; right:6px; top:0; z-index:25; padding:10px 12px; border-radius:11px; background:rgba(10,10,10,0.97); border:1px solid rgba(255,255,255,0.14); box-shadow:0 16px 44px rgba(0,0,0,0.55); opacity:{{ rTipO }}; transition:opacity .16s; pointer-events:none;">
+            <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.14em; color:#666; margin-bottom:5px;">DERIVATION · {{ rTipName }}</div>
+            <p style="margin:0; font-size:11px; line-height:1.5; color:#cfcfcf;">{{ rTipBody }}</p>
+            <div style="margin-top:7px; font-family:'Geist Mono',monospace; font-size:9px; color:#6b93ff;">{{ rTipMeta }}</div>
+          </div>
+        </div>
+        <div style="position:relative; border-top:1px solid rgba(255,255,255,0.07); padding-top:11px; font-family:'Geist Mono',monospace; font-size:9.5px; line-height:1.55; color:#8a8a8a;">
+          <div style="display:flex; align-items:center; gap:6px;"><span style="width:9px; height:2px; background:#ff5a5a; display:inline-block;"></span>Reported rate of new deficit · pooled across corpus series</div>
+          <div style="margin-top:4px; color:#666;">Hover any vertex for its source, range, and basis — every value is a pooled average; verify against the primary source.</div>
+        </div>
+      </div>
+
+      <!-- Concentric gauge: evidence integrity -->
+      <div class="reveal" style="position:relative; padding:20px 22px; border-radius:18px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.09); backdrop-filter:blur(14px); overflow:hidden;">
+        <div style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.18em; color:#666;">EVIDENCE INTEGRITY</div>
+        <div style="font-size:15px; font-weight:600; margin-top:4px;">Citation audit</div>
+        <div style="display:flex; align-items:center; gap:12px; margin-top:8px; flex-wrap:wrap;">
+          <div style="position:relative; width:128px; height:128px; flex:none;">
+            {{ gaugeEl }}
+            <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+              <div style="font-size:34px; font-weight:600; line-height:1; letter-spacing:-0.02em; font-variant-numeric:tabular-nums;">49</div>
+              <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.14em; color:#777; margin-top:4px;">CLAIMS</div>
+            </div>
+          </div>
+          <div style="flex:1 1 140px; min-width:0; display:flex; flex-direction:column; gap:11px;">
+            <div style="display:flex; align-items:center; gap:7px;"><span style="width:8px; height:8px; border-radius:2px; background:#34e07f; box-shadow:0 0 7px rgba(52,224,127,0.6);"></span><span style="font-size:13px; font-weight:600;">38</span><span style="font-size:12px; color:#8a8a8a;">Supported</span></div>
+            <div style="display:flex; align-items:center; gap:7px;"><span style="width:8px; height:8px; border-radius:2px; background:#ffc94d; box-shadow:0 0 7px rgba(255,201,77,0.6);"></span><span style="font-size:13px; font-weight:600;">09</span><span style="font-size:12px; color:#8a8a8a;">To verify</span></div>
+            <div style="display:flex; align-items:center; gap:7px;"><span style="width:8px; height:8px; border-radius:2px; background:#ff5a5a; box-shadow:0 0 7px rgba(255,90,90,0.6);"></span><span style="font-size:13px; font-weight:600;">02</span><span style="font-size:12px; color:#8a8a8a;">Quarantined</span></div>
+            <div style="margin-top:3px; font-family:'Geist Mono',monospace; font-size:9.5px; color:#666; line-height:1.5;">78% grounded<br>to local corpus</div>
+          </div>
+        </div>
+        <div style="margin-top:15px; padding-top:13px; border-top:1px solid rgba(255,255,255,0.07); display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; gap:9px; font-size:11.5px; line-height:1.45; color:#8a8a8a;"><span style="width:7px; height:7px; border-radius:2px; background:#34e07f; flex:none; margin-top:4px;"></span><span><strong style="color:#cfcfcf; font-weight:600;">Supported</strong> — corroborated by two or more corpus sources, shown when you hover the claim.</span></div>
+          <div style="display:flex; gap:9px; font-size:11.5px; line-height:1.45; color:#8a8a8a;"><span style="width:7px; height:7px; border-radius:2px; background:#ffc94d; flex:none; margin-top:4px;"></span><span><strong style="color:#cfcfcf; font-weight:600;">To verify</strong> — rests on a single source; corroborate it before relying on the claim.</span></div>
+          <div style="display:flex; gap:9px; font-size:11.5px; line-height:1.45; color:#8a8a8a;"><span style="width:7px; height:7px; border-radius:2px; background:#ff5a5a; flex:none; margin-top:4px;"></span><span><strong style="color:#cfcfcf; font-weight:600;">Quarantined</strong> — surfaced from the model’s general training, not your corpus, so it’s held back until a source is attached.</span></div>
+        </div>
+      </div>
+
+      <!-- Vitals stack -->
+      <div class="reveal" style="position:relative; padding:20px 22px; border-radius:18px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.09); backdrop-filter:blur(14px);">
+        <div style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.18em; color:#666;">OPERATIVE TARGETS</div>
+        <div style="font-size:15px; font-weight:600; margin-top:4px; margin-bottom:14px;">Planning metrics</div>
+        <div style="display:flex; flex-direction:column; gap:13px;">
+
+          <div style="position:relative; cursor:help;" onMouseEnter="{{ onFacial }}" onMouseLeave="{{ onLeave }}">
+            <div style="position:absolute; left:0; bottom:calc(100% + 9px); z-index:30; width:250px; padding:11px 13px; border-radius:11px; background:rgba(10,10,10,0.97); border:1px solid rgba(255,255,255,0.13); box-shadow:0 16px 44px rgba(0,0,0,0.55); backdrop-filter:blur(12px); opacity:{{ tFacial }}; transition:opacity .16s; pointer-events:none;">
+              <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.14em; color:#666; margin-bottom:6px;">DERIVATION</div>
+              <p style="margin:0; font-size:11.5px; line-height:1.5; color:#cfcfcf;">Pooled HB I–II rate for Koos III CPA schwannoma under continuous facial EMG — Samii microsurgical series weighted with corpus passages.</p>
+              <div style="display:flex; gap:6px; margin-top:9px;"><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#6b93ff; padding:2px 7px; border-radius:5px; background:rgba(107,147,255,0.1); border:1px solid rgba(107,147,255,0.2);">[1]</span><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#6b93ff; padding:2px 7px; border-radius:5px; background:rgba(107,147,255,0.1); border:1px solid rgba(107,147,255,0.2);">[4]</span><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#8a8a8a; padding:2px 7px; border-radius:5px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.09);">n≈1006</span></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;"><span style="font-size:12.5px; color:#a8a8a8; border-bottom:1px dotted rgba(255,255,255,0.22);">Facial preservation (HB I–II)</span><span style="font-family:'Geist Mono',monospace; font-size:13px; font-weight:600; color:#34e07f;">88%</span></div>
+            <div style="height:5px; border-radius:3px; background:rgba(255,255,255,0.06);"><div style="height:100%; width:88%; border-radius:3px; background:linear-gradient(90deg,#1aa85f,#34e07f);"></div></div>
+          </div>
+          <div style="position:relative; cursor:help;" onMouseEnter="{{ onHearing }}" onMouseLeave="{{ onLeave }}">
+            <div style="position:absolute; left:0; bottom:calc(100% + 9px); z-index:30; width:250px; padding:11px 13px; border-radius:11px; background:rgba(10,10,10,0.97); border:1px solid rgba(255,255,255,0.13); box-shadow:0 16px 44px rgba(0,0,0,0.55); backdrop-filter:blur(12px); opacity:{{ tHearing }}; transition:opacity .16s; pointer-events:none;">
+              <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.14em; color:#666; margin-bottom:6px;">DERIVATION</div>
+              <p style="margin:0; font-size:11.5px; line-height:1.5; color:#cfcfcf;">AAO-HNS class B baseline, penalised for IAC-fundal extension via meta-analysis of preservation by tumor extent. Wide confidence interval.</p>
+              <div style="display:flex; gap:6px; margin-top:9px;"><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#34dfe6; padding:2px 7px; border-radius:5px; background:rgba(255,102,216,0.12); border:1px solid rgba(255,102,216,0.24);">[L2]</span><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#6b93ff; padding:2px 7px; border-radius:5px; background:rgba(107,147,255,0.1); border:1px solid rgba(107,147,255,0.2);">[2]</span><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#ffc94d; padding:2px 7px; border-radius:5px; background:rgba(255,201,77,0.1); border:1px solid rgba(255,201,77,0.22);">±14% CI</span></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;"><span style="font-size:12.5px; color:#a8a8a8; border-bottom:1px dotted rgba(255,255,255,0.22);">Hearing preservation</span><span style="font-family:'Geist Mono',monospace; font-size:13px; font-weight:600; color:#ffc94d;">54%</span></div>
+            <div style="height:5px; border-radius:3px; background:rgba(255,255,255,0.06);"><div style="height:100%; width:54%; border-radius:3px; background:linear-gradient(90deg,#c79325,#ffc94d);"></div></div>
+          </div>
+          <div style="position:relative; cursor:help;" onMouseEnter="{{ onGtr }}" onMouseLeave="{{ onLeave }}">
+            <div style="position:absolute; left:0; bottom:calc(100% + 9px); z-index:30; width:250px; padding:11px 13px; border-radius:11px; background:rgba(10,10,10,0.97); border:1px solid rgba(255,255,255,0.13); box-shadow:0 16px 44px rgba(0,0,0,0.55); backdrop-filter:blur(12px); opacity:{{ tGtr }}; transition:opacity .16s; pointer-events:none;">
+              <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.14em; color:#666; margin-bottom:6px;">DERIVATION</div>
+              <p style="margin:0; font-size:11.5px; line-height:1.5; color:#cfcfcf;">Pooled gross-total resection rate for 2–3 cm CPA schwannoma with facial-sparing intent; near-total counted separately.</p>
+              <div style="display:flex; gap:6px; margin-top:9px;"><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#6b93ff; padding:2px 7px; border-radius:5px; background:rgba(107,147,255,0.1); border:1px solid rgba(107,147,255,0.2);">[4]</span><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#6b93ff; padding:2px 7px; border-radius:5px; background:rgba(107,147,255,0.1); border:1px solid rgba(107,147,255,0.2);">[5]</span></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;"><span style="font-size:12.5px; color:#a8a8a8; border-bottom:1px dotted rgba(255,255,255,0.22);">Gross-total resection</span><span style="font-family:'Geist Mono',monospace; font-size:13px; font-weight:600; color:#6b93ff;">81%</span></div>
+            <div style="height:5px; border-radius:3px; background:rgba(255,255,255,0.06);"><div style="height:100%; width:81%; border-radius:3px; background:linear-gradient(90deg,#3f63d6,#6b93ff);"></div></div>
+          </div>
+          <div style="display:flex; gap:10px; margin-top:3px;">
+            <div style="position:relative; flex:1; padding:10px 12px; border-radius:11px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); cursor:help;" onMouseEnter="{{ onOr }}" onMouseLeave="{{ onLeave }}">
+              <div style="position:absolute; left:0; bottom:calc(100% + 9px); z-index:30; width:240px; padding:11px 13px; border-radius:11px; background:rgba(10,10,10,0.97); border:1px solid rgba(255,255,255,0.13); box-shadow:0 16px 44px rgba(0,0,0,0.55); backdrop-filter:blur(12px); opacity:{{ tOr }}; transition:opacity .16s; pointer-events:none;">
+                <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.14em; color:#666; margin-bottom:6px;">DERIVATION</div>
+                <p style="margin:0; font-size:11.5px; line-height:1.5; color:#cfcfcf;">Median skin-to-skin time for retrosigmoid resection in this size class, from the local case log reconciled with corpus operative notes.</p>
+                <div style="display:flex; gap:6px; margin-top:9px;"><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#8a8a8a; padding:2px 7px; border-radius:5px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.09);">LOG n=34</span><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#6b93ff; padding:2px 7px; border-radius:5px; background:rgba(107,147,255,0.1); border:1px solid rgba(107,147,255,0.2);">[5]</span></div>
+              </div>
+              <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.1em; color:#777; border-bottom:1px dotted rgba(255,255,255,0.18); display:inline-block;">EST. OR TIME</div>
+              <div style="font-size:18px; font-weight:600; margin-top:3px; font-variant-numeric:tabular-nums;">6.5<span style="font-size:12px; color:#8a8a8a; font-weight:400;"> hr</span></div>
+            </div>
+            <div style="position:relative; flex:1; padding:10px 12px; border-radius:11px; background:rgba(255,90,90,0.05); border:1px solid rgba(255,90,90,0.16); cursor:help;" onMouseEnter="{{ onCsf }}" onMouseLeave="{{ onLeave }}">
+              <div style="position:absolute; right:0; bottom:calc(100% + 9px); z-index:30; width:240px; padding:11px 13px; border-radius:11px; background:rgba(10,10,10,0.97); border:1px solid rgba(255,255,255,0.13); box-shadow:0 16px 44px rgba(0,0,0,0.55); backdrop-filter:blur(12px); opacity:{{ tCsf }}; transition:opacity .16s; pointer-events:none;">
+                <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.14em; color:#666; margin-bottom:6px;">DERIVATION</div>
+                <p style="margin:0; font-size:11.5px; line-height:1.5; color:#cfcfcf;">Postoperative CSF leak after retrosigmoid approach, pooled across corpus sources. Reported range 9–14%; midpoint shown.</p>
+                <div style="display:flex; gap:6px; margin-top:9px;"><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#6b93ff; padding:2px 7px; border-radius:5px; background:rgba(107,147,255,0.1); border:1px solid rgba(107,147,255,0.2);">[1]</span><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#6b93ff; padding:2px 7px; border-radius:5px; background:rgba(107,147,255,0.1); border:1px solid rgba(107,147,255,0.2);">[2]</span><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#ff8f8a; padding:2px 7px; border-radius:5px; background:rgba(255,90,90,0.08); border:1px solid rgba(255,90,90,0.2);">9–14%</span></div>
+              </div>
+              <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.1em; color:#ff8f8a; border-bottom:1px dotted rgba(255,90,90,0.3); display:inline-block;">CSF LEAK RISK</div>
+              <div style="font-size:18px; font-weight:600; margin-top:3px; color:#ff5a5a; font-variant-numeric:tabular-nums;">11<span style="font-size:12px; font-weight:400;">%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── EVIDENCE FILTER ───────────────────────────────────── -->
+    <section style="display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:18px;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.16em; color:#666; margin-right:4px;">FILTER</span>
+        <button onClick="{{ setAll }}" style="font-family:'Geist Mono',monospace; font-size:11px; padding:7px 13px; border-radius:8px; cursor:pointer; transition:all .16s; border:1px solid {{ allBd }}; background:{{ allBg }}; color:{{ allFg }};">ALL · 49</button>
+        <button onClick="{{ setSupported }}" style="display:flex; align-items:center; gap:7px; font-family:'Geist Mono',monospace; font-size:11px; padding:7px 13px; border-radius:8px; cursor:pointer; transition:all .16s; border:1px solid {{ supBd }}; background:{{ supBg }}; color:{{ supFg }};"><span style="width:7px;height:7px;border-radius:2px;background:#34e07f;"></span>SUPPORTED · 38</button>
+        <button onClick="{{ setVerify }}" style="display:flex; align-items:center; gap:7px; font-family:'Geist Mono',monospace; font-size:11px; padding:7px 13px; border-radius:8px; cursor:pointer; transition:all .16s; border:1px solid {{ verBd }}; background:{{ verBg }}; color:{{ verFg }};"><span style="width:7px;height:7px;border-radius:2px;background:#ffc94d;"></span>VERIFY · 9</button>
+        <button onClick="{{ setQuar }}" style="display:flex; align-items:center; gap:7px; font-family:'Geist Mono',monospace; font-size:11px; padding:7px 13px; border-radius:8px; cursor:pointer; transition:all .16s; border:1px solid {{ quarBd }}; background:{{ quarBg }}; color:{{ quarFg }};"><span style="width:7px;height:7px;border-radius:2px;background:#ff5a5a;"></span>QUARANTINE · 2</button>
+      </div>
+      <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#666;">SYNCED {{ clock }}</span>
+    </section>
+
+    <!-- ── DOSSIER BODY ──────────────────────────────────────── -->
+    <div style="display:grid; grid-template-columns:1fr 372px; gap:18px; align-items:start;">
+
+      <!-- MAIN: sections + claims -->
+      <main style="display:flex; flex-direction:column; gap:18px;">
+
+        <!-- SECTION A -->
+        <section style="padding:24px 26px; border-radius:18px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.08);">
+          <div style="display:flex; align-items:center; gap:13px; margin-bottom:6px;">
+            <span style="font-family:'Geist Mono',monospace; font-size:11px; font-weight:600; color:#0a0a0a; width:26px; height:26px; display:grid; place-items:center; border-radius:8px; background:#ededed;">A</span>
+            <h2 style="margin:0; font-size:19px; font-weight:600; letter-spacing:-0.01em;">Anatomy at risk</h2>
+          </div>
+          <p style="margin:0 0 20px 39px; font-size:13.5px; line-height:1.6; color:#8a8a8a; max-width:640px;">The retrosigmoid corridor exposes the cerebellopontine angle from a posterolateral trajectory. Facial-nerve course over the tumor capsule and the AICA loop within the porus are the dominant determinants of outcome.</p>
+
+          <!-- claim 1 -->
+          <article style="position:relative; padding:18px 20px 18px 22px; border-radius:14px; background:rgba(52,224,127,0.035); border:1px solid rgba(52,224,127,0.16); margin-left:39px; margin-bottom:12px; cursor:help; opacity:{{ oSup }}; transition:opacity .3s;" onMouseEnter="{{ onCA1 }}" onMouseLeave="{{ onCLeave }}">
+            <span style="position:absolute; left:0; top:14px; bottom:14px; width:3px; border-radius:3px; background:#34e07f; box-shadow:0 0 10px rgba(52,224,127,0.5);"></span>
+            <div style="position:absolute; left:16px; right:16px; top:calc(100% - 6px); z-index:40; padding:13px 15px; border-radius:12px; background:rgba(10,10,10,0.98); border:1px solid rgba(255,255,255,0.14); box-shadow:0 18px 50px rgba(0,0,0,0.6); opacity:{{ cA1 }}; transition:opacity .16s; pointer-events:none;">
+              <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.16em; color:#666; margin-bottom:8px;">WHERE THIS CAME FROM</div>
+              <p style="margin:0 0 11px; font-size:12px; line-height:1.55; color:#cfcfcf;">Aggregated from two corpus sources that independently agree — the ~75% is a pooled anatomical frequency across both, not a single study.</p>
+              <div style="display:flex; flex-direction:column; gap:8px;">
+                <div style="display:flex; gap:10px;"><span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:600; color:#6b93ff; flex:none; width:96px;">Rhoton</span><span style="font-size:11.5px; line-height:1.4; color:#9a9a9a;">Cranial Anatomy & Surgical Approaches · Ch. 9 CPA · p.412</span></div>
+                <div style="display:flex; gap:10px;"><span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:600; color:#6b93ff; flex:none; width:96px;">Youmans &amp; Winn</span><span style="font-size:11.5px; line-height:1.4; color:#9a9a9a;">Neurological Surgery · Vol. 2 §148 · p.1203</span></div>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:9px;">
+              <span style="display:flex; align-items:center; gap:7px; font-family:'Geist Mono',monospace; font-size:9.5px; letter-spacing:0.14em; color:#34e07f;"><span style="width:6px;height:6px;border-radius:50%;background:#34e07f;box-shadow:0 0 7px #34e07f;"></span>SUPPORTED</span>
+              <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#666;">2 SOURCES · AGREE</span>
+            </div>
+            <p style="margin:0; font-size:14.5px; line-height:1.6; color:#ededed;">The facial nerve lies <strong style="color:#fff;">anterior and superior</strong> to the tumor capsule in ~75% of CPA schwannomas; confirm course with continuous EMG before capsular entry.</p>
+            <p style="margin:9px 0 0; font-size:12.5px; line-height:1.55; color:#8a8a8a;"><span style="color:#6b93ff; font-weight:500;">Why:</span> Blind capsular dissection over an unmapped nerve is the leading cause of HB III+ palsy.</p>
+            <div style="display:flex; gap:7px; margin-top:13px;">
+              <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#8a8a8a; padding:3px 8px; border-radius:6px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.09); cursor:pointer;" style-hover="color:#6b93ff; border-color:rgba(107,147,255,0.4);">→ Fig 1</span>
+            </div>
+          </article>
+
+          <!-- claim 2 -->
+          <article style="position:relative; padding:18px 20px 18px 22px; border-radius:14px; background:rgba(255,201,77,0.04); border:1px solid rgba(255,201,77,0.18); margin-left:39px; cursor:help; opacity:{{ oVer }}; transition:opacity .3s;" onMouseEnter="{{ onCA2 }}" onMouseLeave="{{ onCLeave }}">
+            <span style="position:absolute; left:0; top:14px; bottom:14px; width:3px; border-radius:3px; background:#ffc94d; box-shadow:0 0 10px rgba(255,201,77,0.5);"></span>
+            <div style="position:absolute; left:16px; right:16px; top:calc(100% - 6px); z-index:40; padding:13px 15px; border-radius:12px; background:rgba(10,10,10,0.98); border:1px solid rgba(255,255,255,0.14); box-shadow:0 18px 50px rgba(0,0,0,0.6); opacity:{{ cA2 }}; transition:opacity .16s; pointer-events:none;">
+              <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.16em; color:#ffc94d; margin-bottom:8px;">WHERE THIS CAME FROM · VERIFY</div>
+              <p style="margin:0 0 11px; font-size:12px; line-height:1.55; color:#cfcfcf;">Rests on a single corpus passage. The 40% is one series' frequency, not laterality-adjusted — corroborate against primary microsurgical data before relying on it.</p>
+              <div style="display:flex; gap:10px;"><span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:600; color:#6b93ff; flex:none; width:96px;">Samii</span><span style="font-size:11.5px; line-height:1.4; color:#9a9a9a;">Surgery of Cerebellopontine Lesions · Ch. 4 Vascular · p.188</span></div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:9px;">
+              <span style="display:flex; align-items:center; gap:7px; font-family:'Geist Mono',monospace; font-size:9.5px; letter-spacing:0.14em; color:#ffc94d;"><span style="width:6px;height:6px;border-radius:50%;background:#ffc94d;box-shadow:0 0 7px #ffc94d;"></span>TO VERIFY</span>
+              <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#666;">1 SOURCE · VERIFY</span>
+            </div>
+            <p style="margin:0; font-size:14.5px; line-height:1.6; color:#ededed;">An AICA loop enters the porus acusticus in up to <strong style="color:#fff;">40%</strong> of cases and may be adherent to the IAC dura — anticipate it before drilling the posterior meatal lip.</p>
+            <p style="margin:9px 0 0; font-size:12.5px; line-height:1.55; color:#8a8a8a;"><span style="color:#ffc94d; font-weight:500;">Why:</span> Single-source frequency; corroborate the laterality-specific rate against primary microsurgical series.</p>
+            <div style="display:flex; gap:7px; margin-top:13px;">
+              <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#8a8a8a; padding:3px 8px; border-radius:6px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.09); cursor:pointer;" style-hover="color:#6b93ff; border-color:rgba(107,147,255,0.4);">→ Fig 2</span>
+            </div>
+          </article>
+        </section>
+
+        <!-- SECTION B -->
+        <section style="padding:24px 26px; border-radius:18px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.08);">
+          <div style="display:flex; align-items:center; gap:13px; margin-bottom:6px;">
+            <span style="font-family:'Geist Mono',monospace; font-size:11px; font-weight:600; color:#0a0a0a; width:26px; height:26px; display:grid; place-items:center; border-radius:8px; background:#ededed;">B</span>
+            <h2 style="margin:0; font-size:19px; font-weight:600; letter-spacing:-0.01em;">Operative plan</h2>
+          </div>
+          <p style="margin:0 0 20px 39px; font-size:13.5px; line-height:1.6; color:#8a8a8a; max-width:640px;">Lateral or park-bench positioning, C-shaped retrosigmoid craniotomy, cisternal CSF release, internal debulking, then capsular dissection off the brainstem and cranial nerves under continuous monitoring.</p>
+
+          <!-- claim 3 -->
+          <article style="position:relative; padding:18px 20px 18px 22px; border-radius:14px; background:rgba(52,224,127,0.035); border:1px solid rgba(52,224,127,0.16); margin-left:39px; margin-bottom:12px; cursor:help; opacity:{{ oSup }}; transition:opacity .3s;" onMouseEnter="{{ onCB3 }}" onMouseLeave="{{ onCLeave }}">
+            <span style="position:absolute; left:0; top:14px; bottom:14px; width:3px; border-radius:3px; background:#34e07f; box-shadow:0 0 10px rgba(52,224,127,0.5);"></span>
+            <div style="position:absolute; left:16px; right:16px; top:calc(100% - 6px); z-index:40; padding:13px 15px; border-radius:12px; background:rgba(10,10,10,0.98); border:1px solid rgba(255,255,255,0.14); box-shadow:0 18px 50px rgba(0,0,0,0.6); opacity:{{ cB3 }}; transition:opacity .16s; pointer-events:none;">
+              <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.16em; color:#666; margin-bottom:8px;">WHERE THIS CAME FROM</div>
+              <p style="margin:0 0 11px; font-size:12px; line-height:1.55; color:#cfcfcf;">Technique consensus rather than a measured rate — corroborated by a corpus source and your own operative record.</p>
+              <div style="display:flex; flex-direction:column; gap:8px;">
+                <div style="display:flex; gap:10px;"><span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:600; color:#6b93ff; flex:none; width:96px;">Rhoton</span><span style="font-size:11.5px; line-height:1.4; color:#9a9a9a;">Cranial Anatomy & Surgical Approaches · Ch. 9 · dissection technique</span></div>
+                <div style="display:flex; gap:10px;"><span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:600; color:#6b93ff; flex:none; width:96px;">Case log</span><span style="font-size:11.5px; line-height:1.4; color:#9a9a9a;">Local institutional series · n=34 retrosigmoid resections</span></div>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:9px;">
+              <span style="display:flex; align-items:center; gap:7px; font-family:'Geist Mono',monospace; font-size:9.5px; letter-spacing:0.14em; color:#34e07f;"><span style="width:6px;height:6px;border-radius:50%;background:#34e07f;box-shadow:0 0 7px #34e07f;"></span>SUPPORTED</span>
+              <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#666;">2 SOURCES</span>
+            </div>
+            <p style="margin:0; font-size:14.5px; line-height:1.6; color:#ededed;">Debulk the tumor interior <strong style="color:#fff;">before</strong> capsular manipulation — internal decompression slackens the capsule and protects the facial nerve from traction injury.</p>
+            <p style="margin:9px 0 0; font-size:12.5px; line-height:1.55; color:#8a8a8a;"><span style="color:#6b93ff; font-weight:500;">Why:</span> Traction, not transection, accounts for most delayed facial weakness in large tumors.</p>
+          </article>
+
+          <!-- claim 4: quarantined -->
+          <article style="position:relative; padding:18px 20px 18px 22px; border-radius:14px; background:rgba(255,90,90,0.05); border:1px solid rgba(255,90,90,0.2); margin-left:39px; cursor:help; opacity:{{ oQuar }}; transition:opacity .3s;" onMouseEnter="{{ onCBQ }}" onMouseLeave="{{ onCLeave }}">
+            <span style="position:absolute; left:0; top:14px; bottom:14px; width:3px; border-radius:3px; background:#ff5a5a; box-shadow:0 0 10px rgba(255,90,90,0.5);"></span>
+            <div style="position:absolute; left:16px; right:16px; top:calc(100% - 6px); z-index:40; padding:13px 15px; border-radius:12px; background:rgba(10,10,10,0.98); border:1px solid rgba(255,90,90,0.3); box-shadow:0 18px 50px rgba(0,0,0,0.6); opacity:{{ cBQ }}; transition:opacity .16s; pointer-events:none;">
+              <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.16em; color:#ff8f8a; margin-bottom:8px;">WHERE THIS CAME FROM</div>
+              <p style="margin:0; font-size:12px; line-height:1.55; color:#cfcfcf;">This came from the model’s general training — its background medical knowledge — not from any passage in your corpus. Because nothing in your sources backs it, it’s quarantined until you attach one.</p>
+              <div style="margin-top:10px; display:flex; gap:10px;"><span style="font-family:'Geist Mono',monospace; font-size:10px; font-weight:600; color:#ff8f8a; flex:none; width:96px;">Origin</span><span style="font-size:11.5px; line-height:1.4; color:#9a9a9a;">Model parametric knowledge · 0 corpus passages · not surfaced as a recommendation</span></div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:9px;">
+              <span style="display:flex; align-items:center; gap:7px; font-family:'Geist Mono',monospace; font-size:9.5px; letter-spacing:0.14em; color:#ff5a5a;"><span style="width:6px;height:6px;border-radius:50%;background:#ff5a5a;box-shadow:0 0 7px #ff5a5a;"></span>QUARANTINED</span>
+              <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#ff8f8a;">UNGROUNDED CLAIM</span>
+            </div>
+            <p style="margin:0; font-size:14.5px; line-height:1.6; color:#cfcfcf;">Routine lumbar drain placement reduces postoperative CSF leak after retrosigmoid approaches.</p>
+            <p style="margin:9px 0 0; font-size:12.5px; line-height:1.55; color:#8a8a8a;"><span style="color:#ff8f8a; font-weight:500;">Held back:</span> Generated from the model’s general training, with no supporting passage in your corpus. Not surfaced in the board until a source is attached.</p>
+          </article>
+        </section>
+      </main>
+
+      <!-- RIGHT RAIL -->
+      <aside style="display:flex; flex-direction:column; gap:18px; position:sticky; top:84px;">
+
+        <!-- Figures -->
+        <div style="padding:18px 18px 20px; border-radius:18px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.09); backdrop-filter:blur(14px);">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+            <span style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.16em; color:#666;">ATTACHED FIGURES</span>
+            <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#8a8a8a;">2</span>
+          </div>
+
+          <figure style="margin:0 0 14px;">
+            <image-slot id="dossier-fig-1" style="display:block; width:100%; height:128px;" shape="rounded" radius="11" placeholder="Drop figure · CPA axial T2 MRI"></image-slot>
+            <figcaption style="margin-top:9px;">
+              <div style="display:flex; align-items:center; gap:7px;"><span style="font-family:'Geist Mono',monospace; font-size:10px; color:#0a0a0a; font-weight:600; padding:2px 7px; border-radius:5px; background:#ededed;">FIG 1</span><span style="font-family:'Geist Mono',monospace; font-size:10px; color:#8a8a8a;">↔ Claim A.1</span></div>
+              <p style="margin:7px 0 0; font-size:12px; line-height:1.5; color:#9a9a9a;">Facial-nerve plane anterosuperior to capsule; IAC fundus involvement.</p>
+            </figcaption>
+          </figure>
+
+          <figure style="margin:0;">
+            <image-slot id="dossier-fig-2" style="display:block; width:100%; height:128px;" shape="rounded" radius="11" placeholder="Drop figure · AICA loop / porus"></image-slot>
+            <figcaption style="margin-top:9px;">
+              <div style="display:flex; align-items:center; gap:7px;"><span style="font-family:'Geist Mono',monospace; font-size:10px; color:#0a0a0a; font-weight:600; padding:2px 7px; border-radius:5px; background:#ededed;">FIG 2</span><span style="font-family:'Geist Mono',monospace; font-size:10px; color:#8a8a8a;">↔ Claim A.2</span></div>
+              <p style="margin:7px 0 0; font-size:12px; line-height:1.5; color:#9a9a9a;">Anterior inferior cerebellar artery looping into the internal auditory canal.</p>
+            </figcaption>
+          </figure>
+        </div>
+
+
+      </aside>
+    </div>
+    </div>
+    <!-- ════════════ END DOSSIER VIEW ════════════ -->
+
+    <!-- ════════════ CARDS VIEW ════════════ -->
+    <div style="display:{{ dCards }}">
+      <section class="reveal" style="margin-bottom:24px;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+          <span style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.2em; color:#6b93ff;">CARDS</span>
+          <span style="width:4px; height:4px; border-radius:50%; background:#555;"></span>
+          <span style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.2em; color:#666;">BOARD-REVIEW DECK</span>
+        </div>
+        <h1 style="margin:0; font-size:34px; line-height:1.08; font-weight:600; letter-spacing:-0.025em;">Search your card bank</h1>
+        <p style="margin:12px 0 22px; max-width:620px; font-size:14.5px; line-height:1.6; color:#8a8a8a;">Hybrid search over your personal ABNS / SANS deck — matched cards and media, never synthesized. Nothing here is generated.</p>
+
+        <div style="display:flex; gap:10px; max-width:780px;">
+          <div style="flex:1; display:flex; align-items:center; gap:12px; padding:14px 18px; border-radius:13px; background:rgba(255,255,255,0.04); border:1px solid rgba(107,147,255,0.32); box-shadow:0 0 0 3px rgba(107,147,255,0.07);">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#777" stroke-width="2.2"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg>
+            <span style="flex:1; font-size:15px; color:#ededed;">facial nerve monitoring thresholds</span>
+            <span style="width:2px; height:17px; background:#6b93ff; animation:nc-glow 1.1s ease-in-out infinite;"></span>
+          </div>
+          <button style="display:flex; align-items:center; font-family:inherit; font-size:14px; font-weight:600; color:#0a0a0a; padding:0 24px; border-radius:13px; background:#ededed; border:none; cursor:pointer; transition:transform .18s;">Search</button>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;">
+          <span style="font-family:'Geist Mono',monospace; font-size:11px; padding:6px 11px; border-radius:8px; background:rgba(255,102,216,0.1); border:1px solid rgba(255,102,216,0.24); color:#ff66d8;">ALL DECKS</span>
+          <span style="font-family:'Geist Mono',monospace; font-size:11px; padding:6px 11px; border-radius:8px; background:rgba(255,255,255,0.035); border:1px solid rgba(255,255,255,0.09); color:#9a9a9a; cursor:pointer;" style-hover="border-color:rgba(255,102,216,0.45); color:#ff66d8;">SANS</span>
+          <span style="font-family:'Geist Mono',monospace; font-size:11px; padding:6px 11px; border-radius:8px; background:rgba(255,255,255,0.035); border:1px solid rgba(255,255,255,0.09); color:#9a9a9a; cursor:pointer;" style-hover="border-color:rgba(255,102,216,0.45); color:#ff66d8;">ABNS</span>
+          <span style="font-family:'Geist Mono',monospace; font-size:11px; padding:6px 11px; border-radius:8px; background:rgba(255,201,77,0.08); border:1px solid rgba(255,201,77,0.22); color:#ffc94d; cursor:pointer;" style-hover="border-color:rgba(255,201,77,0.5);">★ HIGH-YIELD ONLY</span>
+        </div>
+      </section>
+
+      <!-- deck telemetry -->
+      <section style="display:grid; grid-template-columns:1fr 1.1fr 1fr; gap:18px; margin-bottom:18px;">
+        <div style="position:relative; padding:20px 22px; border-radius:18px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.09); backdrop-filter:blur(14px); cursor:help;" onMouseEnter="{{ cardOn.mstr }}" onMouseLeave="{{ onCLeave }}">
+          <div style="position:absolute; left:16px; right:16px; top:calc(100% - 6px); z-index:40; padding:13px 15px; border-radius:12px; background:rgba(10,10,10,0.98); border:1px solid rgba(255,255,255,0.14); box-shadow:0 18px 50px rgba(0,0,0,0.6); opacity:{{ cardOp.mstr }}; transition:opacity .16s; pointer-events:none;">
+            <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.16em; color:#666; margin-bottom:8px;">WHAT THIS NUMBER MEANS</div>
+            <p style="margin:0; font-size:12px; line-height:1.55; color:#cfcfcf;">How closely the best card matches your search, on a 0–1 scale. It blends meaning (does the card cover the same idea?) with keywords (does it use the same words?). <strong style="color:#fff;">0.91</strong> means a near-exact match. Above 0.75 is strong; below that, cards still show but greyed.</p>
+          </div>
+          <div style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.18em; color:#666;">MATCH STRENGTH</div>
+          <div style="font-size:15px; font-weight:600; margin-top:4px;">Top result vs your search</div>
+          <div style="display:flex; align-items:center; gap:16px; margin-top:8px;">
+            <div style="position:relative; width:150px; height:150px; flex:none;">
+              {{ gaugeMatchEl }}
+              <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                <div style="font-size:28px; font-weight:600; line-height:1; letter-spacing:-0.02em;">0.91</div>
+                <div style="font-family:'Geist Mono',monospace; font-size:8.5px; letter-spacing:0.14em; color:#777; margin-top:4px;">OF 1.00</div>
+              </div>
+            </div>
+            <div style="flex:1; font-size:11px; color:#a8a8a8; line-height:1.55;">
+              <div style="color:#34e07f; font-weight:600; font-size:12.5px;">Very strong match</div>
+              <div style="color:#8a8a8a; margin-top:5px;">Near-exact — same topic, same wording.</div>
+              <div style="color:#8a8a8a; margin-top:7px; font-family:'Geist Mono',monospace; font-size:10px;">3 cards above 0.75</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="position:relative; padding:20px 22px; border-radius:18px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.09); backdrop-filter:blur(14px);">
+          <div style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.18em; color:#666;">DECK COVERAGE</div>
+          <div style="font-size:15px; font-weight:600; margin-top:4px;">Where your deck has gaps</div>
+          <div style="font-size:11.5px; line-height:1.5; color:#8a8a8a; margin-top:5px; margin-bottom:14px;">Share of each ABNS blueprint area you already have at least one card for. Hover a bar for the count.</div>
+          <div style="display:flex; flex-direction:column; gap:11px;">
+            <div style="position:relative; cursor:help;" onMouseEnter="{{ cardOn.cov0 }}" onMouseLeave="{{ onCLeave }}">
+              <div style="position:absolute; left:0; right:0; bottom:calc(100% + 8px); z-index:40; padding:11px 13px; border-radius:11px; background:rgba(10,10,10,0.98); border:1px solid rgba(255,255,255,0.14); box-shadow:0 16px 44px rgba(0,0,0,0.6); opacity:{{ cardOp.cov0 }}; transition:opacity .16s; pointer-events:none; font-size:11.5px; line-height:1.5; color:#cfcfcf;">You have cards for <strong style="color:#fff;">41 of 50</strong> tumor topics on the blueprint. 9 topics have no card yet.</div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span style="font-size:12px; color:#a8a8a8;">Tumor</span><span style="font-family:'Geist Mono',monospace; font-size:12px; color:#34e07f;">41/50</span></div>
+              <div style="height:5px; border-radius:3px; background:rgba(255,255,255,0.06);"><div style="height:100%; width:82%; border-radius:3px; background:linear-gradient(90deg,#1aa85f,#34e07f);"></div></div>
+            </div>
+            <div style="position:relative; cursor:help;" onMouseEnter="{{ cardOn.cov1 }}" onMouseLeave="{{ onCLeave }}">
+              <div style="position:absolute; left:0; right:0; bottom:calc(100% + 8px); z-index:40; padding:11px 13px; border-radius:11px; background:rgba(10,10,10,0.98); border:1px solid rgba(255,255,255,0.14); box-shadow:0 16px 44px rgba(0,0,0,0.6); opacity:{{ cardOp.cov1 }}; transition:opacity .16s; pointer-events:none; font-size:11.5px; line-height:1.5; color:#cfcfcf;">You have cards for <strong style="color:#fff;">32 of 45</strong> functional / epilepsy topics. 13 topics have no card yet.</div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span style="font-size:12px; color:#a8a8a8;">Functional</span><span style="font-family:'Geist Mono',monospace; font-size:12px; color:#6b93ff;">32/45</span></div>
+              <div style="height:5px; border-radius:3px; background:rgba(255,255,255,0.06);"><div style="height:100%; width:71%; border-radius:3px; background:linear-gradient(90deg,#3f63d6,#6b93ff);"></div></div>
+            </div>
+            <div style="position:relative; cursor:help;" onMouseEnter="{{ cardOn.cov2 }}" onMouseLeave="{{ onCLeave }}">
+              <div style="position:absolute; left:0; right:0; bottom:calc(100% + 8px); z-index:40; padding:11px 13px; border-radius:11px; background:rgba(10,10,10,0.98); border:1px solid rgba(255,255,255,0.14); box-shadow:0 16px 44px rgba(0,0,0,0.6); opacity:{{ cardOp.cov2 }}; transition:opacity .16s; pointer-events:none; font-size:11.5px; line-height:1.5; color:#cfcfcf;">You have cards for <strong style="color:#fff;">29 of 45</strong> vascular topics. 16 topics have no card yet.</div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span style="font-size:12px; color:#a8a8a8;">Vascular</span><span style="font-family:'Geist Mono',monospace; font-size:12px; color:#ffc94d;">29/45</span></div>
+              <div style="height:5px; border-radius:3px; background:rgba(255,255,255,0.06);"><div style="height:100%; width:64%; border-radius:3px; background:linear-gradient(90deg,#c79325,#ffc94d);"></div></div>
+            </div>
+            <div style="position:relative; cursor:help;" onMouseEnter="{{ cardOn.cov3 }}" onMouseLeave="{{ onCLeave }}">
+              <div style="position:absolute; left:0; right:0; bottom:calc(100% + 8px); z-index:40; padding:11px 13px; border-radius:11px; background:rgba(10,10,10,0.98); border:1px solid rgba(255,90,90,0.3); box-shadow:0 16px 44px rgba(0,0,0,0.6); opacity:{{ cardOp.cov3 }}; transition:opacity .16s; pointer-events:none; font-size:11.5px; line-height:1.5; color:#cfcfcf;">Your weakest area — cards for only <strong style="color:#fff;">24 of 50</strong> spine topics. 26 topics have no card yet.</div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span style="font-size:12px; color:#a8a8a8;">Spine</span><span style="font-family:'Geist Mono',monospace; font-size:12px; color:#ff5a5a;">24/50</span></div>
+              <div style="height:5px; border-radius:3px; background:rgba(255,255,255,0.06);"><div style="height:100%; width:48%; border-radius:3px; background:linear-gradient(90deg,#d84a44,#ff5a5a);"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="position:relative; padding:20px 22px; border-radius:18px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.09); backdrop-filter:blur(14px); display:flex; flex-direction:column;">
+          <div style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.18em; color:#666;">DECK STATUS</div>
+          <div style="font-size:15px; font-weight:600; margin-top:4px; margin-bottom:14px;">Index</div>
+          <div style="display:flex; flex-direction:column; gap:12px; flex:1;">
+            <div style="padding:13px 14px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07);">
+              <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.1em; color:#777;">CARDS INDEXED</div>
+              <div style="font-size:22px; font-weight:600; margin-top:3px; font-variant-numeric:tabular-nums;">1,240</div>
+            </div>
+            <div style="position:relative; padding:13px 14px; border-radius:12px; background:rgba(255,201,77,0.05); border:1px solid rgba(255,201,77,0.16); cursor:help;" onMouseEnter="{{ cardOn.hy }}" onMouseLeave="{{ onCLeave }}">
+              <div style="position:absolute; left:0; right:0; bottom:calc(100% + 8px); z-index:40; padding:11px 13px; border-radius:11px; background:rgba(10,10,10,0.98); border:1px solid rgba(255,201,77,0.3); box-shadow:0 16px 44px rgba(0,0,0,0.6); opacity:{{ cardOp.hy }}; transition:opacity .16s; pointer-events:none; font-size:11.5px; line-height:1.5; color:#cfcfcf;">Not our judgment — &ldquo;high-yield&rdquo; is the deck author&rsquo;s own tag (SANS / ABNS) marking topics the boards test most often. <strong style="color:#ffc94d;">224</strong> of your 1,240 cards carry it.</div>
+              <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.1em; color:#ffc94d;">FLAGGED HIGH-YIELD</div>
+              <div style="font-size:22px; font-weight:600; margin-top:3px; color:#ffc94d; font-variant-numeric:tabular-nums;">18<span style="font-size:13px; font-weight:400;">%</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- matched cards -->
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+        <span style="font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.16em; color:#666;">3 MATCHED CARDS</span>
+        <span style="flex:1; height:1px; background:rgba(255,255,255,0.06);"></span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px;">
+
+        <article style="position:relative; padding:20px 22px; border-radius:16px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.08); display:flex; flex-direction:column; gap:12px; cursor:help;" onMouseEnter="{{ cardOn.k1 }}" onMouseLeave="{{ onCLeave }}">
+          <div style="position:absolute; left:16px; right:16px; top:calc(100% - 6px); z-index:40; padding:13px 15px; border-radius:12px; background:rgba(10,10,10,0.98); border:1px solid rgba(255,255,255,0.14); box-shadow:0 18px 50px rgba(0,0,0,0.6); opacity:{{ cardOp.k1 }}; transition:opacity .16s; pointer-events:none;">
+            <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.16em; color:#666; margin-bottom:8px;">WHERE THIS CARD COMES FROM</div>
+            <p style="margin:0; font-size:12px; line-height:1.55; color:#cfcfcf;">Pulled word-for-word from your <strong style="color:#ff66d8;">SANS</strong> deck — not generated. It scored <strong style="color:#fff;">0.91</strong> against your search (very strong). The deck author tagged it high-yield.</p>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <div style="display:flex; align-items:center; gap:7px;">
+              <span style="font-family:'Geist Mono',monospace; font-size:9.5px; font-weight:600; color:#ff66d8; padding:3px 8px; border-radius:6px; background:rgba(255,102,216,0.12); border:1px solid rgba(255,102,216,0.24);">SANS</span>
+              <span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#ffc94d; padding:3px 8px; border-radius:6px; background:rgba(255,201,77,0.1); border:1px solid rgba(255,201,77,0.22);">★ HIGH-YIELD</span>
+            </div>
+            <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#34e07f;">0.91</span>
+          </div>
+          <div>
+            <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.14em; color:#777; margin-bottom:5px;">PROMPT</div>
+            <p style="margin:0; font-size:14px; line-height:1.55; color:#ededed;">What stimulation threshold at the end of resection predicts good facial outcome?</p>
+          </div>
+          <div style="padding-top:12px; border-top:1px solid rgba(255,255,255,0.06);">
+            <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.14em; color:#34e07f; margin-bottom:5px;">ANSWER</div>
+            <p style="margin:0; font-size:13px; line-height:1.55; color:#a8a8a8;">A response at ≤0.05 mA predicts House-Brackmann I–II in ~90% of patients at one year.</p>
+          </div>
+          <div style="display:flex; gap:6px;"><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#8a8a8a; padding:2px 8px; border-radius:5px; background:rgba(255,255,255,0.035); border:1px solid rgba(255,255,255,0.08);">CN VII</span><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#8a8a8a; padding:2px 8px; border-radius:5px; background:rgba(255,255,255,0.035); border:1px solid rgba(255,255,255,0.08);">monitoring</span></div>
+        </article>
+
+        <article style="position:relative; padding:20px 22px; border-radius:16px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.08); display:flex; flex-direction:column; gap:12px; cursor:help;" onMouseEnter="{{ cardOn.k2 }}" onMouseLeave="{{ onCLeave }}">
+          <div style="position:absolute; left:16px; right:16px; top:calc(100% - 6px); z-index:40; padding:13px 15px; border-radius:12px; background:rgba(10,10,10,0.98); border:1px solid rgba(255,255,255,0.14); box-shadow:0 18px 50px rgba(0,0,0,0.6); opacity:{{ cardOp.k2 }}; transition:opacity .16s; pointer-events:none;">
+            <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.16em; color:#666; margin-bottom:8px;">WHERE THIS CARD COMES FROM</div>
+            <p style="margin:0; font-size:12px; line-height:1.55; color:#cfcfcf;">Pulled word-for-word from your <strong style="color:#ff66d8;">ABNS</strong> deck — not generated. It scored <strong style="color:#fff;">0.86</strong> against your search (strong). Not flagged high-yield.</p>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <div style="display:flex; align-items:center; gap:7px;">
+              <span style="font-family:'Geist Mono',monospace; font-size:9.5px; font-weight:600; color:#ff66d8; padding:3px 8px; border-radius:6px; background:rgba(255,102,216,0.12); border:1px solid rgba(255,102,216,0.24);">ABNS</span>
+            </div>
+            <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#34e07f;">0.86</span>
+          </div>
+          <div>
+            <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.14em; color:#777; margin-bottom:5px;">PROMPT</div>
+            <p style="margin:0; font-size:14px; line-height:1.55; color:#ededed;">Where does the facial nerve typically lie relative to a CPA schwannoma?</p>
+          </div>
+          <div style="padding-top:12px; border-top:1px solid rgba(255,255,255,0.06);">
+            <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.14em; color:#34e07f; margin-bottom:5px;">ANSWER</div>
+            <p style="margin:0; font-size:13px; line-height:1.55; color:#a8a8a8;">Anterosuperior to the tumor in ~75%; anteroinferior less commonly; rarely posterior.</p>
+          </div>
+          <div style="display:flex; gap:6px;"><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#8a8a8a; padding:2px 8px; border-radius:5px; background:rgba(255,255,255,0.035); border:1px solid rgba(255,255,255,0.08);">schwannoma</span><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#8a8a8a; padding:2px 8px; border-radius:5px; background:rgba(255,255,255,0.035); border:1px solid rgba(255,255,255,0.08);">anatomy</span></div>
+        </article>
+
+        <article style="position:relative; padding:20px 22px; border-radius:16px; background:#0a0a0a; border:1px solid rgba(255,255,255,0.08); display:flex; flex-direction:column; gap:12px; cursor:help;" onMouseEnter="{{ cardOn.k3 }}" onMouseLeave="{{ onCLeave }}">
+          <div style="position:absolute; left:16px; right:16px; top:calc(100% - 6px); z-index:40; padding:13px 15px; border-radius:12px; background:rgba(10,10,10,0.98); border:1px solid rgba(255,255,255,0.14); box-shadow:0 18px 50px rgba(0,0,0,0.6); opacity:{{ cardOp.k3 }}; transition:opacity .16s; pointer-events:none;">
+            <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.16em; color:#666; margin-bottom:8px;">WHERE THIS CARD COMES FROM</div>
+            <p style="margin:0; font-size:12px; line-height:1.55; color:#cfcfcf;">Pulled word-for-word from your <strong style="color:#ff66d8;">SANS</strong> deck — not generated. It scored <strong style="color:#fff;">0.79</strong> (strong, just above the 0.75 cutoff). The deck author tagged it high-yield.</p>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <div style="display:flex; align-items:center; gap:7px;">
+              <span style="font-family:'Geist Mono',monospace; font-size:9.5px; font-weight:600; color:#ff66d8; padding:3px 8px; border-radius:6px; background:rgba(255,102,216,0.12); border:1px solid rgba(255,102,216,0.24);">SANS</span>
+              <span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#ffc94d; padding:3px 8px; border-radius:6px; background:rgba(255,201,77,0.1); border:1px solid rgba(255,201,77,0.22);">★ HIGH-YIELD</span>
+            </div>
+            <span style="font-family:'Geist Mono',monospace; font-size:10px; color:#ffc94d;">0.79</span>
+          </div>
+          <div>
+            <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.14em; color:#777; margin-bottom:5px;">PROMPT</div>
+            <p style="margin:0; font-size:14px; line-height:1.55; color:#ededed;">Which vessel loops into the IAC and is at risk during meatal drilling?</p>
+          </div>
+          <div style="padding-top:12px; border-top:1px solid rgba(255,255,255,0.06);">
+            <div style="font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.14em; color:#34e07f; margin-bottom:5px;">ANSWER</div>
+            <p style="margin:0; font-size:13px; line-height:1.55; color:#a8a8a8;">AICA (anterior inferior cerebellar artery); its labyrinthine branch supplies the inner ear.</p>
+          </div>
+          <div style="display:flex; gap:6px;"><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#8a8a8a; padding:2px 8px; border-radius:5px; background:rgba(255,255,255,0.035); border:1px solid rgba(255,255,255,0.08);">AICA</span><span style="font-family:'Geist Mono',monospace; font-size:9.5px; color:#8a8a8a; padding:2px 8px; border-radius:5px; background:rgba(255,255,255,0.035); border:1px solid rgba(255,255,255,0.08);">vascular</span></div>
+        </article>
+
+        <div style="display:flex; align-items:center; justify-content:center; padding:20px; border-radius:16px; border:1px dashed rgba(255,255,255,0.12); font-family:'Geist Mono',monospace; font-size:11px; color:#666;">+ 11 more below threshold</div>
+      </div>
+    </div>
+    <!-- ════════════ END CARDS VIEW ════════════ -->
+
+    <!-- Disclaimer -->
+    <footer style="margin-top:26px; padding:16px 20px; border-radius:14px; background:rgba(255,201,77,0.04); border:1px solid rgba(255,201,77,0.15); display:flex; align-items:center; gap:12px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffc94d" stroke-width="2" style="flex:none;"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+      <span style="font-size:12px; color:rgba(255,201,77,0.66); line-height:1.5;">Decision-support only. Every claim is grounded to the local corpus and surfaced with its evidence state — verify against primary sources before operative use.</span>
+    </footer>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1340,&quot;height&quot;:1180}}">
+class Component extends DCLogic {
+  state = { view: 'ask', filter: 'all', clock: '', hov: '', rHov: -1, cHov: '' };
+
+  componentDidMount() {
+    const tick = () => {
+      const d = new Date();
+      const p = (n) => String(n).padStart(2, '0');
+      this.setState({ clock: `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}` });
+    };
+    tick();
+    this._t = setInterval(tick, 1000);
+  }
+  componentWillUnmount() { clearInterval(this._t); }
+
+  // ── Radar: structures at risk ──────────────────────────────
+  radar(axes, size, opts) {
+    opts = opts || {};
+    const key = opts.key || 'risk';
+    const hov = (opts.hover == null) ? -1 : opts.hover;
+    const onHover = opts.onHover;
+    const showPct = !!opts.showPct;
+    const h = React.createElement;
+    const cx = size / 2, cy = size / 2, R = size / 2 - 30, n = axes.length;
+    const ang = (i) => -Math.PI / 2 + i * (2 * Math.PI / n);
+    const pt = (i, f) => [cx + Math.cos(ang(i)) * R * f, cy + Math.sin(ang(i)) * R * f];
+    const ringPath = (f) => axes.map((_, i) => { const [x, y] = pt(i, f); return `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`; }).join(' ') + 'Z';
+    const dataPath = () => axes.map((a, i) => { const [x, y] = pt(i, a[key] / 100); return `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`; }).join(' ') + 'Z';
+
+    const rings = [0.25, 0.5, 0.75, 1].map((f, i) => h('path', { key: 'r' + i, d: ringPath(f), fill: 'none', stroke: 'rgba(255,255,255,0.07)', strokeWidth: 1 }));
+    const spokes = axes.map((_, i) => { const [x, y] = pt(i, 1); return h('line', { key: 's' + i, x1: cx, y1: cy, x2: x, y2: y, stroke: 'rgba(255,255,255,0.06)', strokeWidth: 1 }); });
+    const dots = axes.map((a, i) => {
+      const [x, y] = pt(i, a[key] / 100); const on = hov === i;
+      return h('circle', { key: 'd' + i, cx: x, cy: y, r: on ? 4.2 : 2.6, fill: on ? '#fff' : '#ff5a5a', style: on ? { filter: 'drop-shadow(0 0 6px rgba(255,90,90,0.9))' } : null });
+    });
+    const labels = axes.map((a, i) => {
+      const [x, y] = pt(i, 1.18); const on = hov === i;
+      const txt = showPct ? `${a.k} ${a[key]}%` : a.k;
+      return h('text', { key: 't' + i, x, y, fill: on ? '#ededed' : '#8a8a8a', fontSize: 8.5, fontWeight: on ? 600 : 400, fontFamily: "'Geist Mono', monospace", letterSpacing: '0.04em', textAnchor: 'middle', dominantBaseline: 'middle' }, txt);
+    });
+    const hits = onHover ? [].concat(
+      axes.map((a, i) => { const [x, y] = pt(i, a[key] / 100); return h('circle', { key: 'hd' + i, cx: x, cy: y, r: 14, fill: 'transparent', style: { cursor: 'help' }, onMouseEnter: () => onHover(i), onMouseLeave: () => onHover(-1) }); }),
+      axes.map((a, i) => { const [x, y] = pt(i, 1.18); return h('rect', { key: 'hl' + i, x: x - 30, y: y - 8, width: 60, height: 16, fill: 'transparent', style: { cursor: 'help' }, onMouseEnter: () => onHover(i), onMouseLeave: () => onHover(-1) }); }),
+    ) : [];
+
+    return h('svg', { viewBox: `0 0 ${size} ${size}`, width: '100%', height: '100%', style: { overflow: 'visible' } },
+      h('defs', null,
+        h('radialGradient', { id: 'ncRadar', cx: '50%', cy: '50%', r: '60%' },
+          h('stop', { offset: '0%', stopColor: 'rgba(255,90,90,0.42)' }),
+          h('stop', { offset: '100%', stopColor: 'rgba(255,90,90,0.12)' }),
+        ),
+      ),
+      ...rings, ...spokes,
+      h('path', { d: dataPath(), fill: 'url(#ncRadar)', stroke: '#ff5a5a', strokeWidth: 1.6, style: { filter: 'drop-shadow(0 0 6px rgba(255,90,90,0.55))' } }),
+      ...dots, ...labels, ...hits,
+    );
+  }
+
+  // ── Concentric gauge: evidence integrity ───────────────────
+  gauge(rings, size) {
+    const h = React.createElement;
+    const cx = size / 2, cy = size / 2;
+    const children = [];
+    rings.forEach((g, i) => {
+      const c = 2 * Math.PI * g.r;
+      children.push(h('circle', { key: 'bg' + i, cx, cy, r: g.r, fill: 'none', stroke: 'rgba(255,255,255,0.06)', strokeWidth: 9 }));
+      children.push(h('circle', {
+        key: 'fg' + i, cx, cy, r: g.r, fill: 'none', stroke: g.color, strokeWidth: 9, strokeLinecap: 'round',
+        strokeDasharray: `${(c * g.frac).toFixed(1)} ${c.toFixed(1)}`,
+        transform: `rotate(-90 ${cx} ${cy})`,
+        style: { filter: `drop-shadow(0 0 5px ${g.glow})` },
+      }));
+    });
+    return h('svg', { viewBox: `0 0 ${size} ${size}`, width: '100%', height: '100%' }, ...children);
+  }
+
+  seg(active) {
+    if (active) return { bg: 'rgba(107,147,255,0.16)', bd: 'rgba(107,147,255,0.4)', fg: '#34dfe6' };
+    return { bg: 'rgba(255,255,255,0.03)', bd: 'rgba(255,255,255,0.09)', fg: '#8a8a8a' };
+  }
+
+  renderVals() {
+    const f = this.state.filter;
+    const all = this.seg(f === 'all');
+    const sup = this.seg(f === 'supported');
+    const ver = this.seg(f === 'verify');
+    const quar = this.seg(f === 'quarantine');
+    const dim = (kind) => (f === 'all' || f === kind) ? 1 : 0.22;
+    const hv = this.state.hov;
+    const t = (k) => hv === k ? 1 : 0;
+    const v = this.state.view;
+    const nav = (k) => v === k
+      ? { bg: 'rgba(107,147,255,0.14)', bd: 'rgba(107,147,255,0.28)', fg: '#34dfe6' }
+      : { bg: 'transparent', bd: 'rgba(255,255,255,0)', fg: '#8a8a8a' };
+    const nAsk = nav('ask'), nDos = nav('dossier'), nCards = nav('cards');
+    const cardKeys = ['mstr', 'cov0', 'cov1', 'cov2', 'cov3', 'hy', 'k1', 'k2', 'k3'];
+    const cardOn = {}, cardOp = {};
+    cardKeys.forEach((k) => { cardOn[k] = () => this.setState({ cHov: k }); cardOp[k] = this.state.cHov === k ? 1 : 0; });
+    const BIG_AXES = [
+      { k: 'CN VIII', pct: 55, label: 'Cochlear nerve', body: 'Loss of serviceable hearing (AAO-HNS A/B) when preservation is attempted. Pooled average across corpus hearing-preservation series; strongly size- and fundal-extension dependent.', meta: 'Reported 45–70% · pooled average' },
+      { k: 'CN VII', pct: 30, label: 'Facial nerve', body: 'New facial weakness (HB ≥III) in the early postoperative period; ~8–15% remain HB ≥III at one year. Pooled average across continuous-EMG series.', meta: 'Early 18–40% · 1yr 8–15% · pooled' },
+      { k: 'CSF', pct: 11, label: 'CSF / dural closure', body: 'Postoperative CSF leak after retrosigmoid closure. Midpoint of the reported range, pooled across corpus sources.', meta: 'Reported 7–14% · pooled average' },
+      { k: 'AICA', pct: 3, label: 'AICA', body: 'AICA injury or territory infarct. Low-frequency event resting largely on a single corpus passage — verify.', meta: 'Reported 1–4% · single source · verify' },
+      { k: 'CEREBELLUM', pct: 3, label: 'Cerebellum', body: 'Cerebellar retraction injury or edema. Pooled average across corpus series; wide uncertainty.', meta: 'Reported 1–5% · pooled average' },
+      { k: 'BRAINSTEM', pct: 2, label: 'Brainstem', body: 'Direct brainstem injury. Rare event, pooled average with wide uncertainty.', meta: 'Reported 1–3% · pooled average' },
+      { k: 'LOWER CN', pct: 2, label: 'Lower cranial nerves', body: 'New lower cranial nerve (IX–XI) deficit. Uncommon in vestibular schwannoma; pooled average.', meta: 'Reported 1–3% · pooled average' },
+    ];
+    // Reported predictors of facial-nerve (HB I–II) outcome after VS resection,
+    // each scaled to its relative impact in the microsurgical literature.
+    const ASK_AXES = [
+      { k: 'TUMOR SIZE', risk: 92 },   // dominant predictor across series
+      { k: 'STIM ≤0.05', risk: 84 },   // final proximal stimulation threshold
+      { k: 'ADHERENCE', risk: 76 },    // nerve–capsule plane / arachnoid preservation
+      { k: 'EXTENT', risk: 66 },       // GTR vs near-total
+      { k: 'CONSISTENCY', risk: 46 },  // cystic vs solid
+      { k: 'PREOP HB', risk: 36 },     // baseline facial function
+    ];
+    const BIG_RINGS = [
+      { r: 56, frac: 38 / 49, color: '#34e07f', glow: 'rgba(52,224,127,0.6)' },
+      { r: 43, frac: 9 / 49, color: '#ffc94d', glow: 'rgba(255,201,77,0.6)' },
+      { r: 30, frac: 2 / 49, color: '#ff5a5a', glow: 'rgba(255,90,90,0.6)' },
+    ];
+    const ASK_RINGS = [
+      { r: 62, frac: 5 / 6, color: '#34e07f', glow: 'rgba(52,224,127,0.6)' },
+      { r: 46, frac: 1 / 6, color: '#ffc94d', glow: 'rgba(255,201,77,0.6)' },
+    ];
+    return {
+      goAsk: () => this.setState({ view: 'ask' }),
+      goDossier: () => this.setState({ view: 'dossier' }),
+      goCards: () => this.setState({ view: 'cards' }),
+      dAsk: v === 'ask' ? 'block' : 'none',
+      dDossier: v === 'dossier' ? 'block' : 'none',
+      dCards: v === 'cards' ? 'block' : 'none',
+      nAskBg: nAsk.bg, nAskBd: nAsk.bd, nAskFg: nAsk.fg,
+      nDosBg: nDos.bg, nDosBd: nDos.bd, nDosFg: nDos.fg,
+      nCardsBg: nCards.bg, nCardsBd: nCards.bd, nCardsFg: nCards.fg,
+      radarAskEl: this.radar(ASK_AXES, 210, false),
+      gaugeAskEl: this.gauge(ASK_RINGS, 150),
+      gaugeMatchEl: this.gauge([{ r: 60, frac: 0.91, color: '#6b93ff', glow: 'rgba(107,147,255,0.6)' }], 150),
+      onFacial: () => this.setState({ hov: 'facial' }),
+      onHearing: () => this.setState({ hov: 'hearing' }),
+      onGtr: () => this.setState({ hov: 'gtr' }),
+      onOr: () => this.setState({ hov: 'or' }),
+      onCsf: () => this.setState({ hov: 'csf' }),
+      onLeave: () => this.setState({ hov: '' }),
+      tFacial: t('facial'), tHearing: t('hearing'), tGtr: t('gtr'), tOr: t('or'), tCsf: t('csf'),
+      radarEl: this.radar(BIG_AXES, 240, { key: 'pct', showPct: true, hover: (this.state.rHov == null ? -1 : this.state.rHov), onHover: (i) => this.setState({ rHov: i }) }),
+      gaugeEl: this.gauge(BIG_RINGS, 128),
+      rTipO: BIG_AXES[(this.state.rHov == null ? -1 : this.state.rHov)] ? 1 : 0,
+      rTipName: (BIG_AXES[this.state.rHov] || {}).label || '',
+      rTipBody: (BIG_AXES[this.state.rHov] || {}).body || '',
+      rTipMeta: (BIG_AXES[this.state.rHov] || {}).meta || '',
+      onCA1: () => this.setState({ cHov: 'a1' }), cA1: this.state.cHov === 'a1' ? 1 : 0,
+      onCA2: () => this.setState({ cHov: 'a2' }), cA2: this.state.cHov === 'a2' ? 1 : 0,
+      onCB3: () => this.setState({ cHov: 'b3' }), cB3: this.state.cHov === 'b3' ? 1 : 0,
+      onCBQ: () => this.setState({ cHov: 'bq' }), cBQ: this.state.cHov === 'bq' ? 1 : 0,
+      onCP1: () => this.setState({ cHov: 'p1' }), cP1: this.state.cHov === 'p1' ? 1 : 0,
+      onCP2: () => this.setState({ cHov: 'p2' }), cP2: this.state.cHov === 'p2' ? 1 : 0,
+      onCLeave: () => this.setState({ cHov: '' }),
+      cardOn, cardOp,
+      clock: this.state.clock,
+      setAll: () => this.setState({ filter: 'all' }),
+      setSupported: () => this.setState({ filter: 'supported' }),
+      setVerify: () => this.setState({ filter: 'verify' }),
+      setQuar: () => this.setState({ filter: 'quarantine' }),
+      allBg: all.bg, allBd: all.bd, allFg: all.fg,
+      supBg: sup.bg, supBd: sup.bd, supFg: sup.fg,
+      verBg: ver.bg, verBd: ver.bd, verFg: ver.fg,
+      quarBg: quar.bg, quarBd: quar.bd, quarFg: quar.fg,
+      oSup: dim('supported'),
+      oVer: dim('verify'),
+      oQuar: dim('quarantine'),
+    };
+  }
+}
+</script>
+</body>
+</html>

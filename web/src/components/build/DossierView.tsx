@@ -18,9 +18,9 @@ interface Rehearsal {
 // it exists only in EvidenceSummary totals and the filter control.
 function statusMeta(status: DossierClaim["status"]) {
   if (status === "supported") {
-    return { color: "#5fa86f", label: "SUPPORTED", srLabel: "corpus-supported" } as const
+    return { color: "#34e07f", label: "SUPPORTED", srLabel: "corpus-supported" } as const
   }
-  return { color: "#d89a3f", label: "TO VERIFY", srLabel: "needs clinician verification" } as const
+  return { color: "#ffc94d", label: "TO VERIFY", srLabel: "needs clinician verification" } as const
 }
 
 /** Returns true when a claim's status matches the active filter. */
@@ -42,10 +42,10 @@ function CitChip({ figId }: { figId: string }) {
       className="inline-flex items-center font-mono text-[10px] font-bold transition-colors"
       style={{
         padding: "1px 5px",
-        background: "rgba(63,150,144,.12)",
-        color: "#6fc0b8",
+        background: "rgba(107,147,255,.12)",
+        color: "#6b93ff",
         borderRadius: "5px",
-        border: "1px solid rgba(63,150,144,.22)",
+        border: "1px solid rgba(107,147,255,.22)",
         textDecoration: "none",
       }}
     >
@@ -112,16 +112,16 @@ function ClaimCard({
         </div>
 
         {/* Claim text */}
-        <p className="text-[13px] leading-relaxed" style={{ color: "#ece7e1" }}>
+        <p className="text-[13px] leading-relaxed" style={{ color: "#ededed" }}>
           {claim.text}
         </p>
 
         {/* Why: line — teal "Why:" label + body text */}
         {claim.why && (
-          <p className="mt-2 text-[12px] leading-relaxed" style={{ color: "#a79e98" }}>
+          <p className="mt-2 text-[12px] leading-relaxed" style={{ color: "#a8a8a8" }}>
             <span
               className="font-mono text-[9px] font-bold uppercase tracking-[0.12em]"
-              style={{ color: "#6fc0b8" }}
+              style={{ color: "#6b93ff" }}
             >
               Why:
             </span>{" "}
@@ -137,11 +137,11 @@ function ClaimCard({
                 <span
                   className="mt-0.5 shrink-0 font-mono text-[11px] leading-none"
                   aria-hidden="true"
-                  style={{ color: "#3f9690" }}
+                  style={{ color: "#6b93ff" }}
                 >
                   ☐
                 </span>
-                <span className="text-[11px] leading-relaxed" style={{ color: "#a79e98" }}>
+                <span className="text-[11px] leading-relaxed" style={{ color: "#a8a8a8" }}>
                   {s}
                 </span>
               </li>
@@ -160,7 +160,7 @@ function ClaimCard({
                 key={`fl-${fid}`}
                 href={`#${fid}`}
                 className="font-mono text-[10px] transition-colors hover:underline"
-                style={{ color: "#6fc0b8", textDecoration: "none" }}
+                style={{ color: "#6b93ff", textDecoration: "none" }}
               >
                 → {fid}
               </a>
@@ -177,10 +177,10 @@ function ClaimCard({
               className="font-mono text-[11px] transition-colors"
               style={{
                 padding: "2px 8px",
-                background: active === "wrong" ? "#c0564f" : "rgba(255,255,255,.06)",
-                color: active === "wrong" ? "#fff" : "#978d86",
+                background: active === "wrong" ? "#ff5a5a" : "rgba(255,255,255,.06)",
+                color: active === "wrong" ? "#fff" : "#8a8a8a",
                 borderRadius: "6px",
-                border: `1px solid ${active === "wrong" ? "#c0564f" : "rgba(255,255,255,.09)"}`,
+                border: `1px solid ${active === "wrong" ? "#ff5a5a" : "rgba(255,255,255,.09)"}`,
                 cursor: "pointer",
               }}
             >
@@ -192,10 +192,10 @@ function ClaimCard({
               className="font-mono text-[11px] transition-colors"
               style={{
                 padding: "2px 8px",
-                background: active === "important" ? "#d8413a" : "rgba(255,255,255,.06)",
-                color: active === "important" ? "#fff" : "#978d86",
+                background: active === "important" ? "#ffc94d" : "rgba(255,255,255,.06)",
+                color: active === "important" ? "#0a0a0a" : "#8a8a8a",
                 borderRadius: "6px",
-                border: `1px solid ${active === "important" ? "#d8413a" : "rgba(255,255,255,.09)"}`,
+                border: `1px solid ${active === "important" ? "#ffc94d" : "rgba(255,255,255,.09)"}`,
                 cursor: "pointer",
               }}
             >
@@ -242,10 +242,10 @@ function MissingInput({
         className="font-mono text-[11px] transition-colors"
         style={{
           padding: "4px 10px",
-          background: "rgba(63,150,144,.15)",
-          color: "#6fc0b8",
+          background: "rgba(107,147,255,.15)",
+          color: "#6b93ff",
           borderRadius: "7px",
-          border: "1px solid rgba(63,150,144,.28)",
+          border: "1px solid rgba(107,147,255,.28)",
           cursor: "pointer",
         }}
       >
@@ -256,16 +256,16 @@ function MissingInput({
 }
 
 // ---------------------------------------------------------------------------
-// Section letter badge (crimson gradient A / B / C…)
+// Section letter badge (neutral white tile, near-black letter — A / B / C…)
 // ---------------------------------------------------------------------------
 function LetterBadge({ letter }: { letter: string }) {
   return (
     <div
-      className="flex h-8 w-8 shrink-0 items-center justify-center font-display text-sm font-bold text-white"
+      className="flex h-8 w-8 shrink-0 items-center justify-center font-display text-sm font-bold"
       style={{
-        background: "linear-gradient(135deg,#d8413a,#ff7363)",
+        background: "#ededed",
+        color: "#0a0a0a",
         borderRadius: "8px",
-        boxShadow: "0 0 12px rgba(216,65,58,.28)",
       }}
     >
       {letter}
@@ -301,14 +301,14 @@ function SectionCard({
       {/* Section header: letter badge + heading */}
       <div className="mb-3 flex items-center gap-3">
         <LetterBadge letter={letter} />
-        <h2 className="font-display text-base font-semibold" style={{ color: "#f1ece6" }}>
+        <h2 className="font-display text-base font-semibold" style={{ color: "#ededed" }}>
           {section.heading}
         </h2>
       </div>
 
       {/* Intro paragraph */}
       {section.intro && (
-        <p className="mb-4 text-[12px] leading-relaxed" style={{ color: "#a79e98" }}>
+        <p className="mb-4 text-[12px] leading-relaxed" style={{ color: "#a8a8a8" }}>
           {section.intro}
         </p>
       )}
@@ -368,11 +368,11 @@ function FigureCard({ fig }: { fig: DossierFigure }) {
           <div className="flex flex-col items-center gap-1 px-3 text-center">
             <span
               className="font-mono text-[9px] font-bold uppercase tracking-[0.18em]"
-              style={{ color: "#6fc0b8" }}
+              style={{ color: "#6b93ff" }}
             >
               {fig.fig_id}
             </span>
-            <span className="font-mono text-[9px]" style={{ color: "#766a64" }}>
+            <span className="font-mono text-[9px]" style={{ color: "#666666" }}>
               image unavailable
             </span>
           </div>
@@ -381,17 +381,17 @@ function FigureCard({ fig }: { fig: DossierFigure }) {
       <figcaption className="p-2.5 space-y-0.5">
         <span
           className="block font-mono text-[9px] font-bold uppercase tracking-[0.14em]"
-          style={{ color: "#6fc0b8" }}
+          style={{ color: "#6b93ff" }}
         >
           {fig.fig_id} · {fig.citation}
         </span>
         {fig.caption && (
-          <p className="text-[11px] leading-snug" style={{ color: "#a79e98" }}>
+          <p className="text-[11px] leading-snug" style={{ color: "#a8a8a8" }}>
             {fig.caption}
           </p>
         )}
         {fig.claim_ref && (
-          <p className="font-mono text-[9px]" style={{ color: "#766a64" }}>
+          <p className="font-mono text-[9px]" style={{ color: "#666666" }}>
             <span className="uppercase tracking-wider">supports:</span> {fig.claim_ref}
           </p>
         )}
@@ -405,7 +405,7 @@ function FigureCard({ fig }: { fig: DossierFigure }) {
 // ---------------------------------------------------------------------------
 function RailPanel({
   title,
-  titleColor = "#6fc0b8",
+  titleColor = "#6b93ff",
   children,
 }: {
   title: string
@@ -474,7 +474,7 @@ export default function DossierView({
                 <span
                   key={i}
                   className="rounded-md px-2 py-0.5 font-mono text-xs font-semibold"
-                  style={{ background: "rgba(63,150,144,.12)", color: "#6fc0b8" }}
+                  style={{ background: "rgba(107,147,255,.12)", color: "#6b93ff" }}
                 >
                   {m.value}
                 </span>
@@ -510,15 +510,15 @@ export default function DossierView({
                     className="inline-flex shrink-0 items-center font-mono text-[9px] font-bold"
                     style={{
                       padding: "1px 4px",
-                      background: "rgba(63,150,144,.12)",
-                      color: "#6fc0b8",
+                      background: "rgba(107,147,255,.12)",
+                      color: "#6b93ff",
                       borderRadius: "4px",
-                      border: "1px solid rgba(63,150,144,.2)",
+                      border: "1px solid rgba(107,147,255,.2)",
                     }}
                   >
                     [{i + 1}]
                   </span>
-                  <span className="text-[11px] leading-snug" style={{ color: "#a79e98" }}>
+                  <span className="text-[11px] leading-snug" style={{ color: "#a8a8a8" }}>
                     {ref}
                   </span>
                 </li>
@@ -529,14 +529,14 @@ export default function DossierView({
 
         {/* Contemporary literature (plum) — from appendix entries */}
         {appendix.length > 0 && (
-          <RailPanel title="Contemporary literature" titleColor="#a98bc4">
+          <RailPanel title="Contemporary literature" titleColor="#ff66d8">
             <div className="flex flex-col gap-3">
               {appendix.map((entry, ei) => (
                 <div key={ei}>
                   {entry.heading && (
                     <p
                       className="mb-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.14em]"
-                      style={{ color: "#c4b0d8" }}
+                      style={{ color: "#ff8fe2" }}
                     >
                       {entry.heading}
                     </p>
@@ -548,15 +548,15 @@ export default function DossierView({
                           className="inline-flex shrink-0 items-center font-mono text-[9px] font-bold"
                           style={{
                             padding: "1px 4px",
-                            background: "rgba(150,120,170,.12)",
-                            color: "#a98bc4",
+                            background: "rgba(255,102,216,.12)",
+                            color: "#ff66d8",
                             borderRadius: "4px",
-                            border: "1px solid rgba(150,120,170,.2)",
+                            border: "1px solid rgba(255,102,216,.2)",
                           }}
                         >
                           [L{ii + 1}]
                         </span>
-                        <span className="text-[11px] leading-snug" style={{ color: "#a79e98" }}>
+                        <span className="text-[11px] leading-snug" style={{ color: "#a8a8a8" }}>
                           {item}
                         </span>
                       </li>
@@ -567,15 +567,15 @@ export default function DossierView({
                           className="inline-flex shrink-0 items-center font-mono text-[9px] font-bold"
                           style={{
                             padding: "1px 4px",
-                            background: "rgba(150,120,170,.12)",
-                            color: "#a98bc4",
+                            background: "rgba(255,102,216,.12)",
+                            color: "#ff66d8",
                             borderRadius: "4px",
-                            border: "1px solid rgba(150,120,170,.2)",
+                            border: "1px solid rgba(255,102,216,.2)",
                           }}
                         >
                           [L{entry.items.length + si + 1}]
                         </span>
-                        <span className="text-[11px] leading-snug" style={{ color: "#a79e98" }}>
+                        <span className="text-[11px] leading-snug" style={{ color: "#a8a8a8" }}>
                           {src}
                         </span>
                       </li>
@@ -599,7 +599,7 @@ export default function DossierView({
           >
             <p
               className="font-mono text-[10px] uppercase tracking-[0.14em]"
-              style={{ color: "#766a64" }}
+              style={{ color: "#666666" }}
             >
               No figures or sources
             </p>

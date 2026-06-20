@@ -119,8 +119,8 @@ function ProvenancePopover({
         <div
           className="p-3"
           style={{
-            background: "rgba(13,17,24,.97)",
-            border: "1px solid rgba(255,255,255,.11)",
+            background: "rgba(10,10,10,.97)",
+            border: "1px solid rgba(255,255,255,.13)",
             borderRadius: "11px",
             backdropFilter: "blur(14px)",
           }}
@@ -128,13 +128,13 @@ function ProvenancePopover({
           {/* DERIVATION mono eyebrow */}
           <p
             className="mb-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em]"
-            style={{ color: "#6fc0b8" }}
+            style={{ color: "#6b93ff" }}
           >
             Derivation
           </p>
 
           {/* Derivation sentence */}
-          <p className="mb-2 text-[11px] leading-relaxed" style={{ color: "#ece7e1" }}>
+          <p className="mb-2 text-[11px] leading-relaxed" style={{ color: "#ededed" }}>
             {provenance.derivation}
           </p>
 
@@ -146,9 +146,9 @@ function ProvenancePopover({
                   key={idx}
                   className="font-mono text-[9px]"
                   style={{
-                    background: "rgba(63,150,144,.12)",
-                    color: "#6fc0b8",
-                    border: "1px solid rgba(63,150,144,.22)",
+                    background: "rgba(107,147,255,.12)",
+                    color: "#6b93ff",
+                    border: "1px solid rgba(107,147,255,.22)",
                     borderRadius: "7px",
                     padding: "1px 6px",
                   }}
@@ -208,7 +208,7 @@ function MetricBar({
         )}
         <span
           className="font-mono text-[10px] font-bold"
-          style={{ color: value !== undefined ? labelColor : "#766a64" }}
+          style={{ color: value !== undefined ? labelColor : "#666666" }}
         >
           {value !== undefined ? `${value}%` : "—"}
         </span>
@@ -286,7 +286,7 @@ export default function PlanningMetrics({
     >
       <p
         className="font-mono text-[9px] font-bold uppercase tracking-[0.18em]"
-        style={{ color: "#6fc0b8" }}
+        style={{ color: "#6b93ff" }}
       >
         Planning Metrics
       </p>
@@ -296,13 +296,13 @@ export default function PlanningMetrics({
         <div className="flex flex-1 flex-col items-center justify-center gap-2 py-6 text-center">
           <span
             className="font-mono text-[9px] font-bold uppercase tracking-[0.14em]"
-            style={{ color: "#766a64" }}
+            style={{ color: "#666666" }}
           >
             Not available
           </span>
           <p
             className="max-w-[16ch] text-[11px] leading-relaxed"
-            style={{ color: "#897d77" }}
+            style={{ color: "#8a8a8a" }}
           >
             No planning data from engine
           </p>
@@ -313,27 +313,27 @@ export default function PlanningMetrics({
             <MetricBar
               label="Facial pres."
               value={facialPres}
-              color="#5fa86f"
-              trackColor="rgba(95,168,111,.12)"
-              labelColor="#74c084"
+              color="#34e07f"
+              trackColor="rgba(52,224,127,.12)"
+              labelColor="#34e07f"
               provenance={facialPresProvenance}
               reducedMotion={reducedMotion}
             />
             <MetricBar
               label="Hearing pres."
               value={hearingPres}
-              color="#d89a3f"
-              trackColor="rgba(216,154,63,.12)"
-              labelColor="#e0a86a"
+              color="#ffc94d"
+              trackColor="rgba(255,201,77,.12)"
+              labelColor="#ffc94d"
               provenance={hearingPresProvenance}
               reducedMotion={reducedMotion}
             />
             <MetricBar
               label="GTR"
               value={gtr}
-              color="#3f9690"
-              trackColor="rgba(63,150,144,.12)"
-              labelColor="#6fc0b8"
+              color="#6b93ff"
+              trackColor="rgba(107,147,255,.12)"
+              labelColor="#6b93ff"
               provenance={gtrProvenance}
               reducedMotion={reducedMotion}
             />
@@ -349,13 +349,13 @@ export default function PlanningMetrics({
             >
               <span
                 className="font-mono text-[9px] uppercase tracking-[0.14em]"
-                style={{ color: "#897d77" }}
+                style={{ color: "#8a8a8a" }}
               >
                 EST OR TIME
               </span>
               <span
                 className="font-mono text-base font-bold"
-                style={{ color: "#f1ece6" }}
+                style={{ color: "#ededed" }}
               >
                 {orTimeHr !== undefined ? `${orTimeHr} hr` : "—"}
               </span>
@@ -363,20 +363,20 @@ export default function PlanningMetrics({
             <div
               className="flex flex-col gap-0.5 p-3"
               style={{
-                background: "rgba(192,86,79,.07)",
-                border: "1px solid rgba(192,86,79,.18)",
+                background: "rgba(255,90,90,.07)",
+                border: "1px solid rgba(255,90,90,.18)",
                 borderRadius: "11px",
               }}
             >
               <span
                 className="font-mono text-[9px] uppercase tracking-[0.14em]"
-                style={{ color: "#c0564f" }}
+                style={{ color: "#ff5a5a" }}
               >
                 CSF LEAK RISK
               </span>
               <span
                 className="font-mono text-base font-bold"
-                style={{ color: "#ff7363" }}
+                style={{ color: "#ff5a5a" }}
               >
                 {csfLeakPct !== undefined ? `${csfLeakPct}%` : "—"}
               </span>

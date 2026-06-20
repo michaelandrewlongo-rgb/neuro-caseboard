@@ -92,7 +92,7 @@ export function RiskRadar({
   // ── Risk value dots ──────────────────────────────────────────────
   const dotsRisk = axes.map((a, i) => {
     const [x, y] = pt(i, a.risk / 100)
-    return <circle key={`d${i}`} cx={x} cy={y} r={2.6} fill="#d8413a" />
+    return <circle key={`d${i}`} cx={x} cy={y} r={2.6} fill="#ff5a5a" />
   })
 
   // ── Mono axis labels at R * 1.16 ────────────────────────────────
@@ -103,9 +103,9 @@ export function RiskRadar({
         key={`t${i}`}
         x={x}
         y={y}
-        fill="#897d77"
+        fill="#8a8a8a"
         fontSize={8.5}
-        fontFamily="'JetBrains Mono', monospace"
+        fontFamily="'Geist Mono', monospace"
         letterSpacing="0.04em"
         textAnchor="middle"
         dominantBaseline="middle"
@@ -126,13 +126,13 @@ export function RiskRadar({
       <defs>
         {/* Radial gradient fill for the risk polygon */}
         <radialGradient id={gradId} cx="50%" cy="50%" r="60%">
-          <stop offset="0%" stopColor="rgba(216,65,58,0.42)" />
-          <stop offset="100%" stopColor="rgba(190,45,50,0.1)" />
+          <stop offset="0%" stopColor="rgba(255,90,90,0.42)" />
+          <stop offset="100%" stopColor="rgba(255,90,90,0.12)" />
         </radialGradient>
         {/* Drop-shadow filter for the risk polygon */}
         <filter id={filterId} x="-20%" y="-20%" width="140%" height="140%">
           <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="blur" />
-          <feFlood floodColor="rgba(216,65,58,0.55)" result="color" />
+          <feFlood floodColor="rgba(255,90,90,0.55)" result="color" />
           <feComposite in="color" in2="blur" operator="in" result="shadow" />
           <feMerge>
             <feMergeNode in="shadow" />
@@ -151,8 +151,8 @@ export function RiskRadar({
       {withMit && (
         <path
           d={dataPath((a) => a.mit ?? 0)}
-          fill="rgba(63,150,144,0.16)"
-          stroke="#3f9690"
+          fill="rgba(107,147,255,0.16)"
+          stroke="#6b93ff"
           strokeWidth={1.3}
           strokeDasharray="3 3"
         />
@@ -162,7 +162,7 @@ export function RiskRadar({
       <path
         d={dataPath((a) => a.risk)}
         fill={`url(#${gradId})`}
-        stroke="#d8413a"
+        stroke="#ff5a5a"
         strokeWidth={1.6}
         filter={`url(#${filterId})`}
       />

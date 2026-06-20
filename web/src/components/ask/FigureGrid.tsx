@@ -15,7 +15,7 @@ function FigurePlaceholder({ fig }: { fig: Figure }) {
     >
       <span
         className="rounded-[6px] px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.18em]"
-        style={{ background: "rgba(63,150,144,.15)", color: "#6fc0b8" }}
+        style={{ background: "rgba(107,147,255,.15)", color: "#6b93ff" }}
       >
         FIG {fig.source_n ?? "—"}
       </span>
@@ -60,7 +60,7 @@ function FigureCard({ fig }: { fig: Figure }) {
       <figcaption className="space-y-1 px-3.5 pb-3.5 pt-2">
         <span
           className="font-mono text-[10px] uppercase tracking-wider"
-          style={{ color: "#6fc0b8" }}
+          style={{ color: "#6b93ff" }}
         >
           [{fig.source_n}] {fig.location}
         </span>

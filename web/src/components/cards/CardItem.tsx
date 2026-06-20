@@ -18,9 +18,9 @@ function matchTier(index: number, total: number): "strong" | "moderate" | "weak"
 }
 
 const TIER_COLOR: Record<"strong" | "moderate" | "weak", string> = {
-  strong: "#74c084",   // sage bright
-  moderate: "#e0a86a", // ochre on-dark
-  weak: "#766a64",     // muted mono
+  strong: "#34e07f",   // sage bright
+  moderate: "#ffc94d", // ochre on-dark
+  weak: "#666666",     // muted mono
 }
 
 const TIER_LABEL: Record<"strong" | "moderate" | "weak", string> = {
@@ -66,7 +66,7 @@ export default function CardItem({
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = "translateY(-2px)"
-        e.currentTarget.style.borderColor = "rgba(63,150,144,.4)"
+        e.currentTarget.style.borderColor = "rgba(107,147,255,.4)"
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = "translateY(0)"
@@ -75,15 +75,15 @@ export default function CardItem({
     >
       {/* ── Badge row ── */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Teal deck badge */}
+        {/* Magenta deck badge — the Cards/deck identity color */}
         <span
           className="font-mono text-[10px] font-bold uppercase tracking-wider"
           style={{
-            background: "rgba(63,150,144,.15)",
-            border: "1px solid rgba(63,150,144,.35)",
+            background: "rgba(255,102,216,.12)",
+            border: "1px solid rgba(255,102,216,.24)",
             borderRadius: "var(--radius-sm)",
             padding: "0.2rem 0.55rem",
-            color: "#6fc0b8",
+            color: "#ff66d8",
           }}
         >
           {card.deck}
@@ -94,11 +94,11 @@ export default function CardItem({
           <span
             className="font-mono text-[10px] font-bold uppercase tracking-wider"
             style={{
-              background: "rgba(216,154,63,.1)",
-              border: "1px solid rgba(216,154,63,.35)",
+              background: "rgba(255,201,77,.1)",
+              border: "1px solid rgba(255,201,77,.35)",
               borderRadius: "var(--radius-sm)",
               padding: "0.2rem 0.55rem",
-              color: "#e0a86a",
+              color: "#ffc94d",
             }}
           >
             ★ HIGH-YIELD
@@ -122,11 +122,11 @@ export default function CardItem({
         <div>
           <p
             className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] mb-1"
-            style={{ color: "#ff7363" }}
+            style={{ color: "#6b93ff" }}
           >
             PROMPT
           </p>
-          <p className="text-sm leading-[1.6]" style={{ color: "#f1ece6" }}>
+          <p className="text-sm leading-[1.6]" style={{ color: "#ededed" }}>
             {card.question_text}
           </p>
         </div>
@@ -137,13 +137,13 @@ export default function CardItem({
         <div>
           <p
             className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] mb-1"
-            style={{ color: "#74c084" }}
+            style={{ color: "#34e07f" }}
           >
             ANSWER
           </p>
           <p
             className="text-sm leading-[1.6] whitespace-pre-wrap"
-            style={{ color: "#a79e98" }}
+            style={{ color: "#a8a8a8" }}
           >
             {card.answer_text}
           </p>
@@ -154,13 +154,13 @@ export default function CardItem({
       {card.flagged.length > 0 && !highYield && (
         <div
           style={{
-            background: "rgba(192,86,79,.08)",
-            border: "1px solid rgba(192,86,79,.25)",
+            background: "rgba(255,90,90,.08)",
+            border: "1px solid rgba(255,90,90,.25)",
             borderRadius: "var(--radius-sm)",
             padding: "0.5rem 0.75rem",
           }}
         >
-          <p className="font-mono text-[9px] uppercase tracking-wider" style={{ color: "#c0564f" }}>
+          <p className="font-mono text-[9px] uppercase tracking-wider" style={{ color: "#ff5a5a" }}>
             Flagged: {card.flagged.join(", ")} — not source-checked
           </p>
         </div>
@@ -178,7 +178,7 @@ export default function CardItem({
                 border: "1px solid rgba(255,255,255,.09)",
                 borderRadius: "var(--radius-sm)",
                 padding: "0.18rem 0.5rem",
-                color: "#766a64",
+                color: "#666666",
               }}
             >
               {tag}
