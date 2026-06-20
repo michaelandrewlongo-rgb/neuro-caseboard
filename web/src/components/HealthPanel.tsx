@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react"
 import { getHealth, type Health } from "@/lib/api"
 import { cn } from "@/lib/utils"
-import { Card, Badge } from "@/components/ui"
 
 type Row = { key: string; label: string; ok: boolean; detail?: string | null }
 
@@ -37,15 +36,35 @@ function rowsFromHealth(h: Health): Row[] {
   ]
 }
 
-function Dot({ ok }: { ok: boolean }) {
+/** Rounded accent dot with a colored glow. */
+function StatusDot({ ok }: { ok: boolean }) {
   return (
     <span
-      className={cn(
-        "inline-block h-2.5 w-2.5 shrink-0 border-2 border-border",
-        ok ? "bg-success" : "bg-primary",
-      )}
+      className="inline-block h-2 w-2 shrink-0 rounded-full"
+      style={{
+        background: ok ? "#5fa86f" : "#c0564f",
+        boxShadow: ok ? "0 0 7px rgba(95,168,111,.7)" : "0 0 7px rgba(192,86,79,.7)",
+      }}
       aria-hidden
     />
+  )
+}
+
+/** Palette-aware availability pill — sage for online, brick for absent. */
+function StatusPill({ ok }: { ok: boolean }) {
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 font-mono text-[9px] font-bold uppercase"
+      style={{
+        background: ok ? "rgba(95,168,111,.12)" : "rgba(192,86,79,.12)",
+        border: `1px solid ${ok ? "rgba(95,168,111,.28)" : "rgba(192,86,79,.28)"}`,
+        borderRadius: "999px",
+        color: ok ? "#74c084" : "#d98a82",
+        letterSpacing: "0.14em",
+      }}
+    >
+      {ok ? "available" : "absent"}
+    </span>
   )
 }
 
@@ -69,7 +88,7 @@ export default function HealthPanel() {
   }, [])
 
   return (
-    <Card className="p-5">
+    <div className="surface p-5">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="eyebrow">Engine availability</h2>
         <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -77,11 +96,30 @@ export default function HealthPanel() {
         </span>
       </div>
 
-      {loading && <p className="font-mono text-sm text-muted-foreground">probing engine…</p>}
+      {loading && (
+        <p className="flex items-center gap-2 font-mono text-sm text-muted-foreground">
+          <span
+            className={cn("inline-block h-1.5 w-1.5 rounded-full")}
+            style={{ background: "#978d86", animation: "pulse 2.4s ease-in-out infinite" }}
+            aria-hidden
+          />
+          probing engine…
+        </p>
+      )}
 
+      {/* Honest "API unreachable" error — preserved verbatim, re-skinned to palette */}
       {error && !loading && (
-        <div className="border-2 border-border bg-card p-4 text-sm shadow-card">
-          <p className="font-bold text-primary-ink">API unreachable</p>
+        <div
+          className="rounded-xl p-4 text-sm"
+          style={{
+            background: "rgba(192,86,79,.08)",
+            border: "1px solid rgba(192,86,79,.22)",
+          }}
+          role="alert"
+        >
+          <p className="font-bold" style={{ color: "#d98a82" }}>
+            API unreachable
+          </p>
           <p className="mt-1 text-muted-foreground">{error}</p>
           <p className="mt-2 font-mono text-xs text-muted-foreground">
             Is the engine wrapper running on :8001? Start it with the dev command.
@@ -94,24 +132,30 @@ export default function HealthPanel() {
           {rowsFromHealth(health).map((r) => (
             <li
               key={r.key}
-              className="flex items-start gap-3 border-2 border-border bg-card px-3.5 py-2.5"
+              className="flex items-start gap-3 rounded-lg px-3.5 py-2.5"
+              style={{
+                background: "rgba(255,255,255,.03)",
+                border: "1px solid rgba(255,255,255,.07)",
+              }}
             >
               <span className="mt-1">
-                <Dot ok={r.ok} />
+                <StatusDot ok={r.ok} />
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-sm font-bold text-foreground">{r.label}</span>
-                  <Badge tone={r.ok ? "success" : "signal"}>{r.ok ? "available" : "absent"}</Badge>
+                  <span className="text-sm font-semibold text-foreground">{r.label}</span>
+                  <StatusPill ok={r.ok} />
                 </div>
                 {r.detail && (
-                  <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{r.detail}</p>
+                  <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+                    {r.detail}
+                  </p>
                 )}
               </div>
             </li>
           ))}
         </ul>
       )}
-    </Card>
+    </div>
   )
 }
