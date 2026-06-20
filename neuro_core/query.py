@@ -211,6 +211,10 @@ class Engine:
         # without this guard it would surface as a blank, not-gradable answer. Retry once
         # (the failure is transient); if still empty, degrade to the honest REFUSAL abstention
         # so the caller always receives a gradable answer, never an empty string.
+        # Scope: this guards the EMPTY-RESULT failure mode only. If synth_fn instead *raises*,
+        # the exception is intentionally left to propagate — the caller (qa.answer_question / the
+        # benchmark runner's retry ladder) handles engine errors; degrading an exception to
+        # REFUSAL here would mask genuine failures.
         if not (syn.answer or "").strip():
             syn = self.synth_fn(question, top, figures, images, self.synth_client, **extra)
             if not (syn.answer or "").strip():

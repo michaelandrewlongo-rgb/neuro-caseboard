@@ -10,6 +10,8 @@ retried once; if still empty, the engine degrades to the honest `REFUSAL` absten
 answer with no spurious citations/figures). These tests drive `_answer` with a deterministic stubbed
 `synth_fn` — no live model — so the transient empty path is reproducible.
 """
+from types import SimpleNamespace
+
 from neuro_core.query import Engine, QueryResult
 from neuro_core.synthesize import Synthesis, Citation, REFUSAL
 
@@ -80,3 +82,16 @@ def test_literal_refusal_is_preserved_and_not_retried():
     assert res.citations == []
     assert res.figures == []
     assert fn.state["i"] == 1, "a genuine refusal is non-empty and must not be retried"
+
+
+def test_empty_with_variant_degrades_to_bare_refusal_without_assuming_prefix():
+    """The guard sits ABOVE the variant 'Assuming {label}' block, so an empty answer on a
+    disambiguated/variant query must degrade to a BARE REFUSAL — never a refusal prefixed with
+    'Assuming …'. Guards against a reordering regression."""
+    variant = SimpleNamespace(label="Cervical", rewrite="cervical rewrite")
+    fn = _synth_seq("", "")
+    res = _make_engine(fn)._answer("q", [], variant)
+    assert res.answer == REFUSAL
+    assert "Assuming" not in res.answer
+    assert res.citations == []
+    assert res.figures == []
