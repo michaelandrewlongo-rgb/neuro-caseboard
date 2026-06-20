@@ -16,6 +16,7 @@ export default defineConfig({
     },
   },
   server: {
+    host: true,        // expose the dev server on the LAN (phone access); proxy keeps one origin
     port: 5173,
     strictPort: true,
     // One origin in the browser: the SPA and /api share http://localhost:5173, so there is no

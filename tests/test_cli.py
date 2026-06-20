@@ -41,12 +41,15 @@ def test_cli_ask_gpu_not_ready_exits_1(capsys, monkeypatch):
 
 
 def test_cli_build_dispatches_to_generate(capsys, monkeypatch):
+    from neuro_caseboard.model import Provenance
+
     class _Summary:
         supported, to_verify, quarantined = 2, 1, 0
 
     class _Dossier:
         sections = [object(), object()]
         summary = _Summary()
+        provenance = Provenance()
 
     calls = {}
 

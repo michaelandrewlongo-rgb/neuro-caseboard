@@ -18,6 +18,7 @@ from neuro_caseboard.model import (
     Dossier,
     EvidenceSummary,
     FigureItem,
+    Provenance,
     Section,
 )
 from neuro_caseboard.textops import scrub_question, split_compound
@@ -25,6 +26,7 @@ from neuro_caseboard.captions import complete_caption, relevance_line
 from neuro_caseboard.dedup import dedup_sections
 from caseprep.audit.card_auditor import accepted_papers, rejected_papers
 from neuro_caseboard.entailment import should_cite, LexicalVerifier
+from neuro_caseboard.evidence_grade import GradeSignals, grade as _grade
 
 _HEADINGS = {
     "03-anatomy-at-risk.md": "Anatomy at Risk",
@@ -74,6 +76,7 @@ def _compile(
     page_texts=None,
     corpus_inline: bool = False,
     corpus_eligible=frozenset(),
+    provenance=None,
     verifier=None,
 ) -> Dossier:
     """Core compiler shared by the build (3-section) and case (8-section) paths. The section
@@ -165,6 +168,14 @@ def _compile(
                     claim.text = f"{claim.text} " + "".join(f"[{m}]" for m in marks)
                 elif considered:
                     claim.status = "verify"   # had candidates but the gate withheld them all
+            # P2 #5: attach a fine evidence category alongside the coarse status. Additive —
+            # claim.status and EvidenceSummary counts are untouched, so renderers/counts don't
+            # regress; conflict/preference signals default off until their provenance is threaded.
+            claim.grade = _grade(GradeSignals(
+                audit_status=c.audit_status,
+                n_sources=len(accepted_papers(c)),
+                cited=claim.text.rstrip().endswith("]"),
+            ))
             claims.append(claim)
 
         if claims or figures:
@@ -201,9 +212,11 @@ def _compile(
     rejected_titles: list[str] = []
     for c in cards:
         for p in rejected_papers(c):
-            title = (p.get("title") or "").strip() if isinstance(p, dict) else ""
-            if title and title not in rejected_titles:
-                rejected_titles.append(title)
+            # NB: use a distinct name — `title` is the dossier-title parameter; reusing it here
+            # clobbered the dossier title with the last rejected paper's title (cross-domain label leak).
+            rtitle = (p.get("title") or "").strip() if isinstance(p, dict) else ""
+            if rtitle and rtitle not in rejected_titles:
+                rejected_titles.append(rtitle)
     if rejected_titles:
         appendix_entries.append(
             AppendixEntry(heading="Rejected Sources (off-target)", sources=rejected_titles))
@@ -216,7 +229,8 @@ def _compile(
     )
 
     return Dossier(title=title, summary=summary, sections=sections,
-                   appendix=Appendix(entries=appendix_entries))
+                   appendix=Appendix(entries=appendix_entries),
+                   provenance=provenance or Provenance())
 
 
 def compile_dossier(
@@ -226,6 +240,7 @@ def compile_dossier(
     evidence=None,
     card_evidence=None,
     page_texts=None,
+    provenance=None,
     verifier=None,
 ) -> Dossier:
     """Build (3-section) compiler — unchanged behavior. Anatomy at Risk / Operative Plan /
@@ -234,7 +249,7 @@ def compile_dossier(
     return _compile(audited_manifest, title=title, headings=_HEADINGS, order=_ORDER,
                     intros_by_tf=_INTRO_BY_TF, evidence=evidence,
                     card_evidence=card_evidence, page_texts=page_texts,
-                    verifier=verifier)
+                    provenance=provenance, verifier=verifier)
 
 
 def compile_case_dossier(
@@ -244,6 +259,7 @@ def compile_case_dossier(
     evidence=None,
     card_evidence=None,
     page_texts=None,
+    provenance=None,
     verifier=None,
 ) -> Dossier:
     """Case (8-section) compiler — the eight surfaces of LOOP_PROMPT §0 in order, titled
@@ -256,4 +272,4 @@ def compile_case_dossier(
                     intros_by_tf=CASE_INTROS, evidence=evidence,
                     card_evidence=card_evidence, page_texts=page_texts,
                     corpus_inline=True, corpus_eligible=CORPUS_ELIGIBLE_FILES,
-                    verifier=verifier)
+                    provenance=provenance, verifier=verifier)

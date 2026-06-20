@@ -9,8 +9,9 @@ import {
 } from "@/lib/api"
 import { Button, Card, Eyebrow } from "@/components/ui"
 import PipelineLoader from "@/components/PipelineLoader"
-import EvidenceBar from "@/components/build/EvidenceBar"
-import DossierView, { type ClaimMark } from "@/components/build/DossierView"
+import { EvidenceGauge } from "@/components/charts/EvidenceGauge"
+import PlanningMetrics from "@/components/build/PlanningMetrics"
+import DossierView, { type ClaimMark, type ClaimFilter } from "@/components/build/DossierView"
 import RememberedPanel from "@/components/build/RememberedPanel"
 
 const HINTS = [
@@ -42,6 +43,7 @@ export default function Build() {
   const [rehearsal, setRehearsal] = useState(false)
   const [marks, setMarks] = useState<FeedbackItemIn[]>([])
   const [remembered, setRemembered] = useState<number | null>(null)
+  const [filterActive, setFilterActive] = useState<ClaimFilter>("all")
 
   const onMark = (heading: string, claim: DossierClaim, mark: ClaimMark) =>
     setMarks((prev) => {
@@ -69,6 +71,7 @@ export default function Build() {
       setResp({ kind: "dossier", build_id: r.build_id, topic: r.topic, dossier: r.dossier })
       setRemembered(r.remembered)
       setMarks([])
+      setFilterActive("all")
     } else {
       setNetError(r.kind === "unavailable" ? r.reason : r.error)
     }
@@ -87,6 +90,7 @@ export default function Build() {
     setResp(null)
     setNetError(null)
     setPdfError(null)
+    setFilterActive("all")
     setLoading(true)
     try {
       const r = await buildDossier(text, { enrich, use_llm: useLlm }, ctrl.signal)
@@ -119,6 +123,12 @@ export default function Build() {
       setPdfLoading(false)
     }
   }
+
+  // Derived from resp when a dossier is ready; safe null-guard for pre-submit states.
+  const dossSummary = resp?.kind === "dossier" ? resp.dossier.summary : null
+  const claimTotal = dossSummary
+    ? dossSummary.supported + dossSummary.to_verify + dossSummary.quarantined
+    : 0
 
   const liveMsg = loading
     ? ""
@@ -214,7 +224,7 @@ export default function Build() {
 
       {netError && !loading && (
         <Card className="p-5 text-sm">
-          <p className="font-bold text-primary-ink">Request failed</p>
+          <p className="font-bold text-destructive">Request failed</p>
           <p className="mt-1 text-muted-foreground">{netError}</p>
           <p className="mt-2 font-mono text-xs text-muted-foreground">
             Is the engine wrapper running on :8001?
@@ -224,38 +234,116 @@ export default function Build() {
 
       {resp && !loading && resp.kind === "error" && (
         <Card className="p-5 text-sm">
-          <p className="font-bold text-primary-ink">Engine error</p>
+          <p className="font-bold text-destructive">Engine error</p>
           <p className="mt-1 font-mono text-xs text-muted-foreground">{resp.error}</p>
         </Card>
       )}
 
       {resp && !loading && resp.kind === "unavailable" && (
-        <Card className="bg-secondary p-5 text-sm">
+        <Card className="bg-muted p-5 text-sm">
           <p className="font-bold text-foreground">Temporarily unavailable</p>
           <p className="mt-1 text-muted-foreground">{resp.reason}</p>
         </Card>
       )}
 
       {resp && !loading && resp.kind === "dossier" && (
-        <div className="flex flex-col gap-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-display text-2xl font-bold text-foreground">{resp.dossier.title}</h2>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                <input
-                  type="checkbox"
-                  checked={rehearsal}
-                  onChange={(e) => setRehearsal(e.target.checked)}
-                  className="accent-primary"
-                />
-                Rehearsal mode
-              </label>
-              <Button variant="outline" onClick={() => void onDownloadPdf()} disabled={pdfLoading}>
-                {pdfLoading ? "Rendering PDF…" : "Download PDF"}
-              </Button>
+        <div className="flex flex-col gap-6">
+          {/* ── Case header ── */}
+          <div
+            className="rounded-[16px] p-5"
+            style={{
+              background: "rgba(255,255,255,.022)",
+              border: "1px solid rgba(255,255,255,.08)",
+            }}
+          >
+            <p
+              className="mb-2 font-mono text-[9px] font-bold uppercase tracking-[0.22em]"
+              style={{ color: "#6fc0b8" }}
+            >
+              ACTIVE CASEBOARD · PRE-OP DOSSIER · v3
+            </p>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex min-w-0 flex-col gap-2">
+                <h2
+                  className="font-display text-2xl font-bold leading-tight"
+                  style={{ color: "#f1ece6" }}
+                >
+                  {resp.dossier.title}
+                </h2>
+                <div className="flex flex-wrap gap-2">
+                  <span
+                    className="font-mono text-[10px]"
+                    style={{
+                      padding: "3px 10px",
+                      borderRadius: "999px",
+                      background: "rgba(63,150,144,.12)",
+                      color: "#6fc0b8",
+                      border: "1px solid rgba(63,150,144,.22)",
+                    }}
+                  >
+                    {resp.topic}
+                  </span>
+                  <span
+                    className="font-mono text-[10px]"
+                    style={{
+                      padding: "3px 10px",
+                      borderRadius: "999px",
+                      background: "rgba(255,255,255,.06)",
+                      color: "#a79e98",
+                      border: "1px solid rgba(255,255,255,.09)",
+                    }}
+                  >
+                    PRE-OP
+                  </span>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void onDownloadPdf()}
+                  disabled={pdfLoading}
+                  className="font-mono text-[11px] transition-all"
+                  style={{
+                    padding: "7px 15px",
+                    borderRadius: "9px",
+                    background: "transparent",
+                    color: pdfLoading ? "#766a64" : "#a79e98",
+                    border: "1px solid rgba(255,255,255,.15)",
+                    cursor: pdfLoading ? "default" : "pointer",
+                  }}
+                >
+                  {pdfLoading ? "Rendering…" : "Export PDF"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRehearsal(!rehearsal)}
+                  className="font-mono text-[11px] font-bold transition-all"
+                  style={{
+                    padding: "7px 15px",
+                    borderRadius: "9px",
+                    background: rehearsal
+                      ? "rgba(216,65,58,.18)"
+                      : "linear-gradient(135deg,#d8413a,#ff7363)",
+                    color: "#fff",
+                    border: rehearsal ? "1px solid rgba(216,65,58,.35)" : "none",
+                    cursor: "pointer",
+                    boxShadow: rehearsal ? "none" : "0 6px 22px rgba(216,65,58,.32)",
+                  }}
+                >
+                  {rehearsal ? "Exit Rehearsal" : "Rehearse"}
+                </button>
+              </div>
             </div>
           </div>
-          {pdfError && <span className="text-xs text-destructive">{pdfError}</span>}
+
+          {/* PDF error */}
+          {pdfError && (
+            <span className="text-xs" style={{ color: "#c0564f" }}>
+              {pdfError}
+            </span>
+          )}
+
+          {/* Rehearsal: remember marks controls */}
           {rehearsal && (
             <div className="flex flex-wrap items-center gap-3">
               <Button onClick={() => void remember()} disabled={!marks.length}>
@@ -266,10 +354,198 @@ export default function Build() {
               </span>
             </div>
           )}
+
+          {/* Remembered panel */}
           {remembered !== null && <RememberedPanel remembered={remembered} />}
-          <EvidenceBar summary={resp.dossier.summary} />
+
+          {/* ── Telemetry grid 1.15fr / 1fr / 1.05fr ── */}
+          <div className="grid gap-4" style={{ gridTemplateColumns: "1.15fr 1fr 1.05fr" }}>
+            {/* Risk topology — no backing data in BuildResponse; honest "not available" */}
+            <div
+              className="flex flex-col gap-3 p-4"
+              style={{
+                background:
+                  "linear-gradient(160deg, rgba(255,255,255,.05), rgba(255,255,255,.012))",
+                border: "1px solid rgba(255,255,255,.09)",
+                borderRadius: "16px",
+              }}
+            >
+              <p
+                className="font-mono text-[9px] font-bold uppercase tracking-[0.18em]"
+                style={{ color: "#897d77" }}
+              >
+                Risk Topology
+              </p>
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 py-6 text-center">
+                <span
+                  className="font-mono text-[9px] font-bold uppercase tracking-[0.14em]"
+                  style={{ color: "#766a64" }}
+                >
+                  Not available
+                </span>
+                <p
+                  className="max-w-[16ch] text-[11px] leading-relaxed"
+                  style={{ color: "#897d77" }}
+                >
+                  No risk-topology data from engine
+                </p>
+              </div>
+            </div>
+
+            {/* Evidence integrity — driven by real EvidenceSummary */}
+            <div
+              className="flex flex-col gap-3 p-4"
+              style={{
+                background:
+                  "linear-gradient(160deg, rgba(255,255,255,.05), rgba(255,255,255,.012))",
+                border: "1px solid rgba(255,255,255,.09)",
+                borderRadius: "16px",
+              }}
+            >
+              <p
+                className="font-mono text-[9px] font-bold uppercase tracking-[0.18em]"
+                style={{ color: "#6fc0b8" }}
+              >
+                Evidence Integrity
+              </p>
+              <div className="flex flex-col items-center gap-4">
+                <EvidenceGauge
+                  size={140}
+                  rings={[
+                    {
+                      r: 54,
+                      frac: claimTotal > 0 ? resp.dossier.summary.supported / claimTotal : 0,
+                      color: "#5fa86f",
+                      glow: "#5fa86f",
+                    },
+                    {
+                      r: 40,
+                      frac: claimTotal > 0 ? resp.dossier.summary.to_verify / claimTotal : 0,
+                      color: "#d89a3f",
+                      glow: "#d89a3f",
+                    },
+                    {
+                      r: 26,
+                      frac: claimTotal > 0 ? resp.dossier.summary.quarantined / claimTotal : 0,
+                      color: "#c0564f",
+                      glow: "#c0564f",
+                    },
+                  ]}
+                >
+                  <div className="text-center">
+                    <span
+                      className="font-display text-2xl font-bold"
+                      style={{ color: "#f1ece6" }}
+                    >
+                      {claimTotal}
+                    </span>
+                    <p
+                      className="font-mono text-[8px] uppercase tracking-[0.18em]"
+                      style={{ color: "#897d77" }}
+                    >
+                      CLAIMS
+                    </p>
+                  </div>
+                </EvidenceGauge>
+                <div className="flex flex-col gap-1.5">
+                  {[
+                    {
+                      color: "#5fa86f",
+                      label: "Supported",
+                      count: resp.dossier.summary.supported,
+                    },
+                    {
+                      color: "#d89a3f",
+                      label: "Verify",
+                      count: resp.dossier.summary.to_verify,
+                    },
+                    {
+                      color: "#c0564f",
+                      label: "Quarantine",
+                      count: resp.dossier.summary.quarantined,
+                    },
+                  ].map(({ color, label, count }) => (
+                    <div key={label} className="flex items-center gap-2">
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        aria-hidden="true"
+                        style={{ background: color, boxShadow: `0 0 6px ${color}` }}
+                      />
+                      <span className="text-[11px]" style={{ color: "#a79e98" }}>
+                        {label}{" "}
+                        <span className="font-mono font-bold" style={{ color: "#f1ece6" }}>
+                          {count}
+                        </span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Planning metrics — no backing data; renders honestly as "not available" */}
+            <PlanningMetrics />
+          </div>
+
+          {/* ── Evidence filter segmented control ── */}
+          <div
+            className="flex flex-wrap items-center gap-1 self-start p-1"
+            style={{
+              background: "rgba(255,255,255,.04)",
+              border: "1px solid rgba(255,255,255,.08)",
+              borderRadius: "11px",
+            }}
+            role="group"
+            aria-label="Filter evidence by status"
+          >
+            {[
+              { key: "all" as const, label: "ALL", count: claimTotal },
+              {
+                key: "supported" as const,
+                label: "SUPPORTED",
+                count: resp.dossier.summary.supported,
+              },
+              {
+                key: "verify" as const,
+                label: "VERIFY",
+                count: resp.dossier.summary.to_verify,
+              },
+              {
+                key: "quarantine" as const,
+                label: "QUARANTINE",
+                count: resp.dossier.summary.quarantined,
+              },
+            ].map(({ key, label, count }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setFilterActive(key)}
+                aria-pressed={filterActive === key}
+                className="font-mono text-[9px] font-bold uppercase tracking-[0.14em] transition-all"
+                style={{
+                  padding: "5px 12px",
+                  borderRadius: "8px",
+                  background: filterActive === key ? "rgba(63,150,144,.18)" : "transparent",
+                  color: filterActive === key ? "#6fc0b8" : "#897d77",
+                  border: `1px solid ${filterActive === key ? "rgba(63,150,144,.35)" : "transparent"}`,
+                  cursor: "pointer",
+                }}
+              >
+                {label}{" "}
+                <span
+                  className="font-mono"
+                  style={{ color: filterActive === key ? "#6fc0b8" : "#766a64" }}
+                >
+                  ({count})
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* ── Dossier body ── */}
           <DossierView
             dossier={resp.dossier}
+            filter={filterActive}
             rehearsal={rehearsal}
             markOf={markOf}
             onMark={onMark}

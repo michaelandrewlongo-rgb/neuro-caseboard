@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { Routes, Route } from "react-router-dom"
 import NavBar from "@/components/NavBar"
 import Home from "@/pages/Home"
@@ -6,6 +7,17 @@ import Build from "@/pages/Build"
 import Cards from "@/pages/Cards"
 
 export default function App() {
+  // BACKLOG P3 #10: pause decorative animations while the tab is hidden so a backgrounded console
+  // stays resource-bounded (separates app readiness from perpetual visual activity). CSS keys off
+  // the `data-doc-hidden` attribute (index.css). Listener is cleaned up on unmount.
+  useEffect(() => {
+    const sync = () =>
+      document.documentElement.toggleAttribute("data-doc-hidden", document.hidden)
+    sync()
+    document.addEventListener("visibilitychange", sync)
+    return () => document.removeEventListener("visibilitychange", sync)
+  }, [])
+
   return (
     <div className="min-h-screen text-foreground">
       <a

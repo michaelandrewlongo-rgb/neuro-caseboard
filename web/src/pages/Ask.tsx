@@ -6,6 +6,8 @@ import AnswerView from "@/components/ask/AnswerView"
 import FigureGrid from "@/components/ask/FigureGrid"
 import SourcesList from "@/components/ask/SourcesList"
 import LiteratureBlock from "@/components/ask/LiteratureBlock"
+import { CitationAudit } from "@/components/ask/CitationAudit"
+import { StructuresRadar } from "@/components/ask/StructuresRadar"
 
 const HINTS = [
   "borders of the cavernous sinus",
@@ -67,7 +69,7 @@ export default function Ask() {
         {liveMsg}
       </div>
       <header>
-        <Eyebrow accent>Ask · Citation-grounded</Eyebrow>
+        <Eyebrow accent>ASK · CITED ANSWER ENGINE</Eyebrow>
         <h1 className="mt-3 font-display text-4xl font-bold tracking-tight text-foreground">
           Ask the corpus
         </h1>
@@ -108,11 +110,34 @@ export default function Ask() {
         </div>
       )}
 
+      {resp?.kind === "answer" && !loading && (
+        <div className="flex flex-col gap-4">
+          {/* Status line — honest counts derived from real AskResponse fields */}
+          <p
+            className="font-mono text-[11px] uppercase tracking-[0.14em]"
+            style={{ color: "#6fc0b8" }}
+          >
+            {(() => {
+              const g = resp.citations.length
+              const l = resp.literature?.citations.length ?? 0
+              const t = g + l
+              if (t === 0) return "No citations in this response"
+              return `${g} of ${t} citations from grounded corpus${l > 0 ? ` · ${l} from literature` : ""}`
+            })()}
+          </p>
+          {/* Telemetry row — Citation Audit (real data) + Structures Radar (not available) */}
+          <div className="grid grid-cols-2 gap-4">
+            <CitationAudit citations={resp.citations} literature={resp.literature} />
+            <StructuresRadar answer={resp.answer} />
+          </div>
+        </div>
+      )}
+
       {loading && <AskLoader />}
 
       {netError && !loading && (
         <Card className="p-5 text-sm">
-          <p className="font-bold text-primary-ink">Request failed</p>
+          <p className="font-bold text-destructive">Request failed</p>
           <p className="mt-1 text-muted-foreground">{netError}</p>
           <p className="mt-2 font-mono text-xs text-muted-foreground">
             Is the engine wrapper running on :8001?
@@ -135,7 +160,7 @@ function ResultView({
   if (resp.kind === "error") {
     return (
       <Card className="p-5 text-sm">
-        <p className="font-bold text-primary-ink">Engine error</p>
+        <p className="font-bold text-destructive">Engine error</p>
         <p className="mt-1 font-mono text-xs text-muted-foreground">{resp.error}</p>
       </Card>
     )
@@ -143,7 +168,7 @@ function ResultView({
 
   if (resp.kind === "unavailable") {
     return (
-      <Card className="bg-secondary p-5 text-sm">
+      <Card className="bg-muted p-5 text-sm">
         <p className="font-bold text-foreground">Temporarily unavailable</p>
         <p className="mt-1 text-muted-foreground">{resp.reason}</p>
         <p className="mt-2 font-mono text-xs text-muted-foreground">Try again in a moment.</p>
