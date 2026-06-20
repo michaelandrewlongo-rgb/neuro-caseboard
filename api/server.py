@@ -11,7 +11,18 @@ textbook index, cards bank, NCBI key) by probing the engine's real config. The P
 (added in later milestones) forward the engine's real result OR its real error — never a
 fabricated dossier/citation/card.
 
-Run (from the repo root): uvicorn api.server:app --port 8000 --reload
+Serving the web UI: this app also serves the built React/Vite console (web/dist) at "/", so a
+single process is the whole product — the redesigned GUI at "/", the engine at "/api/*". Build
+the SPA first, then run the server:
+
+    npm --prefix web run build          # produces web/dist (the redesigned console)
+    uvicorn api.server:app --port 8001  # → GUI at http://127.0.0.1:8001/
+
+If web/dist is absent, "/" returns an honest 503 ("web UI not built …") and the API still works.
+For development use `npm run dev` instead (Vite hot-reload on :5173 proxying /api here). The dist
+location can be overridden with NEURO_CASEBOARD_WEB_DIST.
+
+Run (from the repo root): uvicorn api.server:app --port 8001 --reload
 """
 
 from __future__ import annotations
@@ -655,3 +666,48 @@ def cards(req: CardsRequest):
 def ping() -> dict:
     """Liveness check that touches nothing — proves the server itself is up."""
     return {"ok": True}
+
+
+# --- Static web SPA (single-process local deploy) --------------------------------------
+# Serve the built React/Vite app (web/dist) so `uvicorn api.server:app` is the whole product:
+# the redesigned console at "/", the engine at "/api/*". In dev you'd run `npm run dev` instead
+# (Vite hot-reload + /api proxy); this catch-all just makes the *built* app the default the
+# server hands out. The dist path is resolved per-request from NEURO_CASEBOARD_WEB_DIST (env)
+# so deployments can relocate it and tests can point at a fixture.
+
+def _web_dist() -> Path:
+    """Resolve the built-SPA directory (override with NEURO_CASEBOARD_WEB_DIST)."""
+    override = os.environ.get("NEURO_CASEBOARD_WEB_DIST")
+    if override:
+        return Path(override)
+    return Path(__file__).resolve().parent.parent / "web" / "dist"
+
+
+# Declared LAST so every explicit route above (all "/api/*", plus FastAPI's own "/docs",
+# "/openapi.json") matches first; only non-API, non-doc paths fall through to the SPA.
+@app.get("/{full_path:path}")
+def _serve_spa(full_path: str):
+    # Never let the SPA catch-all answer an unknown /api/* path — a typo'd endpoint must stay
+    # an honest JSON 404, not silently render the HTML shell.
+    if full_path == "api" or full_path.startswith("api/"):
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
+
+    dist = _web_dist()
+    index = dist / "index.html"
+    if not index.is_file():
+        # Honest degradation: the server (API) is up, but the web UI hasn't been built.
+        return JSONResponse(status_code=503, content={
+            "kind": "unavailable",
+            "reason": "web UI not built — run `npm --prefix web run build` "
+                      "(or `npm run dev` for hot-reload during development)",
+        })
+
+    # Serve a real built file when the path points at one (assets, favicon, …); otherwise fall
+    # back to index.html so client-side routes (/ask, /build, /cards) work on a hard refresh.
+    if full_path:
+        candidate = (dist / full_path).resolve()
+        dist_root = dist.resolve()
+        # Path-traversal guard: the resolved file must stay inside the dist directory.
+        if candidate.is_file() and (candidate == dist_root or dist_root in candidate.parents):
+            return FileResponse(candidate)
+    return FileResponse(index)
