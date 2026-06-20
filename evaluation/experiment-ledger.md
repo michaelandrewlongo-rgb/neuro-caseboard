@@ -20,3 +20,25 @@ One entry per intervention. Before/after metrics, keep/revert decisions, evidenc
 - **Decision:** **KEEP** — supported root cause, measurable outcome (218 green, deterministic empty-path proof), regression test present, clean single-commit rollback.
 - **Evidence:** TDD red→green transcript; harness 218 pass; root-causes/C5-disambiguation-empty-answer.md (live reproduction). Live end-to-end confirmation deferred to the step-11 full rerun (SPINE-02 re-answered under the patched engine).
 - **Rollback:** `git revert` the step-9 commit (change confined to `_answer` + one test file; no schema/config/corpus change).
+
+---
+
+## Intervention #2 — **SKIPPED (documented decision, not a forced change)**
+
+Per the spec ("if budget/causal-evidence does not support a second safe intervention, record that
+decision and skip rather than forcing a change"), no second production intervention was implemented.
+
+- **Candidate considered — CHG-C3-calibration (TKT-C3, over-absolute language, 38 minor defects):** a
+  synthesis-prompt calibration instruction. **Rejected for this pass** because (1) its benefit is
+  genuinely uncertain — a hedging instruction can *over*-qualify and degrade the strongest (B+) answers,
+  risking the "no unexplained deterioration of previously strong answers" success criterion; (2) it
+  would **confound the before/after comparison** — with two simultaneous changes, a score delta could
+  not be cleanly attributed to either, undermining the question-level evidence the comparison must
+  provide; (3) it edges toward the "broad prompt rewrite" the spec cautions against. It remains an OPEN
+  ticket for a future, separately-measured pass.
+- **Higher-impact cluster C1 (corpus evidence-currency, 60% of defects) remains DEFERRED** — a large,
+  network-dependent literature-lane change with real regression/latency risk; not appropriate to rush
+  within this loop. Tracked in TKT-C1 with a concrete remediation surface (`neuro_caseboard/literature/`).
+- **Net decision:** ship the single, surgically-tested C5 reliability fix and measure it cleanly against
+  the frozen baseline (step 11). This favors an attributable, non-over-claimed result over a speculative
+  second change — exactly the spec's stated priority ("do not optimize merely for higher grades").
