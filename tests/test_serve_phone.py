@@ -42,3 +42,22 @@ def test_wsl_portproxy_commands_have_consistent_port_and_ip():
     assert "8001" in cmds["firewall_add"]
     assert "Remove-NetFirewallRule" in cmds["firewall_delete"]
     assert "portproxy" in cmds["show"]
+
+
+def test_reachability_banner_lists_urls_native():
+    text = sp.reachability_banner(
+        port=8001, is_wsl_host=False, ips=["192.168.1.50"], wsl_ip=None
+    )
+    assert "http://192.168.1.50:8001" in text
+    assert "netsh" not in text  # native host: no Windows port-forward needed
+
+
+def test_reachability_banner_includes_wsl_portproxy_and_mirrored_hint():
+    text = sp.reachability_banner(
+        port=8001, is_wsl_host=True, ips=["192.168.1.50"], wsl_ip="172.20.1.2"
+    )
+    assert "netsh interface portproxy add" in text
+    assert "connectaddress=172.20.1.2" in text
+    assert "listenport=8001" in text
+    assert "mirrored" in text.lower()
+    assert "scripts/wsl-portproxy.ps1" in text  # points at the helper from Task 3
