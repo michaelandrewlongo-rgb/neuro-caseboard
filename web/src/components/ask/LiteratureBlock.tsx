@@ -45,7 +45,7 @@ export default function LiteratureBlock({ literature }: { literature: Literature
           style={{ borderTop: `1px solid ${PLUM_BORDER}` }}
         >
           {literature.citations.map((c) => (
-            <li key={c.n ?? c.pmid} className="flex gap-3 text-sm">
+            <li key={c.n ?? c.pmid} id={`src-literature-${c.n}`} className="flex scroll-mt-20 gap-3 text-sm">
               <span
                 className="shrink-0 font-mono text-xs font-bold"
                 style={{ color: PLUM_BRIGHT }}
