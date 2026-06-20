@@ -1,8 +1,8 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
-/* Neo-brutalist primitives: white surfaces, 2px black borders, hard offset shadows, square
-   corners. Change these (or the tokens in index.css) and every surface updates. */
+/* Grounded-Anatomical primitives: dark glass surfaces, 1px subtle borders, rounded corners.
+   Change these (or the tokens in index.css) and every surface updates. */
 
 // ---- Card / panel ---------------------------------------------------------------------------
 export function Card({
@@ -13,9 +13,8 @@ export function Card({
   return (
     <div
       className={cn(
-        "border-2 border-border bg-card shadow-card",
-        hover &&
-          "transition-transform duration-100 hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-raised",
+        "border border-border bg-card",
+        hover && "transition-opacity duration-150 hover:opacity-90",
         className,
       )}
       {...props}
@@ -25,7 +24,7 @@ export function Card({
 
 // ---- Button ---------------------------------------------------------------------------------
 const BTN_BASE =
-  "inline-flex select-none items-center justify-center gap-2 border-2 border-border font-bold uppercase tracking-wide shadow-[var(--shadow-brutal-sm)] transition-all duration-100 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none active:translate-x-[3px] active:translate-y-[3px] disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none disabled:hover:translate-x-0 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+  "inline-flex select-none items-center justify-center gap-2 border border-border font-bold uppercase tracking-wide transition-opacity duration-100 hover:opacity-80 active:opacity-70 disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:opacity-50"
 const BTN_VARIANTS = {
   primary: "bg-primary text-primary-foreground",
   outline: "bg-card text-foreground hover:bg-secondary",
@@ -95,14 +94,14 @@ export function Eyebrow({
   children: ReactNode
   accent?: boolean
 }) {
-  return <p className={cn("eyebrow", accent && "!text-primary-ink", className)}>{children}</p>
+  return <p className={cn("eyebrow", accent && "!text-[#ff7363]", className)}>{children}</p>
 }
 
 // ---- Stat (metric) --------------------------------------------------------------------------
 const STAT_VALUE_TONES = {
-  success: "text-success-ink",
-  amber: "text-amber-ink",
-  signal: "text-primary-ink",
+  success: "text-[#74c084]",   /* sage bright — on-dark */
+  amber: "text-[#e0a86a]",     /* ochre on-dark */
+  signal: "text-destructive",  /* brick/critical */
   accent: "text-accent",
   neutral: "text-foreground",
 } as const
@@ -117,7 +116,7 @@ export function Stat({
   tone?: keyof typeof STAT_VALUE_TONES
 }) {
   return (
-    <div className="border-2 border-border bg-card px-4 py-3 shadow-[var(--shadow-brutal-sm)]">
+    <div className="border border-border bg-card px-4 py-3">
       <div className={cn("tnum font-display text-2xl font-bold leading-none", STAT_VALUE_TONES[tone])}>
         {value}
       </div>
