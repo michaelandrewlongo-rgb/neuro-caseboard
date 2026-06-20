@@ -1,3 +1,5 @@
+from pathlib import Path as _Path
+
 from api import serve_phone as sp
 
 
@@ -61,3 +63,17 @@ def test_reachability_banner_includes_wsl_portproxy_and_mirrored_hint():
     assert "listenport=8001" in text
     assert "mirrored" in text.lower()
     assert "scripts/wsl-portproxy.ps1" in text  # points at the helper from Task 3
+
+
+def test_wsl_portproxy_ps1_exists_and_is_consistent():
+    ps1 = _Path("scripts/wsl-portproxy.ps1")
+    assert ps1.is_file(), "scripts/wsl-portproxy.ps1 must exist"
+    text = ps1.read_text()
+    # Default port must match the module default.
+    assert f"= {sp.DEFAULT_PORT}" in text or f"={sp.DEFAULT_PORT}" in text
+    # Must use the same Windows primitives the helper documents.
+    assert "netsh interface portproxy add" in text
+    assert "New-NetFirewallRule" in text
+    assert "Remove-NetFirewallRule" in text
+    # Auto-detect the WSL IP rather than hardcoding it.
+    assert "wsl" in text.lower() and "hostname -I" in text
