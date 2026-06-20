@@ -1,0 +1,11 @@
+# Source-file fidelity record
+# Generated 2026-06-20 during project-loop IMPLEMENT step 0.
+# Proves the three benchmark inputs were preserved byte-for-byte from the user-supplied originals.
+# Originals (this machine): /mnt/c/Users/Michael/Downloads/
+#
+# sha256  filename
+f9ba5d881e8493b05dec0bc9696c567f395ca4ee1fdf55334b3306b051ca1da9  contemporary-qs-in-neurosurgery
+72f75713760cf0522943ee419b8419523c4ba4df136dd9c4a87566a3c6778d19  nsgy-questioner.txt
+0db856a3bbedcd272dc40d92bc8b7ab9fbb66325cc48bec42e1991791c915b9f  nsgy-grader.txt
+#
+# Verify with:  sha256sum -c <(grep -v '^#' SOURCE_CHECKSUMS.txt)  (run from evaluation/inputs/)
