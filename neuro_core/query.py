@@ -4,7 +4,7 @@ from .config import load_config
 from .embed import Embedder
 from .index import Index, Hit, reciprocal_rank_fusion
 from .rerank import Reranker
-from .synthesize import synthesize, is_refusal
+from .synthesize import synthesize, is_refusal, REFUSAL
 from .synth_clients import make_synth_client
 from .gpu_guard import ensure_gpu_ready
 from .visual_embed import VisualEmbedder
@@ -206,6 +206,15 @@ class Engine:
         extra = ({"variant_directive": _variant_directive(variant.label)}
                  if variant else {})
         syn = self.synth_fn(question, top, figures, images, self.synth_client, **extra)
+        # Empty-answer guard (TKT-C5): a transient empty/whitespace synth result (e.g. a
+        # Gemini candidate with no text part) is not a refusal — is_refusal("") is False — so
+        # without this guard it would surface as a blank, not-gradable answer. Retry once
+        # (the failure is transient); if still empty, degrade to the honest REFUSAL abstention
+        # so the caller always receives a gradable answer, never an empty string.
+        if not (syn.answer or "").strip():
+            syn = self.synth_fn(question, top, figures, images, self.synth_client, **extra)
+            if not (syn.answer or "").strip():
+                return QueryResult(answer=REFUSAL, citations=[], figures=[])
         if is_refusal(syn.answer):
             # Synthesis abstained: figures/citations collected from retrieval are
             # spurious on a refusal — drop both (no Assuming line either).
