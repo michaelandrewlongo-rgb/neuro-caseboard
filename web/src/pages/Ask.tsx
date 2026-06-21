@@ -115,7 +115,7 @@ export default function Ask() {
           {/* Status line — honest counts derived from real AskResponse fields */}
           <p
             className="font-mono text-[11px] uppercase tracking-[0.14em]"
-            style={{ color: "#6fc0b8" }}
+            style={{ color: "#6b93ff" }}
           >
             {(() => {
               const g = resp.citations.length

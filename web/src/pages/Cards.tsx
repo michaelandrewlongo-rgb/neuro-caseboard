@@ -139,18 +139,18 @@ export default function Cards() {
       <header className="flex flex-col gap-5">
         <p
           className="font-mono text-[11px] font-bold uppercase tracking-[0.18em]"
-          style={{ color: "#e0a86a" }}
+          style={{ color: "#6b93ff" }}
         >
           CARDS · BOARD-REVIEW DECK
         </p>
         <div>
           <h1
             className="font-display text-[2.4rem] font-semibold leading-tight"
-            style={{ color: "#f1ece6", letterSpacing: "-0.02em" }}
+            style={{ color: "#ededed", letterSpacing: "-0.02em" }}
           >
             Search your card bank
           </h1>
-          <p className="mt-2 max-w-xl text-base" style={{ color: "#a79e98", lineHeight: "1.6" }}>
+          <p className="mt-2 max-w-xl text-base" style={{ color: "#a8a8a8", lineHeight: "1.6" }}>
             Hybrid search over your personal ABNS / SANS deck — your own study cards, matched,
             never synthesized.
           </p>
@@ -175,16 +175,14 @@ export default function Cards() {
               disabled={loading}
               autoFocus
             />
-            {/* Crimson Search button */}
+            {/* White primary Search button */}
             <button
               type="submit"
               disabled={loading || !question.trim()}
               style={{
                 background:
-                  loading || !question.trim()
-                    ? "rgba(255,255,255,0.06)"
-                    : "linear-gradient(135deg,#d8413a,#ff7363)",
-                color: loading || !question.trim() ? "#978d86" : "#ffffff",
+                  loading || !question.trim() ? "rgba(255,255,255,0.06)" : "#ededed",
+                color: loading || !question.trim() ? "#8a8a8a" : "#0a0a0a",
                 border: "none",
                 borderRadius: "var(--radius-md)",
                 padding: "0.75rem 1.5rem",
@@ -196,7 +194,7 @@ export default function Cards() {
                 cursor: loading || !question.trim() ? "not-allowed" : "pointer",
                 whiteSpace: "nowrap",
                 boxShadow:
-                  loading || !question.trim() ? "none" : "0 6px 22px rgba(216,65,58,.32)",
+                  loading || !question.trim() ? "none" : "0 6px 22px rgba(0,0,0,.45)",
                 transition: "background 0.15s, box-shadow 0.15s",
               }}
             >
@@ -207,7 +205,7 @@ export default function Cards() {
           {/* k slider (preserve existing flow) */}
           <label
             className="flex items-center gap-3 text-sm"
-            style={{ color: "#978d86" }}
+            style={{ color: "#8a8a8a" }}
           >
             <span className="font-mono text-[11px] uppercase tracking-wider">Cards to show</span>
             <input
@@ -219,7 +217,7 @@ export default function Cards() {
               disabled={loading}
               className="accent-secondary flex-1"
             />
-            <span className="tnum font-mono" style={{ color: "#f1ece6" }}>
+            <span className="tnum font-mono" style={{ color: "#ededed" }}>
               {k}
             </span>
           </label>
@@ -242,16 +240,16 @@ export default function Cards() {
                     padding: "0.35rem 0.75rem",
                     borderRadius: "var(--radius-sm)",
                     border: isActive
-                      ? "1px solid rgba(63,150,144,.5)"
+                      ? "1px solid rgba(255,102,216,.45)"
                       : ochre
-                        ? "1px solid rgba(216,154,63,.3)"
+                        ? "1px solid rgba(255,201,77,.3)"
                         : "1px solid rgba(255,255,255,.09)",
                     background: isActive
-                      ? "rgba(63,150,144,.15)"
+                      ? "rgba(255,102,216,.12)"
                       : ochre
-                        ? "rgba(216,154,63,.06)"
+                        ? "rgba(255,201,77,.06)"
                         : "rgba(255,255,255,.04)",
-                    color: isActive ? "#6fc0b8" : ochre ? "#e0a86a" : "#a79e98",
+                    color: isActive ? "#ff66d8" : ochre ? "#ffc94d" : "#a8a8a8",
                     cursor: "pointer",
                     transition: "all 0.15s",
                   }}
@@ -295,14 +293,14 @@ export default function Cards() {
         >
           <p
             className="font-mono text-xs font-bold uppercase tracking-wider"
-            style={{ color: "#ff7363" }}
+            style={{ color: "#ff5a5a" }}
           >
             Request failed
           </p>
-          <p className="mt-1 text-sm" style={{ color: "#978d86" }}>
+          <p className="mt-1 text-sm" style={{ color: "#8a8a8a" }}>
             {netError}
           </p>
-          <p className="mt-2 font-mono text-xs" style={{ color: "#766a64" }}>
+          <p className="mt-2 font-mono text-xs" style={{ color: "#666666" }}>
             Is the engine wrapper running on :8001?
           </p>
         </div>
@@ -331,14 +329,14 @@ function DeckTelemetry({ cards }: { cards: Card[] }) {
 
   // Match strength: no score field in CardsResponse — show honest unavailable state.
   const gaugeRings = [
-    { r: 52, frac: 0, color: "rgba(63,150,144,.2)", glow: "rgba(63,150,144,.05)" },
+    { r: 52, frac: 0, color: "rgba(107,147,255,.2)", glow: "rgba(107,147,255,.05)" },
   ]
 
   const coverageBars = [
-    { label: "Tumor", count: coverage.tumor, color: "#5fa86f" },
-    { label: "Functional", count: coverage.functional, color: "#6fc0b8" },
-    { label: "Vascular", count: coverage.vascular, color: "#e0a86a" },
-    { label: "Spine", count: coverage.spine, color: "#c0564f" },
+    { label: "Tumor", count: coverage.tumor, color: "#34e07f" },
+    { label: "Functional", count: coverage.functional, color: "#6b93ff" },
+    { label: "Vascular", count: coverage.vascular, color: "#ffc94d" },
+    { label: "Spine", count: coverage.spine, color: "#ff5a5a" },
   ]
 
   const glassPanel: React.CSSProperties = {
@@ -360,21 +358,21 @@ function DeckTelemetry({ cards }: { cards: Card[] }) {
       <div style={{ ...glassPanel, display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         <p
           className="font-mono text-[10px] font-bold uppercase tracking-[0.18em]"
-          style={{ color: "#a79e98" }}
+          style={{ color: "#a8a8a8" }}
         >
           Match Strength
         </p>
         <div className="flex flex-col items-center gap-2">
           <EvidenceGauge rings={gaugeRings} size={130}>
             <div className="flex flex-col items-center gap-0.5">
-              <span className="font-mono text-xs font-bold" style={{ color: "#6fc0b8" }}>
+              <span className="font-mono text-xs font-bold" style={{ color: "#6b93ff" }}>
                 N/A
               </span>
               <span
                 className="font-mono"
                 style={{
                   fontSize: "9px",
-                  color: "#766a64",
+                  color: "#666666",
                   letterSpacing: "0.12em",
                   textTransform: "uppercase",
                 }}
@@ -386,7 +384,7 @@ function DeckTelemetry({ cards }: { cards: Card[] }) {
         </div>
         <p
           className="font-mono text-[9px] text-center"
-          style={{ color: "#766a64", letterSpacing: "0.1em" }}
+          style={{ color: "#666666", letterSpacing: "0.1em" }}
         >
           Score not returned by API
         </p>
@@ -398,11 +396,11 @@ function DeckTelemetry({ cards }: { cards: Card[] }) {
       >
         <p
           className="font-mono text-[10px] font-bold uppercase tracking-[0.18em]"
-          style={{ color: "#a79e98" }}
+          style={{ color: "#a8a8a8" }}
         >
           Deck Coverage
         </p>
-        <p className="font-mono text-[9px]" style={{ color: "#766a64" }}>
+        <p className="font-mono text-[9px]" style={{ color: "#666666" }}>
           Cards in results by category
         </p>
         {coverageBars.map(({ label, count, color }) => (
@@ -410,7 +408,7 @@ function DeckTelemetry({ cards }: { cards: Card[] }) {
             <div className="flex items-center justify-between">
               <span
                 className="font-mono text-[9px] uppercase tracking-wider"
-                style={{ color: "#978d86" }}
+                style={{ color: "#8a8a8a" }}
               >
                 {label}
               </span>
@@ -439,7 +437,7 @@ function DeckTelemetry({ cards }: { cards: Card[] }) {
           </div>
         ))}
         {allZero && (
-          <p className="font-mono text-[9px]" style={{ color: "#766a64" }}>
+          <p className="font-mono text-[9px]" style={{ color: "#666666" }}>
             No category keywords matched deck names
           </p>
         )}
@@ -451,55 +449,55 @@ function DeckTelemetry({ cards }: { cards: Card[] }) {
       >
         <p
           className="font-mono text-[10px] font-bold uppercase tracking-[0.18em]"
-          style={{ color: "#a79e98" }}
+          style={{ color: "#a8a8a8" }}
         >
           Deck Status
         </p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
           <div
             style={{
-              background: "rgba(63,150,144,.07)",
-              border: "1px solid rgba(63,150,144,.2)",
+              background: "rgba(107,147,255,.07)",
+              border: "1px solid rgba(107,147,255,.2)",
               borderRadius: "var(--radius-md)",
               padding: "0.75rem",
             }}
           >
             <div
               className="tnum font-display text-2xl font-semibold"
-              style={{ color: "#6fc0b8" }}
+              style={{ color: "#6b93ff" }}
             >
               {total}
             </div>
             <div
               className="font-mono text-[9px] uppercase tracking-wider mt-1"
-              style={{ color: "#978d86" }}
+              style={{ color: "#8a8a8a" }}
             >
               Matched
             </div>
           </div>
           <div
             style={{
-              background: "rgba(216,154,63,.06)",
-              border: "1px solid rgba(216,154,63,.2)",
+              background: "rgba(255,201,77,.06)",
+              border: "1px solid rgba(255,201,77,.2)",
               borderRadius: "var(--radius-md)",
               padding: "0.75rem",
             }}
           >
             <div
               className="tnum font-display text-2xl font-semibold"
-              style={{ color: "#e0a86a" }}
+              style={{ color: "#ffc94d" }}
             >
               {highYieldCount}
             </div>
             <div
               className="font-mono text-[9px] uppercase tracking-wider mt-1"
-              style={{ color: "#978d86" }}
+              style={{ color: "#8a8a8a" }}
             >
               High-Yield
             </div>
           </div>
         </div>
-        <p className="font-mono text-[9px]" style={{ color: "#766a64" }}>
+        <p className="font-mono text-[9px]" style={{ color: "#666666" }}>
           From this result set only
         </p>
       </div>
@@ -530,11 +528,11 @@ function CardsResult({
       <div style={degradedStyle}>
         <p
           className="font-mono text-xs font-bold uppercase tracking-wider"
-          style={{ color: "#ff7363" }}
+          style={{ color: "#ff5a5a" }}
         >
           Engine error
         </p>
-        <p className="mt-1 font-mono text-xs" style={{ color: "#978d86" }}>
+        <p className="mt-1 font-mono text-xs" style={{ color: "#8a8a8a" }}>
           {resp.error}
         </p>
       </div>
@@ -544,10 +542,10 @@ function CardsResult({
   if (resp.kind === "unavailable") {
     return (
       <div style={degradedStyle}>
-        <p className="font-semibold" style={{ color: "#f1ece6" }}>
+        <p className="font-semibold" style={{ color: "#ededed" }}>
           Temporarily unavailable
         </p>
-        <p className="mt-1 text-sm" style={{ color: "#978d86" }}>
+        <p className="mt-1 text-sm" style={{ color: "#8a8a8a" }}>
           {resp.reason}
         </p>
       </div>
@@ -557,10 +555,10 @@ function CardsResult({
   if (resp.kind === "not_built") {
     return (
       <div style={degradedStyle}>
-        <p className="font-semibold" style={{ color: "#f1ece6" }}>
+        <p className="font-semibold" style={{ color: "#ededed" }}>
           Card bank not built
         </p>
-        <p className="mt-1 whitespace-pre-wrap font-mono text-xs" style={{ color: "#978d86" }}>
+        <p className="mt-1 whitespace-pre-wrap font-mono text-xs" style={{ color: "#8a8a8a" }}>
           {resp.reason}
         </p>
       </div>
@@ -572,7 +570,7 @@ function CardsResult({
   if (!allCards.length) {
     return (
       <div style={degradedStyle}>
-        <p className="text-sm" style={{ color: "#978d86" }}>
+        <p className="text-sm" style={{ color: "#8a8a8a" }}>
           No matching cards.
         </p>
       </div>
@@ -591,23 +589,23 @@ function CardsResult({
       <div className="flex items-center justify-between">
         <p
           className="font-mono text-[11px] font-bold uppercase tracking-[0.18em]"
-          style={{ color: "#e0a86a" }}
+          style={{ color: "#ffc94d" }}
         >
           Matched Cards
           {displayCards.length !== allCards.length && (
-            <span style={{ color: "#978d86", fontWeight: 400 }}>
+            <span style={{ color: "#8a8a8a", fontWeight: 400 }}>
               {" "}
               — {displayCards.length} of {allCards.length}
             </span>
           )}
         </p>
-        <span className="font-mono text-[10px]" style={{ color: "#766a64" }}>
+        <span className="font-mono text-[10px]" style={{ color: "#666666" }}>
           {displayCards.length} card{displayCards.length !== 1 ? "s" : ""}
         </span>
       </div>
 
       {displayCards.length === 0 ? (
-        <p className="text-sm" style={{ color: "#978d86" }}>
+        <p className="text-sm" style={{ color: "#8a8a8a" }}>
           No cards match this filter.
         </p>
       ) : (
@@ -634,7 +632,7 @@ function CardsResult({
             >
               <span
                 className="font-mono text-[11px] font-bold uppercase tracking-wider"
-                style={{ color: "#766a64" }}
+                style={{ color: "#666666" }}
               >
                 + more in deck — increase range to see
               </span>

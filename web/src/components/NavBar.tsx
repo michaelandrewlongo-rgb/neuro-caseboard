@@ -11,24 +11,33 @@ const NAV_LINKS = [
   { to: "/cards", label: "Cards" },
 ]
 
-// ── Diamond logo mark ─────────────────────────────────────────────────────────
-// Crimson gradient square with a rotated inner-square cutout producing a
-// diamond-window effect — pure CSS, no SVG dependency.
-function DiamondMark() {
+// ── Brain logo mark ───────────────────────────────────────────────────────────
+// Neutral hemispheric brain glyph inside a dark rounded tile — matches the
+// Neurosurgery·Signal header on the landing and the design reference.
+function BrainMark() {
   return (
     <div
-      className="relative h-8 w-8 shrink-0 overflow-hidden"
+      className="relative grid h-8 w-8 shrink-0 place-items-center"
       style={{
-        background: "linear-gradient(135deg,#d8413a,#ff7363)",
-        borderRadius: "5px",
+        background: "#0a0a0a",
+        border: "1px solid rgba(255,255,255,0.14)",
+        borderRadius: "9px",
       }}
       aria-hidden
     >
-      {/* Rotated cutout — reveals the charcoal background through the centre */}
-      <div
-        className="absolute inset-[6px] rotate-45 bg-background"
-        style={{ borderRadius: "2px" }}
-      />
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 100 100"
+        fill="none"
+        stroke="#ededed"
+        strokeWidth="6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M38,18 C20,20 14,40 22,52 C12,60 16,80 34,82 C44,90 60,88 64,78 C82,78 86,58 78,48 C86,38 80,18 60,18 C54,12 44,12 38,18 Z" />
+        <path d="M50,16 L50,84" opacity="0.55" />
+      </svg>
     </div>
   )
 }
@@ -56,37 +65,37 @@ function pillCfg(status: HealthStatus): PillCfg {
     case "online":
       return {
         label: "ENGINE ONLINE",
-        dotColor: "#5fa86f",
-        pillBg: "rgba(95,168,111,.10)",
-        pillBorder: "rgba(95,168,111,.28)",
-        textColor: "#74c084",
+        dotColor: "#34e07f",
+        pillBg: "rgba(52,224,127,.10)",
+        pillBorder: "rgba(52,224,127,.28)",
+        textColor: "#34e07f",
         pulse: true,
       }
     case "degraded":
       return {
         label: "ENGINE DEGRADED",
-        dotColor: "#d89a3f",
-        pillBg: "rgba(216,154,63,.08)",
-        pillBorder: "rgba(216,154,63,.28)",
-        textColor: "#e0a86a",
+        dotColor: "#ffc94d",
+        pillBg: "rgba(255,201,77,.08)",
+        pillBorder: "rgba(255,201,77,.28)",
+        textColor: "#ffc94d",
         pulse: false,
       }
     case "offline":
       return {
         label: "ENGINE OFFLINE",
-        dotColor: "#c0564f",
-        pillBg: "rgba(192,86,79,.10)",
-        pillBorder: "rgba(192,86,79,.30)",
-        textColor: "#d98a82",
+        dotColor: "#ff5a5a",
+        pillBg: "rgba(255,90,90,.10)",
+        pillBorder: "rgba(255,90,90,.30)",
+        textColor: "#ff8f8a",
         pulse: false,
       }
     default: // "loading"
       return {
         label: "SYNCING",
-        dotColor: "#978d86",
+        dotColor: "#8a8a8a",
         pillBg: "rgba(255,255,255,.04)",
         pillBorder: "rgba(255,255,255,.09)",
-        textColor: "#978d86",
+        textColor: "#8a8a8a",
         pulse: false,
       }
   }
@@ -171,12 +180,12 @@ export default function NavBar() {
         <NavLink
           to="/"
           className="flex shrink-0 items-center gap-2.5"
-          aria-label="Neuro·Caseboard home"
+          aria-label="Neurosurgery·Signal home"
         >
-          <DiamondMark />
+          <BrainMark />
           <div className="flex flex-col leading-none">
             <span className="font-display text-base font-semibold tracking-tight text-foreground">
-              Neuro<span style={{ color: "#ff7363" }}>·</span>Caseboard
+              Neurosurgery<span style={{ color: "#666" }}>·</span>Signal
             </span>
             <span
               className="font-mono font-bold uppercase text-muted-foreground"
@@ -187,7 +196,7 @@ export default function NavBar() {
           </div>
         </NavLink>
 
-        {/* ── Nav buttons: Ask / Dossier / Cards (active = teal pill) ── */}
+        {/* ── Nav buttons: Ask / Dossier / Cards (active = blue pill, cyan text) ── */}
         <ul className="flex shrink-0 items-center gap-1" role="list">
           {NAV_LINKS.map((l) => (
             <li key={l.to}>
@@ -197,7 +206,7 @@ export default function NavBar() {
                   cn(
                     "inline-block rounded-full border px-3.5 py-1.5 font-mono text-[11px] font-bold uppercase tracking-[0.14em] transition-colors duration-150",
                     isActive
-                      ? "border-[rgba(63,150,144,.32)] bg-[rgba(63,150,144,.14)] text-[#6fc0b8]"
+                      ? "border-[rgba(107,147,255,.28)] bg-[rgba(107,147,255,.14)] text-[#34dfe6]"
                       : "border-transparent text-muted-foreground hover:text-foreground",
                   )
                 }

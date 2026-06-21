@@ -64,7 +64,7 @@ export function StructuresRadar({ answer }: StructuresRadarProps) {
     >
       <p
         className="font-mono text-[11px] font-bold uppercase tracking-[0.18em]"
-        style={{ color: "#ff7363" }}
+        style={{ color: "#6b93ff" }}
       >
         Structures Referenced
       </p>
@@ -99,7 +99,7 @@ export function StructuresRadar({ answer }: StructuresRadarProps) {
         </div>
         <p
           className="font-mono text-[9.5px] uppercase tracking-[0.12em] text-center leading-[1.7]"
-          style={{ color: "#766a64" }}
+          style={{ color: "#666666" }}
         >
           Anatomy index
           <br />

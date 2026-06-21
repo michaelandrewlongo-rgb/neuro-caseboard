@@ -42,8 +42,8 @@ function StatusDot({ ok }: { ok: boolean }) {
     <span
       className="inline-block h-2 w-2 shrink-0 rounded-full"
       style={{
-        background: ok ? "#5fa86f" : "#c0564f",
-        boxShadow: ok ? "0 0 7px rgba(95,168,111,.7)" : "0 0 7px rgba(192,86,79,.7)",
+        background: ok ? "#34e07f" : "#ff5a5a",
+        boxShadow: ok ? "0 0 7px rgba(52,224,127,.7)" : "0 0 7px rgba(255,90,90,.7)",
       }}
       aria-hidden
     />
@@ -56,10 +56,10 @@ function StatusPill({ ok }: { ok: boolean }) {
     <span
       className="inline-flex items-center px-2 py-0.5 font-mono text-[9px] font-bold uppercase"
       style={{
-        background: ok ? "rgba(95,168,111,.12)" : "rgba(192,86,79,.12)",
-        border: `1px solid ${ok ? "rgba(95,168,111,.28)" : "rgba(192,86,79,.28)"}`,
+        background: ok ? "rgba(52,224,127,.12)" : "rgba(255,90,90,.12)",
+        border: `1px solid ${ok ? "rgba(52,224,127,.28)" : "rgba(255,90,90,.28)"}`,
         borderRadius: "999px",
-        color: ok ? "#74c084" : "#d98a82",
+        color: ok ? "#34e07f" : "#ff8f8a",
         letterSpacing: "0.14em",
       }}
     >
@@ -100,7 +100,7 @@ export default function HealthPanel() {
         <p className="flex items-center gap-2 font-mono text-sm text-muted-foreground">
           <span
             className={cn("inline-block h-1.5 w-1.5 rounded-full")}
-            style={{ background: "#978d86", animation: "pulse 2.4s ease-in-out infinite" }}
+            style={{ background: "#8a8a8a", animation: "pulse 2.4s ease-in-out infinite" }}
             aria-hidden
           />
           probing engine…
@@ -112,12 +112,12 @@ export default function HealthPanel() {
         <div
           className="rounded-xl p-4 text-sm"
           style={{
-            background: "rgba(192,86,79,.08)",
-            border: "1px solid rgba(192,86,79,.22)",
+            background: "rgba(255,90,90,.08)",
+            border: "1px solid rgba(255,90,90,.22)",
           }}
           role="alert"
         >
-          <p className="font-bold" style={{ color: "#d98a82" }}>
+          <p className="font-bold" style={{ color: "#ff8f8a" }}>
             API unreachable
           </p>
           <p className="mt-1 text-muted-foreground">{error}</p>
