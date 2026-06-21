@@ -89,6 +89,10 @@ python3 evaluation/scripts/summarize_grades.py --run-dir evaluation/runs/<new-ru
 
 # 4. Rebuild the failure ledger from grades
 python3 evaluation/scripts/build_failure_ledger.py --grades evaluation/runs/<run>/<prefix>-grades.jsonl --out evaluation/failure-ledger.jsonl
+
+# 5. Record this run in the results table (evaluation/RESULTS.md — see that file for the rendered log)
+python3 evaluation/scripts/update_results.py \
+    --summary evaluation/runs/<new-run>/<prefix>-summary.json --run <new-run> --label "<what changed>"
 ```
 
 ## Artifact index
