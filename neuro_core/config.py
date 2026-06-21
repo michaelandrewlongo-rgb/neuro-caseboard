@@ -21,6 +21,14 @@ DEFAULTS = {
     # at marginal cost. (Plan section A.1: 20->40 / 6->12.)
     "RETRIEVE_K": "40",
     "RERANK_K": "12",
+    # Phase 1-D diversity-aware selection (neuro_core/select.py). Soft Maximal-Marginal-
+    # Relevance penalties subtracted from per-query-normalized rerank scores: per
+    # already-selected same-book passage (BOOK) and same book+page (PAGE). Default 0.0 =>
+    # plain top-k (behavior unchanged). Phase 0A found one book (Youmans, ~72% of corpus)
+    # took ~44% of slots by razor-thin margins; a small BOOK penalty (~0.1-0.2) breaks
+    # those near-ties toward book diversity without flipping decisive single-book wins.
+    "RERANK_MMR_BOOK_PENALTY": "0.0",
+    "RERANK_MMR_PAGE_PENALTY": "0.0",
     "EMBED_DEVICE": "auto",
     "SYNTH_PROVIDER": "vertex",
     "GOOGLE_CLOUD_PROJECT": "",
@@ -91,6 +99,8 @@ class Config:
     chunk_overlap_words: int
     retrieve_k: int
     rerank_k: int
+    rerank_mmr_book_penalty: float
+    rerank_mmr_page_penalty: float
     embed_device: str
     synth_provider: str
     google_cloud_project: str
@@ -138,6 +148,8 @@ def load_config(env_file=".env"):
         chunk_overlap_words=int(get("CHUNK_OVERLAP_WORDS")),
         retrieve_k=int(get("RETRIEVE_K")),
         rerank_k=int(get("RERANK_K")),
+        rerank_mmr_book_penalty=float(get("RERANK_MMR_BOOK_PENALTY")),
+        rerank_mmr_page_penalty=float(get("RERANK_MMR_PAGE_PENALTY")),
         embed_device=get("EMBED_DEVICE"),
         synth_provider=get("SYNTH_PROVIDER"),
         google_cloud_project=get("GOOGLE_CLOUD_PROJECT"),

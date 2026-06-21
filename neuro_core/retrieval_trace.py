@@ -49,12 +49,18 @@ class RetrievalTrace:
             for i, h in enumerate(hits)
         ]
 
-    def record_selection(self, ranked_pairs, top_k: int) -> None:
+    def record_selection(self, ranked_pairs, top_k: int, selected_ids=None) -> None:
         """``ranked_pairs``: the FULL ``[(hit, score), ...]`` list sorted best-first
-        (every reranked candidate, not the top-k slice). ``top_k``: the cut size."""
+        (every reranked candidate, not the top-k slice). ``top_k``: the cut size.
+
+        ``selected_ids``: the chunk ids actually chosen for the answer context. Pass this
+        when selection is NOT pure rank order (e.g. MMR diversity) so the ``selected`` flag
+        reflects what really survived; defaults to the rank-based top-k slice."""
         self.rerank_k = top_k
         self.selection = [
-            TracedCandidate(h.id, h.book, int(h.page), float(s), i, selected=i < top_k)
+            TracedCandidate(
+                h.id, h.book, int(h.page), float(s), i,
+                selected=(h.id in selected_ids) if selected_ids is not None else i < top_k)
             for i, (h, s) in enumerate(ranked_pairs)
         ]
 
@@ -117,6 +123,36 @@ def displacement(trace: RetrievalTrace, book: str, *, lane: str = "selection",
         # RTM-style churn; large gap => the book genuinely dominated.
         "min_intruder_score": min((c.score for c in intruders), default=None),
         "max_displaced_score": max((c.score for c in displaced), default=None),
+    }
+
+
+def selection_composition(trace: RetrievalTrace, book: str) -> dict:
+    """Composition of the ACTUALLY-selected answer context (``selected`` flag) for one query:
+    how many slots went to ``book`` and how many distinct books are represented. Used to
+    validate Phase 1-D grader-independently (MMR should lower ``book``'s share and raise
+    ``distinct_books`` without a grader in the loop)."""
+    book_lower = book.strip().lower()
+    sel = [c for c in trace.selection if c.selected]
+    n_book = sum(1 for c in sel if book_lower in (c.book or "").lower())
+    return {
+        "qid": trace.qid,
+        "n_selected": len(sel),
+        "n_book": n_book,
+        "book_share": (n_book / len(sel)) if sel else 0.0,
+        "distinct_books": len({c.book for c in sel}),
+    }
+
+
+def aggregate_composition(traces, book: str) -> dict:
+    rows = [selection_composition(t, book) for t in traces]
+    n = len(rows) or 1
+    return {
+        "book": book,
+        "n_questions": len(rows),
+        "mean_book_slots": sum(r["n_book"] for r in rows) / n,
+        "mean_book_share": sum(r["book_share"] for r in rows) / n,
+        "mean_distinct_books": sum(r["distinct_books"] for r in rows) / n,
+        "rows": rows,
     }
 
 

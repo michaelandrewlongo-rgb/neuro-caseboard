@@ -4,7 +4,7 @@ import pytest
 from neuro_core.index import Hit
 from neuro_core.rerank import Reranker
 from neuro_core.retrieval_trace import (
-    RetrievalTrace, aggregate_displacement, displacement)
+    RetrievalTrace, aggregate_displacement, displacement, selection_composition)
 
 
 def _hit(id_, book, page, text, score=0.0):
@@ -108,6 +108,28 @@ def test_aggregate_marginal_vs_decisive_gap():
     assert agg["total_displaced"] == 2
     assert agg["marginal_gaps"] == pytest.approx([0.1, 4.0])
     assert agg["mean_marginal_gap"] == pytest.approx(2.05)
+
+
+def test_record_selection_honors_explicit_selected_ids():
+    # MMR may pick a lower-ranked passage over a higher one; selected_ids must override
+    # the rank-based default so the trace reflects what actually survived.
+    trace = RetrievalTrace(question="q")
+    pairs = [(_hit("a", "Youmans", 1, "t"), 9.0), (_hit("b", "Youmans", 2, "t"), 8.0),
+             (_hit("c", "Rhoton", 3, "t"), 7.9)]
+    trace.record_selection(pairs, top_k=2, selected_ids={"a", "c"})
+    assert [c.selected for c in trace.selection] == [True, False, True]
+
+
+def test_selection_composition_counts_book_share_and_diversity():
+    trace = RetrievalTrace(question="q", qid="Q1")
+    pairs = [(_hit("a", "Youmans", 1, "t"), 9.0), (_hit("b", "Rhoton", 2, "t"), 8.0),
+             (_hit("c", "Youmans", 3, "t"), 7.0)]
+    trace.record_selection(pairs, top_k=2)              # selects a, b
+    comp = selection_composition(trace, "youmans")
+    assert comp["n_selected"] == 2
+    assert comp["n_book"] == 1                          # only 'a' is Youmans among selected
+    assert comp["book_share"] == 0.5
+    assert comp["distinct_books"] == 2
 
 
 def test_to_dict_round_trips():

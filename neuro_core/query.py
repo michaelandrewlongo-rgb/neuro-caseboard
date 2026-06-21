@@ -243,7 +243,9 @@ def get_engine(config=None):
     config = config or load_config()
     embedder = Embedder(config.embed_model, device=config.embed_device)
     index = Index(config.index_dir)
-    reranker = Reranker(config.rerank_model, device=config.embed_device)
+    reranker = Reranker(config.rerank_model, device=config.embed_device,
+                        mmr_book_penalty=config.rerank_mmr_book_penalty,
+                        mmr_page_penalty=config.rerank_mmr_page_penalty)
     synth_client = make_synth_client(config)
     visual_embedder = None
     visual_index = None

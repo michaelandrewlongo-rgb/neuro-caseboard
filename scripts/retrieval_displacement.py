@@ -46,7 +46,7 @@ def load_questions(manifest: Path, limit=None):
 
 def run(manifest, book, lane, limit, out_dir, top_k=None):
     from neuro_core.query import get_engine
-    from neuro_core.retrieval_trace import aggregate_displacement
+    from neuro_core.retrieval_trace import aggregate_composition, aggregate_displacement
 
     engine = get_engine()
     questions = load_questions(manifest, limit)
@@ -72,8 +72,14 @@ def run(manifest, book, lane, limit, out_dir, top_k=None):
         b["q"] += 1
         b["displaced"] += row["n_displaced"]
 
+    comp = aggregate_composition(traces, book)
     summary = {
         "book": book, "lane": lane,
+        "composition": {                     # actual selected-set make-up (validates MMR)
+            "mean_book_slots": round(comp["mean_book_slots"], 3),
+            "mean_book_share": round(comp["mean_book_share"], 4),
+            "mean_distinct_books": round(comp["mean_distinct_books"], 3),
+        },
         "n_questions": agg["n_questions"],
         "questions_with_intruder": agg["questions_with_intruder"],
         "questions_with_displacement": agg["questions_with_displacement"],
@@ -101,6 +107,11 @@ def run(manifest, book, lane, limit, out_dir, top_k=None):
     print(f"mean evicted / question              : {summary['mean_displaced_per_q']}")
     print(f"mean marginal gap (small => evicted strong incumbents): "
           f"{summary['mean_marginal_gap']}")
+    c = summary["composition"]
+    print(f"-- selected-set composition --")
+    print(f"mean {book} slots / question        : {c['mean_book_slots']}")
+    print(f"mean {book} share of context        : {c['mean_book_share']}")
+    print(f"mean distinct books / question      : {c['mean_distinct_books']}")
     print(f"\nwrote {trace_path} and {out_dir / 'displacement-summary.json'}")
     return summary
 

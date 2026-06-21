@@ -2,9 +2,9 @@
   "book": "youmans",
   "lane": "selection",
   "composition": {
-    "mean_book_slots": 6.284,
-    "mean_book_share": 0.5236,
-    "mean_distinct_books": 3.254
+    "mean_book_slots": 4.299,
+    "mean_book_share": 0.3582,
+    "mean_distinct_books": 4.701
   },
   "n_questions": 67,
   "questions_with_intruder": 65,
