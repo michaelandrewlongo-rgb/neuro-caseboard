@@ -1,0 +1,32 @@
+Neuro·Caseboard Batch Question Runner
+Task: You will be given a numbered list of neurosurgical questions. For each question, submit it to the Neuro·Caseboard "Ask the corpus" interface at http://127.0.0.1:8001/ask and record the full response. Process all questions sequentially.
+Interface behavior to handle:
+
+The input field accepts free-text questions. Clear it fully before each new question (triple-click, then type).
+Submit by pressing Enter or clicking the ASK button.
+Responses take 30–180 seconds to generate. Wait in 10-second increments, checking for the ASK button to reappear (indicating completion). Do not proceed to the next question until the current one is fully loaded.
+If an Engine error appears, click ASK again to retry the same question before moving on.
+If a disambiguation prompt appears (e.g. "This question maps to several distinct topics — pick the variant you meant"), select the most clinically comprehensive or broadly applicable option, note which variant was selected, then wait for the response.
+Once a response is visible, use get_page_text to capture the full answer text, not just the visible portion of the page.
+
+For each question, record:
+
+The question number and full question text
+Which variant was selected (if disambiguation occurred)
+The complete response text as returned by get_page_text
+
+Output format: After all questions are processed, present the results as a structured document with each question as a heading followed by its full response. Do not summarize, truncate, or paraphrase the responses — reproduce them in full.
+Error handling:
+
+Engine error → retry once immediately; if it fails again, wait 30 seconds and retry a second time; if still failing, log "ENGINE ERROR — no response" and move to the next question.
+Page still loading / screenshot timeout → wait an additional 30 seconds and retry the screenshot.
+If a question takes longer than 5 minutes with no status change, retry by clicking ASK once more.
+
+Begin with question [N] and end with question [M].
+
+The key design decisions in that prompt, and why they matter:
+Explicit state machine for waiting — the biggest failure mode in the session was not knowing when to stop waiting. Anchoring on "ASK button reappears" gives a reliable, UI-driven signal rather than a fixed timer.
+get_page_text over screenshots — screenshots only show what's in the viewport; get_page_text captures the full article regardless of length.
+Disambiguation handling — the system occasionally returns topic-picker UI instead of a direct answer. Without an explicit rule, the agent stalls or picks arbitrarily; the prompt makes the selection logic explicit and instructs logging of the choice.
+No paraphrasing rule — without it, an agent will naturally compress long responses into summaries, losing citation numbers and fine clinical distinctions that are the whole point of the corpus.
+Retry ladder — the session hit both engine errors and screenshot timeouts. A graded retry (immediate → 30s → log and skip) prevents infinite loops while not giving up too early.

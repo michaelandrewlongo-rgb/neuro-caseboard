@@ -34,9 +34,10 @@ def _run_ask(args) -> int:
         loc = c.book + (f", {c.chapter}" if c.chapter else "") + f", p.{c.page}"
         print(f"  [{c.n}] {loc}")
     lit = getattr(result, "literature", None)
-    if lit and lit.narrative:
+    if lit and lit.citations:
         print("\nContemporary Literature:")
-        print(lit.narrative)
+        if lit.narrative:  # separate mode carries a standalone narrative; woven mode does not
+            print(lit.narrative)
         for c in lit.citations:
             link = f"https://doi.org/{c.doi}" if c.doi else c.url
             print(f"  [L{c.n}] {c.title} — {c.journal} {c.year or ''} · {link}")

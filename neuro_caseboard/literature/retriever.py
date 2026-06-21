@@ -117,10 +117,11 @@ class LiteratureRetriever:
     """question -> ranked LiteratureRecords. `client` is any object exposing the
     PubMedClient async methods (search/summaries/structured_abstracts/abstracts)."""
 
-    def __init__(self, client, *, k: int = 8, recency_years: int = 7):
+    def __init__(self, client, *, k: int = 8, recency_years: int = 7, recency_boost: int = 0):
         self._client = client
         self._k = k
         self._recency_years = recency_years
+        self._recency_boost = recency_boost
         # Set by retrieve(): explains thin coverage (BACKLOG P2 #7) for the caller to surface.
         self.last_coverage_note = ""
 
@@ -167,8 +168,14 @@ class LiteratureRetriever:
             # Bucket by relevance, then prefer evidence quality + recency WITHIN a bucket:
             # relevance gates selection; tier/recency only reorder similarly-relevant papers.
             bucket = rank_of.get(r.pmid, len(pmids)) // _RELEVANCE_BUCKET
+            tier = pub_tier(r.pub_types)
             recent = 0 if (r.year and current_year - r.year <= self._recency_years) else 1
-            return (bucket, pub_tier(r.pub_types), recent, -(r.year or 0))
+            # Mechanism B: a recent, high-evidence paper (guideline/SR/meta/RCT) may be promoted
+            # up to recency_boost buckets so a landmark recent trial just below the relevance
+            # cutoff is not buried. Conservative; recency_boost=0 is a no-op (today's behavior).
+            if self._recency_boost and recent == 0 and tier <= 1:
+                bucket = max(0, bucket - self._recency_boost)
+            return (bucket, tier, recent, -(r.year or 0))
 
         records.sort(key=rank_key)
         # P2 #7: apply a quality floor to the relevance-ranked pool (drop low-tier off-topic

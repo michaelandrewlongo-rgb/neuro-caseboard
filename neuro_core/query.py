@@ -4,7 +4,7 @@ from .config import load_config
 from .embed import Embedder
 from .index import Index, Hit, reciprocal_rank_fusion
 from .rerank import Reranker
-from .synthesize import synthesize, is_refusal
+from .synthesize import synthesize, is_refusal, REFUSAL
 from .synth_clients import make_synth_client
 from .gpu_guard import ensure_gpu_ready
 from .visual_embed import VisualEmbedder
@@ -37,6 +37,19 @@ class Clarification:
     asks which variant rather than guessing. No PDF is produced for this case."""
     question: str
     variants: list = field(default_factory=list)
+
+
+@dataclass
+class RetrievalBundle:
+    """Retrieval-only output for the woven Ask path: the (possibly variant-resolved)
+    question plus retrieved passages and collected figures/images, WITHOUT synthesis.
+    Synthesis happens in the neuro_caseboard integration layer so neuro_core stays
+    literature-agnostic."""
+    question: str
+    hits: list = field(default_factory=list)
+    figures: list = field(default_factory=list)
+    images: list = field(default_factory=list)
+    variant: VariantRewrite | None = None
 
 
 @dataclass
@@ -211,11 +224,34 @@ class Engine:
         figures, _ = self._collect_figures(plan.question, plan.top)
         return figures
 
+    def retrieve_for_synthesis(self, question):
+        """Retrieve passages + figures without synthesizing (for the woven Ask path).
+        Returns a Clarification (ambiguous, no answer) or a RetrievalBundle."""
+        plan = self._plan_query(question)
+        if isinstance(plan, Clarification):
+            return plan
+        figures, images = self._collect_figures(plan.question, plan.top)
+        return RetrievalBundle(question=plan.question, hits=plan.top, figures=figures,
+                               images=images, variant=plan.variant)
+
     def _answer(self, question, top, variant=None):
         figures, images = self._collect_figures(question, top)
         extra = ({"variant_directive": _variant_directive(variant.label)}
                  if variant else {})
         syn = self.synth_fn(question, top, figures, images, self.synth_client, **extra)
+        # Empty-answer guard (TKT-C5): a transient empty/whitespace synth result (e.g. a
+        # Gemini candidate with no text part) is not a refusal — is_refusal("") is False — so
+        # without this guard it would surface as a blank, not-gradable answer. Retry once
+        # (the failure is transient); if still empty, degrade to the honest REFUSAL abstention
+        # so the caller always receives a gradable answer, never an empty string.
+        # Scope: this guards the EMPTY-RESULT failure mode only. If synth_fn instead *raises*,
+        # the exception is intentionally left to propagate — the caller (qa.answer_question / the
+        # benchmark runner's retry ladder) handles engine errors; degrading an exception to
+        # REFUSAL here would mask genuine failures.
+        if not (syn.answer or "").strip():
+            syn = self.synth_fn(question, top, figures, images, self.synth_client, **extra)
+            if not (syn.answer or "").strip():
+                return QueryResult(answer=REFUSAL, citations=[], figures=[])
         if is_refusal(syn.answer):
             # Synthesis abstained: figures/citations collected from retrieval are
             # spurious on a refusal — drop both (no Assuming line either).
@@ -274,3 +310,10 @@ def query(question, config=None, force=False):
     if config.synth_provider == "local" and config.gpu_guard:
         ensure_gpu_ready(config, force=force)
     return get_engine(config).query(question)
+
+
+def plan_retrieval(question, config=None, force=False):
+    config = config or load_config()
+    if config.synth_provider == "local" and config.gpu_guard:
+        ensure_gpu_ready(config, force=force)
+    return get_engine(config).retrieve_for_synthesis(question)

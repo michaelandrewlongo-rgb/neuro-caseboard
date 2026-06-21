@@ -1,0 +1,16 @@
+{
+  "run_id": "b363d0448d2b499297641f9a9578230a",
+  "created_at": "2026-06-20T18:29:38.370683+00:00",
+  "application_commit": "eb9e981a93b71f1b2aa1497185d2638d0375110c",
+  "working_tree_dirty": true,
+  "benchmark_version": "contemporary-qs-in-neurosurgery:f9ba5d881e84",
+  "model_configuration": {
+    "synth_provider": "vertex",
+    "vertex_model": "gemini-2.5-pro",
+    "google_cloud_project": "project-a20782b0-fdca-45ec-bc7",
+    "google_cloud_location": "us-central1"
+  },
+  "python_version": "3.12.3",
+  "host": "DESKTOP-U1OJM3G",
+  "platform": "Linux-6.18.33.1-microsoft-standard-WSL2-x86_64-with-glibc2.39"
+}

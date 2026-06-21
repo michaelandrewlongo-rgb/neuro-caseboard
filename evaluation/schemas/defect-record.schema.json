@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "neuro-caseboard/evaluation/defect-record",
+  "title": "Defect record",
+  "description": "Atomic failure-mode record (JSONL) for failure-ledger.jsonl.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "defect_id", "question_id", "category", "severity", "answer_excerpt",
+    "grader_basis", "probable_layer", "candidate_files", "confidence",
+    "causal_status", "recommended_action"
+  ],
+  "properties": {
+    "defect_id": {"type": "string"},
+    "question_id": {"type": "string"},
+    "category": {
+      "type": "string",
+      "enum": [
+        "retrieval_irrelevance", "retrieval_omission", "retrieval_near_miss",
+        "figure_or_image_contamination", "source_quality_failure", "outdated_evidence",
+        "citation_claim_mismatch", "unsupported_claim", "incorrect_synthesis",
+        "missing_decision_threshold", "missing_patient_selection", "missing_comparator",
+        "missing_risk_or_tradeoff", "overabsolute_language", "poor_question_decomposition",
+        "disambiguation_failure", "context_window_or_truncation", "output_schema_inconsistency",
+        "engine_reliability", "latency", "grader_uncertainty", "other"
+      ]
+    },
+    "severity": {"type": "string", "enum": ["minor", "material", "safety_critical"]},
+    "answer_excerpt": {"type": "string"},
+    "grader_basis": {"type": "string"},
+    "probable_layer": {
+      "type": "string",
+      "enum": [
+        "query_understanding", "query_decomposition", "retrieval", "reranking",
+        "source_filtering", "figure_retrieval", "context_packing", "prompting",
+        "model_synthesis", "citation_rendering", "ui_capture", "infrastructure", "unknown"
+      ]
+    },
+    "candidate_files": {"type": "array", "items": {"type": "string"}},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "causal_status": {"type": "string", "enum": ["hypothesis", "supported", "confirmed"]},
+    "recommended_action": {
+      "type": "string",
+      "enum": ["investigate", "patch", "accept", "needs_external_review"]
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "neuro-caseboard/evaluation/run-record",
+  "title": "Benchmark run record",
+  "description": "One record per question per run (JSONL). Captures the engine answer + provenance.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "question_id", "question", "domain", "answer", "status", "attempts",
+    "started_at", "completed_at", "latency_seconds", "run_id"
+  ],
+  "properties": {
+    "question_id": {"type": "string"},
+    "question": {"type": "string"},
+    "domain": {"type": "string"},
+    "selected_variant": {"type": ["string", "null"]},
+    "answer": {"type": ["string", "null"]},
+    "status": {"type": "string", "enum": ["completed", "engine_error", "timeout", "not_gradable"]},
+    "attempts": {"type": "integer", "minimum": 0},
+    "started_at": {"type": "string"},
+    "completed_at": {"type": ["string", "null"]},
+    "latency_seconds": {"type": "number", "minimum": 0},
+    "run_id": {"type": "string"},
+    "application_commit": {"type": ["string", "null"]},
+    "working_tree_dirty": {"type": ["boolean", "null"]},
+    "corpus_fingerprint": {"type": ["string", "null"]},
+    "prompt_fingerprint": {"type": ["string", "null"]},
+    "model_configuration": {"type": ["object", "null"]},
+    "citations": {"type": ["array", "null"]},
+    "figures": {"type": ["array", "null"]},
+    "raw_response": {"type": ["object", "string", "null"]},
+    "error_details": {"type": ["string", "object", "null"]}
+  }
+}

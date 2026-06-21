@@ -23,6 +23,7 @@ from ask_session import (is_new_submission, mark_answered, reset_conversation,
 from ask_confidence import grade_answer, summarize, STATUS_LABEL, STATUS_MARK
 from quant_support import extract_metrics, unquantified_comparisons, summarize as quant_summarize
 from progress import ProgressTracker, out_of_scope
+from ask_literature import should_show_literature
 from ask_errors import (classify_error, log_failure, not_yet_failed, note_failure,
                         clear_failure)
 from neuro_caseboard.board_view import board_view
@@ -36,6 +37,7 @@ from neuro_caseboard.qa import answer_question
 st.set_page_config(page_title="Neuro·Caseboard — Signal", page_icon="◈", layout="wide",
                    initial_sidebar_state="expanded")
 sig.apply_theme()
+
 
 # Optional passcode gate: set APP_PASSWORD in the deployment env. No gate locally.
 _pw = os.environ.get("APP_PASSWORD", "")
@@ -176,9 +178,11 @@ if mode == "Ask":
                     _badge(from_figure(f).key, label)
         sig.section("Sources", "SRC")
         sig.sources_panel(result.citations)
-        if result.literature and result.literature.narrative:
+        if should_show_literature(result.literature):
             sig.section("Contemporary Literature", "LIT")
-            st.markdown(sig.citation_chips(result.literature.narrative), unsafe_allow_html=True)
+            if result.literature.narrative:
+                st.markdown(sig.citation_chips(result.literature.narrative),
+                            unsafe_allow_html=True)
             sig.literature_panel(result.literature.citations)
         if st.checkbox("Prepare PDF", help="Render this answer as an Executive-Navy PDF"):
             with st.spinner("Rendering PDF…"):
