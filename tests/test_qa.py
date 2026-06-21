@@ -72,3 +72,47 @@ def test_build_literature_section_disabled_returns_none():
     cfg = LiteratureConfig(enabled=False, recency_years=7, k=5, cache_ttl_days=14,
                            ncbi_api_key="", cache_dir="/tmp/x")
     assert build_literature_section("q", lit_config=cfg) is None
+
+
+def test_answer_question_routes_to_woven_when_flag_on(monkeypatch):
+    monkeypatch.setenv("NEURO_CASEBOARD_SKIP_DOTENV", "1")
+    monkeypatch.setenv("LITERATURE_WEAVE", "1")
+    import neuro_caseboard.qa as qa
+    monkeypatch.setattr(qa, "_answer_question_woven", lambda *a, **k: "WOVEN")
+    assert qa.answer_question("q") == "WOVEN"
+
+
+def test_answer_question_separate_path_when_flag_off(monkeypatch):
+    monkeypatch.setenv("NEURO_CASEBOARD_SKIP_DOTENV", "1")
+    monkeypatch.delenv("LITERATURE_WEAVE", raising=False)
+    out = answer_question("q", lane_a=_query_result, lane_b=lambda: None)
+    assert isinstance(out, QAResult)
+    assert out.answer == "Textbook answer [1]."
+
+
+def test_retrieve_records_cache_key_includes_recency_boost():
+    from neuro_caseboard.qa import retrieve_records
+
+    class _KeyCache:
+        def __init__(self):
+            self.asked = []
+        def get(self, key):
+            self.asked.append(key)
+            return []  # cache "hit" with empty list -> no network, returns ([], term)
+        def set(self, key, records):
+            pass
+
+    class _Synth:
+        def generate(self, system, user, images):
+            return "x"
+
+    def _cfg(boost):
+        return LiteratureConfig(enabled=True, recency_years=7, k=5, cache_ttl_days=14,
+                                ncbi_api_key="", cache_dir="/tmp/x", weave=True,
+                                recency_boost=boost, precision_gate=True, precision_min_overlap=1)
+
+    c0, c1 = _KeyCache(), _KeyCache()
+    retrieve_records("distal MCA occlusion", lit_config=_cfg(0), synth_client=_Synth(), cache=c0)
+    retrieve_records("distal MCA occlusion", lit_config=_cfg(2), synth_client=_Synth(), cache=c1)
+    assert c0.asked and c1.asked
+    assert c0.asked[0] != c1.asked[0]  # boost must be part of the key

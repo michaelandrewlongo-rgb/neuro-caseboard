@@ -40,6 +40,19 @@ class Clarification:
 
 
 @dataclass
+class RetrievalBundle:
+    """Retrieval-only output for the woven Ask path: the (possibly variant-resolved)
+    question plus retrieved passages and collected figures/images, WITHOUT synthesis.
+    Synthesis happens in the neuro_caseboard integration layer so neuro_core stays
+    literature-agnostic."""
+    question: str
+    hits: list = field(default_factory=list)
+    figures: list = field(default_factory=list)
+    images: list = field(default_factory=list)
+    variant: VariantRewrite | None = None
+
+
+@dataclass
 class _Resolved:
     """Internal: the (possibly variant-resolved) query + its retrieved passages."""
     question: str
@@ -201,6 +214,16 @@ class Engine:
         figures, _ = self._collect_figures(plan.question, plan.top)
         return figures
 
+    def retrieve_for_synthesis(self, question):
+        """Retrieve passages + figures without synthesizing (for the woven Ask path).
+        Returns a Clarification (ambiguous, no answer) or a RetrievalBundle."""
+        plan = self._plan_query(question)
+        if isinstance(plan, Clarification):
+            return plan
+        figures, images = self._collect_figures(plan.question, plan.top)
+        return RetrievalBundle(question=plan.question, hits=plan.top, figures=figures,
+                               images=images, variant=plan.variant)
+
     def _answer(self, question, top, variant=None):
         figures, images = self._collect_figures(question, top)
         extra = ({"variant_directive": _variant_directive(variant.label)}
@@ -275,3 +298,10 @@ def query(question, config=None, force=False):
     if config.synth_provider == "local" and config.gpu_guard:
         ensure_gpu_ready(config, force=force)
     return get_engine(config).query(question)
+
+
+def plan_retrieval(question, config=None, force=False):
+    config = config or load_config()
+    if config.synth_provider == "local" and config.gpu_guard:
+        ensure_gpu_ready(config, force=force)
+    return get_engine(config).retrieve_for_synthesis(question)

@@ -98,7 +98,7 @@ def _literature_html(result) -> str:
         return ""
     narrative = _g(lit, "narrative") or ""
     cites = _g(lit, "citations") or []
-    if not narrative or not cites:
+    if not cites:
         return ""
     rows = []
     for c in cites:
@@ -110,9 +110,11 @@ def _literature_html(result) -> str:
         rows.append(f'<div class="src"><span class="ln">[L{_g(c, "n")}]</span> '
                     f'{html.escape(_g(c, "title") or "")} '
                     f'<span class="litmeta">— {meta}</span>{link}</div>')
+    narrative_html = (f'<div class="answer">{_md_to_html(narrative)}</div>'
+                      if narrative else "")
     return ('<div class="section"><div class="sec-h"><span class="k">LIT</span>'
             '<span class="t">Contemporary Literature</span><span class="ln"></span></div>'
-            f'<div class="answer">{_md_to_html(narrative)}</div>'
+            f'{narrative_html}'
             f'<div class="sources">{"".join(rows)}</div></div>')
 
 
@@ -250,13 +252,14 @@ def render_briefing_clinical_pdf(result, out_path, *, title: str, subtitle: str 
             pdf.multi_cell(0, 4.6, t(f"[{_g(c, 'n')}] {loc}"), new_x="LMARGIN", new_y="NEXT")
 
     lit = _g(result, "literature")
-    if lit and _g(lit, "narrative") and (_g(lit, "citations") or []):
+    if lit and (_g(lit, "citations") or []):
         pdf.ln(2); pdf.set_font(fam, "B", 13)
         pdf.multi_cell(0, 7, t("Contemporary Literature"), new_x="LMARGIN", new_y="NEXT")
-        pdf.set_font(fam, "", 10)
-        for kind, text in _md_lines(_g(lit, "narrative")):
-            pdf.multi_cell(0, 5, t(("- " + text) if kind == "li" else text),
-                           new_x="LMARGIN", new_y="NEXT")
+        if _g(lit, "narrative"):
+            pdf.set_font(fam, "", 10)
+            for kind, text in _md_lines(_g(lit, "narrative")):
+                pdf.multi_cell(0, 5, t(("- " + text) if kind == "li" else text),
+                               new_x="LMARGIN", new_y="NEXT")
         pdf.set_font(fam, "", 9)
         for c in (_g(lit, "citations") or []):
             doi = _g(c, "doi") or ""
