@@ -156,3 +156,47 @@ def test_relevance_gates_high_tier_low_relevance():
     recs = asyncio.run(LiteratureRetriever(C(), k=8, recency_years=7).retrieve("q", current_year=2024))
     order = [r.pmid for r in recs]
     assert order.index("p0") < order.index("p5")
+
+
+def _recency_client():
+    # p0..p4 are older (2010) narrative reviews in relevance bucket 0 (ranks 0-4);
+    # p5 is a recent (2024) RCT in relevance bucket 1 (rank 5). Mechanism B promotes
+    # the recent high-tier paper one bucket so it competes with bucket 0.
+    class C:
+        async def search(self, query, *, max_results=40, filter_type=None):
+            if filter_type == "systematic_review":
+                return ([], 0)
+            return (["p0", "p1", "p2", "p3", "p4", "p5"], 6)
+
+        async def summaries(self, pmids):
+            rows = []
+            for p in pmids:
+                if p == "p5":
+                    rows.append({"pmid": p, "title": f"t {p}", "source": "J",
+                                 "pubdate": "2024", "pub_types": ["Randomized Controlled Trial"],
+                                 "doi": "", "url": p, "authors": ""})
+                else:
+                    rows.append({"pmid": p, "title": f"t {p}", "source": "J",
+                                 "pubdate": "2010", "pub_types": ["Review"],
+                                 "doi": "", "url": p, "authors": ""})
+            return rows
+
+        async def structured_abstracts(self, pmids):
+            return {p: {"RESULTS": "r"} for p in pmids}
+
+        async def abstracts(self, pmids):
+            return {p: "a" for p in pmids}
+    return C()
+
+
+def test_recency_boost_promotes_recent_high_tier():
+    recs = asyncio.run(LiteratureRetriever(_recency_client(), k=8, recency_years=7,
+                                           recency_boost=1).retrieve("q", current_year=2024))
+    assert recs[0].pmid == "p5"  # promoted across the bucket boundary to the front
+
+
+def test_recency_boost_zero_is_noop():
+    recs = asyncio.run(LiteratureRetriever(_recency_client(), k=8, recency_years=7,
+                                           recency_boost=0).retrieve("q", current_year=2024))
+    order = [r.pmid for r in recs]
+    assert order.index("p0") < order.index("p5")  # relevance bucket order preserved
