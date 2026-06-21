@@ -1,7 +1,7 @@
 # Investigation: Optimal Textbook + PubMed Retrieval Strategy
 
 **Repo:** `neuro-caseboard` (master) • **Benchmark:** `youmans-full67-20260620-2210` (67 Qs, blinded, 3 arms)
-**Status:** investigation + Phase-0A/1-C implementation landed (working tree, uncommitted). Findings labeled **VERIFIED** (traced to code / computed from data) vs **HYPOTHESIS / INFERRED**. See **"Phase 0A Results"** and **"Implementation Status"** at the end.
+**Status:** investigation + Phases 0A / 1-C / 1-D / 0B implemented & validated on branch `feat/retrieval-instrument-and-citation-safety`. Findings labeled **VERIFIED** (traced to code / computed from data) vs **HYPOTHESIS / INFERRED**. See **"Phase 0A Results"**, **"Phase 0B Results"**, and **"Implementation Status"** at the end. NOTE: §0 TL;DR items 3–4 are *superseded* by Phase 0B — the +3.9 PubMed gain is a joint-grading artifact (real appendix is score-neutral in isolation), not a length effect.
 
 ---
 
@@ -307,18 +307,92 @@ opposite valence — which is the whole argument for diversity-aware selection o
 
 ---
 
-# Implementation Status (working tree, `master`, uncommitted)
+# Implementation Status (branch `feat/retrieval-instrument-and-citation-safety`)
 
-| Item | Status | Files | Tests |
+| Item | Status | Files | Tests / evidence |
 |---|---|---|---|
-| **0A** displacement instrumentation | ✅ landed + run | `neuro_core/retrieval_trace.py` (new); optional `trace=` in `index.hybrid_search`, `rerank.Reranker.rerank`, `query.Engine._retrieve`/`retrieve_traced`; `scripts/retrieval_displacement.py` (new) | 10 new unit tests; full neuro_core suite green incl. byte-identical-to-today |
-| **1-C** cite-what-you-used | ✅ landed | `qa.py` (cite only `[L#]` actually emitted; drop lane if none), `synth.py::cited_marker_numbers` (new) | new qa tests |
-| **1-C** kill single-article fallback | ✅ landed | `standardize.py` (abstain instead of admitting low-tier) | updated augmentation test |
-| Broad regression check | ✅ | 255 passed across touched modules + dependents (17s scoped run) | — |
-| **0B** placebo/scramble eval | ⏳ next | — | — |
-| **1-D** dynamic-K + MMR retrieval fix | ⏳ held until 0B; design = relevance-relative cut + MMR same-book penalty + widen `RETRIEVE_K` (NOT a raw score floor, NOT per-book quotas) | — | — |
+| **0A** displacement instrumentation | ✅ committed `43a3874` | `neuro_core/retrieval_trace.py` (new); optional `trace=` in `index.hybrid_search`, `rerank.Reranker.rerank`, `query.Engine._retrieve`/`retrieve_traced`; `scripts/retrieval_displacement.py` (new) | 10+ unit tests; full neuro_core green incl. byte-identical-to-today |
+| **1-C** cite-what-you-used + kill fallback | ✅ committed `43a3874` | `qa.py` (cite only emitted `[L#]`; drop lane if none), `synth.py::cited_marker_numbers`, `standardize.py` (abstain vs low-tier) | new qa/synth/augmentation tests; 255 green across dependents |
+| **1-D** MMR diversity selection | ✅ committed `078da26` | `neuro_core/select.py::mmr_select` (new); `Reranker` + `RERANK_MMR_BOOK_PENALTY`/`PAGE_PENALTY` (default 0 → unchanged); trace records actual post-MMR selection + `selection_composition` | grader-independent: Youmans share 52.4%→35.8%, distinct books 3.25→4.70 at penalty 0.15 |
+| **0B** placebo/scramble eval | 🔄 running | `eval/placebo_eval.py` (new) — reuses run answers, builds core/real/placebo/scramble arms, grades each IN ISOLATION (fixes joint-contrast confound) via faithful single-answer rubric | 6 unit tests; 12-call Vertex pilot OK; full 64×4 run in progress |
 
-Additive, flag-free changes so far are behavior-preserving on the untraced path (the
-instrumentation does nothing unless a `trace=` is passed). The retrieval *behavior* change
-(1-D) is deliberately not started — 0A says the fix is "stabilize which passages survive,"
-and 0B will say whether the literature lane's gain is real before any lane-shaping work.
+The retrieval-behavior change (1-D) was unblocked once 0A landed (0A's verdict — "stabilize
+*which* passages survive" — is exactly what MMR does), and validated grader-independently
+before commit. 0B settles whether the PubMed lane's gain is evidence or format; PubMed-quality
+work (topical rerank / confidence-gating / reconciled synthesis) stays deferred until it reads out.
+
+## Phase 1-D validation (grader-independent, `book_penalty=0.15`, 67 Qs)
+
+| metric | MMR off | MMR on | Δ |
+|---|---|---|---|
+| mean Youmans slots / 12 | 6.28 | 4.30 | **−1.99** |
+| mean Youmans share of context | 52.4% | 35.8% | **−16.5 pts** |
+| mean distinct books / answer | 3.25 | 4.70 | **+1.45** |
+
+MMR converts ~2 of the 12 answer slots from Youmans to other (specialized) books by breaking
+the razor-thin near-ties Phase 0A measured, without per-book quotas or an uncalibrated score
+floor. Youmans remains the plurality (36%, appropriate at ~72% of corpus) but no longer the
+majority. Whether this *raises scores* (vs merely rebalancing composition) is for the grader
+eval; structurally it does precisely what 0A prescribed. `RERANK_MMR_BOOK_PENALTY` is the
+tunable; 0.15 is a starting point, not yet score-optimized.
+
+---
+
+# Phase 0B Results — PubMed lane de-confounded (isolated grading)
+
+`eval/placebo_eval.py`: reuses the youmans run answers, builds four arms, and grades each
+answer **in isolation** (one answer → 0–100, faithful single-answer rubric) on
+vertex/gemini-2.5-pro — removing the joint/contrast confound of the original 3-arm grading.
+n=64 gradable questions, 0 errors. Artifacts: `eval/placebo/`.
+
+| arm | mean (isolated) | paired Δ vs core | 95% CI | W/L/T vs core |
+|---|---|---|---|---|
+| core (youmans, no appendix) | 86.16 | — | — | — |
+| **real** (core + real PubMed appendix) | 86.11 | **−0.05** | **[−3.20, +3.11]** | 30/22/12 |
+| placebo (core + length-matched boilerplate) | 80.59 | −5.56 | [−8.10, −3.02] | 13/42/9 |
+| scramble (core + wrong-topic real appendix) | 61.25 | −24.91 | [−28.6, −21.2] | 3/59/2 |
+
+Derived: real − placebo = **+5.52** [+2.3, +8.7]; real − scramble = **+24.86** [+20.9, +28.8].
+
+## What this establishes
+
+1. **The benchmark's +3.9 "PubMed gain" is NOT an intrinsic answer-quality gain.** Graded in
+   isolation, the real appendix is **score-neutral** (−0.05, CI straddling 0). The +3.9 came
+   from **joint/comparative grading** — the grader rewarding the one answer that carried a
+   "Contemporary Literature" section when the three arms were scored side by side. This
+   confirms the methodologist's central hypothesis with a clean experiment. **VERIFIED.**
+2. **But it is NOT a crude "length rewards" effect.** A length-matched boilerplate appendix
+   *hurts* (−5.56), and a wrong-topic appendix is devastating (−24.91). The grader is
+   relevance-sensitive; it simply gives no *positive* credit for on-topic literature beyond a
+   complete core answer. So the original report's "length confound" framing was directionally
+   right about the +3.9 being an artifact, but the mechanism is **comparative-context reward,
+   not answer length.** **VERIFIED** (refines F2).
+3. **Off-topic / padding content actively harms** (scramble −25, placebo −6). This independently
+   validates that relevance gating and cite-what-you-used (Phase 1-C) matter for *quality*, not
+   just tidiness — a careful reader heavily penalizes irrelevant citations. **VERIFIED** (F3 is real).
+
+## Implications for the roadmap (updated)
+
+- **De-prioritize PubMed-quality work for *score* reasons.** Topical rerank / confidence-gating /
+  reconciled synthesis (old T6/T7/T8) were predicated on the literature lane improving answers;
+  isolated grading says appending literature does **not** raise answer quality. Do not invest
+  there to chase the (artifactual) +3.9.
+- **Keep the lane as a user-facing feature, gated.** A surgeon may want current citations even
+  though a 0–100 rubric is neutral on them — that is a product decision, not a quality-score one.
+  If kept, it **must** be relevance-gated (scramble −25 shows the downside of letting off-topic
+  studies through), which is exactly what 1-C (cite-what-you-used + abstain) delivers.
+- **1-C was the right priority; 1-D stands on its own** (0A + composition validation). Whether
+  1-D *raises scores* is a separate textbook-arm question that can reuse this same isolated
+  grader (core vs MMR-on answer) — a clean, cheap follow-up.
+
+## Caveats (do not over-read)
+
+- **Single grader, self-grading.** Generation and grading are both gemini-2.5-pro; the rubric
+  grounds but does not remove self-preference. The real−core≈0 result is internally consistent
+  and tightly bounded, but the methodologist's call for ≥2 graders / an ICC still stands before
+  treating it as final. A second-grader replication is the recommended next confirmation.
+- **Isolated grader ≠ benchmark grader.** It is harsher and more variable (absolute means differ
+  from the 78.7/80/83.9 joint run); only the within-experiment *paired deltas* are interpreted.
+- **Placebo realism.** The boilerplate is recognizably generic; part of its −5.6 may be a "padding"
+  penalty. That does not affect the headline (real−core≈0) but means "length alone" is, if anything,
+  mildly negative — reinforcing that the +3.9 was comparative-context, not length.

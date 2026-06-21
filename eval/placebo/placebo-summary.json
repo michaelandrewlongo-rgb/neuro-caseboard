@@ -1,0 +1,30 @@
+{
+  "n_questions": 64,
+  "n_errors": 0,
+  "mean_by_arm": {
+    "core": 86.16,
+    "real": 86.11,
+    "placebo": 80.59,
+    "scramble": 61.25
+  },
+  "real_minus_core": [
+    -0.046875,
+    64
+  ],
+  "placebo_minus_core": [
+    -5.5625,
+    64
+  ],
+  "scramble_minus_core": [
+    -24.90625,
+    64
+  ],
+  "real_minus_placebo": [
+    5.515625,
+    64
+  ],
+  "real_minus_scramble": [
+    24.859375,
+    64
+  ]
+}

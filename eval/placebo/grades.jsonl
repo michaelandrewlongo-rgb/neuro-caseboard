@@ -1,0 +1,256 @@
+{"qid": "NIS-01", "domain": "Neurointerventional Surgery", "arm": "core", "score": 20.0, "letter": "F", "error": null}
+{"qid": "NIS-01", "domain": "Neurointerventional Surgery", "arm": "real", "score": 40.0, "letter": "F", "error": null}
+{"qid": "NIS-01", "domain": "Neurointerventional Surgery", "arm": "placebo", "score": 45.0, "letter": "F", "error": null}
+{"qid": "NIS-01", "domain": "Neurointerventional Surgery", "arm": "scramble", "score": 10.0, "letter": "F", "error": null}
+{"qid": "NIS-02", "domain": "Neurointerventional Surgery", "arm": "core", "score": 60.0, "letter": "D", "error": null}
+{"qid": "NIS-02", "domain": "Neurointerventional Surgery", "arm": "real", "score": 60.0, "letter": "D", "error": null}
+{"qid": "NIS-02", "domain": "Neurointerventional Surgery", "arm": "placebo", "score": 70.0, "letter": "C", "error": null}
+{"qid": "NIS-02", "domain": "Neurointerventional Surgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "NIS-03", "domain": "Neurointerventional Surgery", "arm": "core", "score": 85.0, "letter": "B", "error": null}
+{"qid": "NIS-03", "domain": "Neurointerventional Surgery", "arm": "real", "score": 93.0, "letter": "A", "error": null}
+{"qid": "NIS-03", "domain": "Neurointerventional Surgery", "arm": "placebo", "score": 85.0, "letter": "B", "error": null}
+{"qid": "NIS-03", "domain": "Neurointerventional Surgery", "arm": "scramble", "score": 25.0, "letter": "F", "error": null}
+{"qid": "NIS-04", "domain": "Neurointerventional Surgery", "arm": "core", "score": 72.0, "letter": "C", "error": null}
+{"qid": "NIS-04", "domain": "Neurointerventional Surgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "NIS-04", "domain": "Neurointerventional Surgery", "arm": "placebo", "score": 82.0, "letter": "B", "error": null}
+{"qid": "NIS-04", "domain": "Neurointerventional Surgery", "arm": "scramble", "score": 40.0, "letter": "F", "error": null}
+{"qid": "NIS-05", "domain": "Neurointerventional Surgery", "arm": "core", "score": 70.0, "letter": "C", "error": null}
+{"qid": "NIS-05", "domain": "Neurointerventional Surgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "NIS-05", "domain": "Neurointerventional Surgery", "arm": "placebo", "score": 70.0, "letter": "C", "error": null}
+{"qid": "NIS-05", "domain": "Neurointerventional Surgery", "arm": "scramble", "score": 45.0, "letter": "F", "error": null}
+{"qid": "NIS-06", "domain": "Neurointerventional Surgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "NIS-06", "domain": "Neurointerventional Surgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "NIS-06", "domain": "Neurointerventional Surgery", "arm": "placebo", "score": 92.0, "letter": "A", "error": null}
+{"qid": "NIS-06", "domain": "Neurointerventional Surgery", "arm": "scramble", "score": 65.0, "letter": "C", "error": null}
+{"qid": "NIS-07", "domain": "Neurointerventional Surgery", "arm": "core", "score": 60.0, "letter": "D", "error": null}
+{"qid": "NIS-07", "domain": "Neurointerventional Surgery", "arm": "real", "score": 70.0, "letter": "C", "error": null}
+{"qid": "NIS-07", "domain": "Neurointerventional Surgery", "arm": "placebo", "score": 70.0, "letter": "C", "error": null}
+{"qid": "NIS-07", "domain": "Neurointerventional Surgery", "arm": "scramble", "score": 55.0, "letter": "D", "error": null}
+{"qid": "NIS-08", "domain": "Neurointerventional Surgery", "arm": "core", "score": 88.0, "letter": "B", "error": null}
+{"qid": "NIS-08", "domain": "Neurointerventional Surgery", "arm": "real", "score": 93.0, "letter": "A", "error": null}
+{"qid": "NIS-08", "domain": "Neurointerventional Surgery", "arm": "placebo", "score": 70.0, "letter": "C", "error": null}
+{"qid": "NIS-08", "domain": "Neurointerventional Surgery", "arm": "scramble", "score": 20.0, "letter": "F", "error": null}
+{"qid": "SPINE-01", "domain": "Spine Surgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "SPINE-01", "domain": "Spine Surgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "SPINE-01", "domain": "Spine Surgery", "arm": "placebo", "score": 88.0, "letter": "B", "error": null}
+{"qid": "SPINE-01", "domain": "Spine Surgery", "arm": "scramble", "score": 60.0, "letter": "D", "error": null}
+{"qid": "SPINE-03", "domain": "Spine Surgery", "arm": "core", "score": 90.0, "letter": "A", "error": null}
+{"qid": "SPINE-03", "domain": "Spine Surgery", "arm": "real", "score": 85.0, "letter": "B", "error": null}
+{"qid": "SPINE-03", "domain": "Spine Surgery", "arm": "placebo", "score": 85.0, "letter": "B", "error": null}
+{"qid": "SPINE-03", "domain": "Spine Surgery", "arm": "scramble", "score": 45.0, "letter": "F", "error": null}
+{"qid": "SPINE-04", "domain": "Spine Surgery", "arm": "core", "score": 88.0, "letter": "B", "error": null}
+{"qid": "SPINE-04", "domain": "Spine Surgery", "arm": "real", "score": 96.0, "letter": "A", "error": null}
+{"qid": "SPINE-04", "domain": "Spine Surgery", "arm": "placebo", "score": 92.0, "letter": "A", "error": null}
+{"qid": "SPINE-04", "domain": "Spine Surgery", "arm": "scramble", "score": 45.0, "letter": "F", "error": null}
+{"qid": "SPINE-05", "domain": "Spine Surgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "SPINE-05", "domain": "Spine Surgery", "arm": "real", "score": 75.0, "letter": "C", "error": null}
+{"qid": "SPINE-05", "domain": "Spine Surgery", "arm": "placebo", "score": 94.0, "letter": "A", "error": null}
+{"qid": "SPINE-05", "domain": "Spine Surgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "SPINE-06", "domain": "Spine Surgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "SPINE-06", "domain": "Spine Surgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "SPINE-06", "domain": "Spine Surgery", "arm": "placebo", "score": 82.0, "letter": "B", "error": null}
+{"qid": "SPINE-06", "domain": "Spine Surgery", "arm": "scramble", "score": 55.0, "letter": "D", "error": null}
+{"qid": "SPINE-07", "domain": "Spine Surgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "SPINE-07", "domain": "Spine Surgery", "arm": "real", "score": 88.0, "letter": "B", "error": null}
+{"qid": "SPINE-07", "domain": "Spine Surgery", "arm": "placebo", "score": 85.0, "letter": "B", "error": null}
+{"qid": "SPINE-07", "domain": "Spine Surgery", "arm": "scramble", "score": 55.0, "letter": "D", "error": null}
+{"qid": "SPINE-08", "domain": "Spine Surgery", "arm": "core", "score": 88.0, "letter": "B", "error": null}
+{"qid": "SPINE-08", "domain": "Spine Surgery", "arm": "real", "score": 45.0, "letter": "F", "error": null}
+{"qid": "SPINE-08", "domain": "Spine Surgery", "arm": "placebo", "score": 83.0, "letter": "B", "error": null}
+{"qid": "SPINE-08", "domain": "Spine Surgery", "arm": "scramble", "score": 60.0, "letter": "D", "error": null}
+{"qid": "SPINE-09", "domain": "Spine Surgery", "arm": "core", "score": 85.0, "letter": "B", "error": null}
+{"qid": "SPINE-09", "domain": "Spine Surgery", "arm": "real", "score": 78.0, "letter": "C", "error": null}
+{"qid": "SPINE-09", "domain": "Spine Surgery", "arm": "placebo", "score": 75.0, "letter": "C", "error": null}
+{"qid": "SPINE-09", "domain": "Spine Surgery", "arm": "scramble", "score": 65.0, "letter": "C", "error": null}
+{"qid": "TUMOR-01", "domain": "Brain Tumor Surgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "TUMOR-01", "domain": "Brain Tumor Surgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "TUMOR-01", "domain": "Brain Tumor Surgery", "arm": "placebo", "score": 70.0, "letter": "C", "error": null}
+{"qid": "TUMOR-01", "domain": "Brain Tumor Surgery", "arm": "scramble", "score": 55.0, "letter": "D", "error": null}
+{"qid": "TUMOR-03", "domain": "Brain Tumor Surgery", "arm": "core", "score": 92.0, "letter": "A", "error": null}
+{"qid": "TUMOR-03", "domain": "Brain Tumor Surgery", "arm": "real", "score": 85.0, "letter": "B", "error": null}
+{"qid": "TUMOR-03", "domain": "Brain Tumor Surgery", "arm": "placebo", "score": 75.0, "letter": "C", "error": null}
+{"qid": "TUMOR-03", "domain": "Brain Tumor Surgery", "arm": "scramble", "score": 58.0, "letter": "D", "error": null}
+{"qid": "TUMOR-04", "domain": "Brain Tumor Surgery", "arm": "core", "score": 85.0, "letter": "B", "error": null}
+{"qid": "TUMOR-04", "domain": "Brain Tumor Surgery", "arm": "real", "score": 70.0, "letter": "C", "error": null}
+{"qid": "TUMOR-04", "domain": "Brain Tumor Surgery", "arm": "placebo", "score": 75.0, "letter": "C", "error": null}
+{"qid": "TUMOR-04", "domain": "Brain Tumor Surgery", "arm": "scramble", "score": 55.0, "letter": "D", "error": null}
+{"qid": "TUMOR-05", "domain": "Brain Tumor Surgery", "arm": "core", "score": 75.0, "letter": "C", "error": null}
+{"qid": "TUMOR-05", "domain": "Brain Tumor Surgery", "arm": "real", "score": 93.0, "letter": "A", "error": null}
+{"qid": "TUMOR-05", "domain": "Brain Tumor Surgery", "arm": "placebo", "score": 75.0, "letter": "C", "error": null}
+{"qid": "TUMOR-05", "domain": "Brain Tumor Surgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "TUMOR-06", "domain": "Brain Tumor Surgery", "arm": "core", "score": 82.0, "letter": "B", "error": null}
+{"qid": "TUMOR-06", "domain": "Brain Tumor Surgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "TUMOR-06", "domain": "Brain Tumor Surgery", "arm": "placebo", "score": 75.0, "letter": "C", "error": null}
+{"qid": "TUMOR-06", "domain": "Brain Tumor Surgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "TUMOR-07", "domain": "Brain Tumor Surgery", "arm": "core", "score": 88.0, "letter": "B", "error": null}
+{"qid": "TUMOR-07", "domain": "Brain Tumor Surgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "TUMOR-07", "domain": "Brain Tumor Surgery", "arm": "placebo", "score": 75.0, "letter": "C", "error": null}
+{"qid": "TUMOR-07", "domain": "Brain Tumor Surgery", "arm": "scramble", "score": 55.0, "letter": "D", "error": null}
+{"qid": "TUMOR-08", "domain": "Brain Tumor Surgery", "arm": "core", "score": 85.0, "letter": "B", "error": null}
+{"qid": "TUMOR-08", "domain": "Brain Tumor Surgery", "arm": "real", "score": 75.0, "letter": "C", "error": null}
+{"qid": "TUMOR-08", "domain": "Brain Tumor Surgery", "arm": "placebo", "score": 72.0, "letter": "C", "error": null}
+{"qid": "TUMOR-08", "domain": "Brain Tumor Surgery", "arm": "scramble", "score": 58.0, "letter": "D", "error": null}
+{"qid": "TUMOR-09", "domain": "Brain Tumor Surgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "TUMOR-09", "domain": "Brain Tumor Surgery", "arm": "real", "score": 89.0, "letter": "B", "error": null}
+{"qid": "TUMOR-09", "domain": "Brain Tumor Surgery", "arm": "placebo", "score": 95.0, "letter": "A", "error": null}
+{"qid": "TUMOR-09", "domain": "Brain Tumor Surgery", "arm": "scramble", "score": 58.0, "letter": "D", "error": null}
+{"qid": "GENERAL-01", "domain": "General Neurosurgery", "arm": "core", "score": 70.0, "letter": "C", "error": null}
+{"qid": "GENERAL-01", "domain": "General Neurosurgery", "arm": "real", "score": 70.0, "letter": "C", "error": null}
+{"qid": "GENERAL-01", "domain": "General Neurosurgery", "arm": "placebo", "score": 72.0, "letter": "C", "error": null}
+{"qid": "GENERAL-01", "domain": "General Neurosurgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "GENERAL-02", "domain": "General Neurosurgery", "arm": "core", "score": 88.0, "letter": "B", "error": null}
+{"qid": "GENERAL-02", "domain": "General Neurosurgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "GENERAL-02", "domain": "General Neurosurgery", "arm": "placebo", "score": 75.0, "letter": "C", "error": null}
+{"qid": "GENERAL-02", "domain": "General Neurosurgery", "arm": "scramble", "score": 60.0, "letter": "D", "error": null}
+{"qid": "GENERAL-03", "domain": "General Neurosurgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "GENERAL-03", "domain": "General Neurosurgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "GENERAL-03", "domain": "General Neurosurgery", "arm": "placebo", "score": 96.0, "letter": "A", "error": null}
+{"qid": "GENERAL-03", "domain": "General Neurosurgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "GENERAL-04", "domain": "General Neurosurgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "GENERAL-04", "domain": "General Neurosurgery", "arm": "real", "score": 85.0, "letter": "B", "error": null}
+{"qid": "GENERAL-04", "domain": "General Neurosurgery", "arm": "placebo", "score": 85.0, "letter": "B", "error": null}
+{"qid": "GENERAL-04", "domain": "General Neurosurgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "GENERAL-05", "domain": "General Neurosurgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "GENERAL-05", "domain": "General Neurosurgery", "arm": "real", "score": 92.0, "letter": "A", "error": null}
+{"qid": "GENERAL-05", "domain": "General Neurosurgery", "arm": "placebo", "score": 94.0, "letter": "A", "error": null}
+{"qid": "GENERAL-05", "domain": "General Neurosurgery", "arm": "scramble", "score": 60.0, "letter": "D", "error": null}
+{"qid": "GENERAL-06", "domain": "General Neurosurgery", "arm": "core", "score": 88.0, "letter": "B", "error": null}
+{"qid": "GENERAL-06", "domain": "General Neurosurgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "GENERAL-06", "domain": "General Neurosurgery", "arm": "placebo", "score": 85.0, "letter": "B", "error": null}
+{"qid": "GENERAL-06", "domain": "General Neurosurgery", "arm": "scramble", "score": 82.0, "letter": "B", "error": null}
+{"qid": "GENERAL-07", "domain": "General Neurosurgery", "arm": "core", "score": 96.0, "letter": "A", "error": null}
+{"qid": "GENERAL-07", "domain": "General Neurosurgery", "arm": "real", "score": 98.0, "letter": "A", "error": null}
+{"qid": "GENERAL-07", "domain": "General Neurosurgery", "arm": "placebo", "score": 95.0, "letter": "A", "error": null}
+{"qid": "GENERAL-07", "domain": "General Neurosurgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "GENERAL-08", "domain": "General Neurosurgery", "arm": "core", "score": 88.0, "letter": "B", "error": null}
+{"qid": "GENERAL-08", "domain": "General Neurosurgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "GENERAL-08", "domain": "General Neurosurgery", "arm": "placebo", "score": 88.0, "letter": "B", "error": null}
+{"qid": "GENERAL-08", "domain": "General Neurosurgery", "arm": "scramble", "score": 75.0, "letter": "C", "error": null}
+{"qid": "GENERAL-09", "domain": "General Neurosurgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "GENERAL-09", "domain": "General Neurosurgery", "arm": "real", "score": 78.0, "letter": "C", "error": null}
+{"qid": "GENERAL-09", "domain": "General Neurosurgery", "arm": "placebo", "score": 95.0, "letter": "A", "error": null}
+{"qid": "GENERAL-09", "domain": "General Neurosurgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "GENERAL-11", "domain": "General Neurosurgery", "arm": "core", "score": 93.0, "letter": "A", "error": null}
+{"qid": "GENERAL-11", "domain": "General Neurosurgery", "arm": "real", "score": 75.0, "letter": "C", "error": null}
+{"qid": "GENERAL-11", "domain": "General Neurosurgery", "arm": "placebo", "score": 70.0, "letter": "C", "error": null}
+{"qid": "GENERAL-11", "domain": "General Neurosurgery", "arm": "scramble", "score": 40.0, "letter": "F", "error": null}
+{"qid": "OPEN-CV-01", "domain": "Open Cerebrovascular Surgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "OPEN-CV-01", "domain": "Open Cerebrovascular Surgery", "arm": "real", "score": 92.0, "letter": "A", "error": null}
+{"qid": "OPEN-CV-01", "domain": "Open Cerebrovascular Surgery", "arm": "placebo", "score": 87.0, "letter": "B", "error": null}
+{"qid": "OPEN-CV-01", "domain": "Open Cerebrovascular Surgery", "arm": "scramble", "score": 68.0, "letter": "C", "error": null}
+{"qid": "OPEN-CV-02", "domain": "Open Cerebrovascular Surgery", "arm": "core", "score": 90.0, "letter": "A", "error": null}
+{"qid": "OPEN-CV-02", "domain": "Open Cerebrovascular Surgery", "arm": "real", "score": 85.0, "letter": "B", "error": null}
+{"qid": "OPEN-CV-02", "domain": "Open Cerebrovascular Surgery", "arm": "placebo", "score": 85.0, "letter": "B", "error": null}
+{"qid": "OPEN-CV-02", "domain": "Open Cerebrovascular Surgery", "arm": "scramble", "score": 55.0, "letter": "D", "error": null}
+{"qid": "OPEN-CV-03", "domain": "Open Cerebrovascular Surgery", "arm": "core", "score": 75.0, "letter": "C", "error": null}
+{"qid": "OPEN-CV-03", "domain": "Open Cerebrovascular Surgery", "arm": "real", "score": 85.0, "letter": "B", "error": null}
+{"qid": "OPEN-CV-03", "domain": "Open Cerebrovascular Surgery", "arm": "placebo", "score": 55.0, "letter": "D", "error": null}
+{"qid": "OPEN-CV-03", "domain": "Open Cerebrovascular Surgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "OPEN-CV-04", "domain": "Open Cerebrovascular Surgery", "arm": "core", "score": 94.0, "letter": "A", "error": null}
+{"qid": "OPEN-CV-04", "domain": "Open Cerebrovascular Surgery", "arm": "real", "score": 96.0, "letter": "A", "error": null}
+{"qid": "OPEN-CV-04", "domain": "Open Cerebrovascular Surgery", "arm": "placebo", "score": 95.0, "letter": "A", "error": null}
+{"qid": "OPEN-CV-04", "domain": "Open Cerebrovascular Surgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "OPEN-CV-05", "domain": "Open Cerebrovascular Surgery", "arm": "core", "score": 60.0, "letter": "D", "error": null}
+{"qid": "OPEN-CV-05", "domain": "Open Cerebrovascular Surgery", "arm": "real", "score": 68.0, "letter": "C", "error": null}
+{"qid": "OPEN-CV-05", "domain": "Open Cerebrovascular Surgery", "arm": "placebo", "score": 78.0, "letter": "C", "error": null}
+{"qid": "OPEN-CV-05", "domain": "Open Cerebrovascular Surgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "OPEN-CV-06", "domain": "Open Cerebrovascular Surgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "OPEN-CV-06", "domain": "Open Cerebrovascular Surgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "OPEN-CV-06", "domain": "Open Cerebrovascular Surgery", "arm": "placebo", "score": 85.0, "letter": "B", "error": null}
+{"qid": "OPEN-CV-06", "domain": "Open Cerebrovascular Surgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "OPEN-CV-07", "domain": "Open Cerebrovascular Surgery", "arm": "core", "score": 88.0, "letter": "B", "error": null}
+{"qid": "OPEN-CV-07", "domain": "Open Cerebrovascular Surgery", "arm": "real", "score": 85.0, "letter": "B", "error": null}
+{"qid": "OPEN-CV-07", "domain": "Open Cerebrovascular Surgery", "arm": "placebo", "score": 75.0, "letter": "C", "error": null}
+{"qid": "OPEN-CV-07", "domain": "Open Cerebrovascular Surgery", "arm": "scramble", "score": 60.0, "letter": "D", "error": null}
+{"qid": "OPEN-CV-08", "domain": "Open Cerebrovascular Surgery", "arm": "core", "score": 88.0, "letter": "B", "error": null}
+{"qid": "OPEN-CV-08", "domain": "Open Cerebrovascular Surgery", "arm": "real", "score": 93.0, "letter": "A", "error": null}
+{"qid": "OPEN-CV-08", "domain": "Open Cerebrovascular Surgery", "arm": "placebo", "score": 92.0, "letter": "A", "error": null}
+{"qid": "OPEN-CV-08", "domain": "Open Cerebrovascular Surgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "OPEN-CV-09", "domain": "Open Cerebrovascular Surgery", "arm": "core", "score": 94.0, "letter": "A", "error": null}
+{"qid": "OPEN-CV-09", "domain": "Open Cerebrovascular Surgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "OPEN-CV-09", "domain": "Open Cerebrovascular Surgery", "arm": "placebo", "score": 65.0, "letter": "C", "error": null}
+{"qid": "OPEN-CV-09", "domain": "Open Cerebrovascular Surgery", "arm": "scramble", "score": 75.0, "letter": "C", "error": null}
+{"qid": "OPEN-CV-10", "domain": "Open Cerebrovascular Surgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "OPEN-CV-10", "domain": "Open Cerebrovascular Surgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "OPEN-CV-10", "domain": "Open Cerebrovascular Surgery", "arm": "placebo", "score": 82.0, "letter": "B", "error": null}
+{"qid": "OPEN-CV-10", "domain": "Open Cerebrovascular Surgery", "arm": "scramble", "score": 60.0, "letter": "D", "error": null}
+{"qid": "FUNCTIONAL-01", "domain": "Functional Neurosurgery", "arm": "core", "score": 94.0, "letter": "A", "error": null}
+{"qid": "FUNCTIONAL-01", "domain": "Functional Neurosurgery", "arm": "real", "score": 75.0, "letter": "C", "error": null}
+{"qid": "FUNCTIONAL-01", "domain": "Functional Neurosurgery", "arm": "placebo", "score": 88.0, "letter": "B", "error": null}
+{"qid": "FUNCTIONAL-01", "domain": "Functional Neurosurgery", "arm": "scramble", "score": 55.0, "letter": "D", "error": null}
+{"qid": "FUNCTIONAL-02", "domain": "Functional Neurosurgery", "arm": "core", "score": 85.0, "letter": "B", "error": null}
+{"qid": "FUNCTIONAL-02", "domain": "Functional Neurosurgery", "arm": "real", "score": 88.0, "letter": "B", "error": null}
+{"qid": "FUNCTIONAL-02", "domain": "Functional Neurosurgery", "arm": "placebo", "score": 85.0, "letter": "B", "error": null}
+{"qid": "FUNCTIONAL-02", "domain": "Functional Neurosurgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "FUNCTIONAL-03", "domain": "Functional Neurosurgery", "arm": "core", "score": 88.0, "letter": "B", "error": null}
+{"qid": "FUNCTIONAL-03", "domain": "Functional Neurosurgery", "arm": "real", "score": 96.0, "letter": "A", "error": null}
+{"qid": "FUNCTIONAL-03", "domain": "Functional Neurosurgery", "arm": "placebo", "score": 78.0, "letter": "C", "error": null}
+{"qid": "FUNCTIONAL-03", "domain": "Functional Neurosurgery", "arm": "scramble", "score": 65.0, "letter": "C", "error": null}
+{"qid": "FUNCTIONAL-04", "domain": "Functional Neurosurgery", "arm": "core", "score": 92.0, "letter": "A", "error": null}
+{"qid": "FUNCTIONAL-04", "domain": "Functional Neurosurgery", "arm": "real", "score": 96.0, "letter": "A", "error": null}
+{"qid": "FUNCTIONAL-04", "domain": "Functional Neurosurgery", "arm": "placebo", "score": 88.0, "letter": "B", "error": null}
+{"qid": "FUNCTIONAL-04", "domain": "Functional Neurosurgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "FUNCTIONAL-05", "domain": "Functional Neurosurgery", "arm": "core", "score": 72.0, "letter": "C", "error": null}
+{"qid": "FUNCTIONAL-05", "domain": "Functional Neurosurgery", "arm": "real", "score": 82.0, "letter": "B", "error": null}
+{"qid": "FUNCTIONAL-05", "domain": "Functional Neurosurgery", "arm": "placebo", "score": 82.0, "letter": "B", "error": null}
+{"qid": "FUNCTIONAL-05", "domain": "Functional Neurosurgery", "arm": "scramble", "score": 60.0, "letter": "D", "error": null}
+{"qid": "FUNCTIONAL-06", "domain": "Functional Neurosurgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "FUNCTIONAL-06", "domain": "Functional Neurosurgery", "arm": "real", "score": 60.0, "letter": "D", "error": null}
+{"qid": "FUNCTIONAL-06", "domain": "Functional Neurosurgery", "arm": "placebo", "score": 70.0, "letter": "C", "error": null}
+{"qid": "FUNCTIONAL-06", "domain": "Functional Neurosurgery", "arm": "scramble", "score": 55.0, "letter": "D", "error": null}
+{"qid": "FUNCTIONAL-07", "domain": "Functional Neurosurgery", "arm": "core", "score": 92.0, "letter": "A", "error": null}
+{"qid": "FUNCTIONAL-07", "domain": "Functional Neurosurgery", "arm": "real", "score": 92.0, "letter": "A", "error": null}
+{"qid": "FUNCTIONAL-07", "domain": "Functional Neurosurgery", "arm": "placebo", "score": 85.0, "letter": "B", "error": null}
+{"qid": "FUNCTIONAL-07", "domain": "Functional Neurosurgery", "arm": "scramble", "score": 55.0, "letter": "D", "error": null}
+{"qid": "FUNCTIONAL-08", "domain": "Functional Neurosurgery", "arm": "core", "score": 72.0, "letter": "C", "error": null}
+{"qid": "FUNCTIONAL-08", "domain": "Functional Neurosurgery", "arm": "real", "score": 88.0, "letter": "B", "error": null}
+{"qid": "FUNCTIONAL-08", "domain": "Functional Neurosurgery", "arm": "placebo", "score": 70.0, "letter": "C", "error": null}
+{"qid": "FUNCTIONAL-08", "domain": "Functional Neurosurgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "FUNCTIONAL-09", "domain": "Functional Neurosurgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "FUNCTIONAL-09", "domain": "Functional Neurosurgery", "arm": "real", "score": 88.0, "letter": "B", "error": null}
+{"qid": "FUNCTIONAL-09", "domain": "Functional Neurosurgery", "arm": "placebo", "score": 85.0, "letter": "B", "error": null}
+{"qid": "FUNCTIONAL-09", "domain": "Functional Neurosurgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "FUNCTIONAL-10", "domain": "Functional Neurosurgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "FUNCTIONAL-10", "domain": "Functional Neurosurgery", "arm": "real", "score": 94.0, "letter": "A", "error": null}
+{"qid": "FUNCTIONAL-10", "domain": "Functional Neurosurgery", "arm": "placebo", "score": 95.0, "letter": "A", "error": null}
+{"qid": "FUNCTIONAL-10", "domain": "Functional Neurosurgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "TRAUMA-01", "domain": "Trauma Neurosurgery", "arm": "core", "score": 92.0, "letter": "A", "error": null}
+{"qid": "TRAUMA-01", "domain": "Trauma Neurosurgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "TRAUMA-01", "domain": "Trauma Neurosurgery", "arm": "placebo", "score": 94.0, "letter": "A", "error": null}
+{"qid": "TRAUMA-01", "domain": "Trauma Neurosurgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "TRAUMA-02", "domain": "Trauma Neurosurgery", "arm": "core", "score": 75.0, "letter": "C", "error": null}
+{"qid": "TRAUMA-02", "domain": "Trauma Neurosurgery", "arm": "real", "score": 88.0, "letter": "B", "error": null}
+{"qid": "TRAUMA-02", "domain": "Trauma Neurosurgery", "arm": "placebo", "score": 85.0, "letter": "B", "error": null}
+{"qid": "TRAUMA-02", "domain": "Trauma Neurosurgery", "arm": "scramble", "score": 78.0, "letter": "C", "error": null}
+{"qid": "TRAUMA-03", "domain": "Trauma Neurosurgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "TRAUMA-03", "domain": "Trauma Neurosurgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "TRAUMA-03", "domain": "Trauma Neurosurgery", "arm": "placebo", "score": 88.0, "letter": "B", "error": null}
+{"qid": "TRAUMA-03", "domain": "Trauma Neurosurgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "TRAUMA-04", "domain": "Trauma Neurosurgery", "arm": "core", "score": 94.0, "letter": "A", "error": null}
+{"qid": "TRAUMA-04", "domain": "Trauma Neurosurgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "TRAUMA-04", "domain": "Trauma Neurosurgery", "arm": "placebo", "score": 70.0, "letter": "C", "error": null}
+{"qid": "TRAUMA-04", "domain": "Trauma Neurosurgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "TRAUMA-05", "domain": "Trauma Neurosurgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "TRAUMA-05", "domain": "Trauma Neurosurgery", "arm": "real", "score": 55.0, "letter": "D", "error": null}
+{"qid": "TRAUMA-05", "domain": "Trauma Neurosurgery", "arm": "placebo", "score": 82.0, "letter": "B", "error": null}
+{"qid": "TRAUMA-05", "domain": "Trauma Neurosurgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "TRAUMA-06", "domain": "Trauma Neurosurgery", "arm": "core", "score": 78.0, "letter": "C", "error": null}
+{"qid": "TRAUMA-06", "domain": "Trauma Neurosurgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "TRAUMA-06", "domain": "Trauma Neurosurgery", "arm": "placebo", "score": 70.0, "letter": "C", "error": null}
+{"qid": "TRAUMA-06", "domain": "Trauma Neurosurgery", "arm": "scramble", "score": 78.0, "letter": "C", "error": null}
+{"qid": "TRAUMA-07", "domain": "Trauma Neurosurgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "TRAUMA-07", "domain": "Trauma Neurosurgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "TRAUMA-07", "domain": "Trauma Neurosurgery", "arm": "placebo", "score": 70.0, "letter": "C", "error": null}
+{"qid": "TRAUMA-07", "domain": "Trauma Neurosurgery", "arm": "scramble", "score": 55.0, "letter": "D", "error": null}
+{"qid": "TRAUMA-08", "domain": "Trauma Neurosurgery", "arm": "core", "score": 95.0, "letter": "A", "error": null}
+{"qid": "TRAUMA-08", "domain": "Trauma Neurosurgery", "arm": "real", "score": 92.0, "letter": "A", "error": null}
+{"qid": "TRAUMA-08", "domain": "Trauma Neurosurgery", "arm": "placebo", "score": 82.0, "letter": "B", "error": null}
+{"qid": "TRAUMA-08", "domain": "Trauma Neurosurgery", "arm": "scramble", "score": 70.0, "letter": "C", "error": null}
+{"qid": "TRAUMA-09", "domain": "Trauma Neurosurgery", "arm": "core", "score": 72.0, "letter": "C", "error": null}
+{"qid": "TRAUMA-09", "domain": "Trauma Neurosurgery", "arm": "real", "score": 85.0, "letter": "B", "error": null}
+{"qid": "TRAUMA-09", "domain": "Trauma Neurosurgery", "arm": "placebo", "score": 72.0, "letter": "C", "error": null}
+{"qid": "TRAUMA-09", "domain": "Trauma Neurosurgery", "arm": "scramble", "score": 45.0, "letter": "F", "error": null}
+{"qid": "TRAUMA-10", "domain": "Trauma Neurosurgery", "arm": "core", "score": 88.0, "letter": "B", "error": null}
+{"qid": "TRAUMA-10", "domain": "Trauma Neurosurgery", "arm": "real", "score": 95.0, "letter": "A", "error": null}
+{"qid": "TRAUMA-10", "domain": "Trauma Neurosurgery", "arm": "placebo", "score": 85.0, "letter": "B", "error": null}
+{"qid": "TRAUMA-10", "domain": "Trauma Neurosurgery", "arm": "scramble", "score": 75.0, "letter": "C", "error": null}
