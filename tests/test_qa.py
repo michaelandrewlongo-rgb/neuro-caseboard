@@ -72,3 +72,50 @@ def test_build_literature_section_disabled_returns_none():
     cfg = LiteratureConfig(enabled=False, recency_years=7, k=5, cache_ttl_days=14,
                            ncbi_api_key="", cache_dir="/tmp/x")
     assert build_literature_section("q", lit_config=cfg) is None
+
+
+def _two_record_cache(tmp_path):
+    cfg = LiteratureConfig(enabled=True, recency_years=7, k=5, cache_ttl_days=14,
+                           ncbi_api_key="", cache_dir=str(tmp_path))
+
+    class _Cache:
+        def __init__(self):
+            self.records = [
+                LiteratureRecord(pmid="111", title="T1", journal="J", year=2024, doi="d1",
+                                 url="u1", abstract="a", sections={}, pub_types=["Review"]),
+                LiteratureRecord(pmid="222", title="T2", journal="J", year=2024, doi="d2",
+                                 url="u2", abstract="a", sections={}, pub_types=["Review"])]
+
+        def get(self, key):
+            return self.records
+
+        def set(self, key, records):
+            pass
+
+    return cfg, _Cache()
+
+
+def test_build_literature_section_cites_only_used_records(tmp_path):
+    # Two studies fed to synthesis; narrative cites ONLY [L2]. The off-topic [L1] must NOT
+    # appear as a citation, and the used study keeps its original marker number (2).
+    cfg, cache = _two_record_cache(tmp_path)
+
+    class _Synth:
+        def generate(self, system, user, images):
+            return "Only the second study is relevant here [L2]."
+
+    section = build_literature_section("q", lit_config=cfg, cache=cache, synth_client=_Synth())
+    assert section is not None
+    assert [c.n for c in section.citations] == [2]
+    assert [c.pmid for c in section.citations] == ["222"]
+
+
+def test_build_literature_section_drops_lane_when_nothing_cited(tmp_path):
+    # An ungrounded narrative (no [L#] markers) must not attach fabricated authority.
+    cfg, cache = _two_record_cache(tmp_path)
+
+    class _Synth:
+        def generate(self, system, user, images):
+            return "Contemporary practice has evolved considerably in recent years."
+
+    assert build_literature_section("q", lit_config=cfg, cache=cache, synth_client=_Synth()) is None

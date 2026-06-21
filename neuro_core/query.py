@@ -169,10 +169,20 @@ class Engine:
         except OSError:
             return None
 
-    def _retrieve(self, question):
+    def _retrieve(self, question, trace=None):
         qv = self.embedder.embed_query(question)
-        hits = self.index.hybrid_search(question, qv, self.config.retrieve_k)
-        return self.reranker.rerank(question, hits, self.config.rerank_k)
+        if trace is not None:
+            trace.retrieve_k = self.config.retrieve_k
+        hits = self.index.hybrid_search(question, qv, self.config.retrieve_k, trace=trace)
+        return self.reranker.rerank(question, hits, self.config.rerank_k, trace=trace)
+
+    def retrieve_traced(self, question, qid=None):
+        """Run retrieval and return ``(top_hits, RetrievalTrace)``. Grader-independent
+        instrumentation for displacement analysis (Phase 0A); does NOT call synthesis."""
+        from .retrieval_trace import RetrievalTrace
+        trace = RetrievalTrace(question=question, qid=qid)
+        top = self._retrieve(question, trace=trace)
+        return top, trace
 
     def _plan_query(self, question):
         """Shared disambiguation seam. Returns a Clarification (ask, no briefing) or

@@ -24,13 +24,17 @@ class FakeIndex:
         self.hits = hits
         self.called_with = None
 
-    def hybrid_search(self, query_text, query_vector, k):
+    def hybrid_search(self, query_text, query_vector, k, trace=None):
         self.called_with = (query_text, query_vector, k)
+        if trace is not None:
+            trace.record_recall(self.hits)
         return self.hits
 
 
 class FakeReranker:
-    def rerank(self, query, hits, top_k):
+    def rerank(self, query, hits, top_k, trace=None):
+        if trace is not None:
+            trace.record_selection([(h, h.score) for h in hits], top_k)
         return hits[:top_k]
 
 

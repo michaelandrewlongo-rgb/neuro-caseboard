@@ -21,9 +21,12 @@ def standardize_records(ranked: list, *, k: int, max_tier: int = 2, tier_fn=None
         note = "" if len(kept) >= k else (
             f"Limited literature: only {len(kept)} source(s) met the evidence bar for this question.")
     elif ranked:
-        kept = ranked[:1]
-        note = ("No high-quality evidence (guideline, trial, review, or cohort) matched; showing the "
-                "single most relevant article — interpret with caution.")
+        # Abstain rather than admit low-tier evidence. The previous single-article fallback
+        # could surface a case report or small registry as the basis for surgical guidance —
+        # clinically unsafe. When nothing clears the bar we keep nothing (the lane drops out
+        # downstream) and say why, instead of citing a sub-threshold source "with caution".
+        note = ("No high-quality evidence (guideline, trial, review, or cohort) matched this "
+                "question; omitting contemporary literature rather than citing low-tier sources.")
     else:
         note = "No relevant literature found for this question."
     return Augmentation(records=kept, note=note)

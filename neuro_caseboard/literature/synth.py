@@ -1,8 +1,18 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 LIT_REFUSAL = "No relevant recent literature found."
+
+_LIT_MARKER = re.compile(r"\[L(\d+)\]")
+
+
+def cited_marker_numbers(narrative: str) -> set:
+    """The set of study numbers actually cited in the narrative, e.g. ``[L2]`` -> ``{2}``.
+    Used to build a citation list of what was USED, not everything retrieved (so an
+    off-topic-but-retrieved study never appears as fabricated authority)."""
+    return {int(m) for m in _LIT_MARKER.findall(narrative or "")}
 
 LIT_SYSTEM = (
     "You are a neurosurgical evidence summarizer. Using ONLY the numbered studies "

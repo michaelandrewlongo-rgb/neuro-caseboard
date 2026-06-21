@@ -113,7 +113,7 @@ class Index:
         rows = self.tbl.search(query_text, query_type="fts").limit(k).to_list()
         return [self._row_to_hit(r) for r in rows]
 
-    def hybrid_search(self, query_text, query_vector, k):
+    def hybrid_search(self, query_text, query_vector, k, trace=None):
         vhits = self.vector_search(query_vector, k)
         thits = self.text_search(query_text, k)
         by_id = {h.id: h for h in vhits + thits}
@@ -125,4 +125,6 @@ class Index:
             hit = by_id[_id]
             hit.score = score
             out.append(hit)
+        if trace is not None:                 # record the recall gate (RRF pool)
+            trace.record_recall(out)
         return out

@@ -1,5 +1,5 @@
 from neuro_caseboard.literature.synth import (
-    synthesize_literature, is_lit_refusal, LIT_REFUSAL,
+    synthesize_literature, is_lit_refusal, LIT_REFUSAL, cited_marker_numbers,
 )
 from neuro_caseboard.literature.retriever import LiteratureRecord
 
@@ -45,3 +45,10 @@ def test_empty_records_yields_none():
 def test_is_lit_refusal_normalizes():
     assert is_lit_refusal("  No relevant recent literature found.  ")
     assert not is_lit_refusal("Recent RCTs show...")
+
+
+def test_cited_marker_numbers_extracts_used_studies():
+    assert cited_marker_numbers("EVT expanded [L1]. Bridging shifts [L3], also [L1].") == {1, 3}
+    assert cited_marker_numbers("No brackets here at all.") == set()
+    assert cited_marker_numbers("") == set()
+    assert cited_marker_numbers(None) == set()

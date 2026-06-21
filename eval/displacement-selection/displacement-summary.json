@@ -1,0 +1,511 @@
+{
+  "book": "youmans",
+  "lane": "selection",
+  "n_questions": 67,
+  "questions_with_intruder": 65,
+  "questions_with_displacement": 64,
+  "total_displaced": 352,
+  "mean_displaced_per_q": 5.254,
+  "mean_marginal_gap": 0.0402,
+  "by_domain": {
+    "Neurointerventional Surgery": {
+      "q": 8,
+      "displaced": 24
+    },
+    "Spine Surgery": {
+      "q": 9,
+      "displaced": 45
+    },
+    "Brain Tumor Surgery": {
+      "q": 9,
+      "displaced": 48
+    },
+    "General Neurosurgery": {
+      "q": 11,
+      "displaced": 71
+    },
+    "Open Cerebrovascular Surgery": {
+      "q": 10,
+      "displaced": 49
+    },
+    "Functional Neurosurgery": {
+      "q": 10,
+      "displaced": 63
+    },
+    "Trauma Neurosurgery": {
+      "q": 10,
+      "displaced": 52
+    }
+  },
+  "per_question": [
+    {
+      "qid": "NIS-01",
+      "n_intruders": 4,
+      "n_displaced": 4,
+      "min_intruder_score": 0.42089730501174927,
+      "max_displaced_score": 0.32257789373397827
+    },
+    {
+      "qid": "NIS-02",
+      "n_intruders": 0,
+      "n_displaced": 0,
+      "min_intruder_score": null,
+      "max_displaced_score": null
+    },
+    {
+      "qid": "NIS-03",
+      "n_intruders": 4,
+      "n_displaced": 4,
+      "min_intruder_score": 0.2824028432369232,
+      "max_displaced_score": 0.2445375919342041
+    },
+    {
+      "qid": "NIS-04",
+      "n_intruders": 0,
+      "n_displaced": 0,
+      "min_intruder_score": null,
+      "max_displaced_score": null
+    },
+    {
+      "qid": "NIS-05",
+      "n_intruders": 6,
+      "n_displaced": 6,
+      "min_intruder_score": 0.6467223167419434,
+      "max_displaced_score": 0.6381253600120544
+    },
+    {
+      "qid": "NIS-06",
+      "n_intruders": 4,
+      "n_displaced": 4,
+      "min_intruder_score": 0.9467606544494629,
+      "max_displaced_score": 0.9444379210472107
+    },
+    {
+      "qid": "NIS-07",
+      "n_intruders": 4,
+      "n_displaced": 4,
+      "min_intruder_score": 0.9007013440132141,
+      "max_displaced_score": 0.8872178792953491
+    },
+    {
+      "qid": "NIS-08",
+      "n_intruders": 2,
+      "n_displaced": 2,
+      "min_intruder_score": 0.7204027771949768,
+      "max_displaced_score": 0.6981325745582581
+    },
+    {
+      "qid": "SPINE-01",
+      "n_intruders": 2,
+      "n_displaced": 2,
+      "min_intruder_score": 0.9834768176078796,
+      "max_displaced_score": 0.9801875948905945
+    },
+    {
+      "qid": "SPINE-02",
+      "n_intruders": 2,
+      "n_displaced": 2,
+      "min_intruder_score": 0.9620553851127625,
+      "max_displaced_score": 0.899007260799408
+    },
+    {
+      "qid": "SPINE-03",
+      "n_intruders": 2,
+      "n_displaced": 2,
+      "min_intruder_score": 0.8601158261299133,
+      "max_displaced_score": 0.8256476521492004
+    },
+    {
+      "qid": "SPINE-04",
+      "n_intruders": 5,
+      "n_displaced": 5,
+      "min_intruder_score": 0.9358630776405334,
+      "max_displaced_score": 0.9024796485900879
+    },
+    {
+      "qid": "SPINE-05",
+      "n_intruders": 3,
+      "n_displaced": 3,
+      "min_intruder_score": 0.8091232776641846,
+      "max_displaced_score": 0.7539028525352478
+    },
+    {
+      "qid": "SPINE-06",
+      "n_intruders": 9,
+      "n_displaced": 9,
+      "min_intruder_score": 0.8421563506126404,
+      "max_displaced_score": 0.839837372303009
+    },
+    {
+      "qid": "SPINE-07",
+      "n_intruders": 5,
+      "n_displaced": 5,
+      "min_intruder_score": 0.8884044289588928,
+      "max_displaced_score": 0.8869824409484863
+    },
+    {
+      "qid": "SPINE-08",
+      "n_intruders": 9,
+      "n_displaced": 9,
+      "min_intruder_score": 0.6090002655982971,
+      "max_displaced_score": 0.5585815906524658
+    },
+    {
+      "qid": "SPINE-09",
+      "n_intruders": 10,
+      "n_displaced": 8,
+      "min_intruder_score": 0.2075604796409607,
+      "max_displaced_score": 0.09063988924026489
+    },
+    {
+      "qid": "TUMOR-01",
+      "n_intruders": 7,
+      "n_displaced": 7,
+      "min_intruder_score": 0.7171645760536194,
+      "max_displaced_score": 0.6904075741767883
+    },
+    {
+      "qid": "TUMOR-02",
+      "n_intruders": 9,
+      "n_displaced": 9,
+      "min_intruder_score": 0.6886866688728333,
+      "max_displaced_score": 0.6627914905548096
+    },
+    {
+      "qid": "TUMOR-03",
+      "n_intruders": 4,
+      "n_displaced": 4,
+      "min_intruder_score": 0.52084881067276,
+      "max_displaced_score": 0.5059832334518433
+    },
+    {
+      "qid": "TUMOR-04",
+      "n_intruders": 6,
+      "n_displaced": 6,
+      "min_intruder_score": 0.6530258655548096,
+      "max_displaced_score": 0.6359821557998657
+    },
+    {
+      "qid": "TUMOR-05",
+      "n_intruders": 2,
+      "n_displaced": 2,
+      "min_intruder_score": 0.9569212198257446,
+      "max_displaced_score": 0.924563467502594
+    },
+    {
+      "qid": "TUMOR-06",
+      "n_intruders": 10,
+      "n_displaced": 8,
+      "min_intruder_score": 0.810918390750885,
+      "max_displaced_score": 0.6201637387275696
+    },
+    {
+      "qid": "TUMOR-07",
+      "n_intruders": 6,
+      "n_displaced": 6,
+      "min_intruder_score": 0.9357258081436157,
+      "max_displaced_score": 0.9165309071540833
+    },
+    {
+      "qid": "TUMOR-08",
+      "n_intruders": 4,
+      "n_displaced": 4,
+      "min_intruder_score": 0.8184183239936829,
+      "max_displaced_score": 0.7722196578979492
+    },
+    {
+      "qid": "TUMOR-09",
+      "n_intruders": 2,
+      "n_displaced": 2,
+      "min_intruder_score": 0.21785889565944672,
+      "max_displaced_score": 0.17684507369995117
+    },
+    {
+      "qid": "GENERAL-01",
+      "n_intruders": 8,
+      "n_displaced": 7,
+      "min_intruder_score": 0.942512035369873,
+      "max_displaced_score": 0.9207304120063782
+    },
+    {
+      "qid": "GENERAL-02",
+      "n_intruders": 4,
+      "n_displaced": 4,
+      "min_intruder_score": 0.967808723449707,
+      "max_displaced_score": 0.9317617416381836
+    },
+    {
+      "qid": "GENERAL-03",
+      "n_intruders": 10,
+      "n_displaced": 10,
+      "min_intruder_score": 0.9109097719192505,
+      "max_displaced_score": 0.9022360444068909
+    },
+    {
+      "qid": "GENERAL-04",
+      "n_intruders": 11,
+      "n_displaced": 3,
+      "min_intruder_score": 0.6711128950119019,
+      "max_displaced_score": 0.559440016746521
+    },
+    {
+      "qid": "GENERAL-05",
+      "n_intruders": 11,
+      "n_displaced": 8,
+      "min_intruder_score": 0.8608458638191223,
+      "max_displaced_score": 0.8109843730926514
+    },
+    {
+      "qid": "GENERAL-06",
+      "n_intruders": 6,
+      "n_displaced": 6,
+      "min_intruder_score": 0.9101201891899109,
+      "max_displaced_score": 0.8946251273155212
+    },
+    {
+      "qid": "GENERAL-07",
+      "n_intruders": 10,
+      "n_displaced": 5,
+      "min_intruder_score": 0.7885063886642456,
+      "max_displaced_score": 0.7146924734115601
+    },
+    {
+      "qid": "GENERAL-08",
+      "n_intruders": 9,
+      "n_displaced": 9,
+      "min_intruder_score": 0.660457968711853,
+      "max_displaced_score": 0.6517552733421326
+    },
+    {
+      "qid": "GENERAL-09",
+      "n_intruders": 5,
+      "n_displaced": 5,
+      "min_intruder_score": 0.8252207040786743,
+      "max_displaced_score": 0.8137125968933105
+    },
+    {
+      "qid": "GENERAL-10",
+      "n_intruders": 6,
+      "n_displaced": 6,
+      "min_intruder_score": 0.4233386516571045,
+      "max_displaced_score": 0.2007964700460434
+    },
+    {
+      "qid": "GENERAL-11",
+      "n_intruders": 10,
+      "n_displaced": 8,
+      "min_intruder_score": 0.5170890688896179,
+      "max_displaced_score": 0.5106446743011475
+    },
+    {
+      "qid": "OPEN-CV-01",
+      "n_intruders": 1,
+      "n_displaced": 1,
+      "min_intruder_score": 0.9413352012634277,
+      "max_displaced_score": 0.9278267621994019
+    },
+    {
+      "qid": "OPEN-CV-02",
+      "n_intruders": 4,
+      "n_displaced": 4,
+      "min_intruder_score": 0.9512099027633667,
+      "max_displaced_score": 0.9434766173362732
+    },
+    {
+      "qid": "OPEN-CV-03",
+      "n_intruders": 6,
+      "n_displaced": 6,
+      "min_intruder_score": 0.9478337168693542,
+      "max_displaced_score": 0.9386544823646545
+    },
+    {
+      "qid": "OPEN-CV-04",
+      "n_intruders": 7,
+      "n_displaced": 7,
+      "min_intruder_score": 0.9650114178657532,
+      "max_displaced_score": 0.9548878073692322
+    },
+    {
+      "qid": "OPEN-CV-05",
+      "n_intruders": 6,
+      "n_displaced": 6,
+      "min_intruder_score": 0.9868059158325195,
+      "max_displaced_score": 0.9698612093925476
+    },
+    {
+      "qid": "OPEN-CV-06",
+      "n_intruders": 7,
+      "n_displaced": 7,
+      "min_intruder_score": 0.9154784679412842,
+      "max_displaced_score": 0.8808756470680237
+    },
+    {
+      "qid": "OPEN-CV-07",
+      "n_intruders": 5,
+      "n_displaced": 5,
+      "min_intruder_score": 0.9663333892822266,
+      "max_displaced_score": 0.9510952830314636
+    },
+    {
+      "qid": "OPEN-CV-08",
+      "n_intruders": 3,
+      "n_displaced": 3,
+      "min_intruder_score": 0.8059775829315186,
+      "max_displaced_score": 0.774773120880127
+    },
+    {
+      "qid": "OPEN-CV-09",
+      "n_intruders": 3,
+      "n_displaced": 3,
+      "min_intruder_score": 0.7227022051811218,
+      "max_displaced_score": 0.6322823166847229
+    },
+    {
+      "qid": "OPEN-CV-10",
+      "n_intruders": 7,
+      "n_displaced": 7,
+      "min_intruder_score": 0.596585750579834,
+      "max_displaced_score": 0.5642187595367432
+    },
+    {
+      "qid": "FUNCTIONAL-01",
+      "n_intruders": 8,
+      "n_displaced": 5,
+      "min_intruder_score": 0.8907817006111145,
+      "max_displaced_score": 0.812836766242981
+    },
+    {
+      "qid": "FUNCTIONAL-02",
+      "n_intruders": 9,
+      "n_displaced": 6,
+      "min_intruder_score": 0.941311776638031,
+      "max_displaced_score": 0.9399166107177734
+    },
+    {
+      "qid": "FUNCTIONAL-03",
+      "n_intruders": 11,
+      "n_displaced": 4,
+      "min_intruder_score": 0.8443529605865479,
+      "max_displaced_score": 0.737686812877655
+    },
+    {
+      "qid": "FUNCTIONAL-04",
+      "n_intruders": 11,
+      "n_displaced": 7,
+      "min_intruder_score": 0.7943441867828369,
+      "max_displaced_score": 0.7439596056938171
+    },
+    {
+      "qid": "FUNCTIONAL-05",
+      "n_intruders": 12,
+      "n_displaced": 3,
+      "min_intruder_score": 0.6398118138313293,
+      "max_displaced_score": 0.5963385105133057
+    },
+    {
+      "qid": "FUNCTIONAL-06",
+      "n_intruders": 7,
+      "n_displaced": 7,
+      "min_intruder_score": 0.7220359444618225,
+      "max_displaced_score": 0.666553258895874
+    },
+    {
+      "qid": "FUNCTIONAL-07",
+      "n_intruders": 10,
+      "n_displaced": 10,
+      "min_intruder_score": 0.9090596437454224,
+      "max_displaced_score": 0.8773295879364014
+    },
+    {
+      "qid": "FUNCTIONAL-08",
+      "n_intruders": 6,
+      "n_displaced": 6,
+      "min_intruder_score": 0.8925701379776001,
+      "max_displaced_score": 0.8381439447402954
+    },
+    {
+      "qid": "FUNCTIONAL-09",
+      "n_intruders": 11,
+      "n_displaced": 11,
+      "min_intruder_score": 0.030716974288225174,
+      "max_displaced_score": 0.016949201002717018
+    },
+    {
+      "qid": "FUNCTIONAL-10",
+      "n_intruders": 4,
+      "n_displaced": 4,
+      "min_intruder_score": 0.19322991371154785,
+      "max_displaced_score": 0.1333073526620865
+    },
+    {
+      "qid": "TRAUMA-01",
+      "n_intruders": 11,
+      "n_displaced": 11,
+      "min_intruder_score": 0.903489887714386,
+      "max_displaced_score": 0.8810252547264099
+    },
+    {
+      "qid": "TRAUMA-02",
+      "n_intruders": 6,
+      "n_displaced": 6,
+      "min_intruder_score": 0.8788703083992004,
+      "max_displaced_score": 0.870053768157959
+    },
+    {
+      "qid": "TRAUMA-03",
+      "n_intruders": 7,
+      "n_displaced": 7,
+      "min_intruder_score": 0.9514886140823364,
+      "max_displaced_score": 0.9429188966751099
+    },
+    {
+      "qid": "TRAUMA-04",
+      "n_intruders": 3,
+      "n_displaced": 3,
+      "min_intruder_score": 0.9437258243560791,
+      "max_displaced_score": 0.8652810454368591
+    },
+    {
+      "qid": "TRAUMA-05",
+      "n_intruders": 4,
+      "n_displaced": 4,
+      "min_intruder_score": 0.9666067957878113,
+      "max_displaced_score": 0.9630005359649658
+    },
+    {
+      "qid": "TRAUMA-06",
+      "n_intruders": 12,
+      "n_displaced": 0,
+      "min_intruder_score": 0.8654353022575378,
+      "max_displaced_score": null
+    },
+    {
+      "qid": "TRAUMA-07",
+      "n_intruders": 11,
+      "n_displaced": 7,
+      "min_intruder_score": 0.752838134765625,
+      "max_displaced_score": 0.6886507868766785
+    },
+    {
+      "qid": "TRAUMA-08",
+      "n_intruders": 4,
+      "n_displaced": 4,
+      "min_intruder_score": 0.06069328263401985,
+      "max_displaced_score": 0.05097366124391556
+    },
+    {
+      "qid": "TRAUMA-09",
+      "n_intruders": 5,
+      "n_displaced": 5,
+      "min_intruder_score": 0.8469594120979309,
+      "max_displaced_score": 0.8405085206031799
+    },
+    {
+      "qid": "TRAUMA-10",
+      "n_intruders": 9,
+      "n_displaced": 5,
+      "min_intruder_score": 0.46428805589675903,
+      "max_displaced_score": 0.37170708179473877
+    }
+  ]
+}

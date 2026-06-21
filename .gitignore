@@ -32,3 +32,8 @@ gui-council/axe/
 # local throwaway venvs
 .testvenv/
 .project-loop/
+
+# Phase 0A displacement instrument: keep small summaries, ignore bulky traces/logs/smoke
+eval/displacement-*/traces.jsonl
+eval/displacement-run.log
+eval/displacement-smoke/

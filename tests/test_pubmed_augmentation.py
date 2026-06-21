@@ -33,11 +33,13 @@ def test_no_note_when_enough_quality():
     assert len(aug.records) == 3 and aug.note == ""
 
 
-def test_fallback_to_single_most_relevant_when_no_quality():
+def test_abstains_when_no_quality_evidence():
+    # Clinical-safety policy: when nothing clears the evidence bar, surface NOTHING rather
+    # than fall back to a low-tier case report/registry as the basis for surgical guidance.
     ranked = [_Rec("1", CASE), _Rec("2", UNTYPED)]
     aug = standardize_records(ranked, k=8)
-    assert [r.pmid for r in aug.records] == ["1"]   # most-relevant single, flagged
-    assert "interpret with caution" in aug.note
+    assert aug.records == []                          # abstain, no single-article fallback
+    assert "omitting contemporary literature" in aug.note
 
 
 def test_empty_input_explains_no_literature():

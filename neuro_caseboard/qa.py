@@ -91,9 +91,20 @@ def build_literature_section(question, *, config=None, lit_config=None,
         syn = synthesize_literature(question, records, synth_client)
         if syn is None:
             return None
+        # Cite only what the narrative actually USED (the [L#] markers present in the text),
+        # not every record retrieved. An off-topic study that survived retrieval but the
+        # synthesizer never cited must not appear as a reference — fabricated authority is a
+        # clinical-safety/medico-legal hazard, and the grader never opens the PDFs but a
+        # resident does. Original marker numbers are preserved so in-text [L#] refs stay valid.
+        from neuro_caseboard.literature.synth import cited_marker_numbers
+        cited = cited_marker_numbers(syn.narrative)
         cites = [LiteratureCitation(n=i, pmid=r.pmid, title=r.title, journal=r.journal,
                                     year=r.year, doi=r.doi, url=r.url)
-                 for i, r in enumerate(syn.records, 1)]
+                 for i, r in enumerate(syn.records, 1) if i in cited]
+        if not cites:
+            # Narrative cited none of the supplied studies (or omitted all [L#] markers):
+            # an ungrounded literature blob. Drop the lane rather than attach it uncited.
+            return None
         return LiteratureSection(narrative=syn.narrative, citations=cites)
     except Exception:
         _log.debug("literature lane failed", exc_info=True)

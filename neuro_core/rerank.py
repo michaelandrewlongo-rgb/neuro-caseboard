@@ -15,12 +15,14 @@ class Reranker:
                 self.model_name, device=resolve_device(self.device))
         return self._scorer
 
-    def rerank(self, query, hits, top_k):
+    def rerank(self, query, hits, top_k, trace=None):
         if not hits:
             return []
         pairs = [(query, h.text) for h in hits]
         scores = self.scorer.predict(pairs)
         ranked = sorted(zip(hits, scores), key=lambda hs: float(hs[1]), reverse=True)
+        if trace is not None:                 # record the FULL selection ordering, not the slice
+            trace.record_selection(ranked, top_k)
         out = []
         for hit, score in ranked[:top_k]:
             hit.score = float(score)
