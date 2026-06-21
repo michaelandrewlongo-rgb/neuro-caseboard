@@ -1,0 +1,67 @@
+{"qid": "NIS-01", "domain": "Neurointerventional Surgery", "score_off": 40.0, "score_on": 55.0, "len_off": 2817, "len_on": 2300, "err_off": null, "err_on": null}
+{"qid": "NIS-02", "domain": "Neurointerventional Surgery", "score_off": 72.0, "score_on": 75.0, "len_off": 5313, "len_on": 5537, "err_off": null, "err_on": null}
+{"qid": "NIS-03", "domain": "Neurointerventional Surgery", "score_off": 75.0, "score_on": 88.0, "len_off": 4290, "len_on": 4088, "err_off": null, "err_on": null}
+{"qid": "NIS-04", "domain": "Neurointerventional Surgery", "score_off": 45.0, "score_on": 70.0, "len_off": 4602, "len_on": 4657, "err_off": null, "err_on": null}
+{"qid": "NIS-05", "domain": "Neurointerventional Surgery", "score_off": 70.0, "score_on": 55.0, "len_off": 2901, "len_on": 2515, "err_off": null, "err_on": null}
+{"qid": "NIS-06", "domain": "Neurointerventional Surgery", "score_off": 85.0, "score_on": 95.0, "len_off": 4862, "len_on": 5306, "err_off": null, "err_on": null}
+{"qid": "NIS-07", "domain": "Neurointerventional Surgery", "score_off": 75.0, "score_on": 93.0, "len_off": 4766, "len_on": 3888, "err_off": null, "err_on": null}
+{"qid": "NIS-08", "domain": "Neurointerventional Surgery", "score_off": 85.0, "score_on": 95.0, "len_off": 2362, "len_on": 2611, "err_off": null, "err_on": null}
+{"qid": "SPINE-01", "domain": "Spine Surgery", "score_off": 78.0, "score_on": 88.0, "len_off": 4672, "len_on": 4402, "err_off": null, "err_on": null}
+{"qid": "SPINE-02", "domain": "Spine Surgery", "skipped": "clarification", "score_off": null, "score_on": null}
+{"qid": "SPINE-03", "domain": "Spine Surgery", "skipped": "clarification", "score_off": null, "score_on": null}
+{"qid": "SPINE-04", "domain": "Spine Surgery", "score_off": 75.0, "score_on": 85.0, "len_off": 4269, "len_on": 3132, "err_off": null, "err_on": null}
+{"qid": "SPINE-05", "domain": "Spine Surgery", "score_off": 85.0, "score_on": 95.0, "len_off": 2725, "len_on": 4895, "err_off": null, "err_on": null}
+{"qid": "SPINE-06", "domain": "Spine Surgery", "score_off": 85.0, "score_on": 72.0, "len_off": 5583, "len_on": 5844, "err_off": null, "err_on": null}
+{"qid": "SPINE-07", "domain": "Spine Surgery", "score_off": 93.0, "score_on": 92.0, "len_off": 3988, "len_on": 4901, "err_off": null, "err_on": null}
+{"qid": "SPINE-08", "domain": "Spine Surgery", "score_off": 70.0, "score_on": 95.0, "len_off": 4849, "len_on": 4907, "err_off": null, "err_on": null}
+{"qid": "SPINE-09", "domain": "Spine Surgery", "score_off": 85.0, "score_on": 75.0, "len_off": 5199, "len_on": 4572, "err_off": null, "err_on": null}
+{"qid": "TUMOR-01", "domain": "Brain Tumor Surgery", "score_off": 94.0, "score_on": 90.0, "len_off": 4693, "len_on": 3708, "err_off": null, "err_on": null}
+{"qid": "TUMOR-02", "domain": "Brain Tumor Surgery", "score_off": 95.0, "score_on": 95.0, "len_off": 4021, "len_on": 4528, "err_off": null, "err_on": null}
+{"qid": "TUMOR-03", "domain": "Brain Tumor Surgery", "score_off": 75.0, "score_on": 95.0, "len_off": 4020, "len_on": 3907, "err_off": null, "err_on": null}
+{"qid": "TUMOR-04", "domain": "Brain Tumor Surgery", "score_off": 85.0, "score_on": 88.0, "len_off": 2898, "len_on": 2119, "err_off": null, "err_on": null}
+{"qid": "TUMOR-05", "domain": "Brain Tumor Surgery", "score_off": 70.0, "score_on": 70.0, "len_off": 5807, "len_on": 4664, "err_off": null, "err_on": null}
+{"qid": "TUMOR-06", "domain": "Brain Tumor Surgery", "score_off": 88.0, "score_on": 75.0, "len_off": 5989, "len_on": 5296, "err_off": null, "err_on": null}
+{"qid": "TUMOR-07", "domain": "Brain Tumor Surgery", "score_off": 88.0, "score_on": 95.0, "len_off": 4902, "len_on": 4025, "err_off": null, "err_on": null}
+{"qid": "TUMOR-08", "domain": "Brain Tumor Surgery", "score_off": 78.0, "score_on": 95.0, "len_off": 4501, "len_on": 3752, "err_off": null, "err_on": null}
+{"qid": "TUMOR-09", "domain": "Brain Tumor Surgery", "score_off": 93.0, "score_on": 91.0, "len_off": 4415, "len_on": 4332, "err_off": null, "err_on": null}
+{"qid": "GENERAL-01", "domain": "General Neurosurgery", "score_off": 58.0, "score_on": 68.0, "len_off": 6325, "len_on": 6721, "err_off": null, "err_on": null}
+{"qid": "GENERAL-02", "domain": "General Neurosurgery", "skipped": "clarification", "score_off": null, "score_on": null}
+{"qid": "GENERAL-03", "domain": "General Neurosurgery", "score_off": 95.0, "score_on": 95.0, "len_off": 5840, "len_on": 7229, "err_off": null, "err_on": null}
+{"qid": "GENERAL-04", "domain": "General Neurosurgery", "score_off": 85.0, "score_on": 75.0, "len_off": 7159, "len_on": 6207, "err_off": null, "err_on": null}
+{"qid": "GENERAL-05", "domain": "General Neurosurgery", "score_off": 88.0, "score_on": 85.0, "len_off": 2864, "len_on": 3379, "err_off": null, "err_on": null}
+{"qid": "GENERAL-06", "domain": "General Neurosurgery", "score_off": 85.0, "score_on": 89.0, "len_off": 6125, "len_on": 4696, "err_off": null, "err_on": null}
+{"qid": "GENERAL-07", "domain": "General Neurosurgery", "score_off": 95.0, "score_on": 95.0, "len_off": 5529, "len_on": 5575, "err_off": null, "err_on": null}
+{"qid": "GENERAL-08", "domain": "General Neurosurgery", "score_off": 95.0, "score_on": 95.0, "len_off": 3375, "len_on": 4089, "err_off": null, "err_on": null}
+{"qid": "GENERAL-09", "domain": "General Neurosurgery", "score_off": 95.0, "score_on": 85.0, "len_off": 4649, "len_on": 4614, "err_off": null, "err_on": null}
+{"qid": "GENERAL-10", "domain": "General Neurosurgery", "score_off": 75.0, "score_on": 85.0, "len_off": 3576, "len_on": 3617, "err_off": null, "err_on": null}
+{"qid": "GENERAL-11", "domain": "General Neurosurgery", "score_off": 70.0, "score_on": 58.0, "len_off": 4404, "len_on": 3908, "err_off": null, "err_on": null}
+{"qid": "OPEN-CV-01", "domain": "Open Cerebrovascular Surgery", "score_off": 95.0, "score_on": 95.0, "len_off": 4716, "len_on": 4728, "err_off": null, "err_on": null}
+{"qid": "OPEN-CV-02", "domain": "Open Cerebrovascular Surgery", "score_off": 88.0, "score_on": 82.0, "len_off": 5312, "len_on": 5295, "err_off": null, "err_on": null}
+{"qid": "OPEN-CV-03", "domain": "Open Cerebrovascular Surgery", "skipped": "clarification", "score_off": null, "score_on": null}
+{"qid": "OPEN-CV-04", "domain": "Open Cerebrovascular Surgery", "score_off": 96.0, "score_on": 95.0, "len_off": 3846, "len_on": 3390, "err_off": null, "err_on": null}
+{"qid": "OPEN-CV-05", "domain": "Open Cerebrovascular Surgery", "score_off": 95.0, "score_on": 95.0, "len_off": 4467, "len_on": 5469, "err_off": null, "err_on": null}
+{"qid": "OPEN-CV-06", "domain": "Open Cerebrovascular Surgery", "score_off": 85.0, "score_on": 94.0, "len_off": 3639, "len_on": 4556, "err_off": null, "err_on": null}
+{"qid": "OPEN-CV-07", "domain": "Open Cerebrovascular Surgery", "score_off": 95.0, "score_on": 95.0, "len_off": 5123, "len_on": 4348, "err_off": null, "err_on": null}
+{"qid": "OPEN-CV-08", "domain": "Open Cerebrovascular Surgery", "score_off": 70.0, "score_on": 70.0, "len_off": 3265, "len_on": 4296, "err_off": null, "err_on": null}
+{"qid": "OPEN-CV-09", "domain": "Open Cerebrovascular Surgery", "score_off": 88.0, "score_on": 95.0, "len_off": 4212, "len_on": 3665, "err_off": null, "err_on": null}
+{"qid": "OPEN-CV-10", "domain": "Open Cerebrovascular Surgery", "score_off": 93.0, "score_on": 95.0, "len_off": 3290, "len_on": 3157, "err_off": null, "err_on": null}
+{"qid": "FUNCTIONAL-01", "domain": "Functional Neurosurgery", "score_off": 95.0, "score_on": 85.0, "len_off": 3006, "len_on": 2959, "err_off": null, "err_on": null}
+{"qid": "FUNCTIONAL-02", "domain": "Functional Neurosurgery", "score_off": 88.0, "score_on": 95.0, "len_off": 6654, "len_on": 6976, "err_off": null, "err_on": null}
+{"qid": "FUNCTIONAL-03", "domain": "Functional Neurosurgery", "score_off": 95.0, "score_on": 85.0, "len_off": 4900, "len_on": 4751, "err_off": null, "err_on": null}
+{"qid": "FUNCTIONAL-04", "domain": "Functional Neurosurgery", "score_off": 72.0, "score_on": 72.0, "len_off": 3903, "len_on": 4575, "err_off": null, "err_on": null}
+{"qid": "FUNCTIONAL-05", "domain": "Functional Neurosurgery", "score_off": 78.0, "score_on": 72.0, "len_off": 3882, "len_on": 3414, "err_off": null, "err_on": null}
+{"qid": "FUNCTIONAL-06", "domain": "Functional Neurosurgery", "score_off": 82.0, "score_on": 85.0, "len_off": 3045, "len_on": 2500, "err_off": null, "err_on": null}
+{"qid": "FUNCTIONAL-07", "domain": "Functional Neurosurgery", "score_off": 80.0, "score_on": 75.0, "len_off": 2812, "len_on": 3280, "err_off": null, "err_on": null}
+{"qid": "FUNCTIONAL-08", "domain": "Functional Neurosurgery", "score_off": 72.0, "score_on": 70.0, "len_off": 3426, "len_on": 4516, "err_off": null, "err_on": null}
+{"qid": "FUNCTIONAL-09", "domain": "Functional Neurosurgery", "score_off": 92.0, "score_on": 95.0, "len_off": 3632, "len_on": 3295, "err_off": null, "err_on": null}
+{"qid": "FUNCTIONAL-10", "domain": "Functional Neurosurgery", "score_off": 95.0, "score_on": 89.0, "len_off": 5524, "len_on": 4381, "err_off": null, "err_on": null}
+{"qid": "TRAUMA-01", "domain": "Trauma Neurosurgery", "score_off": 95.0, "score_on": 82.0, "len_off": 3753, "len_on": 4612, "err_off": null, "err_on": null}
+{"qid": "TRAUMA-02", "domain": "Trauma Neurosurgery", "skipped": "clarification", "score_off": null, "score_on": null}
+{"qid": "TRAUMA-03", "domain": "Trauma Neurosurgery", "score_off": 88.0, "score_on": 95.0, "len_off": 3909, "len_on": 3527, "err_off": null, "err_on": null}
+{"qid": "TRAUMA-04", "domain": "Trauma Neurosurgery", "score_off": 72.0, "score_on": 92.0, "len_off": 1687, "len_on": 1390, "err_off": null, "err_on": null}
+{"qid": "TRAUMA-05", "domain": "Trauma Neurosurgery", "score_off": 95.0, "score_on": 85.0, "len_off": 6323, "len_on": 6305, "err_off": null, "err_on": null}
+{"qid": "TRAUMA-06", "domain": "Trauma Neurosurgery", "score_off": 95.0, "score_on": 88.0, "len_off": 5136, "len_on": 5052, "err_off": null, "err_on": null}
+{"qid": "TRAUMA-07", "domain": "Trauma Neurosurgery", "score_off": 95.0, "score_on": 92.0, "len_off": 3236, "len_on": 3336, "err_off": null, "err_on": null}
+{"qid": "TRAUMA-08", "domain": "Trauma Neurosurgery", "score_off": 95.0, "score_on": 88.0, "len_off": 1887, "len_on": 1900, "err_off": null, "err_on": null}
+{"qid": "TRAUMA-09", "domain": "Trauma Neurosurgery", "score_off": 82.0, "score_on": 75.0, "len_off": 5072, "len_on": 5414, "err_off": null, "err_on": null}
+{"qid": "TRAUMA-10", "domain": "Trauma Neurosurgery", "score_off": 85.0, "score_on": 70.0, "len_off": 6035, "len_on": 4611, "err_off": null, "err_on": null}

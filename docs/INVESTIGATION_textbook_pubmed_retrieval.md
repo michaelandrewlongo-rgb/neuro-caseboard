@@ -444,3 +444,44 @@ for others) — a single global knob cannot capture it.
 - **Caveat:** single self-grader, n≈8/subspecialty — directional. The subspecialty pattern is
   consistent with 0A's mechanism and the benchmark's own per-subspecialty deltas, which raises
   confidence, but per-domain n is small.
+
+## Penalty tuning: 0.07 vs 0.15 (final)
+
+| subspecialty | Δ@0.07 | Δ@0.15 |
+|---|---|---|
+| Neurointerventional | +9.9 | +8.9 |
+| Spine | **+4.4** | −3.3 |
+| Brain Tumor | +3.1 | +4.9 |
+| Open Cerebrovascular | +1.2 | +1.0 |
+| General | −1.1 | +0.9 |
+| Functional | −2.6 | −5.3 |
+| Trauma | −3.9 | −4.8 |
+| **overall** | **+1.24** (CI [−1.21,+3.69], W/L/T 26/26/10, n=62) | +0.19 (CI [−2.48,+2.85], n=59) |
+
+**0.07 strictly dominates 0.15 in aggregate**: it preserves the NIS/Tumor gains, *flips Spine
+positive*, and roughly halves the Functional harm. But (a) the overall CI still straddles 0
+(single grader, n=62 — not a clean significant win), and (b) Functional (−2.6) and Trauma
+(−3.9) remain net-negative even at the gentler penalty, so part of their harm is **structural**
+— Youmans really is the better source there.
+
+### Final recommendation for `RERANK_MMR_BOOK_PENALTY`
+
+1. **Do not adopt a single global penalty as a proven score win.** 0.07 is mildly net-positive
+   and clearly better-behaved than 0.15, but not statistically clean, and it still mildly hurts
+   Functional/Trauma. Keep **default `0.0`** until the conditional policy below exists; if a
+   modest aggregate textbook-diversity gain is wanted *now*, **0.07** is the best-tested value
+   to enable (behind the flag) — never 0.15.
+2. **The correct fix is subspecialty-conditional diversity** (the council clinician's point,
+   now data-backed): a meaningful penalty (~0.10–0.15) for NIS / Tumor / Spine where it helps,
+   ~0 for Functional / Trauma where Youmans is authoritative. Projected to capture the
+   +9.9 / +4.9 / +4.4 gains without the −2.6 / −3.9 harm — a genuine net win. Needs a
+   question→subspecialty signal (benchmark already carries `domain`; production needs a light
+   classifier). This is the recommended next ticket; the MMR machinery + instrument already exist.
+3. **Confirm with a second grader before any default flip** (the standing 0B/1-D caveat).
+
+### #2 bottom line
+
+MMR is a *validated mechanism* that does exactly what Phase 0A prescribed (rebalances the
+answer context away from one dominant book) and helps the specialized subspecialties that
+crowd-out was hurting — but a flat global penalty is at best mildly net-positive because source
+authority is subspecialty-specific. Recommended: keep default off, ship the conditional policy.
