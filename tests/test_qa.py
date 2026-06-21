@@ -72,3 +72,19 @@ def test_build_literature_section_disabled_returns_none():
     cfg = LiteratureConfig(enabled=False, recency_years=7, k=5, cache_ttl_days=14,
                            ncbi_api_key="", cache_dir="/tmp/x")
     assert build_literature_section("q", lit_config=cfg) is None
+
+
+def test_answer_question_routes_to_woven_when_flag_on(monkeypatch):
+    monkeypatch.setenv("NEURO_CASEBOARD_SKIP_DOTENV", "1")
+    monkeypatch.setenv("LITERATURE_WEAVE", "1")
+    import neuro_caseboard.qa as qa
+    monkeypatch.setattr(qa, "_answer_question_woven", lambda *a, **k: "WOVEN")
+    assert qa.answer_question("q") == "WOVEN"
+
+
+def test_answer_question_separate_path_when_flag_off(monkeypatch):
+    monkeypatch.setenv("NEURO_CASEBOARD_SKIP_DOTENV", "1")
+    monkeypatch.delenv("LITERATURE_WEAVE", raising=False)
+    out = answer_question("q", lane_a=_query_result, lane_b=lambda: None)
+    assert isinstance(out, QAResult)
+    assert out.answer == "Textbook answer [1]."
