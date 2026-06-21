@@ -1,0 +1,18 @@
+{
+  "penalty_on": 0.15,
+  "n_paired": 59,
+  "n_skipped": 8,
+  "mean_off": 85.61,
+  "mean_on": 85.8,
+  "mean_delta_on_minus_off": 0.19,
+  "sd": 10.44,
+  "se": 1.36,
+  "ci95": [
+    -2.48,
+    2.85
+  ],
+  "t": 0.14,
+  "wins": 18,
+  "losses": 23,
+  "ties": 18
+}

@@ -396,3 +396,51 @@ Derived: real − placebo = **+5.52** [+2.3, +8.7]; real − scramble = **+24.86
 - **Placebo realism.** The boilerplate is recognizably generic; part of its −5.6 may be a "padding"
   penalty. That does not affect the headline (real−core≈0) but means "length alone" is, if anything,
   mildly negative — reinforcing that the +3.9 was comparative-context, not length.
+
+---
+
+# Phase 1-D Score Effect — does MMR raise answer quality? (isolated grading)
+
+`eval/mmr_score_eval.py`: generate each question's textbook answer twice from ONE shared
+pipeline under two rerankers differing ONLY in the MMR penalty (off=0.0 vs on), figures
+disabled for both (no confound), then grade each answer IN ISOLATION with the Phase-0B
+rubric. Paired on−off. n=59 paired (8 clarification-skips). Artifacts: `eval/mmr-score/`.
+
+## Result at `book_penalty=0.15` — net-neutral but strongly heterogeneous
+
+Overall: **+0.19**, 95% CI **[−2.48, +2.85]**, t=0.14, W/L/T = 18/23/18. A global 0.15 penalty
+does **not** raise overall scores.
+
+| subspecialty | n | mean Δ (on−off) |
+|---|---|---|
+| Neurointerventional | 8 | **+8.88** |
+| Brain Tumor | 8 | **+4.88** |
+| Open Cerebrovascular | 9 | +1.00 |
+| General | 9 | +0.89 |
+| Spine | 6 | −3.33 |
+| Trauma | 9 | −4.78 |
+| Functional | 10 | **−5.30** |
+
+## Interpretation (VERIFIED)
+
+MMR helps exactly the specialized, fast-moving subspecialties Phase 0A showed Youmans was
+crowding out (**NIS +8.9, Tumor +4.9**), and hurts the subspecialties where Youmans is
+genuinely the best source — **the same Functional/Trauma/Spine that *gained* from Youmans in
+the original benchmark** (FUNCTIONAL +5.7, TRAUMA +1.9). A flat global penalty robs Peter to
+pay Paul, netting ~0. This **empirically confirms the council clinician's claim that source
+authority is subspecialty-specific** (Youmans is authoritative for some fields, dated/shallow
+for others) — a single global knob cannot capture it.
+
+## Recommendation (interim, pending the 0.07 sweep)
+
+- **Do NOT ship a global MMR penalty as a score play** — at 0.15 it is net-neutral.
+- The structurally-correct fix is **subspecialty/question-conditional diversity** (penalize
+  same-book strongly for NIS/Tumor, ~0 for Functional/Trauma) — i.e. the council's
+  per-(book×subspecialty) trust idea, now backed by data. That needs a question→subspecialty
+  signal (the benchmark already carries `domain`; production would need a light classifier).
+- Keep `RERANK_MMR_BOOK_PENALTY` **default 0.0** (off) until a conditional policy is built;
+  the knob + instrument remain for that work. A gentler global value (0.07) is being tested
+  to see whether the Functional/Trauma harm is magnitude-driven (reducible) or structural.
+- **Caveat:** single self-grader, n≈8/subspecialty — directional. The subspecialty pattern is
+  consistent with 0A's mechanism and the benchmark's own per-subspecialty deltas, which raises
+  confidence, but per-domain n is small.
