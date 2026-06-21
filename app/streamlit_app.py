@@ -37,6 +37,13 @@ st.set_page_config(page_title="Neuro·Caseboard — Signal", page_icon="◈", la
                    initial_sidebar_state="expanded")
 sig.apply_theme()
 
+
+def _should_show_literature(lit) -> bool:
+    """Woven mode carries [L#] citations with an empty narrative; separate mode carries both.
+    Render the panel whenever citations exist (narrative is optional)."""
+    return bool(lit and getattr(lit, "citations", None))
+
+
 # Optional passcode gate: set APP_PASSWORD in the deployment env. No gate locally.
 _pw = os.environ.get("APP_PASSWORD", "")
 if _pw and not st.session_state.get("authed"):
@@ -176,9 +183,11 @@ if mode == "Ask":
                     _badge(from_figure(f).key, label)
         sig.section("Sources", "SRC")
         sig.sources_panel(result.citations)
-        if result.literature and result.literature.narrative:
+        if _should_show_literature(result.literature):
             sig.section("Contemporary Literature", "LIT")
-            st.markdown(sig.citation_chips(result.literature.narrative), unsafe_allow_html=True)
+            if result.literature.narrative:
+                st.markdown(sig.citation_chips(result.literature.narrative),
+                            unsafe_allow_html=True)
             sig.literature_panel(result.literature.citations)
         if st.checkbox("Prepare PDF", help="Render this answer as an Executive-Navy PDF"):
             with st.spinner("Rendering PDF…"):
