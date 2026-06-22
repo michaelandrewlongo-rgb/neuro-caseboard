@@ -108,7 +108,7 @@ export async function askQuestion(question: string, signal?: AbortSignal): Promi
 export interface DossierClaim {
   text: string
   why: string
-  status: "supported" | "verify"
+  status: "supported" | "verify" | "quarantine"
   sub_items: string[]
   figure_ids: string[]
 }
