@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - **Install only `pip install -e .[dev]`** — never `-e ../caseprep` (vendored copy at `vendor/caseprep`).
-- **LLM provider is Vertex, not Anthropic** — no `ANTHROPIC_API_KEY`; never probe one.
+- **LLM provider is Vertex (OpenRouter optional)** — no first-party LLM-vendor key; never probe one.
 - **Tests must be hermetic + scoped.** Fast loop: `pytest tests/neuro_core tests/test_pipeline.py tests/test_retrieve.py tests/test_qa.py` (~20s). Full suite (~17 min) is CI's job. **Never** add `pytest-xdist -n auto`.
 - **Guard streamlit imports**: any test importing `streamlit` MUST start with `pytest.importorskip("streamlit")` before the import (web extra absent in required `.[dev]` CI; a bare import aborts the whole run at collection).
 - **Tests opt out of dotenv**: `tests/conftest.py` sets `NEURO_CASEBOARD_SKIP_DOTENV=1`; any test touching `load_literature_config` env should set env vars explicitly via `monkeypatch.setenv`.

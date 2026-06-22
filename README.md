@@ -75,12 +75,15 @@ The *presentation* fixes generalise across all of neurosurgery, but the *clinica
 of a board is only as good as the question-cards the Explorer produces. To make the
 content generalise too, the Explorer is **LLM-first**:
 
-- `explore_llm.py` asks Claude (`claude-opus-4-8`, structured JSON output) to generate
-  **case-specific** anatomy/operative/risk cards for the exact procedure — naming the real
-  nerves, vessels, steps, complications, and rescue maneuvers — with a system prompt that
-  forbids content from other operations/subspecialties. **Requires `ANTHROPIC_API_KEY`.**
-- Without a key it **falls back** to caseprep's deterministic rule-based + family-template
-  Explorer (rich where a hand-written template exists, generic elsewhere).
+- `explore_llm.py` asks the configured LLM — Vertex Gemini (`gemini-2.5-pro`) by default, or
+  OpenRouter — to generate **case-specific** anatomy/operative/risk cards for the exact
+  procedure, naming the real nerves, vessels, steps, complications, and rescue maneuvers,
+  through a planner → author → critic pipeline with structured JSON output and a system prompt
+  that forbids content from other operations/subspecialties. **Select the provider with
+  `CASEBOARD_LLM_PROVIDER`** (`vertex` needs `GOOGLE_CLOUD_PROJECT` + ADC; `openrouter` needs
+  `OPENROUTER_API_KEY`).
+- Without a configured provider it **falls back** to caseprep's deterministic rule-based +
+  family-template Explorer (rich where a hand-written template exists, generic elsewhere).
 - Either way the manifest passes through `guard.py` (`prune_offtarget`), a deterministic
   anti-bleed filter that strips cross-region content (e.g. CPA / posterior-fossa cranial
   nerves on a supratentorial convexity case).

@@ -77,8 +77,7 @@ def test_falls_back_to_deterministic_on_unparseable_output():
 
 def test_no_provider_no_fn_uses_deterministic(monkeypatch):
     # Hermetic: clear every provider selector so a dev shell defaulting to a provider can't leak.
-    for v in ("CASEBOARD_LLM_PROVIDER", "GOOGLE_CLOUD_PROJECT", "ANTHROPIC_API_KEY",
-              "ANTHROPIC_AUTH_TOKEN", "OPENROUTER_API_KEY"):
+    for v in ("CASEBOARD_LLM_PROVIDER", "GOOGLE_CLOUD_PROJECT", "OPENROUTER_API_KEY"):
         monkeypatch.delenv(v, raising=False)
     cc = parse_dictation(SPINE_DICTATION)
     assert cc.source == "deterministic" and cc.level == "C5-6"

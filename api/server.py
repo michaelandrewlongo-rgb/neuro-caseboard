@@ -101,8 +101,8 @@ def _probe_synth() -> dict:
                     missing.append("ADC credentials")
                 info["detail"] = "missing: " + ", ".join(missing) if missing else None
         else:
-            # Non-vertex providers (e.g. anthropic/openrouter) are out of scope for this
-            # deployment; report provider but treat availability conservatively.
+            # Non-vertex providers (e.g. openrouter/local) are out of scope for this
+            # deployment's probe; report provider but treat availability conservatively.
             info["detail"] = f"provider '{cfg.synth_provider}' not probed (deployment uses vertex)"
     except Exception as e:
         info["detail"] = f"{type(e).__name__}: {e}"
@@ -174,8 +174,9 @@ def health() -> dict:
     cards = _probe_cards()
     literature = _probe_literature()
     return {
-        # Required top-level shape (loop spec). anthropic_key is intentionally absent:
-        # this deployment synthesizes via Vertex, so `synth` is the meaningful signal.
+        # Required top-level shape (loop spec). A first-party LLM-vendor key field is
+        # intentionally absent: this deployment synthesizes via Vertex, so `synth` is the
+        # meaningful signal.
         "engine": engine["ok"],
         "synth": synth["available"],
         "corpus": corpus["available"],
