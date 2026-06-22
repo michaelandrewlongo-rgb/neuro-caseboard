@@ -511,3 +511,36 @@ jobs:
 **2. Placeholder scan:** all file contents are complete and literal; no TBD/TODO. Task 7 (docs) is prose-specified with the exact items and snippets it must contain.
 
 **3. Type/name consistency:** image ref `ghcr.io/michaelandrewlongo-rgb/neuro-caseboard` and env override `CASEBOARD_IMAGE` are consistent across Tasks 3–7; `/api/health.engine` is the single rollback signal in Tasks 3/5/7; `CD_ENABLED` gate is consistent in Tasks 6/7; serve command `uvicorn api.server:app --host 0.0.0.0 --port 8001` consistent in Tasks 3/4 and matches `api/serve_phone.py`/`scripts/serve-phone.sh`.
+
+---
+
+## Review Findings
+
+Code review of PR #51 (2026-06-22): **0 MUST, 2 SHOULD, 3 NIT — mergeable**, but the SHOULDs would
+break the one-time box bring-up, so fix them now.
+
+- [SHOULD] `scripts/cd-pull-deploy.sh:7` vs `docs/cd.md` — the script does `cd "$(dirname "$0")/.."`
+  (→ repo root) but the runbook tells the operator to run from a separate `/path/to/deploy` with the
+  `.env` there. The script's `cd` wins, so `docker compose` runs in the repo root, loads an absent
+  repo-root `.env`, and the `GOOGLE_CLOUD_PROJECT:?` guard aborts every cycle. Align on **deploy-dir
+  == repo root** (clone the repo on the box; keep `.env` in the repo root) in both the script and the
+  docs.
+- [SHOULD] `Dockerfile` runtime stage — bare `python:3.12-slim` lacks `libgomp1` (the OpenMP runtime
+  torch/open-clip need). Those import at QUERY time, not at the `/api/health` engine check, so a
+  missing lib would 500 `/api/ask`/`/api/cards` WITHOUT tripping the engine-only rollback gate (the
+  local evidence never ran a real query). Add `libgomp1` to the runtime stage and verify
+  `import torch, open_clip, sentence_transformers` inside the container.
+- [NIT] `scripts/cd-pull-deploy.sh:64` — dead `CASEBOARD_IMAGE=` prefix on the rollback `poll_health`
+  (poll_health only curls the fixed URL); drop it. (Folded into the deploy-script review task.)
+- [NIT] `scripts/cd-pull-deploy.sh:48,63` — rollback re-pins by the running image's content digest,
+  which a prune could evict; pinning the prior version tag would survive pruning. Accepted for the box.
+- [NIT] `cd.yml` build-push — the ~9.3 GB image + `gha` cache may approach the runner's disk ceiling;
+  the noted CPU-torch slimming follow-up de-risks it. Accepted.
+
+Triaged tasks (SHOULD → actionable; NITs recorded above, only the trivial dead-prefix is folded in):
+
+- [ ] review: align deploy-dir/`.env` between `scripts/cd-pull-deploy.sh` and `docs/cd.md` so compose
+  finds `GOOGLE_CLOUD_PROJECT` (deploy from the repo root; `.env` in the repo root) — and drop the dead
+  `CASEBOARD_IMAGE=` prefix on the rollback `poll_health` (NIT). Verify: `bash -n` + `--selftest` still pass.
+- [ ] review: add `libgomp1` to the `Dockerfile` runtime stage (apt-get, slim) and verify `import torch,
+  open_clip, sentence_transformers` succeeds inside the built container (`docker run … python -c …`).
