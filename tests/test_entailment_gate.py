@@ -36,6 +36,44 @@ def test_lexical_rejects_long_offtopic_premise_sharing_few_tokens():
     assert v.entails(premise, hypothesis) is False
 
 
+def test_lexical_entails_long_ontopic_multisentence_premise():
+    # The real-world failure (run pr50-groundedness): a long MULTI-sentence on-topic textbook chunk
+    # that states the claim in ONE of its sentences. The shipped gate computed precision against the
+    # WHOLE chunk, so a short well-supported claim scored precision ~0.14 (< 0.20) and was wrongly
+    # flagged unsupported despite recall ~0.88. Precision must be judged against the best-matching
+    # premise sentence (length-invariant), not the whole chunk.
+    v = LexicalVerifier()
+    premise = (
+        "Aneurysms of the internal carotid artery represent a heterogeneous group of lesions with "
+        "varied natural history depending on size, location, and morphology. Microsurgical clipping "
+        "was historically the mainstay of treatment for these complex lesions. "
+        "Flow diversion with the pipeline embolization device has become the preferred treatment for "
+        "large and giant unruptured aneurysms of the internal carotid artery. "
+        "Dual antiplatelet therapy with aspirin and clopidogrel is mandatory to mitigate "
+        "thromboembolic complications during and after device deployment. "
+        "Reported complete occlusion rates exceed eighty percent at one year of angiographic follow-up."
+    )
+    claim = "Flow diversion is the preferred treatment for large unruptured aneurysms of the internal carotid artery."
+    assert len(premise.split()) >= 60          # genuinely long, multi-sentence
+    assert v.entails(premise, claim) is True    # RED on shipped (whole-chunk precision) -> GREEN after fix
+
+
+def test_lexical_rejects_long_multisentence_offtopic_premise():
+    # Guard the fix does NOT over-pass: a long multi-sentence OFF-topic chunk (no single sentence
+    # densely matches the claim) must stay rejected even with per-sentence precision.
+    v = LexicalVerifier()
+    premise = (
+        "Photosynthesis converts sunlight, water, and carbon dioxide into glucose and oxygen. "
+        "Chlorophyll within the thylakoid membranes of chloroplasts absorbs light energy. "
+        "The light-dependent reactions generate adenosine triphosphate and reduced nicotinamide. "
+        "The Calvin cycle then fixes inorganic carbon into three-carbon sugars. "
+        "Stomata on the leaf surface regulate gas exchange and transpirational water loss."
+    )
+    claim = "Flow diversion is the preferred treatment for large unruptured aneurysms of the internal carotid artery."
+    assert len(premise.split()) >= 40
+    assert v.entails(premise, claim) is False
+
+
 def test_should_cite_abstains_keep_on_thin_premise():
     assert should_cite("Reference corpus record 1",
                        "Preserve the recurrent artery of Heubner.", LexicalVerifier()) is True
