@@ -19,6 +19,7 @@ import shutil
 
 from neuro_core.index import Index
 from neuro_core.config import load_config
+from neuro_core.asset_paths import resolve_asset_path
 from neuro_core.figure_retriever import build_figure_retriever as _core_build_figret
 
 # Tiny stoplist so FTS5 queries keep the informative clinical terms.
@@ -129,7 +130,9 @@ def _hit_to_dict(h) -> dict:
         "text": getattr(h, "text", "") or "",
     }
     fp = getattr(h, "figure_path", None)
-    if getattr(h, "has_figure", False) and fp and os.path.isfile(fp):
+    # Gate on the runtime-resolved path (container mounts figures at /data/figures, not the
+    # build-time host path); keep the original fp so the serve layer re-roots it identically.
+    if getattr(h, "has_figure", False) and fp and resolve_asset_path(fp, load_config().assets_dir).is_file():
         d["figure_path"] = fp
         d["caption"] = getattr(h, "caption", None) or ""
     return d

@@ -268,13 +268,18 @@ def render_briefing_clinical_pdf(result, out_path, *, title: str, subtitle: str 
             pdf.multi_cell(0, 4.6, t(f"[L{_g(c, 'n')}] {_g(c, 'title') or ''} -- {meta} {href}"),
                            new_x="LMARGIN", new_y="NEXT")
 
+    from neuro_core.asset_paths import resolve_asset_path
+    from neuro_core.config import load_config
     for f in (_g(result, "figures") or []):
         path = _g(f, "image_path")
-        if path and os.path.exists(path):
+        # Resolve the stored build-time path to the runtime ASSETS_DIR (container mounts figures
+        # at /data/figures) before embedding into the briefing PDF.
+        resolved = resolve_asset_path(path, load_config().assets_dir) if path else None
+        if resolved and resolved.is_file():
             if pdf.get_y() + 70 > pdf.h - pdf.b_margin:
                 pdf.add_page()
             try:
-                pdf.image(path, w=min(pdf.epw, 110))
+                pdf.image(str(resolved), w=min(pdf.epw, 110))
             except Exception:
                 pass
         pdf.set_font(fam, "I", 8); pdf.set_text_color(90, 90, 90)
