@@ -45,6 +45,12 @@ def _run_ask(args) -> int:
         print("\nFigures:")
         for f in result.figures:
             print(f"  [{f.source_n}] {f.book}, p.{f.page} -> {f.image_path}")
+    import os
+    if os.environ.get("CASEBOARD_VERIFY_DISPLAY", "1") != "0":
+        from neuro_caseboard.answer_verify import verification_notice
+        _note = verification_notice(getattr(result, "verification", None))
+        if _note:
+            print(_note)
     if getattr(args, "pdf", False):
         out_path = args.output or f"ask-{_slug(args.question)}.pdf"
         render_ask_pdf(result, args.question, out_path)

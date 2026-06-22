@@ -38,6 +38,7 @@ class Citation:
     book: str
     chapter: str
     page: int
+    text: str = ""   # cited chunk passage; "" for appended-figure citations (source_n > len(hits))
 
 
 @dataclass
@@ -94,7 +95,7 @@ def synthesize(question, hits, figures, images, synth_client, variant_directive=
         user += "\n\n" + variant_directive
     answer = synth_client.generate(SYSTEM_PROMPT, user, images)
     citations = [
-        Citation(n=i, book=h.book, chapter=h.chapter or "", page=h.page)
+        Citation(n=i, book=h.book, chapter=h.chapter or "", page=h.page, text=h.text)
         for i, h in enumerate(hits, 1)
     ]
     for f in appended:

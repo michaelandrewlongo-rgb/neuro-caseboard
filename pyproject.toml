@@ -50,7 +50,7 @@ dependencies = [
 [project.optional-dependencies]
 # pytest-asyncio: caseprep's test suite marks ~110 cases with @pytest.mark.asyncio
 # (explicit/strict mode), so the plugin must be present for them to actually run.
-dev = ["pytest>=7", "pytest-asyncio>=0.23", "pdfplumber>=0.11"]
+dev = ["pytest>=7", "pytest-asyncio>=0.23", "pdfplumber>=0.11", "jsonschema>=4"]
 # caseprep's optional semantic retriever (corpus_topology). The retriever module itself is
 # discovered at runtime via $CORPUS_CLUSTERING_PATH; these are only its heavy backends.
 semantic = ["sentence-transformers>=2.2", "psycopg[binary]>=3.1", "pgvector>=0.2"]
