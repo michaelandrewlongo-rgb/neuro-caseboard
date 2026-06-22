@@ -167,3 +167,19 @@ The index is mounted `:ro` and `/api/health` only checks that the index dir exis
 `corpus: true` on mount. If a future LanceDB version needs to write a lock/version file at query time
 under a read-only mount, switch that one volume to `:rw` (or give it a writable `tmpfs` for locks);
 keep everything else read-only.
+
+## What a healthy deploy looks like (verified local build)
+
+Built and booted locally (`docker build .` + `docker compose up` with the real index mounted
+read-only). The image is **~3.16 GB** (`docker image inspect --format '{{.Size}}'`; the `docker
+images` column shows ~9.3 GB uncompressed). A healthy `/api/health` with the index mounted:
+
+```json
+{ "engine": true, "synth": false, "corpus": true, "cards_index": false, "ncbi_key": false }
+```
+
+- `engine: true` — the image is sound (the rollback gate).
+- `corpus: true` — the read-only index volume is mounted.
+- `synth` / `cards_index` / `ncbi_key` reflect runtime config (a real `GOOGLE_CLOUD_PROJECT` + ADC
+  flips `synth: true`; a built `cards.lance` in the index flips `cards_index`; an `NCBI_API_KEY`
+  flips `ncbi_key`). `GET /` returns `200` (the SPA is served from the baked `web/dist`).
