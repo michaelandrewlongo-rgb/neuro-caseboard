@@ -79,12 +79,17 @@ def test_cross_section_duplicate_collapsed_with_crossref(built):
     assert "Pre-brief" in risk_text  # distinct Risk claim survives dedup
 
 
-def test_appendix_has_quarantined_claims_and_sources(built):
+def test_quarantined_claims_in_list_not_appendix_and_sources_present(built):
     f, d = built
-    assert not d.appendix.is_empty()
+    # off-target retrievals are now status="quarantine" claims in the section list ...
+    quar = [c for s in d.sections for c in s.claims if c.status == "quarantine"]
+    keys = ("lumbar", "endonasal", "radiosurgery", "thrombectomy")
+    assert any(k in c.text.lower() for c in quar for k in keys)
+    # ... and no longer dumped into any appendix entry's items
     items = " ".join(i for e in d.appendix.entries for i in e.items).lower()
+    assert not any(k in items for k in keys)
+    # Evidence Sources appendix unchanged
     sources = " ".join(s for e in d.appendix.entries for s in e.sources)
-    assert any(k in items for k in ("lumbar", "endonasal", "radiosurgery", "thrombectomy"))
     assert f.evidence[0].metadata["citation"] in sources
 
 

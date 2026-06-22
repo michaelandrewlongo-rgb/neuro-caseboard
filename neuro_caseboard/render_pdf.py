@@ -25,7 +25,8 @@ from neuro_caseboard.fpdf_base import register_fonts, ascii_fallback
 from neuro_caseboard.model import Dossier, MARK, ASCII_MARK, fallback_notice
 
 # Neo Brutalism palette.
-_COLORS = {"supported": (26, 161, 26), "verify": (217, 119, 6)}   # green / amber
+_COLORS = {"supported": (26, 161, 26), "verify": (217, 119, 6),
+           "quarantine": (200, 40, 40)}   # green / amber / red
 _BLACK = (0, 0, 0)
 _GRAY = (51, 51, 51)
 _RED = (255, 51, 51)

@@ -17,7 +17,7 @@ def _legend() -> str:
 def _summary(s) -> str:
     return (f"**Evidence:** {MARK['supported']} {s.supported} corpus-supported · "
             f"{MARK['verify']} {s.to_verify} to verify · "
-            f"{s.quarantined} quarantined (appendix)")
+            f"{MARK['quarantine']} {s.quarantined} quarantined (off-target)")
 
 
 def render_markdown(dossier: Dossier) -> str:
