@@ -89,14 +89,14 @@ SUPPORTED / VERIFY / QUARANTINE tabs strictly *subset* the list (not merely dim 
   `sources=` not `items=`); suite never asserts `rendered verify == summary.to_verify` (what let the MUST ship).
 
 ### Review tasks
-- [ ] review: [MUST] derive tab counts from rendered (post-dedup) claims by status, not `summary.*` —
+- [x] review: [MUST] derive tab counts from rendered (post-dedup) claims by status, not `summary.*` —
   compute via `subsetClaims(allClaims, filter).length` in Build.tsx (extract a pure helper); add a test
   asserting tab-count == rendered-count for supported/verify/quarantine/all.
-- [ ] review: [SHOULD] `dedup_sections` skips `status == "quarantine"` (never a dedup victim, never added
+- [x] review: [SHOULD] `dedup_sections` skips `status == "quarantine"` (never a dedup victim, never added
   to `seen`) — prevents off-target claims suppressing legitimate primary claims.
-- [ ] review: [SHOULD] `render_pdf.py` summary mirrors render_md (quarantine glyph + "(off-target)"); fix
+- [x] review: [SHOULD] `render_pdf.py` summary mirrors render_md (quarantine glyph + "(off-target)"); fix
   the "(appendix)" wording at the summary/legend lines so it no longer claims quarantine is in the appendix.
-- [ ] review: [SHOULD] DossierView shows an empty-state ("no claims match this filter") when a filter
+- [x] review: [SHOULD] DossierView shows an empty-state ("no claims match this filter") when a filter
   yields zero claims across all sections.
-- [ ] review: [nits] single quarantine predicate in compile.py; add ✗ to md/pdf legends (or drop dead
+- [x] review: [nits] single quarantine predicate in compile.py; add ✗ to md/pdf legends (or drop dead
   `LEGEND_ITEMS`); make `test_no_appendix_double_listing` non-vacuous + add a `rendered==tab` assertion.
