@@ -66,3 +66,37 @@ SUPPORTED / VERIFY / QUARANTINE tabs strictly *subset* the list (not merely dim 
     claims and preserves order.
   - **Verify:** `npm --prefix web run test` (incl. new spec) + `npm --prefix web run build` (union
     typechecks) green; `PYTHONPATH=vendor/caseprep python3 -m pytest … tests/test_compile.py tests/test_dossier_quarantine.py` still green.
+
+---
+
+## Review Findings (PR #56, increment 8)
+
+- [MUST] `web/src/pages/Build.tsx`:500-515 / `compile.py`:198 — tab counts come from `EvidenceSummary`
+  (card-level, PRE-dedup) but DossierView now strictly subsets POST-dedup claims → tabs over-count
+  (verified: VERIFY shows (3) renders 2, ALL shows (7) renders 6 across all fixtures). Trust-breaking.
+- [SHOULD] `compile.py`:185-198 — quarantine claims enter `claims` before `dedup_sections`, so an
+  off-target claim can suppress a legitimate primary claim in a later section (Jaccard ≥ 0.72) → a real
+  claim silently vanishes behind a cross-ref to off-target content.
+- [SHOULD] `render_pdf.py`:132/139/301 — summary still reads "quarantined (appendix)" + omits the
+  marker glyph; quarantine now renders inline, so "(appendix)" misdirects. render_md was updated; pdf wasn't.
+- [SHOULD] `DossierView.tsx`:288 — clicking a 0-count tab blanks the main column (every SectionCard
+  returns null) with no empty-state; QUARANTINE is routinely (0), so it reads as a broken page.
+- [NIT] `compile.py`:120 vs :234 — emission uses `audit_status not in _PRIMARY`, gauge uses
+  `== "off_target"`; equivalent only because the status domain is closed at 4 values. Use one predicate.
+- [NIT] `render_md.py`:14 / `render_pdf.py`:114-115 legends are hardcoded 2-item and omit the ✗
+  quarantine marker now shown on cards; `model.py` `LEGEND_ITEMS` quarantine entry is dead code (unconsumed).
+- [NIT] `tests/test_dossier_quarantine.py`:36-42 — double-listing test passes vacuously (appendix uses
+  `sources=` not `items=`); suite never asserts `rendered verify == summary.to_verify` (what let the MUST ship).
+
+### Review tasks
+- [ ] review: [MUST] derive tab counts from rendered (post-dedup) claims by status, not `summary.*` —
+  compute via `subsetClaims(allClaims, filter).length` in Build.tsx (extract a pure helper); add a test
+  asserting tab-count == rendered-count for supported/verify/quarantine/all.
+- [ ] review: [SHOULD] `dedup_sections` skips `status == "quarantine"` (never a dedup victim, never added
+  to `seen`) — prevents off-target claims suppressing legitimate primary claims.
+- [ ] review: [SHOULD] `render_pdf.py` summary mirrors render_md (quarantine glyph + "(off-target)"); fix
+  the "(appendix)" wording at the summary/legend lines so it no longer claims quarantine is in the appendix.
+- [ ] review: [SHOULD] DossierView shows an empty-state ("no claims match this filter") when a filter
+  yields zero claims across all sections.
+- [ ] review: [nits] single quarantine predicate in compile.py; add ✗ to md/pdf legends (or drop dead
+  `LEGEND_ITEMS`); make `test_no_appendix_double_listing` non-vacuous + add a `rendered==tab` assertion.
