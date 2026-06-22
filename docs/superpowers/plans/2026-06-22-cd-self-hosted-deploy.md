@@ -485,7 +485,7 @@ jobs:
 
 **This is the goal's explicit "VERIFY before claiming done."** Evidence, not assertions.
 
-- [ ] **Task 8** — Produce and record real evidence:
+- [x] **Task 8** — Produce and record real evidence:
   1. `docker build -t neuro-caseboard:evidence .` → success.
   2. `docker image inspect neuro-caseboard:evidence --format '{{.Size}}'` → bytes; also `docker image ls neuro-caseboard:evidence` for the human-readable size. Record both.
   3. Boot via compose with whatever real host volumes exist (`GOOGLE_CLOUD_PROJECT=<real-or-dummy> docker compose up -d`). Capture `curl -s localhost:8001/api/health | python -m json.tool` verbatim. Capture `curl -s -o /dev/null -w '%{http_code}\n' localhost:8001/` (SPA at `/` → `200`).
