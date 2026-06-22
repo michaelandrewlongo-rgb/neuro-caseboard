@@ -42,7 +42,7 @@
 
 ## Tasks
 
-- [ ] **Task A0 — Expose per-citation premise text on `Citation` (additive enabler).**
+- [x] **Task A0 — Expose per-citation premise text on `Citation` (additive enabler).**
 
   **Files:** Modify `neuro_core/synthesize.py:35-40` (dataclass) + `:96-99` (construction); `neuro_caseboard/woven_synth.py:64-68` (construction). Test: `tests/neuro_core/test_synthesize.py`.
   **Produces:** `Citation(n:int, book:str, chapter:str, page:int, text:str = "")` — `text` is the cited chunk passage (empty for appended-figure citations whose `source_n > len(hits)`).
@@ -65,7 +65,7 @@
   4. Run green; run `tests/neuro_core` + `tests/test_woven_synth.py` (no regression).
   5. Commit.
 
-- [ ] **Task A1 — Claim segmentation utility (`answer_verify.py`).**
+- [x] **Task A1 — Claim segmentation utility (`answer_verify.py`).**
 
   **Files:** Create `neuro_caseboard/answer_verify.py`; create `tests/test_answer_verify.py`. **After this lands, the operator appends `tests/test_answer_verify.py` to STATE.harness.**
   **Produces:**
@@ -114,7 +114,7 @@
   4. Run green.
   5. Commit.
 
-- [ ] **Task A2 — Per-claim entailment verification (`answer_verify.py`).**
+- [x] **Task A2 — Per-claim entailment verification (`answer_verify.py`).**
 
   **Files:** Modify `neuro_caseboard/answer_verify.py`; test `tests/test_answer_verify.py`.
   **Consumes:** `segment_claims`; `entailment.should_cite`, `entailment.get_default_verifier`.
@@ -172,7 +172,7 @@
   4. Run green.
   5. Commit.
 
-- [ ] **Task A3 — Integrate into `qa.answer_question` (separate/default path) + literature premise.**
+- [x] **Task A3 — Integrate into `qa.answer_question` (separate/default path) + literature premise.**
 
   **Files:** Modify `neuro_caseboard/qa.py` — add `abstract: str = ""` to `LiteratureCitation` (`:16-24`), populate in `build_literature_section` (`:105-108`) from records; add `verification` to `QAResult` (`:33-38`); attach it in `answer_question` (`:239-240`).
   **Consumes:** `verify_answer`; `Citation.text` (A0); `LiteratureRecord.abstract`. Premise map = `{str(c.n): getattr(c,"text","") for c in citations}` ∪ `{f"L{lc.n}": lc.abstract for lc in lit.citations}`.
@@ -194,7 +194,7 @@
   4. Run green; run `tests/test_qa.py` + `tests/test_literature_synth.py`.
   5. Commit.
 
-- [ ] **Task A4 — Integrate into the woven path (`_answer_question_woven`).**
+- [x] **Task A4 — Integrate into the woven path (`_answer_question_woven`).**
 
   **Files:** Modify `neuro_caseboard/qa.py` `_answer_question_woven` (`:133-196`) — premise map from `plan.hits[i-1].text` (textbook) and `records[i-1].abstract` (literature); attach `verification` to the returned `QAResult` (`:195-196`).
   **TDD steps:**
@@ -213,7 +213,7 @@
   4. Run green (`tests/test_woven_qa.py`).
   5. Commit.
 
-- [ ] **Task A5 — Surface verification in API + CLI (flag-gated display).**
+- [x] **Task A5 — Surface verification in API + CLI (flag-gated display).**
 
   **Files:** Modify `api/server.py` — add `"verification": _verification_dict(getattr(result,"verification",None))` to the `kind="answer"` dict (`:362-368`); add `_verification_dict`. Modify `neuro_caseboard/cli.py` `_run_ask` — when `os.environ.get("CASEBOARD_VERIFY_DISPLAY","1") != "0"`, print a compact `⚠ needs verification: claims [markers]` notice AFTER the answer; never edits the answer string. Test: `tests/test_qa.py` (or `tests/test_cli_smoke.py`).
   **Produces (JSON):** `{"n_cited_claims":int,"n_unsupported":int,"groundedness":float,"unsupported_markers":[str]}` or `None`.
@@ -233,7 +233,7 @@
   4. Run green; run `tests/test_qa.py` + server/cli tests.
   5. Commit.
 
-- [ ] **Task B1 — Benchmark runner records the per-answer verification summary.**
+- [x] **Task B1 — Benchmark runner records the per-answer verification summary.**
 
   **Files:** Modify `evaluation/scripts/run_benchmark.py` — add `serialize_verification(v)->dict|None` near `:120-134`; in the `status=="completed"` block (`:383-392`) set `record["verification"] = serialize_verification(getattr(result,"verification",None))`. Test: `tests/evaluation/test_runner.py`.
   **TDD steps:**
@@ -250,7 +250,7 @@
   4. Run green (`tests/evaluation/test_runner.py`).
   5. Commit.
 
-- [ ] **Task B2 — Computed groundedness aggregate in `summarize_grades.py`.**
+- [x] **Task B2 — Computed groundedness aggregate in `summarize_grades.py`.**
 
   **Files:** Modify `evaluation/scripts/summarize_grades.py` — add `groundedness_summary(run_rows)->dict` + a top-level `"groundedness"` key in `build_summary` (`:90-111`) and a `"groundedness"` entry per `by_domain`. Create `tests/evaluation/test_summarize_grades.py` (NET-NEW; load script via `importlib.util.spec_from_file_location` like `test_results_summary.py:1-13`).
   **Produces:** `{"answers_scored","answers_with_unsupported","fraction_with_unsupported","total_cited_claims","total_unsupported","mean_unsupported_rate","mean_groundedness"}` from `run_rows[*]["verification"]` (skip rows lacking it).
@@ -271,7 +271,7 @@
   4. Run green; run `tests/evaluation`.
   5. Commit.
 
-- [ ] **Task B3 — Emit `unsupported_claim` / `citation_claim_mismatch` defects.**
+- [x] **Task B3 — Emit `unsupported_claim` / `citation_claim_mismatch` defects.**
 
   **Files:** Modify `evaluation/scripts/build_failure_ledger.py` — add a `--run <run.jsonl>` input; add `defects_for_run_row(row)->list[dict]` reusing the `add()` record shape (`:61-75`); for each `verification` with `n_unsupported>0` emit `category="unsupported_claim"`; extend `LAYER` with `unsupported_claim`→`("model_synthesis",["neuro_caseboard/answer_verify.py","neuro_core/synthesize.py"])` and `citation_claim_mismatch`→`("citation_rendering",["neuro_caseboard/qa.py"])`; wire `--run` into `main()`. Create `tests/evaluation/test_failure_ledger.py`.
   **TDD steps:**
@@ -290,7 +290,7 @@
   4. Run green; run `tests/evaluation`.
   5. Commit.
 
-- [ ] **Task B4 — Schema + docs.**
+- [x] **Task B4 — Schema + docs.**
 
   **Files:** Modify `evaluation/schemas/run-record.schema.json` — declare a `verification` object property (`n_cited_claims`,`n_unsupported`,`groundedness`,`unsupported_markers`); schema is `additionalProperties:true` so this documents it. Modify `evaluation/README.md` — one paragraph on the computed groundedness metric and the `CASEBOARD_VERIFY_DISPLAY` flag. Add a small schema-validation test (or extend `tests/evaluation/test_manifest.py` style); skip gracefully if no validator is importable.
   **TDD steps:**
