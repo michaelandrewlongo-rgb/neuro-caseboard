@@ -134,7 +134,7 @@ def build_summary(grades: list[dict], run_rows: list[dict]) -> dict:
                 "score": stats(numeric_scores(gs)),
                 "grade_distribution": {L: sum(1 for g in gs if g.get("letter_grade") == L) for L in LETTERS if any(g.get("letter_grade") == L for g in gs)},
                 "unsafe": sum(1 for g in gs if is_unsafe(g)),
-                "groundedness": groundedness_summary([r for r in run_rows if (r.get("domain") if isinstance(r, dict) else None) == d]),
+                "groundedness": groundedness_summary([r for r in run_rows if (r.get("domain", "?") if isinstance(r, dict) else None) == d]),
             }
             for d, gs in sorted(by_domain.items())
         },

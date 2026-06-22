@@ -245,12 +245,17 @@ def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=N
         except Exception:
             _log.debug("literature lane raised in executor", exc_info=True)
             lit = None
-    from neuro_caseboard.answer_verify import verify_answer
+    from neuro_caseboard.answer_verify import merge_verifications, verify_answer
     premises = {str(getattr(c, "n", i)): getattr(c, "text", "") or ""
                 for i, c in enumerate(qr.citations or [], 1)}
     if lit is not None:
         for lc in (lit.citations or []):
             premises[f"L{getattr(lc, 'n', '')}"] = getattr(lc, "abstract", "") or ""
     verification = verify_answer(qr.answer, premises)
+    # The literature [L#] narrative is a separate section in this (non-woven) path; verify its
+    # claims against the same premise map (which carries the L# abstracts) and merge, so
+    # literature groundedness is checked here too — not just the textbook [n] answer.
+    if lit is not None and getattr(lit, "narrative", ""):
+        verification = merge_verifications(verification, verify_answer(lit.narrative, premises))
     return QAResult(answer=qr.answer, citations=qr.citations,
                     figures=qr.figures, literature=lit, verification=verification)

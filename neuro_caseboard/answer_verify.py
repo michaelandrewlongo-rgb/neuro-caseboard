@@ -76,6 +76,20 @@ def verify_answer(answer: str, premises: dict, *, verifier=None) -> "AnswerVerif
     return AnswerVerification(verdicts, n_cited, n_unsup)
 
 
+def merge_verifications(*verifications) -> "AnswerVerification":
+    """Combine several AnswerVerification results (e.g. the textbook [n] answer and the
+    literature [L#] narrative) into one. ``None`` entries are skipped; counts and claim
+    lists are concatenated so groundedness/unsupported_markers span both."""
+    claims, nc, nu = [], 0, 0
+    for v in verifications:
+        if v is None:
+            continue
+        claims.extend(v.claims)
+        nc += v.n_cited_claims
+        nu += v.n_unsupported
+    return AnswerVerification(claims, nc, nu)
+
+
 def verification_to_dict(v) -> "dict | None":
     if v is None:
         return None

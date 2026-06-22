@@ -35,6 +35,24 @@ def test_missing_premise_is_non_destructive():
     assert v.n_unsupported == 0
 
 
+def test_merge_verifications_concatenates_counts_and_markers():
+    from neuro_caseboard.answer_verify import merge_verifications, AnswerVerification, ClaimVerdict
+    a = AnswerVerification([ClaimVerdict("x [1].", ["1"], True, 20)], 1, 0)
+    b = AnswerVerification([ClaimVerdict("y [L1].", ["L1"], False, 30)], 1, 1)
+    merged = merge_verifications(a, None, b)
+    assert merged.n_cited_claims == 2 and merged.n_unsupported == 1
+    assert merged.groundedness() == 0.5
+    assert merged.unsupported_markers() == ["L1"]
+    assert len(merged.claims) == 2
+
+
+def test_merge_verifications_all_none_is_empty():
+    from neuro_caseboard.answer_verify import merge_verifications
+    merged = merge_verifications(None, None)
+    assert merged.n_cited_claims == 0 and merged.n_unsupported == 0
+    assert merged.groundedness() == 1.0 and merged.claims == []
+
+
 def test_verification_to_dict_shape():
     from neuro_caseboard.answer_verify import verification_to_dict, AnswerVerification, ClaimVerdict
     v = AnswerVerification([ClaimVerdict("x [1].", ["1"], False, 10)], 1, 1)

@@ -113,3 +113,31 @@ def test_woven_attaches_verification():
     assert isinstance(out, QAResult)
     assert out.verification is not None
     assert out.verification.n_cited_claims == 2
+
+
+def test_woven_flags_unsupported_literature_claim():
+    """SHOULD-1/2 (woven path): alignment-sensitive — the [L1] premise comes from the
+    record's abstract. With an off-topic abstract (≥5 content tokens) the LexicalVerifier
+    must flag the [L1] claim unsupported, proving the literature premise wiring is aligned."""
+    # Custom hit text supports the textbook [1] claim; the literature abstract is unrelated
+    # to the [L1] claim, so only [L1] should fail.
+    bundle = RetrievalBundle(
+        question="q",
+        hits=[Hit(id="a", book="B", chapter="C", page=1,
+                  text="The middle cerebral artery supplies the lateral cerebral cortex.")],
+        figures=[], images=[], variant=None)
+    off_topic = LiteratureRecord(
+        pmid="111", title="T", journal="J", year=2024, doi="d", url="u",
+        abstract="The corpus callosum is a broad commissural white-matter tract "
+                 "connecting the two cerebral hemispheres.",
+        sections={}, pub_types=["Review"])
+    out = _answer_question_woven(
+        "q", lit_config=_cfg(),
+        synth_client=_Synth("The MCA supplies the lateral cortex [1]. "
+                            "Endovascular thrombectomy improves distal-occlusion outcomes [L1]."),
+        plan_a=lambda: bundle, retrieve_b=lambda: [off_topic])
+    assert isinstance(out, QAResult)
+    assert out.verification.n_cited_claims == 2
+    assert out.verification.n_unsupported == 1
+    assert "L1" in out.verification.unsupported_markers()
+    assert "1" not in out.verification.unsupported_markers()

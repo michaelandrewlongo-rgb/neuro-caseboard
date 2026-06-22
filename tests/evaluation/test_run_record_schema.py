@@ -5,8 +5,9 @@ Guards that ``evaluation/schemas/run-record.schema.json`` declares the optional
 field types are actually constrained. ``verification`` is optional (None on error
 rows), so it is intentionally *not* in the schema's ``required`` list.
 
-Skips cleanly when ``jsonschema`` is absent (it ships in the ``.[dev]`` extra),
-mirroring ``tests/evaluation/test_failure_ledger.py``.
+``jsonschema`` is a ``.[dev]`` dependency, so this test RUNS (not skips) under the
+required ``.[dev]`` CI install; the ``importorskip`` below only skips it in a minimal
+environment that omits the dev extra, mirroring ``tests/evaluation/test_failure_ledger.py``.
 """
 import json
 from pathlib import Path
