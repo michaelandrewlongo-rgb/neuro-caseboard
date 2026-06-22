@@ -21,6 +21,30 @@ that run's row from its score files (see the command at the bottom). Do not hand
 | youmans-full67-20260620-2210 · youmans_pubmed | 2026-06-20 | 3-arm corpus A/B (youmans_pubmed) | 9f5138a dirty | 67 | 83.87 | +6.13 | 0/61/5/0 | — | length confound on composed arm |
 
 
+## Groundedness (citation faithfulness) — a separate metric, not a score row
+
+PR#50 added a computed **groundedness / unsupported-claim-rate** metric (does each cited sentence
+follow from the source it cites?). It is **not an answer-quality score and has no row above**: PR#50
+is *answer-preserving* (it only attaches verification metadata), so the answers — and therefore the
+0–100 grades and Δ — are unchanged. There is nothing to A/B on the score table.
+
+First measurement on the frozen 67-Q set (run `pr50-groundedness-20260622-125141`, textbook `[n]`
+lane, 1380 cited claims) exposed a **metric bug**: the default `LexicalVerifier` judged precision
+against the *whole* retrieved chunk, so a short well-supported claim (a tiny fraction of a long
+passage) was flagged unsupported — an artifact **groundedness 0.07 / ~93% "unsupported"**, not a real
+hallucination rate. Fixed on `fix/groundedness-precision-gate` (precision judged against the
+best-matching premise *sentence*; off-topic spans still rejected). Re-scored offline on the same run:
+
+| Verifier | groundedness | unsupported rate |
+|---|---|---|
+| shipped (whole-premise precision) | 0.07 | 0.93 |
+| **fixed (best-sentence precision)** | **0.80** | **0.20** |
+
+Per-domain (fixed): Neurointerventional 0.86 · Open-CV 0.82 · Spine 0.80 · Functional 0.80 ·
+General 0.78 · Trauma 0.79 · Tumor 0.73. This is a conservative *lexical* proxy (it flags paraphrase
+and cross-chunk synthesis), so read it as a relative signal, not an absolute hallucination rate. The
+`[L#]` literature lane isn't re-scored offline (its abstracts aren't stored in the run record).
+
 ---
 
 Update a row after a full run:

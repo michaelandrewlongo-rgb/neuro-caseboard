@@ -14,6 +14,7 @@ import re
 from typing import Protocol, runtime_checkable
 
 _TOKEN = re.compile(r"[a-z0-9]+")
+_SENTENCE = re.compile(r"(?<=[.!?])\s+")
 _STOP = {"the", "and", "for", "with", "that", "this", "are", "must", "its", "into",
          "from", "their", "which", "may", "can", "not", "but", "all", "any", "per"}
 
@@ -38,17 +39,29 @@ class LexicalVerifier:
         self.min_precision = min_precision
 
     def entails(self, premise: str, hypothesis: str) -> bool:
-        p = _content_tokens(premise)
         h = _content_tokens(hypothesis)
         if not h:
             return True
+        p = _content_tokens(premise)
         shared = len(p & h)
-        # (1) recall: the premise must cover enough of the hypothesis' content tokens.
-        if (shared / len(h)) < self.threshold:
+        # (1) recall: the premise must cover enough of the hypothesis' content tokens. Judged over
+        # the WHOLE premise, so support spread across a multi-sentence passage still counts.
+        if not p or (shared / len(h)) < self.threshold:
             return False
-        # (2) precision: the shared tokens must also be a meaningful fraction of the *premise*, so
-        # a long off-topic span can't clear the recall bar on a couple of incidental shared tokens.
-        return bool(p) and (shared / len(p)) >= self.min_precision
+        # (2) precision: the shared tokens must be a meaningful fraction of the best-matching premise
+        # SENTENCE — not the whole premise. Retrieved corpus spans are long, multi-sentence chunks;
+        # a short well-supported claim is a tiny fraction of the whole chunk (~0.05) yet a large
+        # fraction of the one sentence that states it. Per-sentence precision keeps the guard against
+        # long *off-topic* spans (no sentence densely matches) without rejecting long *on-topic* ones.
+        # ponytail: a punctuation-free blob splits to one "sentence" == the whole premise, degrading
+        # to the old whole-premise precision (conservative over-flag); upgrade path is a token window.
+        best_precision = 0.0
+        for sentence in _SENTENCE.split(premise):
+            sp = _content_tokens(sentence)
+            if len(sp) < self.min_premise_tokens:
+                continue
+            best_precision = max(best_precision, len(sp & h) / len(sp))
+        return best_precision >= self.min_precision
 
 
 def should_cite(premise: str, hypothesis: str, verifier: ClaimVerifier) -> bool:
