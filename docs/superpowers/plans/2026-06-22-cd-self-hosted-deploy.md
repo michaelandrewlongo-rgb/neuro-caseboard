@@ -539,8 +539,8 @@ break the one-time box bring-up, so fix them now.
 
 Triaged tasks (SHOULD → actionable; NITs recorded above, only the trivial dead-prefix is folded in):
 
-- [ ] review: align deploy-dir/`.env` between `scripts/cd-pull-deploy.sh` and `docs/cd.md` so compose
+- [x] review: align deploy-dir/`.env` between `scripts/cd-pull-deploy.sh` and `docs/cd.md` so compose
   finds `GOOGLE_CLOUD_PROJECT` (deploy from the repo root; `.env` in the repo root) — and drop the dead
   `CASEBOARD_IMAGE=` prefix on the rollback `poll_health` (NIT). Verify: `bash -n` + `--selftest` still pass.
-- [ ] review: add `libgomp1` to the `Dockerfile` runtime stage (apt-get, slim) and verify `import torch,
+- [x] review: add `libgomp1` to the `Dockerfile` runtime stage (apt-get, slim) and verify `import torch,
   open_clip, sentence_transformers` succeeds inside the built container (`docker run … python -c …`).
