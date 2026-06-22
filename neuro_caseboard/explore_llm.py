@@ -46,7 +46,6 @@ _SLOTS_BY_FILE = {
 
 _log = logging.getLogger(__name__)
 
-_ANTHROPIC_DEFAULT = "claude-opus-4-8"
 _OPENROUTER_AUTHOR = "openai/gpt-4o"       # cheap, big-token author call
 _OPENROUTER_STRONG = "google/gemini-2.5-pro"  # strong, small planner/critic calls
 _VERTEX_DEFAULT = "gemini-2.5-pro"         # quality-first on the GCP free credit
@@ -61,15 +60,13 @@ stop_points, closure_reconstruction, monitoring, equipment_adjuncts, attending_p
 
 def _llm_provider() -> str:
     """The active LLM provider. An explicit ``CASEBOARD_LLM_PROVIDER``
-    (vertex|openrouter|anthropic) wins; otherwise infer from configured keys.
-    ``vertex`` is opt-in (explicit only) so it never activates unexpectedly in tests."""
+    (vertex|openrouter) wins; otherwise infer from configured keys. ``vertex`` is opt-in
+    (explicit only) so it never activates unexpectedly in tests."""
     p = (os.environ.get("CASEBOARD_LLM_PROVIDER") or "").strip().lower()
     if p:
         return p
     if os.environ.get("OPENROUTER_API_KEY"):
         return "openrouter"
-    if os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"):
-        return "anthropic"
     return ""
 
 
@@ -80,11 +77,9 @@ def _resolve_model(model: str | None, *, provider: str | None = None) -> str:
     if env:
         return env
     provider = provider or _llm_provider()
-    if provider == "vertex":
-        return _VERTEX_DEFAULT
     if provider == "openrouter":
         return _OPENROUTER_AUTHOR
-    return _ANTHROPIC_DEFAULT
+    return _VERTEX_DEFAULT
 
 
 def _model_for(role: str) -> str:
@@ -97,11 +92,9 @@ def _model_for(role: str) -> str:
     if m:
         return m
     provider = _llm_provider()
-    if provider == "vertex":
-        return _VERTEX_DEFAULT
     if provider == "openrouter":
         return _OPENROUTER_AUTHOR if role == "author" else _OPENROUTER_STRONG
-    return _ANTHROPIC_DEFAULT
+    return _VERTEX_DEFAULT
 
 
 # --- prompts ---------------------------------------------------------------
@@ -218,12 +211,6 @@ def llm_available() -> bool:
             return True
         except Exception:
             return False
-    if provider == "anthropic":
-        try:
-            import anthropic  # noqa: F401
-            return True
-        except Exception:
-            return False
     return False
 
 
@@ -267,26 +254,11 @@ def _openrouter_complete(system: str, user: str, *, model: str | None = None,
     raise last  # pragma: no cover
 
 
-def _anthropic_complete(system: str, user: str, *, model: str | None = None,
-                        temperature: float = 0.3) -> str:
-    """First-party Claude call returning JSON text (plain; parsing is tolerant)."""
-    import anthropic
-    client = anthropic.Anthropic()
-    resp = client.messages.create(
-        model=_resolve_model(model, provider="anthropic"),
-        max_tokens=12000,
-        temperature=temperature,
-        system=system,
-        messages=[{"role": "user", "content": user}],
-    )
-    return next(b.text for b in resp.content if b.type == "text")
-
-
 def _vertex_complete(system: str, user: str, *, model: str | None = None,
                      temperature: float = 0.3) -> str:
     """Vertex AI Gemini completion returning JSON text. Auth via Application Default
     Credentials (``gcloud auth application-default login``); spends the GCP project's
-    credit rather than a paid OpenRouter/Anthropic key. Targets google-genai >= 1.0.
+    credit rather than a paid OpenRouter key. Targets google-genai >= 1.0.
     Not unit-tested (network); the dispatch into it is."""
     from google import genai
     from google.genai import types
@@ -313,7 +285,9 @@ def _default_complete(system: str, user: str, *, model: str | None = None,
         return _vertex_complete(system, user, model=model, temperature=temperature)
     if provider == "openrouter":
         return _openrouter_complete(system, user, model=model, temperature=temperature)
-    return _anthropic_complete(system, user, model=model, temperature=temperature)
+    raise RuntimeError(
+        "no LLM provider configured: set CASEBOARD_LLM_PROVIDER=vertex "
+        "(with GOOGLE_CLOUD_PROJECT + ADC) or OPENROUTER_API_KEY")
 
 
 # --- parsing / merge helpers ----------------------------------------------

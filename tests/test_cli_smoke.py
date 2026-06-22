@@ -24,8 +24,6 @@ pytestmark = pytest.mark.smoke
 # Environment variables that, if leaked in, could let a real LLM/corpus/online lane engage.
 # We strip them so the smoke proves the deterministic offline fallback truly stands alone.
 _SCRUB = (
-    "ANTHROPIC_API_KEY",
-    "ANTHROPIC_AUTH_TOKEN",
     "OPENROUTER_API_KEY",
     "GOOGLE_CLOUD_PROJECT",
     "CASEBOARD_LLM_PROVIDER",

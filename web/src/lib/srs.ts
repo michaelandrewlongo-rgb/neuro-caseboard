@@ -26,7 +26,8 @@ export function newSchedule(now: number): CardSchedule {
 }
 
 export function schedule(s: CardSchedule, rating: Rating, now: number): CardSchedule {
-  let { ease, intervalDays, reps, lapses } = s
+  const { lapses } = s
+  let { ease, intervalDays, reps } = s
 
   if (rating === "again") {
     return {

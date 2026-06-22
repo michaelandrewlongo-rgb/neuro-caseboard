@@ -57,7 +57,7 @@ design:
 | core (declared) | fpdf2, pillow, pymupdf, **lancedb**, **numpy** | `[project].dependencies` | installed everywhere (required) |
 | external sibling | **caseprep** | public git, pinned SHA | installed before the package in every required job |
 | dev | pytest, pdfplumber | `[project.optional-dependencies].dev` | required |
-| llm / vertex / briefing / web / models | anthropic / google-genai / playwright / streamlit / sentence-transformers+open-clip-torch | extras | optional workflow / local only |
+| vertex / briefing / web / models | google-genai / playwright / streamlit / sentence-transformers+open-clip-torch | extras | optional workflow / local only |
 
 `lancedb`+`numpy` were promoted into core deps because the entry point cannot import
 without them — this is a correctness fix, not a footprint expansion of *runtime behavior*.
@@ -78,8 +78,8 @@ versions, pip cache keyed on `pyproject.toml`, pinned `CASEPREP_REF`.
 | `package` | `python -m build` produces a valid sdist+wheel; `twine check` passes; the **wheel** installs into a clean venv (declared deps resolve from PyPI) alongside caseprep; every public module imports; `caseboard --help` works. | Catches undeclared deps, broken metadata, missing entry point. |
 
 The CLI smoke is a pytest test (`tests/test_cli_smoke.py`, marker `smoke`) that runs
-`caseboard build --no-llm --pdf` in a **scrubbed environment** (no `ANTHROPIC_API_KEY`,
-`OPENROUTER_API_KEY`, `GOOGLE_CLOUD_PROJECT`, `CASEPREP_TEXTBOOK`) and asserts the
+`caseboard build --no-llm --pdf` in a **scrubbed environment** (no `OPENROUTER_API_KEY`,
+`GOOGLE_CLOUD_PROJECT`, `CASEPREP_TEXTBOOK`) and asserts the
 Markdown + a real PDF are produced — proving the offline path has no hidden dependence on
 keys/corpora.
 

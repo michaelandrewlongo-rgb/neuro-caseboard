@@ -86,8 +86,6 @@ def test_llm_unavailable_without_api_key(monkeypatch):
     # Vertex (CASEBOARD_LLM_PROVIDER / GOOGLE_CLOUD_PROJECT) can't leak in.
     monkeypatch.delenv("CASEBOARD_LLM_PROVIDER", raising=False)
     monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     assert llm_available() is False
 
@@ -110,13 +108,15 @@ def test_explicit_provider_vertex_overrides_other_keys(monkeypatch):
     assert _llm_provider() == "vertex"
 
 
-def test_provider_defaults_to_openrouter_then_anthropic(monkeypatch):
+def test_provider_inference_openrouter_only_else_unset(monkeypatch):
+    # OpenRouter is the only key-inferred provider; Vertex is explicit-only. With no
+    # provider key configured, nothing is inferred (deterministic Explorer takes over).
     monkeypatch.delenv("CASEBOARD_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
     assert _llm_provider() == "openrouter"
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
-    assert _llm_provider() == "anthropic"
+    assert _llm_provider() == ""
 
 
 def test_vertex_uses_gemini_pro_for_every_role(monkeypatch):
