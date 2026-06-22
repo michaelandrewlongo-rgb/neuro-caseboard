@@ -116,3 +116,14 @@ def test_retrieve_records_cache_key_includes_recency_boost():
     retrieve_records("distal MCA occlusion", lit_config=_cfg(2), synth_client=_Synth(), cache=c1)
     assert c0.asked and c1.asked
     assert c0.asked[0] != c1.asked[0]  # boost must be part of the key
+
+
+def test_answer_question_attaches_verification():
+    from types import SimpleNamespace
+    from neuro_caseboard.qa import answer_question
+    qr = SimpleNamespace(answer="The MCA supplies the lateral cortex [1].",
+        citations=[SimpleNamespace(n=1, book="Youmans", chapter="", page=5,
+                                   text="The MCA supplies the lateral cerebral cortex.")], figures=[])
+    out = answer_question("q", lane_a=lambda: qr, lane_b=lambda: None)
+    assert out.verification is not None
+    assert out.verification.n_cited_claims == 1 and out.verification.n_unsupported == 0

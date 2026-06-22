@@ -22,6 +22,7 @@ class LiteratureCitation:
     year: int | None
     doi: str
     url: str
+    abstract: str = ""
 
 
 @dataclass
@@ -36,6 +37,7 @@ class QAResult:
     citations: list = field(default_factory=list)
     figures: list = field(default_factory=list)
     literature: "LiteratureSection | None" = None
+    verification: "AnswerVerification | None" = None
 
 
 def retrieve_records(question, *, lit_config, client=None, synth_client, cache=None):
@@ -103,7 +105,8 @@ def build_literature_section(question, *, config=None, lit_config=None,
         if syn is None:
             return None
         cites = [LiteratureCitation(n=i, pmid=r.pmid, title=r.title, journal=r.journal,
-                                    year=r.year, doi=r.doi, url=r.url)
+                                    year=r.year, doi=r.doi, url=r.url,
+                                    abstract=getattr(r, "abstract", "") or "")
                  for i, r in enumerate(syn.records, 1)]
         return LiteratureSection(narrative=syn.narrative, citations=cites)
     except Exception:
@@ -236,5 +239,12 @@ def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=N
         except Exception:
             _log.debug("literature lane raised in executor", exc_info=True)
             lit = None
+    from neuro_caseboard.answer_verify import verify_answer
+    premises = {str(getattr(c, "n", i)): getattr(c, "text", "") or ""
+                for i, c in enumerate(qr.citations or [], 1)}
+    if lit is not None:
+        for lc in (lit.citations or []):
+            premises[f"L{getattr(lc, 'n', '')}"] = getattr(lc, "abstract", "") or ""
+    verification = verify_answer(qr.answer, premises)
     return QAResult(answer=qr.answer, citations=qr.citations,
-                    figures=qr.figures, literature=lit)
+                    figures=qr.figures, literature=lit, verification=verification)
