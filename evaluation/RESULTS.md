@@ -45,6 +45,24 @@ General 0.78 · Trauma 0.79 · Tumor 0.73. This is a conservative *lexical* prox
 and cross-chunk synthesis), so read it as a relative signal, not an absolute hallucination rate. The
 `[L#]` literature lane isn't re-scored offline (its abstracts aren't stored in the run record).
 
+**Validated by an independent frontier-model judge (2026-06-22) — not a human expert** — against a
+40-claim blind gold set (`evaluation/groundedness-gold-set.jsonl`): a separate frontier LLM (distinct
+from the answer-generating model *and* from the checker) graded 20 checker-passed + 20 checker-flagged
+claims supported/partial/not, blind to the checker's verdict, with per-item entailment reasoning.
+Result — the checker is **high-precision, low-recall about problems**: when it says **supported it is
+right 95%** (19/20; dangerous false-pass rate **5%**, the one miss a partial not a fabrication — it
+caught the only true hallucination and the knowledge-injection case), but when it **flags, ~90% are
+false alarms** (18/20 were actually supported). So the **judge-estimated true groundedness is ≈0.94**,
+and **the 0.80 headline is a conservative floor** (over-flagging drags it down), not the real rate.
+**Use 0.80 as a safety screen and regression tripwire — trust a "supported" verdict, treat a "flag"
+as worth-a-look — not as an absolute quality number.**
+
+*Provenance caveat:* this is an **LLM-judge** validation, not human-expert ground truth. The judge is
+independent, semantic, and blinded (a strong proxy), but it can share blind spots with LLM-generated
+answers, so "agreement with the judge" is not "agreement with truth." A clinician spot-check of a
+subset would upgrade this from *strong proxy* to *confirmed*. To de-noise the flags, swap in the
+semantic NLI verifier (`CASEBOARD_NLI_MODEL`) and validate it against the saved gold set.
+
 ---
 
 Update a row after a full run:
