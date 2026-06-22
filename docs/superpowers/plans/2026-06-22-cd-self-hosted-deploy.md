@@ -346,7 +346,7 @@ exit 1
 
 **Gating (mirrors `live-judge.yml`):** a `gate` job emits `configured`. When the repo variable `CD_ENABLED` is not `true`, every heavy job is skipped → a clean green no-op (so forks / unconfigured repos never fail). GHCR push uses the auto `GITHUB_TOKEN` (`packages: write`); no custom registry secret is needed.
 
-- [ ] **Task 6** — Create `.github/workflows/cd.yml`:
+- [x] **Task 6** — Create `.github/workflows/cd.yml`:
 
 ```yaml
 name: CD
