@@ -29,12 +29,16 @@ runner = _load_runner()
 
 
 # ---- stand-in objects mimicking the real shapes -------------------------------------------------
-def make_qaresult(answer="An answer.", citations=None, figures=None, literature=None):
+def make_qaresult(answer="An answer.", citations=None, figures=None, literature=None,
+                  verification=None):
     cits = citations if citations is not None else [
         SimpleNamespace(n=1, book="Youmans", chapter="Ch 1", page=42)
     ]
     figs = figures if figures is not None else []
-    return SimpleNamespace(answer=answer, citations=cits, figures=figs, literature=literature)
+    return SimpleNamespace(
+        answer=answer, citations=cits, figures=figs, literature=literature,
+        verification=verification,
+    )
 
 
 def make_clarification(variants):
@@ -113,6 +117,20 @@ def test_happy_path_records_completed_and_serializes():
     # schema-required fields present
     for f in ("started_at", "completed_at", "latency_seconds", "run_id"):
         assert f in rec
+
+
+def test_runner_records_verification():
+    from neuro_caseboard.answer_verify import AnswerVerification, ClaimVerdict
+
+    v = AnswerVerification([ClaimVerdict("x [1].", ["1"], False, 5)], 1, 1)
+    rec = _run_one(lambda q: make_qaresult(answer="x [1].", verification=v))
+    assert rec["status"] == "completed"
+    assert rec["verification"] == {
+        "n_cited_claims": 1,
+        "n_unsupported": 1,
+        "groundedness": 0.0,
+        "unsupported_markers": ["1"],
+    }
 
 
 # ---- disambiguation -----------------------------------------------------------------------------
