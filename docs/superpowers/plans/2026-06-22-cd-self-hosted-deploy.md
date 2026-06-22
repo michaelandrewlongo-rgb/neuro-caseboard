@@ -31,7 +31,7 @@ Copied verbatim from the spec — every task implicitly includes these:
 
 **Why first:** the loop harness is `npm --prefix web run lint / test / build`. Baseline lint **fails** with one pre-existing error (`29:35 'lapses' is never reassigned. Use 'const' instead  prefer-const`) that no workflow ever caught. Until it's fixed, every VERIFY fails on lint. Tiny, isolated, independently shippable.
 
-- [ ] **Task 1** — Change the `let lapses` declaration at `web/src/lib/srs.ts:29` to `const lapses` (the variable is never reassigned). Do not change behavior.
+- [x] **Task 1** — Change the `let lapses` declaration at `web/src/lib/srs.ts:29` to `const lapses` (the variable is never reassigned). Do not change behavior.
   - Verify: `npm --prefix web run lint` exits 0 (no errors). `npm --prefix web run test` still 20 pass. `npm --prefix web run build` still succeeds.
   - Commit: `loop step 0: fix web lint (prefer-const in srs.ts) so the web gate is green`
 
