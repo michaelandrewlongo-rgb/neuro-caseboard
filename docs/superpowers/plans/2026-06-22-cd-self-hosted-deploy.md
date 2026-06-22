@@ -257,7 +257,7 @@ services:
 
 **Interfaces:** consumes `docker-compose.yml` (Task 4); honors `CASEBOARD_IMAGE` to pin a rollback target.
 
-- [ ] **Task 5** — Create `scripts/cd-pull-deploy.sh` (and `chmod +x`):
+- [x] **Task 5** — Create `scripts/cd-pull-deploy.sh` (and `chmod +x`):
 
 ```bash
 #!/usr/bin/env bash
