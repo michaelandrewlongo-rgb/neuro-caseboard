@@ -71,6 +71,34 @@ def verification_coverage(grades: list[dict]) -> dict:
     }
 
 
+def groundedness_summary(run_rows):
+    scored = []
+    for r in (run_rows or []):
+        v = r.get("verification") if isinstance(r, dict) else None
+        if not v:
+            continue
+        nc = v.get("n_cited_claims", 0) or 0
+        if nc <= 0:
+            continue
+        nu = v.get("n_unsupported", 0) or 0
+        scored.append((nc, nu))
+    if not scored:
+        return {"answers_scored": 0, "answers_with_unsupported": 0,
+                "fraction_with_unsupported": 0.0, "total_cited_claims": 0,
+                "total_unsupported": 0, "mean_unsupported_rate": 0.0,
+                "mean_groundedness": 1.0}
+    n = len(scored)
+    total_cited = sum(nc for nc, _ in scored)
+    total_unsup = sum(nu for _, nu in scored)
+    with_unsup = sum(1 for _, nu in scored if nu > 0)
+    rates = [nu / nc for nc, nu in scored]
+    mean_rate = sum(rates) / n
+    return {"answers_scored": n, "answers_with_unsupported": with_unsup,
+            "fraction_with_unsupported": with_unsup / n,
+            "total_cited_claims": total_cited, "total_unsupported": total_unsup,
+            "mean_unsupported_rate": mean_rate, "mean_groundedness": 1.0 - mean_rate}
+
+
 def build_summary(grades: list[dict], run_rows: list[dict]) -> dict:
     by_domain: dict[str, list[dict]] = {}
     qid_domain = {r["question_id"]: r.get("domain", "?") for r in run_rows}
@@ -100,11 +128,13 @@ def build_summary(grades: list[dict], run_rows: list[dict]) -> dict:
             "p95": round(sorted(lat)[max(0, int(round(0.95 * (len(lat) - 1))))], 1) if lat else 0,
         },
         "evidence_verification": verification_coverage(grades),
+        "groundedness": groundedness_summary(run_rows),
         "by_domain": {
             d: {
                 "score": stats(numeric_scores(gs)),
                 "grade_distribution": {L: sum(1 for g in gs if g.get("letter_grade") == L) for L in LETTERS if any(g.get("letter_grade") == L for g in gs)},
                 "unsafe": sum(1 for g in gs if is_unsafe(g)),
+                "groundedness": groundedness_summary([r for r in run_rows if (r.get("domain") if isinstance(r, dict) else None) == d]),
             }
             for d, gs in sorted(by_domain.items())
         },
