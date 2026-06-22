@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
 from .config import load_config
+from .asset_paths import resolve_asset_path
 from .embed import Embedder
 from .index import Index, Hit, reciprocal_rank_fusion
 from .rerank import Reranker
@@ -161,7 +162,11 @@ class Engine:
             # (CT/CTA/DSA captions) are not over-blocked. The question is the region signal.
             if figure_offtarget(cap, question, h.book or "", guards="strict"):
                 continue
-            image = self._read_image(path)
+            # `path` is the absolute build-time path stored in the index; when the assets tree is
+            # mounted elsewhere at runtime (container: /data/figures) the literal open() fails and
+            # the figure would be dropped. Resolve to the runtime ASSETS_DIR for the read; keep the
+            # original `path` in Figure.image_path so the API serve layer re-roots it identically.
+            image = self._read_image(resolve_asset_path(path, self.config.assets_dir))
             if image is None:
                 continue
             src = passage_index.get((h.book, h.page))

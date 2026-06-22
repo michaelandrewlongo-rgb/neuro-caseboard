@@ -226,27 +226,15 @@ def _image_roots() -> list[Path]:
     return roots
 
 
-def _reroot_candidates(path: str, roots: list[Path]):
-    """Figure paths are stored in the index as absolute *build-time* host paths. When the assets
-    tree is mounted somewhere else at runtime (the container mounts it at /data/figures while the
-    index still holds /home/.../assets/figures/...), the literal path is absent. For each runtime
-    root whose directory name appears in the stored path, rebase the tail after that name onto the
-    root — e.g. .../figures/<book>/x.png served from ASSETS_DIR/<book>/x.png. resolve() in the
-    caller still collapses any `..`, so this never widens the whitelist."""
-    parts = Path(path).parts
-    for root in roots:
-        if root.name in parts:
-            i = len(parts) - 1 - parts[::-1].index(root.name)  # last occurrence of the root dir name
-            yield root.joinpath(*parts[i + 1:])
-
-
 def _safe_image_path(path: str) -> Path | None:
     """Resolve *path* and return it only if it is a real file inside a whitelisted root. Tries the
-    literal path first, then re-rooted fallbacks for an index built at a different assets location."""
+    literal path first, then re-rooted fallbacks (shared with the engine read via
+    neuro_core.asset_paths) for an index built at a different assets location."""
     if not path:
         return None
+    from neuro_core.asset_paths import reroot_candidates
     roots = _image_roots()
-    for cand in (Path(path), *_reroot_candidates(path, roots)):
+    for cand in (Path(path), *reroot_candidates(path, roots)):
         try:
             cand = cand.resolve()  # collapse `..` BEFORE the whitelist check (no traversal escape)
         except Exception:
