@@ -227,21 +227,26 @@ def _image_roots() -> list[Path]:
 
 
 def _safe_image_path(path: str) -> Path | None:
-    """Resolve *path* and return it only if it is a real file inside a whitelisted root."""
+    """Resolve *path* and return it only if it is a real file inside a whitelisted root. Tries the
+    literal path first, then re-rooted fallbacks (shared with the engine read via
+    neuro_core.asset_paths) for an index built at a different assets location."""
     if not path:
         return None
-    try:
-        p = Path(path).resolve()
-    except Exception:
-        return None
-    if not p.is_file():
-        return None
-    for root in _image_roots():
+    from neuro_core.asset_paths import reroot_candidates
+    roots = _image_roots()
+    for cand in (Path(path), *reroot_candidates(path, roots)):
         try:
-            p.relative_to(root)
-            return p
-        except ValueError:
+            cand = cand.resolve()  # collapse `..` BEFORE the whitelist check (no traversal escape)
+        except Exception:
             continue
+        if not cand.is_file():
+            continue
+        for root in roots:
+            try:
+                cand.relative_to(root)
+                return cand
+            except ValueError:
+                continue
     return None
 
 

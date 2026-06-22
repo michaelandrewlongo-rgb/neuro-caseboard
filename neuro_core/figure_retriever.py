@@ -142,7 +142,10 @@ def _load_rows(index_dir=None):
     if _ROWS_CACHE is not None:
         return _ROWS_CACHE
     from neuro_core.config import load_config
-    index_dir = index_dir or str(load_config().index_dir)
+    from neuro_core.asset_paths import resolve_asset_path
+    cfg = load_config()
+    index_dir = index_dir or str(cfg.index_dir)
+    assets_dir = cfg.assets_dir
     rows_out = []
     if os.path.isdir(index_dir):
         import lancedb
@@ -155,7 +158,9 @@ def _load_rows(index_dir=None):
                 if any(d in book.lower() for d in _DIAGNOSTIC_BOOKS):
                     continue
                 cap = _row_caption(r)
-                if cap and fp and os.path.isfile(fp):
+                # fp is the absolute build-time path; resolve to the runtime ASSETS_DIR so a
+                # container that mounts figures elsewhere (/data/figures) doesn't drop every row.
+                if cap and fp and resolve_asset_path(fp, assets_dir).is_file():
                     rows_out.append({"book": book, "chapter": r.get("chapter"),
                                      "page": r.get("page"), "figure_path": fp,
                                      "caption": cap, "context": "", "vector": r.get("vector")})

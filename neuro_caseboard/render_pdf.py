@@ -245,9 +245,14 @@ def _render_claim(pdf, fam, t, glyph, c) -> None:
 def _render_figure(pdf, fam, t, fig) -> None:
     if pdf.get_y() + 70 > pdf.h - pdf.b_margin:
         pdf.add_page()
-    if fig.image_path and os.path.exists(fig.image_path):
+    # Resolve the stored build-time path to the runtime ASSETS_DIR before embedding, so a
+    # container that mounts figures at /data/figures still renders them in the exported PDF.
+    from neuro_core.asset_paths import resolve_asset_path
+    from neuro_core.config import load_config
+    resolved = resolve_asset_path(fig.image_path, load_config().assets_dir) if fig.image_path else None
+    if resolved and resolved.is_file():
         try:
-            pdf.image(fig.image_path, w=min(pdf.epw, 110))
+            pdf.image(str(resolved), w=min(pdf.epw, 110))
         except Exception:
             pass
     pdf.set_font(fam, "B", 8)
