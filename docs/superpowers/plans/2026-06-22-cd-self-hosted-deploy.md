@@ -44,7 +44,7 @@ Copied verbatim from the spec — every task implicitly includes these:
 
 **Rationale:** the web bundle (4 vitest suites + `tsc -b && vite build`) has zero CI coverage today. The spec says add a web job and make it a required workflow. We add a **separate** workflow (NOT editing `ci.yml`, per the global constraint) so it can be marked a required check alongside the python jobs.
 
-- [ ] **Task 2** — Create `.github/workflows/web.yml` exactly:
+- [x] **Task 2** — Create `.github/workflows/web.yml` exactly:
 
 ```yaml
 name: web
