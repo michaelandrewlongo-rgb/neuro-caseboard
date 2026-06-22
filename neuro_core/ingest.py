@@ -37,13 +37,18 @@ _ICKE_CHAPTER = re.compile(r"^Chapter \d+:")
 
 # Front-matter / structural bookmarks that are not chapter content. Dropped from chapter
 # labels so they don't blanket the pages after them (e.g. "DEDICATION" → ~70 pages until
-# chapter 1). Exact, lowercased prefix match — zero false positives across the corpus.
+# chapter 1). Lowercased prefix match — zero false positives across the corpus.
 # (Deliberately excludes "Introduction"/"Methods", which are legitimate chapter titles.)
 _FRONT_MATTER_PREFIXES = (
     "copyright", "dedication", "contents", "table of contents", "title page",
-    "cover", "contributors", "preface", "acknowledgment", "acknowledgement",
+    "contributors", "preface", "acknowledgment", "acknowledgement",
     "foreword", "index", "bibliography",
 )
+
+# "cover"-family bookmarks are matched EXACTLY (not as a prefix) so legitimate medical
+# titles such as "Covered Stent Technique" or "Coverage of the scalp defect" are not
+# swept up as front matter.
+_FRONT_MATTER_EXACT = ("cover", "cover page", "front youmans cover")
 
 
 def _is_medical_chapter(title) -> bool:
@@ -53,14 +58,23 @@ def _is_medical_chapter(title) -> bool:
 
 def _is_front_matter(title) -> bool:
     t = (title or "").strip().lower()
+    if t in _FRONT_MATTER_EXACT:
+        return True
     return any(t.startswith(p) for p in _FRONT_MATTER_PREFIXES)
 
 
 def _is_random_token(title) -> bool:
-    """A long single whitespace-free token is a garbage bookmark, not a chapter title
-    (e.g. "5yk4n23ycnpq9lc2A5dqvlhvrs2rhdbs9c6jz5gnc3xpr788fm4zwd2")."""
+    """A long whitespace-free token *containing a digit* is a garbage bookmark, not a
+    chapter title (e.g. "5yk4n23ycnpq9lc2A5dqvlhvrs2rhdbs9c6jz5gnc3xpr788fm4zwd2").
+
+    Slash-joined section titles ("Laminotomy/Foraminotomy/Discectomy",
+    "INDICATIONS/CONTRAINDICATIONS") and purely-alphabetic run-on tokens are real
+    medical labels in other corpus books, so they are explicitly kept: a slash or the
+    absence of any digit means "not random"."""
     t = (title or "").strip()
-    return " " not in t and len(t) > 25 and not _is_medical_chapter(t)
+    if " " in t or "/" in t or _is_medical_chapter(t):
+        return False
+    return len(t) > 25 and any(ch.isdigit() for ch in t)
 
 
 def _classify_toc(doc):
@@ -83,14 +97,12 @@ def _classify_toc(doc):
 
     content_end = None
     for pg, t in raw:
-        is_renegade = "renegade mind" in t.lower()
-        # The colon-chapter pattern is only trusted as contamination once we are past the
-        # last medical chapter, so a clean book that happens to use "Chapter N:" is safe.
-        is_icke = (
-            bool(_ICKE_CHAPTER.match(t))
-            and last_medical is not None
-            and pg > last_medical
-        )
+        # Both contamination signals are only trusted once we are past the last medical
+        # chapter: a clean book that happens to use "Chapter N:" is safe, and a stray
+        # "renegade mind" bookmark *before* the medical content can't truncate the book.
+        past_medical = last_medical is not None and pg > last_medical
+        is_renegade = "renegade mind" in t.lower() and past_medical
+        is_icke = bool(_ICKE_CHAPTER.match(t)) and past_medical
         if is_renegade or is_icke:
             content_end = pg
             break
@@ -105,11 +117,6 @@ def _classify_toc(doc):
         and not _is_random_token(t)
     ]
     return entries, content_end
-
-
-def _chapter_entries(doc):
-    """Sorted (start_page_1based, title) chapter-label entries from the PDF TOC."""
-    return _classify_toc(doc)[0]
 
 
 def _chapter_for_page(entries, page, *, max_gap: int = 120):

@@ -7,10 +7,15 @@ real PDF is needed in CI. Reproduces the real Youmans failure modes:
   * three copies of David Icke's "Perceptions of a Renegade Mind" appended after the
     medical content.
 """
+import fitz  # PyMuPDF
+
 from neuro_core.ingest import (
     _is_medical_chapter,
+    _is_front_matter,
+    _is_random_token,
     _chapter_for_page,
     _classify_toc,
+    extract_pages,
 )
 
 
@@ -38,6 +43,48 @@ def test_is_medical_chapter_false_for_junk_and_contamination():
     assert _is_medical_chapter("Perceptions of a Renegade Mind") is False
     assert _is_medical_chapter("5yk4n23ycnpq9lc2A5dqvlhvrs2rhdbs9c6jz5gnc3xpr788") is False
     assert _is_medical_chapter("") is False
+
+
+# --- _is_random_token: keep legitimate slash-joined / alphabetic titles ------
+
+def test_is_random_token_drops_only_digit_bearing_garbage():
+    # The real garbage bookmark (no space, has digits, long) is dropped.
+    assert _is_random_token(
+        "5yk4n23ycnpq9lc2A5dqvlhvrs2rhdbs9c6jz5gnc3xpr788fm4zwd2") is True
+
+
+def test_is_random_token_keeps_slash_joined_section_titles():
+    # Slash-joined medical section titles in OTHER corpus books were being false-dropped.
+    for title in (
+        "Laminotomy/Foraminotomy/Discectomy",
+        "Sedation/Analgesia/Anesthesia",
+        "MYCOBACTERIAL/TUBERCULOSIS",
+        "INDICATIONS/CONTRAINDICATIONS",
+        "VERTEBROPLASTY/KYPHOPLASTY",
+        "Diskectomy/Osteophytectomy.",
+    ):
+        assert _is_random_token(title) is False, title
+
+
+def test_is_random_token_keeps_long_alphabetic_token():
+    # A purely-alphabetic run-on (no digit) is a real label, not garbage.
+    assert _is_random_token("Neuroanatomyandphysiologyoverview") is False
+    assert _is_random_token("") is False
+
+
+# --- _is_front_matter: "cover" is exact, not a prefix ------------------------
+
+def test_is_front_matter_cover_is_exact_not_prefix():
+    # Exact "cover"-family bookmarks are front matter…
+    assert _is_front_matter("cover") is True
+    assert _is_front_matter("Cover Page") is True
+    assert _is_front_matter("front youmans cover") is True
+    # …but a real medical title that merely starts with "cover" must be KEPT.
+    assert _is_front_matter("Covered Stent Technique") is False
+    assert _is_front_matter("Coverage of the scalp defect") is False
+    # Other front-matter prefixes are unchanged.
+    assert _is_front_matter("Copyright © 2021") is True
+    assert _is_front_matter("DEDICATION") is True
 
 
 # --- _chapter_for_page: cap-the-gap -----------------------------------------
@@ -113,6 +160,38 @@ def test_pages_at_or_after_content_end_are_excluded():
         assert pageno >= content_end           # would be excluded
     for pageno in (78, 649, 4181, 6329):
         assert pageno < content_end             # still indexed
+
+
+def test_extract_pages_excludes_contamination_pages(tmp_path):
+    """Real end-to-end exercise of the safety-critical exclusion loop: build a tiny PDF
+    whose TOC has medical chapters followed by the appended Icke contamination, run
+    ``extract_pages``, and assert the returned records keep the medical pages and drop
+    every page at/after the contamination boundary."""
+    n = 4  # contamination starts here (must be AFTER the last medical chapter)
+    path = tmp_path / "Contaminated Book.pdf"
+    doc = fitz.open()
+    for i in range(6):  # pages must exist before set_toc validates the page numbers
+        doc.new_page().insert_text((72, 72), f"Page {i + 1} body content")
+    doc.set_toc([
+        [1, "1 - Real Chapter", 1],
+        [1, "2 - Second Chapter", 2],
+        [1, "Perceptions of a Renegade Mind by David Icke", n],
+        [1, "Chapter 1: 'I'm thinking' - Oh, but are you?", n + 1],
+        [1, "Chapter 2: Renegade perception", n + 2],
+    ])
+    doc.save(path)
+    doc.close()
+
+    # Sanity: the classifier puts the boundary exactly at the renegade bookmark.
+    _entries, content_end = _classify_toc(fitz.open(path))
+    assert content_end == n
+
+    records = extract_pages(path)
+    pages = {r.page for r in records}
+    assert pages == {1, 2, 3}                     # medical content (pages < n) kept
+    assert all(r.page < n for r in records)       # nothing at/after the boundary
+    for contaminated in (n, n + 1, n + 2):
+        assert contaminated not in pages          # Icke pages never indexed
 
 
 def test_classify_drops_contamination_and_junk_from_labels():
