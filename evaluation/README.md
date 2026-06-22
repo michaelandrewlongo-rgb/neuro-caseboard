@@ -46,6 +46,21 @@ Section numbering restarts each section, so stable IDs are assigned by section:
 | Trauma Neurosurgery | `TRAUMA-01..10` | 10 |
 | **Total** | | **67** |
 
+## Citation faithfulness / groundedness metric
+
+For each Ask answer the engine computes a per-answer `verification` summary: every claim that cites a
+textbook `[n]` or literature `[L#]` marker is checked against its cited source by the entailment
+verifier (`neuro_caseboard/entailment.py`), and the summary records `n_cited_claims`, `n_unsupported`,
+`groundedness`, and the `unsupported_markers`. It is written to each run record under `verification`
+(optional/`null` on error rows; see `schemas/run-record.schema.json`). `summarize_grades.py`
+aggregates these into a `groundedness` block (overall and per domain) whose denominator is only the
+answers that actually cite — fields `mean_groundedness`, `mean_unsupported_rate`, and
+`fraction_with_unsupported`. `build_failure_ledger.py --run <run.jsonl>` turns answers with
+unsupported claims into `unsupported_claim` defect records. The CLI prints a `needs-verification`
+notice after the answer, gated by the `CASEBOARD_VERIFY_DISPLAY` env var (default on; set `=0` to
+silence) — the verdicts are still computed regardless and are exposed in the API `verification`
+response field and the run records.
+
 ## Reproduction
 
 Exact commands are recorded in the root-level `NEURO_CASEBOARD_EVALUATION.md` once the runner,

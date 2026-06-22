@@ -29,6 +29,16 @@
     "citations": {"type": ["array", "null"]},
     "figures": {"type": ["array", "null"]},
     "raw_response": {"type": ["object", "string", "null"]},
-    "error_details": {"type": ["string", "object", "null"]}
+    "error_details": {"type": ["string", "object", "null"]},
+    "verification": {
+      "type": ["object", "null"],
+      "description": "Per-answer citation-faithfulness summary computed by the engine (Ask-path entailment). Null when unavailable.",
+      "properties": {
+        "n_cited_claims": {"type": "integer"},
+        "n_unsupported": {"type": "integer"},
+        "groundedness": {"type": "number"},
+        "unsupported_markers": {"type": "array", "items": {"type": "string"}}
+      }
+    }
   }
 }
