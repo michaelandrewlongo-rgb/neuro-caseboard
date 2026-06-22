@@ -166,7 +166,9 @@ class Engine:
             # mounted elsewhere at runtime (container: /data/figures) the literal open() fails and
             # the figure would be dropped. Resolve to the runtime ASSETS_DIR for the read; keep the
             # original `path` in Figure.image_path so the API serve layer re-roots it identically.
-            image = self._read_image(resolve_asset_path(path, self.config.assets_dir))
+            # Degrade to the literal path if the config carries no assets_dir (minimal/test configs).
+            assets_dir = getattr(self.config, "assets_dir", None)
+            image = self._read_image(resolve_asset_path(path, assets_dir) if assets_dir else path)
             if image is None:
                 continue
             src = passage_index.get((h.book, h.page))
