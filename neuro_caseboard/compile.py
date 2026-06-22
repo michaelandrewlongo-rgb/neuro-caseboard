@@ -231,7 +231,9 @@ def _compile(
     summary = EvidenceSummary(
         supported=sum(1 for c in cards if c.audit_status == "supported"),
         to_verify=sum(1 for c in cards if c.audit_status in ("needs_review", "no_evidence")),
-        quarantined=sum(1 for c in cards if c.audit_status == "off_target"),
+        # One predicate with the emission split above (`audit_status not in _PRIMARY`) so the gauge
+        # and the quarantine-claim emission can never diverge if a new non-primary status is added.
+        quarantined=sum(1 for c in cards if c.audit_status not in _PRIMARY),
     )
 
     return Dossier(title=title, summary=summary, sections=sections,

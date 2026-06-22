@@ -13,6 +13,7 @@ import { EvidenceGauge } from "@/components/charts/EvidenceGauge"
 import PlanningMetrics from "@/components/build/PlanningMetrics"
 import DossierView, { type ClaimMark, type ClaimFilter } from "@/components/build/DossierView"
 import RememberedPanel from "@/components/build/RememberedPanel"
+import { subsetClaims } from "@/lib/claimFilter"
 
 const HINTS = [
   "left retrosigmoid vestibular schwannoma",
@@ -129,6 +130,11 @@ export default function Build() {
   const claimTotal = dossSummary
     ? dossSummary.supported + dossSummary.to_verify + dossSummary.quarantined
     : 0
+  // Post-dedup claims DossierView actually renders. compile.py runs dedup_sections AFTER the
+  // summary is computed, so the rendered claim list is a subset of summary.* — the segmented-control
+  // tab counts must equal what renders (NOT the card-level audit gauge, which stays on summary.*).
+  const renderedClaims =
+    resp?.kind === "dossier" ? resp.dossier.sections.flatMap((s) => s.claims) : []
 
   const liveMsg = loading
     ? ""
@@ -497,21 +503,21 @@ export default function Build() {
             aria-label="Filter evidence by status"
           >
             {[
-              { key: "all" as const, label: "ALL", count: claimTotal },
+              { key: "all" as const, label: "ALL", count: renderedClaims.length },
               {
                 key: "supported" as const,
                 label: "SUPPORTED",
-                count: resp.dossier.summary.supported,
+                count: subsetClaims(renderedClaims, "supported").length,
               },
               {
                 key: "verify" as const,
                 label: "VERIFY",
-                count: resp.dossier.summary.to_verify,
+                count: subsetClaims(renderedClaims, "verify").length,
               },
               {
                 key: "quarantine" as const,
                 label: "QUARANTINE",
-                count: resp.dossier.summary.quarantined,
+                count: subsetClaims(renderedClaims, "quarantine").length,
               },
             ].map(({ key, label, count }) => (
               <button

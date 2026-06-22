@@ -33,6 +33,11 @@ def dedup_sections(sections, *, threshold: float = DEFAULT_THRESHOLD):
     for sec in sections:
         kept = []
         for claim in sec.claims:
+            # Quarantine (off-target) claims bypass dedup entirely: kept verbatim and NEVER added
+            # to the seen set — so they neither get removed nor suppress a legitimate later claim.
+            if getattr(claim, "status", None) == "quarantine":
+                kept.append(claim)
+                continue
             dup_of = None
             for heading, text in seen:
                 if heading != sec.heading and _similar(claim.dedup_text, text, threshold):

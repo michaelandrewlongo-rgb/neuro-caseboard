@@ -55,3 +55,24 @@ describe("subsetClaims", () => {
     expect(subsetClaims(onlySupported, "quarantine")).toEqual([])
   })
 })
+
+describe("subsetClaims partition invariant (tab counts == rendered claims)", () => {
+  // Build.tsx derives tab counts from the post-dedup claims flattened across all sections.
+  // The fix relies on: summing subsetClaims over each section equals subsetClaims over the
+  // flattened union, for every filter — so a per-section render can never disagree with the
+  // tab count regardless of how claims are distributed across sections.
+  const sections: { claims: { status: Status }[] }[] = [
+    { claims: [{ status: "supported" }, { status: "quarantine" }] },
+    { claims: [{ status: "verify" }, { status: "supported" }, { status: "verify" }] },
+    { claims: [] },
+    { claims: [{ status: "quarantine" }, { status: "supported" }] },
+  ]
+  const flattened = sections.flatMap((s) => s.claims)
+
+  it("sum over sections equals the flattened subset for every filter", () => {
+    for (const filter of FILTERS) {
+      const perSection = sections.reduce((n, s) => n + subsetClaims(s.claims, filter).length, 0)
+      expect(perSection).toBe(subsetClaims(flattened, filter).length)
+    }
+  })
+})

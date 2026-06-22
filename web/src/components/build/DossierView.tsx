@@ -451,6 +451,10 @@ export default function DossierView({
     dossier.sections.flatMap((s) => s.claims.map((c) => `${c.text} ${c.why}`)),
   )
 
+  // Under a non-"all" filter every SectionCard with no matching claim returns null; if NONE match
+  // across all sections the main column would go blank, so render an explicit empty-state instead.
+  const anyVisible = dossier.sections.some((s) => subsetClaims(s.claims, filter).length > 0)
+
   return (
     <div
       className="grid gap-6"
@@ -483,6 +487,25 @@ export default function DossierView({
         {dossier.sections.map((s, i) => (
           <SectionCard key={i} section={s} sectionIdx={i} r={r} filter={filter} />
         ))}
+        {/* Empty-state: a non-"all" filter that matches nothing in any section leaves the column
+            blank otherwise. Mirrors the muted-mono rail empty state. */}
+        {filter !== "all" && !anyVisible && (
+          <div
+            className="flex items-center justify-center p-6"
+            style={{
+              background: "rgba(255,255,255,.018)",
+              border: "1px dashed rgba(255,255,255,.07)",
+              borderRadius: "14px",
+            }}
+          >
+            <p
+              className="font-mono text-[10px] uppercase tracking-[0.14em]"
+              style={{ color: "#666666" }}
+            >
+              No claims match this filter
+            </p>
+          </div>
+        )}
       </div>
 
       {/* ── Right rail ── */}
