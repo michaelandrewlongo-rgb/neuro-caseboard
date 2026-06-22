@@ -4,13 +4,74 @@ Project-specific gotchas that are **not derivable from the code**. Generic workf
 (TDD-first, verify-before-claiming-done) is already enforced by the superpowers skills, so this file
 captures only what those skills can't know about this repo and this machine.
 
+## Architecture at a glance
+
+One engine assembled from **three layers**; read these together to understand any change:
+
+- **`caseprep/`** (vendored at `vendor/caseprep/caseprep`) — the audited
+  `Explorer → Enricher → Auditor` pipeline that turns a free-text case into a validated
+  `AuditedManifest` of operative question-cards. Reused as a library.
+- **`neuro_core/`** (formerly the textbook-rag repo) — the citation-grounded **retrieval +
+  figure engine**: LanceDB hybrid search over textbook chunks (`index.py`, `query.py`,
+  `chunk.py`, `embed.py`, `rerank.py`), a separate figure/visual lane
+  (`figure_retriever.py`, `visual_index.py`, `figure_guards.py`), the standalone board-review
+  `cards` lane (`cards_*.py`), and synthesis clients (`synth_clients.py`, `synthesize.py` —
+  Vertex/Gemini by default, see runtime note below).
+- **`neuro_caseboard/`** — orchestration + the **rebuilt report/export surface** that owns the
+  data model and renderers (`model.py` → `compile.py` → `render_md.py` / `render_pdf.py`),
+  plus the PubMed literature lane (`literature/`, `case_literature.py`), the citation
+  **entailment gate** (`entailment.py`), woven synthesis (`woven_synth.py`), and the
+  LLM-first Explorer (`explore_llm.py`) with the deterministic anti-bleed `guard.py`.
+
+**Two pathways** (both routed through `pipeline.py` / `cli.py`):
+- **Ask** (`caseboard ask`): question → `neuro_core` retrieval (chunks + figures) → synthesis →
+  cited answer, augmented with a PubMed "Contemporary Literature" `[L#]` section; every corpus
+  citation must pass `entailment.py` or the claim is downgraded to *needs-verification*.
+- **Build / Case** (`caseboard build` / `case`): free-text case → caseprep Explorer (LLM-first,
+  deterministic fallback) → Enricher → Auditor → `compile.py` (manifest + evidence → `Dossier`)
+  → Markdown/PDF.
+
+**Surfaces over the same engine:** the `caseboard` CLI; a React SPA (`web/`) over a FastAPI
+wrapper (`api/server.py`); a legacy Streamlit app (`app/streamlit_app.py`); and a Signal-styled
+briefing PDF (`neuro_caseboard/briefing_pdf.py`).
+
+## Common commands
+
+```bash
+pip install -e .[dev]                       # the ONLY supported install (see Install & packaging)
+
+# CLI (entry point: neuro_caseboard.cli:main)
+caseboard ask "what supplies Wernicke's area?"
+caseboard build "C5-6 corpectomy" --pdf -o out/   # dossier; --no-llm forces deterministic Explorer
+caseboard case "<free-text dictation>"            # patient-specific dossier
+caseboard cards "cavernous sinus"                 # search the board-review card bank
+
+# Web / dev
+./dev.sh                                    # React SPA (Vite :5173) + FastAPI engine (:8001) together
+streamlit run app/streamlit_app.py          # legacy single-app UI (needs the `web` extra)
+scripts/serve-phone.sh                       # SPA+API on 0.0.0.0:8001 for phone access (see Web console)
+cd web && npm run lint && npm run test       # eslint + vitest for the SPA (NOT a Python-CI gate)
+
+# Tests (read the Testing section before running — full suite is ~17 min here)
+pytest tests/neuro_core tests/test_pipeline.py tests/test_retrieve.py tests/test_qa.py  # fast scoped loop
+pytest tests/test_qa.py::test_<name>         # a single test
+ci/local-ci.sh                               # reproduce the full REQUIRED CI in a throwaway venv
+
+# Build the corpus index / card bank (needs the live data paths below)
+python -m neuro_core.scripts.build_index         # textbook chunk + figure index
+python -m neuro_core.scripts.build_cards_index   # board-review cards table
+python -m build                                  # build sdist + wheel (matches the `package` CI job)
+```
+
 ## Environment & runtime (this machine)
 
-- **LLM provider is Vertex, not Anthropic.** Synthesis uses `SYNTH_PROVIDER=vertex`,
-  `VERTEX_MODEL=gemini-2.5-pro` (needs `GOOGLE_CLOUD_PROJECT`, ADC at
-  `~/.config/gcloud/application_default_credentials.json`, and `google-genai`). No `ANTHROPIC_API_KEY`
-  is needed. The defaults in `neuro_core/config.py` are stale — probe Vertex, not an Anthropic key, in
-  any health check.
+- **LLM provider is Vertex (OpenRouter is the optional alternate); there is no first-party
+  LLM-vendor key path.** Synthesis uses `SYNTH_PROVIDER=vertex`, `VERTEX_MODEL=gemini-2.5-pro`
+  (needs `GOOGLE_CLOUD_PROJECT`, ADC at `~/.config/gcloud/application_default_credentials.json`,
+  and `google-genai`); the LLM-backed Explorer lane is selected with `CASEBOARD_LLM_PROVIDER`
+  (`vertex` or `openrouter`) and otherwise falls back to the deterministic path. No first-party
+  vendor API key is used — probe Vertex (ADC + `GOOGLE_CLOUD_PROJECT`) in any health check. The
+  defaults in `neuro_core/config.py` are stale.
 - **Live data paths live outside the repo** (so git worktrees share them automatically — no symlinks):
   - Corpus PDFs: `/home/michael/textbook_pdfs` (set `CORPUS_DIR`; the `/mnt/d/...` default is stale).
   - LanceDB index + figure assets: `/home/michael/neuro-textbook-rag/index` and `.../assets/figures`.

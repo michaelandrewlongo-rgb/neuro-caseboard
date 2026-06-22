@@ -54,11 +54,10 @@ dev = ["pytest>=7", "pytest-asyncio>=0.23", "pdfplumber>=0.11", "jsonschema>=4"]
 # caseprep's optional semantic retriever (corpus_topology). The retriever module itself is
 # discovered at runtime via $CORPUS_CLUSTERING_PATH; these are only its heavy backends.
 semantic = ["sentence-transformers>=2.2", "psycopg[binary]>=3.1", "pgvector>=0.2"]
-# LLM-backed Explorer (case-specific question generation for any procedure).
-# Needs ANTHROPIC_API_KEY at runtime; falls back to the deterministic Explorer without it.
-llm = ["anthropic>=0.40"]
-# Vertex AI provider for the Explorer (GCP free credits, quality-first). Needs
-# GOOGLE_CLOUD_PROJECT + ADC at runtime; falls back to the deterministic Explorer without it.
+# Vertex AI provider for the LLM-backed Explorer (GCP free credits, quality-first) — the
+# default LLM lane. Needs GOOGLE_CLOUD_PROJECT + ADC at runtime; falls back to the
+# deterministic Explorer without it. (The optional OpenRouter lane needs only OPENROUTER_API_KEY
+# and the core `requests` dep — no extra.)
 vertex = ["google-genai>=1.0"]
 # Signal-styled briefing PDF export (neuro_caseboard.briefing_pdf). After install also run:
 #   playwright install chromium

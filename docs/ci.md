@@ -41,9 +41,8 @@ candidates**.
 caseboard build "C5-6 corpectomy" --no-llm --pdf -o <tmp>
 ```
 
-with `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `GOOGLE_CLOUD_PROJECT`,
-`CASEBOARD_LLM_PROVIDER`, `CASEBOARD_LLM`, and `CASEPREP_TEXTBOOK` **stripped from the
-environment**. It asserts a non-trivial Markdown (topic title, marker legend, sections) and
+with `OPENROUTER_API_KEY`, `GOOGLE_CLOUD_PROJECT`, `CASEBOARD_LLM_PROVIDER`,
+`CASEBOARD_LLM`, and `CASEPREP_TEXTBOOK` **stripped from the environment**. It asserts a non-trivial Markdown (topic title, marker legend, sections) and
 a real `%PDF` are produced. That proves the rendering/export surface generates artifacts on
 the deterministic offline path with **zero hidden dependence** on keys, a corpus, or a GPU.
 
@@ -92,8 +91,8 @@ These need GPUs, billed API keys, or the private textbook corpus, so they are in
 - `caseboard ask "<question>"` — GPU readiness guard + real retrieval + synthesis.
 - Real LanceDB corpus build and the BiomedCLIP visual figure lane (needs the textbook PDFs
   and `TEXTBOOK_INDEX_DIR`/`ASSETS_DIR`).
-- The Vertex/Anthropic LLM Explorer (`caseboard build` without `--no-llm`) — needs
-  `GOOGLE_CLOUD_PROJECT` + ADC, or `ANTHROPIC_API_KEY`/`OPENROUTER_API_KEY`.
+- The Vertex/OpenRouter LLM Explorer (`caseboard build` without `--no-llm`) — needs
+  `GOOGLE_CLOUD_PROJECT` + ADC, or `OPENROUTER_API_KEY`.
 - `eval/` corpus scorers — need the private textbook corpus.
 
 ## Reproduce CI locally
@@ -133,7 +132,7 @@ Leave `optional-integration` **unchecked** (manual/scheduled).
 | core | fpdf2, pillow, pymupdf, httpx, lancedb, numpy + caseprep's deps (mcp, fastapi, uvicorn, requests, pandas, pydantic, markdown) | `[project].dependencies` | yes |
 | vendored | caseprep (in-tree at `vendor/caseprep/`) | `git subtree`, mapped via `package-dir` | yes (bundled) |
 | dev | pytest, pytest-asyncio, pdfplumber | `[dev]` extra | yes |
-| llm / vertex | anthropic / google-genai | `[llm]` / `[vertex]` extras | no (local/runtime) |
+| vertex | google-genai | `[vertex]` extra | no (local/runtime) |
 | briefing | playwright | `[briefing]` extra | optional workflow |
 | web | streamlit | `[web]` extra | no (syntax-checked only) |
 | models | sentence-transformers, open-clip-torch | `[models]` extra | optional workflow |
