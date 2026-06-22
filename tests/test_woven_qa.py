@@ -104,3 +104,12 @@ def test_woven_lane_b_failure_is_additive():
                                  plan_a=lambda: _bundle(), retrieve_b=boom)
     assert out.answer == "Textbook [1]."
     assert out.literature is None  # literature failure never blocks the answer
+
+
+def test_woven_attaches_verification():
+    out = _answer_question_woven("q", lit_config=_cfg(),
+        synth_client=_Synth("The MCA supplies lateral cortex [1]. EVT helps [L1]."),
+        plan_a=lambda: _bundle(), retrieve_b=lambda: [_rec("111")])
+    assert isinstance(out, QAResult)
+    assert out.verification is not None
+    assert out.verification.n_cited_claims == 2

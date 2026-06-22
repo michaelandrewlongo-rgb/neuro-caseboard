@@ -195,8 +195,14 @@ def _answer_question_woven(question, *, config=None, force=False, lit_config=Non
                                     year=r.year, doi=r.doi, url=r.url)
                  for i, r in enumerate(syn.records, 1)]
         lit = LiteratureSection(narrative="", citations=cites)
+    from neuro_caseboard.answer_verify import verify_answer
+    premises = {str(getattr(c, "n", i)): getattr(c, "text", "") or ""
+                for i, c in enumerate(syn.citations or [], 1)}
+    for i, r in enumerate(syn.records or [], 1):
+        premises[f"L{i}"] = getattr(r, "abstract", "") or ""
+    verification = verify_answer(syn.answer, premises)
     return QAResult(answer=answer, citations=syn.citations, figures=plan.figures,
-                    literature=lit)
+                    literature=lit, verification=verification)
 
 
 def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=None) -> QAResult:
