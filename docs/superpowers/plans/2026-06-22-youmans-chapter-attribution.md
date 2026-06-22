@@ -72,11 +72,11 @@ contains the bad data; this slice only fixes go-forward indexing + metadata.
 - [NIT] `_chapter_entries` is now dead code (no callers) — remove it.
 
 ### Review tasks
-- [ ] review: [SHOULD] fix `_is_random_token` to not drop slash-joined/alphabetic section titles
+- [x] review: [SHOULD] fix `_is_random_token` to not drop slash-joined/alphabetic section titles
   (require a digit and/or treat "/" as non-random); make the "cover" front-matter filter an exact
   match not a prefix. Add a regression test asserting those real titles (e.g.
   "Laminotomy/Foraminotomy/Discectomy", "Covered Stent Technique") are KEPT.
-- [ ] review: [SHOULD] replace the tautological content_end test with a real `extract_pages` test
+- [x] review: [SHOULD] replace the tautological content_end test with a real `extract_pages` test
   (synthetic PDF + set_toc contamination bookmark → assert contaminated pagenos absent from records).
-- [ ] review: [nits] gate the renegade-mind contamination arm on `pg > last_medical`; remove the dead
+- [x] review: [nits] gate the renegade-mind contamination arm on `pg > last_medical`; remove the dead
   `_chapter_entries` function.
