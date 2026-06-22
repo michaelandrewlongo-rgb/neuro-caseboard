@@ -79,7 +79,8 @@ image build (nothing private is baked in).
    ```bash
    echo "$GHCR_PAT" | docker login ghcr.io -u <github-username> --password-stdin
    ```
-2. **Place `docker-compose.yml`** (from this repo) on the box, and a **`.env` beside it** with the
+2. **Clone this repo on the box** — the deploy dir IS the repo root (`cd-pull-deploy.sh` `cd`s there
+   itself, and `docker-compose.yml` lives there). Create a **`.env` in the repo root** with the
    runtime config. `GOOGLE_CLOUD_PROJECT` is required (compose fails fast without it):
    ```dotenv
    GOOGLE_CLOUD_PROJECT=your-gcp-project
@@ -103,7 +104,8 @@ image build (nothing private is baked in).
 5. **Schedule the pull-based rollout.** The box initiates; `cd-pull-deploy.sh` is idempotent (if the
    pulled digest is unchanged it just confirms health). Either a **cron** line:
    ```cron
-   */10 * * * * cd /path/to/deploy && /path/to/repo/scripts/cd-pull-deploy.sh >> /var/log/caseboard-deploy.log 2>&1
+   # the script cd's to the repo root (where docker-compose.yml + .env live) itself
+   */10 * * * * /path/to/neuro-caseboard/scripts/cd-pull-deploy.sh >> /var/log/caseboard-deploy.log 2>&1
    ```
    or a **systemd timer** (`caseboard-deploy.service` + `.timer`):
    ```ini
@@ -112,8 +114,8 @@ image build (nothing private is baked in).
    Description=Pull + redeploy neuro-caseboard (health-gated, auto-rollback)
    [Service]
    Type=oneshot
-   WorkingDirectory=/path/to/deploy          # dir holding docker-compose.yml + .env
-   ExecStart=/path/to/repo/scripts/cd-pull-deploy.sh
+   WorkingDirectory=/path/to/neuro-caseboard   # the repo root (script also cd's there itself)
+   ExecStart=/path/to/neuro-caseboard/scripts/cd-pull-deploy.sh
    ```
    ```ini
    # /etc/systemd/system/caseboard-deploy.timer

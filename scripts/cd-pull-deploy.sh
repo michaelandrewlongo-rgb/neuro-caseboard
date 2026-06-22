@@ -61,7 +61,7 @@ fi
 echo "!! engine unavailable after ${TIMEOUT_SECS}s — rolling back" >&2
 if [ -n "$PREV_IMAGE" ]; then
   CASEBOARD_IMAGE="$PREV_IMAGE" docker compose up -d "$SERVICE"
-  if CASEBOARD_IMAGE="$PREV_IMAGE" poll_health; then
+  if poll_health; then
     echo ">> rolled back to prior image ($PREV_IMAGE); engine available" >&2
   else
     echo "!! rollback to $PREV_IMAGE also unhealthy — manual intervention needed" >&2

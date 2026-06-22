@@ -41,6 +41,11 @@ ENV PYTHONUNBUFFERED=1 \
     NEURO_CASEBOARD_WEB_DIST=/app/web/dist \
     SYNTH_PROVIDER=vertex
 WORKDIR /app
+# libgomp1: the OpenMP runtime torch/open-clip load at QUERY time (slim base omits it). Without it
+# /api/ask & /api/cards would 500 on first retrieval while /api/health still reports engine:true
+# (the engine probe never imports torch), so the engine-only rollback gate wouldn't catch it.
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+ && rm -rf /var/lib/apt/lists/*
 COPY --from=py-build /opt/venv /opt/venv
 COPY api ./api
 COPY --from=web-build /web/dist ./web/dist
