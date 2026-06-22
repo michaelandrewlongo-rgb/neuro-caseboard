@@ -1,9 +1,13 @@
-"""Pure-function tests for the guarded parallel benchmark runner.
+"""Tests for the guarded parallel benchmark runner.
 
-Covers the money paths only — the memory gate arithmetic, the round-robin shard split, and the
-shard merge (dedup + partial-line tolerance). No Vertex, no subprocess, no psutil: every function
-under test takes plain values, so these run in milliseconds in the scoped CI gate.
+Most cover the money paths as pure functions (gate arithmetic, round-robin split, shard merge) — no
+Vertex, no psutil. The final class is one end-to-end orchestration test that drives the real
+shard→subprocess→merge path against a STUB runner (still no Vertex), so the sharding actually
+executes rather than only its logic being asserted.
 """
+import json
+
+from evaluation.scripts import run_benchmark_parallel as rbp
 from evaluation.scripts.run_benchmark_parallel import (
     choose_n,
     merge_records,
@@ -80,3 +84,38 @@ class TestParseJsonlTolerant:
     def test_skips_blank_lines(self):
         recs = parse_jsonl_tolerant('\n{"question_id": "A"}\n\n')
         assert [r["question_id"] for r in recs] == ["A"]
+
+
+# A tiny stand-in for run_benchmark.py: writes one record to its --run-dir/run.jsonl per call.
+# Lets us drive the real orchestration (gate → shard → subprocess → merge) with no Vertex/index.
+_STUB_RUNNER = (
+    "import argparse, json, pathlib\n"
+    "ap = argparse.ArgumentParser()\n"
+    "ap.add_argument('--run-dir'); ap.add_argument('--start-id'); ap.add_argument('--end-id')\n"
+    "ap.add_argument('--resume', action='store_true')\n"
+    "a = ap.parse_args()\n"
+    "p = pathlib.Path(a.run_dir); p.mkdir(parents=True, exist_ok=True)\n"
+    "with (p / 'run.jsonl').open('a') as f:\n"
+    "    f.write(json.dumps({'question_id': a.start_id, 'answer': 'stub'}) + '\\n')\n"
+)
+
+
+class TestOrchestrationEndToEnd:
+    def test_shards_run_and_merge(self, tmp_path, monkeypatch):
+        stub = tmp_path / "stub_runner.py"
+        stub.write_text(_STUB_RUNNER)
+        monkeypatch.setattr(rbp, "RUNNER", stub)
+        monkeypatch.setattr(rbp, "available_gb", lambda: 14.0)   # ample → N=2
+        run = tmp_path / "run"
+        rc = rbp.main(["--run-dir", str(run), "--ids", "A B C D E"])
+        assert rc == 0
+        # both shard dirs were created and the merge has every id exactly once
+        assert (run / "shard-0").is_dir() and (run / "shard-1").is_dir()
+        merged = [json.loads(line) for line in (run / "run.jsonl").read_text().splitlines()]
+        assert sorted(r["question_id"] for r in merged) == ["A", "B", "C", "D", "E"]
+
+    def test_aborts_when_memory_starved(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(rbp, "available_gb", lambda: 6.0)    # < peak+cushion → N=0 → abort
+        rc = rbp.main(["--run-dir", str(tmp_path / "run"), "--ids", "A B"])
+        assert rc == 2
+        assert not (tmp_path / "run" / "run.jsonl").exists()      # nothing run on abort
