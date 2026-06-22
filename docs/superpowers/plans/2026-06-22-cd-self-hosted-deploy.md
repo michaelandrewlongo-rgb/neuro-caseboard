@@ -105,7 +105,7 @@ jobs:
 - `web/dist` at `/app/web/dist` (also `NEURO_CASEBOARD_WEB_DIST=/app/web/dist`), so `/` serves the SPA.
 - `HEALTHCHECK` hits `/api/health` via python urllib (slim has no curl).
 
-- [ ] **Task 3** — Create `.dockerignore`:
+- [x] **Task 3** — Create `.dockerignore`:
 
 ```gitignore
 .git
