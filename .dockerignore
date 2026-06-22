@@ -1,0 +1,23 @@
+.git
+**/__pycache__
+**/*.pyc
+.venv
+.ci-venv
+.pytest_cache
+dist
+build
+*.egg-info
+web/node_modules
+web/dist
+node_modules
+.project-loop
+evaluation/runs
+docs/superpowers/plans
+.claude
+# secrets / credentials must never enter the build context
+.env
+**/.env
+*.pem
+**/application_default_credentials.json
+**/*adc*.json
+.config

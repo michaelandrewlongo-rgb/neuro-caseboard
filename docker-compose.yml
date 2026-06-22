@@ -1,0 +1,33 @@
+# Single-process serve of the Caseboard GUI+API. Live data + secrets are MOUNTED read-only at
+# runtime — NEVER baked into the image. All host paths are env-overridable (machine defaults shown).
+# Phone reachability (bind 0.0.0.0) still needs WSL2 mirrored networking / wsl-portproxy.ps1 — see
+# docs/SERVE_ON_PHONE.md.
+#
+# Host-side override vars (set in a box .env next to this file) are deliberately namespaced
+# CASEBOARD_* so they can never collide with the CONTAINER env the app reads (CORPUS_DIR /
+# INDEX_DIR / ASSETS_DIR are fixed to the /data/* mount points below).
+services:
+  caseboard:
+    image: ${CASEBOARD_IMAGE:-ghcr.io/michaelandrewlongo-rgb/neuro-caseboard:latest}
+    build: .                                  # `docker compose build` locally; the box uses `pull`
+    ports:
+      - "${CASEBOARD_PORT:-8001}:8001"        # 0.0.0.0:8001 -> phone-reachable
+    restart: unless-stopped
+    environment:
+      SYNTH_PROVIDER: vertex
+      CASEBOARD_LLM_PROVIDER: ${CASEBOARD_LLM_PROVIDER:-vertex}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:?set GOOGLE_CLOUD_PROJECT in the box .env}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-us-central1}
+      VERTEX_MODEL: ${VERTEX_MODEL:-gemini-2.5-pro}
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/adc.json
+      CORPUS_DIR: /data/corpus                # container paths (the app reads these); host sources
+      INDEX_DIR: /data/index                  # are the CASEBOARD_*_DIR vars in the volumes below
+      ASSETS_DIR: /data/figures
+      NCBI_API_KEY: ${NCBI_API_KEY:-}
+      GPU_GUARD: "false"                       # CPU container: never block on GPU readiness
+      EMBED_DEVICE: ${EMBED_DEVICE:-cpu}
+    volumes:
+      - ${CASEBOARD_CORPUS_DIR:-/home/michael/textbook_pdfs}:/data/corpus:ro
+      - ${CASEBOARD_INDEX_DIR:-/home/michael/neuro-textbook-rag/index}:/data/index:ro
+      - ${CASEBOARD_FIGURES_DIR:-/home/michael/neuro-textbook-rag/assets/figures}:/data/figures:ro
+      - ${CASEBOARD_ADC_FILE:-/home/michael/.config/gcloud/application_default_credentials.json}:/secrets/adc.json:ro
