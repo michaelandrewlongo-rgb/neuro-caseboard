@@ -1,0 +1,109 @@
+name: CD
+
+# Runs AFTER the required CI is green — it does not re-run or duplicate ci.yml's PR gate. Triggers
+# only on a version tag (v*) or a manual dispatch. Builds the SPA + serve image and pushes it to
+# GHCR tagged by version AND git sha (+ latest). Secret/variable-gated: with CD_ENABLED unset it is
+# a clean, green no-op (mirrors live-judge.yml). The actual rollout is PULL-based — the self-hosted
+# box's cd-pull-deploy.sh timer picks up the new image (see docs/cd.md); CD does not push to the box.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to build/push (e.g. v0.2.0)"
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  gate:
+    name: Gate on CD config (clean no-op when unconfigured)
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.gate.outputs.configured }}
+    steps:
+      - id: gate
+        run: |
+          if [ "${{ vars.CD_ENABLED }}" = "true" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "CD_ENABLED variable is not 'true' — CD is the keyed deploy path (skipping cleanly)."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  web:
+    name: web gate (lint + test + build)
+    needs: gate
+    if: needs.gate.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
+
+  build-push:
+    name: build + push image to GHCR
+    needs: [gate, web]
+    if: needs.gate.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Resolve version + lowercased image ref
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME}"
+          fi
+          IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+      # Fast fail-fast that the package install target resolves before the long image build, using
+      # the same shared installer CI uses (caseprep is bundled). The authoritative clean-install
+      # gate is ci.yml's `package` job; the heavy serve extras ([vertex,models]) install inside the
+      # Docker build, not here.
+      - name: Python install sanity (shared installer)
+        run: ./ci/install.sh ".[dev]"
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push (version + sha + latest)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+            ${{ steps.meta.outputs.image }}:${{ github.sha }}
+            ${{ steps.meta.outputs.image }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Rollout note (pull-based)
+        run: |
+          echo "Pushed ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }} (+ sha, +latest)."
+          echo "The self-hosted box's cd-pull-deploy.sh timer will roll it out and health-gate/rollback."
