@@ -118,10 +118,17 @@ def inline(text: str) -> str:
 
 def img_data_uri(path: str) -> str:
     """Return a ``data:`` URI for the image at ``path`` (MIME derived from the filename)."""
+    # `path` is the absolute build-time host path stored in the figures index; when the assets
+    # tree is mounted elsewhere at runtime (container: /data/figures) the literal open() fails.
+    # Resolve to the runtime ASSETS_DIR first — the same reroot the retrieval/serve/PDF lanes
+    # use — so a remapped mount doesn't silently drop the plate. (Idempotent on native runs.)
+    from neuro_core.asset_paths import resolve_asset_path
+    from neuro_core.config import load_config
+    resolved = resolve_asset_path(path, load_config().assets_dir)
     # Derive the extension from the basename only — a dot in a parent dir (e.g. /data/v1.2/figA)
     # or a missing extension must not corrupt the MIME type.
     name = os.path.basename(path)
     ext = name.rsplit(".", 1)[-1].lower() if "." in name else "png"
     mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "svg": "image/svg+xml"}.get(ext, f"image/{ext}")
-    with open(path, "rb") as f:
+    with open(resolved, "rb") as f:
         return f"data:{mime};base64," + base64.b64encode(f.read()).decode()
