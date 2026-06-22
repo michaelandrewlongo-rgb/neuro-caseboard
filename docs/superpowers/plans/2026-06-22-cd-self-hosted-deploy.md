@@ -467,7 +467,7 @@ jobs:
 **Files:**
 - Create: `docs/cd.md`
 
-- [ ] **Task 7** — Write `docs/cd.md` mirroring `docs/ci.md`'s structure and tone. It MUST cover:
+- [x] **Task 7** — Write `docs/cd.md` mirroring `docs/ci.md`'s structure and tone. It MUST cover:
   - **What each stage does:** the 3-stage Dockerfile (web build → venv with `.[vertex,models]` → slim uvicorn runtime); why the serve image includes torch though required CI omits it; `web.yml` as the new required web gate; `cd.yml` trigger (`v*` / dispatch) → web gate → build/push to GHCR (`version` + `sha` + `latest`); the pull-based rollout.
   - **GitHub config/secrets:** repo **variable** `CD_ENABLED=true` enables CD (else green no-op); GHCR push uses the built-in `GITHUB_TOKEN` (`packages: write`) — no extra registry secret. Note the Vertex secret names reused from `live-judge.yml` (`CASEBOARD_LLM_PROVIDER`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CREDENTIALS`) are for the *engine at runtime on the box*, not for the image build.
   - **One-time box setup:** `docker login ghcr.io` (PAT with `read:packages`); a box `.env` next to `docker-compose.yml` with `GOOGLE_CLOUD_PROJECT`, optional `NCBI_API_KEY`, and any path overrides (`INDEX_DIR`, `ASSETS_DIR`, `CORPUS_DIR`, `GOOGLE_CREDENTIALS_FILE`); the read-only volume mounts (corpus/index/figures + ADC json at `/secrets/adc.json`); a **systemd timer or cron** running `scripts/cd-pull-deploy.sh` every ~10 min (give both a sample `cron` line and a sample systemd `.service` + `.timer`). Cross-link `docs/SERVE_ON_PHONE.md` for the WSL2 0.0.0.0 reachability (mirrored networking / `wsl-portproxy.ps1`) — note CD does not change that.
