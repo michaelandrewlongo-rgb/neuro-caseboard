@@ -18,9 +18,33 @@ _SENTENCE = re.compile(r"(?<=[.!?])\s+")
 _STOP = {"the", "and", "for", "with", "that", "this", "are", "must", "its", "into",
          "from", "their", "which", "may", "can", "not", "but", "all", "any", "per"}
 
+# Word endings that mark a salient clinical entity (lesion / inflammation / operation / deficit).
+# Anchored at the token end; case-insensitive (tokens are lowercased before matching).
+_MEDICAL_SUFFIX = re.compile(
+    r"(oma|omas|itis|osis|ectomy|otomy|ostomy|plasty|pathy|plegia|paresis|algia|"
+    r"emia|aemia|cele|rrhage|rrhagia|rrhea|rrhoea|stenosis|sclerosis|malacia|oplasty)$",
+    re.IGNORECASE,
+)
+
 
 def _content_tokens(text: str) -> set[str]:
     return {t for t in _TOKEN.findall((text or "").lower()) if len(t) >= 3 and t not in _STOP}
+
+
+def medical_entities(text: str) -> set[str]:
+    """Salient clinical-entity tokens in ``text``: length >= 6 (avoids short coincidences) and
+    bearing a medical suffix. Generic prose words never match the suffix set, so this is a low
+    false-positive proxy for "named pathology/operation/deficit" rather than ordinary vocabulary."""
+    return {t for t in _TOKEN.findall((text or "").lower())
+            if len(t) >= 6 and _MEDICAL_SUFFIX.search(t)}
+
+
+def unsupported_entities(claim: str, premise: str) -> set[str]:
+    """Medical entities asserted in ``claim`` but absent from its cited ``premise`` token set —
+    a cross-source content bleed (e.g. "cavernoma" appearing in a glioma answer's sentence whose
+    cited span never mentions it). Uses the same tokenizer/lowercasing on both sides."""
+    premise_tokens = set(_TOKEN.findall((premise or "").lower()))
+    return {e for e in medical_entities(claim) if e not in premise_tokens}
 
 
 @runtime_checkable
