@@ -1,10 +1,12 @@
 import { useState } from "react"
 import type { ReactNode } from "react"
 import type { Dossier, DossierClaim, DossierFigure, DossierSection } from "@/lib/api"
+import { type ClaimFilter, subsetClaims } from "@/lib/claimFilter"
 import { summarizeDossier } from "@/lib/quant"
 
 export type ClaimMark = "wrong" | "important"
-export type ClaimFilter = "all" | "supported" | "verify" | "quarantine"
+// Re-export so existing consumers (Build.tsx) keep importing ClaimFilter from here.
+export type { ClaimFilter } from "@/lib/claimFilter"
 
 interface Rehearsal {
   rehearsal?: boolean
@@ -13,23 +15,19 @@ interface Rehearsal {
   onMissing?: (heading: string, text: string) => void
 }
 
-// Per-status palette: sage for supported, ochre for to-verify.
-// Quarantine is not a valid DossierClaim status in the current data model —
-// it exists only in EvidenceSummary totals and the filter control.
+// Per-status palette: sage for supported, ochre for to-verify, red for quarantined.
 function statusMeta(status: DossierClaim["status"]) {
   if (status === "supported") {
     return { color: "#34e07f", label: "SUPPORTED", srLabel: "corpus-supported" } as const
   }
-  return { color: "#ffc94d", label: "TO VERIFY", srLabel: "needs clinician verification" } as const
-}
-
-/** Returns true when a claim's status matches the active filter. */
-function claimMatchesFilter(status: DossierClaim["status"], filter: ClaimFilter): boolean {
-  if (filter === "all") return true
-  if (filter === "supported") return status === "supported"
-  if (filter === "verify") return status === "verify"
-  // filter === "quarantine": no claim can hold this status per DossierClaim["status"]
-  return false
+  if (status === "verify") {
+    return { color: "#ffc94d", label: "TO VERIFY", srLabel: "needs clinician verification" } as const
+  }
+  return {
+    color: "#ff5a5a",
+    label: "QUARANTINED",
+    srLabel: "off-target — excluded from synthesis",
+  } as const
 }
 
 // ---------------------------------------------------------------------------
@@ -61,23 +59,18 @@ function ClaimCard({
   claim,
   heading,
   r,
-  filter,
 }: {
   claim: DossierClaim
   heading: string
   r: Rehearsal
-  filter: ClaimFilter
 }) {
   const active = r.markOf?.(heading, claim) ?? null
   const meta = statusMeta(claim.status)
-  const dimmed = !claimMatchesFilter(claim.status, filter)
 
   return (
     <li
       className="relative flex overflow-hidden"
       style={{
-        opacity: dimmed ? 0.22 : 1,
-        transition: "opacity 0.3s",
         background: "rgba(255,255,255,.022)",
         border: "1px solid rgba(255,255,255,.08)",
         borderRadius: "12px",
@@ -288,6 +281,11 @@ function SectionCard({
   filter: ClaimFilter
 }) {
   const letter = String.fromCharCode(65 + sectionIdx) // A, B, C …
+  const visible = subsetClaims(section.claims, filter)
+  // A non-"all" tab strictly subsets the page: hide the whole section (header, intro,
+  // rehearsal input) when it has no claims in the active filter. Under "all", always
+  // render the section even if it carries no claims (preserves prior behavior).
+  if (filter !== "all" && visible.length === 0) return null
   return (
     <div
       className="reveal p-5"
@@ -313,11 +311,11 @@ function SectionCard({
         </p>
       )}
 
-      {/* Claims list */}
-      {section.claims.length > 0 && (
+      {/* Claims list — strict subset of the active filter */}
+      {visible.length > 0 && (
         <ul className="flex flex-col gap-3">
-          {section.claims.map((c, i) => (
-            <ClaimCard key={i} claim={c} heading={section.heading} r={r} filter={filter} />
+          {visible.map((c, i) => (
+            <ClaimCard key={i} claim={c} heading={section.heading} r={r} />
           ))}
         </ul>
       )}
@@ -453,6 +451,10 @@ export default function DossierView({
     dossier.sections.flatMap((s) => s.claims.map((c) => `${c.text} ${c.why}`)),
   )
 
+  // Under a non-"all" filter every SectionCard with no matching claim returns null; if NONE match
+  // across all sections the main column would go blank, so render an explicit empty-state instead.
+  const anyVisible = dossier.sections.some((s) => subsetClaims(s.claims, filter).length > 0)
+
   return (
     <div
       className="grid gap-6"
@@ -485,6 +487,25 @@ export default function DossierView({
         {dossier.sections.map((s, i) => (
           <SectionCard key={i} section={s} sectionIdx={i} r={r} filter={filter} />
         ))}
+        {/* Empty-state: a non-"all" filter that matches nothing in any section leaves the column
+            blank otherwise. Mirrors the muted-mono rail empty state. */}
+        {filter !== "all" && !anyVisible && (
+          <div
+            className="flex items-center justify-center p-6"
+            style={{
+              background: "rgba(255,255,255,.018)",
+              border: "1px dashed rgba(255,255,255,.07)",
+              borderRadius: "14px",
+            }}
+          >
+            <p
+              className="font-mono text-[10px] uppercase tracking-[0.14em]"
+              style={{ color: "#666666" }}
+            >
+              No claims match this filter
+            </p>
+          </div>
+        )}
       </div>
 
       {/* ── Right rail ── */}

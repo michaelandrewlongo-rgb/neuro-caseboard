@@ -178,15 +178,21 @@ def _compile(
             ))
             claims.append(claim)
 
+        # Off-target retrievals are surfaced as status="quarantine" claims INTO this section's
+        # list (badged, never cited/graded — they are excluded from synthesis), not hidden in an
+        # appendix. Appended before the section-append check so a tf with only quarantined cards
+        # still produces a section. summary.quarantined still counts the same off_target cards.
+        for c in quarantined:
+            claims.append(Claim(
+                text=scrub_question(c.question),
+                why=(c.audit_reason or "off-target retrieval — excluded from synthesis").strip(),
+                status="quarantine",
+                raw=c.question,
+            ))
+
         if claims or figures:
             sections.append(Section(heading=heading, intro=intros_by_tf.get(tf, ""),
                                     claims=claims, figures=figures))
-        if quarantined:
-            items = [
-                f"{scrub_question(c.question)} — {c.audit_reason or 'quarantined'}"
-                for c in quarantined
-            ]
-            appendix_entries.append(AppendixEntry(heading=heading, items=items))
 
     # #9 collapse cross-section near-duplicates
     dedup_sections(sections)
@@ -225,7 +231,9 @@ def _compile(
     summary = EvidenceSummary(
         supported=sum(1 for c in cards if c.audit_status == "supported"),
         to_verify=sum(1 for c in cards if c.audit_status in ("needs_review", "no_evidence")),
-        quarantined=sum(1 for c in cards if c.audit_status == "off_target"),
+        # One predicate with the emission split above (`audit_status not in _PRIMARY`) so the gauge
+        # and the quarantine-claim emission can never diverge if a new non-primary status is added.
+        quarantined=sum(1 for c in cards if c.audit_status not in _PRIMARY),
     )
 
     return Dossier(title=title, summary=summary, sections=sections,

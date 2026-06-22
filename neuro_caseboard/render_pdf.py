@@ -25,7 +25,8 @@ from neuro_caseboard.fpdf_base import register_fonts, ascii_fallback
 from neuro_caseboard.model import Dossier, MARK, ASCII_MARK, fallback_notice
 
 # Neo Brutalism palette.
-_COLORS = {"supported": (26, 161, 26), "verify": (217, 119, 6)}   # green / amber
+_COLORS = {"supported": (26, 161, 26), "verify": (217, 119, 6),
+           "quarantine": (200, 40, 40)}   # green / amber / red
 _BLACK = (0, 0, 0)
 _GRAY = (51, 51, 51)
 _RED = (255, 51, 51)
@@ -111,7 +112,8 @@ def render_pdf(dossier: Dossier, out_path) -> ArtifactRef:
     pdf.set_font(fam, "B", 10)
     pdf.write(6, t("Markers:  "))
     for i, (status, label) in enumerate((("supported", "corpus-supported"),
-                                         ("verify", "needs clinician verification"))):
+                                         ("verify", "needs clinician verification"),
+                                         ("quarantine", "off-target — excluded from synthesis"))):
         if i:
             pdf.set_text_color(*_BLACK)
             pdf.write(6, "      ")
@@ -128,14 +130,14 @@ def render_pdf(dossier: Dossier, out_path) -> ArtifactRef:
     pdf.set_font(fam, "", 10)
     summ = (f"Evidence:   {glyph('supported')} {s.supported} corpus-supported    "
             f"{glyph('verify')} {s.to_verify} to verify    "
-            f"{s.quarantined} quarantined (appendix)")
+            f"{glyph('quarantine')} {s.quarantined} quarantined (off-target)")
     pdf.multi_cell(0, 5, t(summ), new_x="LMARGIN", new_y="NEXT")
 
     has_appendix = not dossier.appendix.is_empty()
     if has_appendix:
         pdf.set_font(fam, "I", 9)
         pdf.set_text_color(*_GRAY)
-        pdf.multi_cell(0, 5, t("See the appendix for evidence sources and off-target claims."),
+        pdf.multi_cell(0, 5, t("See the appendix for evidence sources and rejected (off-target) sources."),
                        new_x="LMARGIN", new_y="NEXT")
         pdf.set_text_color(*_BLACK)
     pdf.ln(2)

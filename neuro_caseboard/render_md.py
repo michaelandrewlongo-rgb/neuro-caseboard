@@ -11,13 +11,15 @@ from neuro_caseboard.model import Dossier, MARK, fallback_notice
 
 
 def _legend() -> str:
-    return f"**Markers:** {MARK['supported']} corpus-supported   {MARK['verify']} needs clinician verification"
+    return (f"**Markers:** {MARK['supported']} corpus-supported   "
+            f"{MARK['verify']} needs clinician verification   "
+            f"{MARK['quarantine']} off-target — excluded from synthesis")
 
 
 def _summary(s) -> str:
     return (f"**Evidence:** {MARK['supported']} {s.supported} corpus-supported · "
             f"{MARK['verify']} {s.to_verify} to verify · "
-            f"{s.quarantined} quarantined (appendix)")
+            f"{MARK['quarantine']} {s.quarantined} quarantined (off-target)")
 
 
 def render_markdown(dossier: Dossier) -> str:

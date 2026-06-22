@@ -12,11 +12,12 @@ from dataclasses import dataclass, field
 
 # Status markers (evidence axis). The Unicode glyph renders via the embedded font in
 # PDF; the ASCII token is the deterministic fallback (defect #1).
-MARK = {"supported": "✓", "verify": "⚠"}        # ✓ , ⚠
-ASCII_MARK = {"supported": "[OK]", "verify": "[VERIFY]"}
+MARK = {"supported": "✓", "verify": "⚠", "quarantine": "✗"}        # ✓ , ⚠ , ✗
+ASCII_MARK = {"supported": "[OK]", "verify": "[VERIFY]", "quarantine": "[QUARANTINE]"}
 LEGEND_ITEMS = [
     ("supported", "corpus-supported"),
     ("verify", "needs clinician verification"),
+    ("quarantine", "off-target — excluded from synthesis"),
 ]
 
 # Provenance of a board's cards: which Explorer lane produced them and — when the LLM lane
@@ -50,7 +51,7 @@ class FigureItem:
 class Claim:
     text: str                         # claim / question, scrubbed (#5: separate from why)
     why: str = ""                     # rationale, rendered on its own indented line (#5)
-    status: str = "supported"         # "supported" | "verify" (coarse marker; renderers consume)
+    status: str = "supported"         # "supported" | "verify" | "quarantine" (coarse marker; renderers consume)
     sub_items: list[str] = field(default_factory=list)   # checkbox sub-items (#6)
     figure_ids: list[str] = field(default_factory=list)  # linked figures (#7 cross-link)
     raw: str | None = None            # original source text used for dedup (#9)
