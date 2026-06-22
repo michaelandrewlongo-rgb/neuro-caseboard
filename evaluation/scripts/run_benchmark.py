@@ -330,6 +330,7 @@ def run_one(
         "answer": None,
         "citations": None,
         "figures": None,
+        "verification": None,
         "raw_response": None,
         "error_details": None,
     }
@@ -381,10 +382,15 @@ def run_one(
     )
 
     if status == "completed":
+        # Lazy import keeps this module engine-free at import time (see module docstring); the
+        # dict-shape helper is reused from neuro_caseboard rather than duplicated here.
+        from neuro_caseboard.answer_verify import verification_to_dict
+
         answer_text = getattr(result, "answer", None)
         record["answer"] = answer_text
         record["citations"] = serialize_citations(result)
         record["figures"] = serialize_figures(result)
+        record["verification"] = verification_to_dict(getattr(result, "verification", None))
         record["raw_response"] = serialize_raw_response(result)
         if not answer_text or not str(answer_text).strip():
             record["status"] = "not_gradable"
