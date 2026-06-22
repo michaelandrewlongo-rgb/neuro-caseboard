@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator, Optional
@@ -20,23 +21,122 @@ class PageRecord:
     figures: list = field(default_factory=list)
 
 
-def _chapter_entries(doc):
-    """Sorted (start_page_1based, title) from the PDF table of contents."""
-    entries = []
+# A real medical-chapter bookmark in this corpus looks like "1 - History",
+# "25 - Positioning for Spine Surgery", "300 - Radiosurgery…": a leading chapter
+# number, a hyphen/en-dash, then a title. Used to anchor the contamination boundary
+# (where the medical content ends), NOT to filter chapter labels — most textbooks in
+# the corpus (Greenberg/Rhoton/Schmidek/NeuroICU) don't number chapters this way.
+_MEDICAL_CHAPTER = re.compile(r"^\s*\d+\s*[-–]\s*\S")
+
+# Contamination signals. A scraped Youmans PDF in this corpus has THREE copies of David
+# Icke's "Perceptions of a Renegade Mind" appended after the medical content; Icke numbers
+# chapters "Chapter N:" (colon), distinct from Youmans' "N - Title" (dash). The book-title
+# match is zero-false-positive; the colon-chapter match is only trusted past the medical
+# content (see _classify_toc) so it can't truncate a clean book.
+_ICKE_CHAPTER = re.compile(r"^Chapter \d+:")
+
+# Front-matter / structural bookmarks that are not chapter content. Dropped from chapter
+# labels so they don't blanket the pages after them (e.g. "DEDICATION" → ~70 pages until
+# chapter 1). Lowercased prefix match — zero false positives across the corpus.
+# (Deliberately excludes "Introduction"/"Methods", which are legitimate chapter titles.)
+_FRONT_MATTER_PREFIXES = (
+    "copyright", "dedication", "contents", "table of contents", "title page",
+    "contributors", "preface", "acknowledgment", "acknowledgement",
+    "foreword", "index", "bibliography",
+)
+
+# "cover"-family bookmarks are matched EXACTLY (not as a prefix) so legitimate medical
+# titles such as "Covered Stent Technique" or "Coverage of the scalp defect" are not
+# swept up as front matter.
+_FRONT_MATTER_EXACT = ("cover", "cover page", "front youmans cover")
+
+
+def _is_medical_chapter(title) -> bool:
+    """True only for the numbered "<n> - <title>" medical-chapter pattern."""
+    return bool(_MEDICAL_CHAPTER.match((title or "").strip()))
+
+
+def _is_front_matter(title) -> bool:
+    t = (title or "").strip().lower()
+    if t in _FRONT_MATTER_EXACT:
+        return True
+    return any(t.startswith(p) for p in _FRONT_MATTER_PREFIXES)
+
+
+def _is_random_token(title) -> bool:
+    """A long whitespace-free token *containing a digit* is a garbage bookmark, not a
+    chapter title (e.g. "5yk4n23ycnpq9lc2A5dqvlhvrs2rhdbs9c6jz5gnc3xpr788fm4zwd2").
+
+    Slash-joined section titles ("Laminotomy/Foraminotomy/Discectomy",
+    "INDICATIONS/CONTRAINDICATIONS") and purely-alphabetic run-on tokens are real
+    medical labels in other corpus books, so they are explicitly kept: a slash or the
+    absence of any digit means "not random"."""
+    t = (title or "").strip()
+    if " " in t or "/" in t or _is_medical_chapter(t):
+        return False
+    return len(t) > 25 and any(ch.isdigit() for ch in t)
+
+
+def _classify_toc(doc):
+    """Classify the PDF table of contents into chapter labels + a content boundary.
+
+    Returns ``(entries, content_end)`` where ``entries`` is the sorted
+    ``(start_page_1based, title)`` list kept for chapter labelling (contamination,
+    front-matter and garbage bookmarks dropped), and ``content_end`` is the 1-based start
+    page of the first contamination bookmark past the medical content — the page at/after
+    which the book stops being medical content — or ``None`` if there is no such boundary.
+    """
+    raw = []
     for _level, title, page in doc.get_toc():
         if page and page > 0:
-            entries.append((page, title.strip()))
-    entries.sort(key=lambda e: e[0])
-    return entries
+            raw.append((page, (title or "").strip()))
+    raw.sort(key=lambda e: e[0])
+
+    medical_pages = [pg for pg, t in raw if _is_medical_chapter(t)]
+    last_medical = max(medical_pages) if medical_pages else None
+
+    content_end = None
+    for pg, t in raw:
+        # Both contamination signals are only trusted once we are past the last medical
+        # chapter: a clean book that happens to use "Chapter N:" is safe, and a stray
+        # "renegade mind" bookmark *before* the medical content can't truncate the book.
+        past_medical = last_medical is not None and pg > last_medical
+        is_renegade = "renegade mind" in t.lower() and past_medical
+        is_icke = bool(_ICKE_CHAPTER.match(t)) and past_medical
+        if is_renegade or is_icke:
+            content_end = pg
+            break
+
+    # Chapter-label entries: drop the whole contamination region (everything at/after the
+    # boundary, which is excluded from indexing anyway) plus front-matter and garbage
+    # bookmarks. A clean book (content_end is None) keeps all of its labels.
+    entries = [
+        (pg, t) for pg, t in raw
+        if (content_end is None or pg < content_end)
+        and not _is_front_matter(t)
+        and not _is_random_token(t)
+    ]
+    return entries, content_end
 
 
-def _chapter_for_page(entries, page):
+def _chapter_for_page(entries, page, *, max_gap: int = 120):
+    """The chapter label for a page, or ``None`` when the TOC can't actually identify it.
+
+    Assigns the nearest preceding bookmark — but if that bookmark starts more than
+    ``max_gap`` pages back, the sparse TOC cannot tell us the chapter (huge un-bookmarked
+    gaps would otherwise inherit one distant label), so return ``None`` ("unknown
+    chapter"). Honest unknown beats a confidently-wrong distant label.
+    """
     chapter = None
+    chapter_start = None
     for start, title in entries:
         if start <= page:
             chapter = title
+            chapter_start = start
         else:
             break
+    if chapter_start is not None and page - chapter_start > max_gap:
+        return None
     return chapter
 
 
@@ -49,12 +149,16 @@ def extract_pages(pdf_path, render=False, assets_dir=None, dpi=160,
     pdf_path = Path(pdf_path)
     book = pdf_path.stem
     doc = fitz.open(pdf_path)
-    entries = _chapter_entries(doc)
+    entries, content_end = _classify_toc(doc)
     records = []
     for i in range(len(doc)):
+        pageno = i + 1
+        # Drop non-medical contamination (e.g. the appended David Icke book) so it is
+        # never indexed as medical content. Data-driven boundary, not a hardcoded page.
+        if content_end is not None and pageno >= content_end:
+            continue
         page = doc[i]
         text = page.get_text().strip()
-        pageno = i + 1
         info = page_figure_info(page, area_threshold)
         figure_path = None
         plates = []
