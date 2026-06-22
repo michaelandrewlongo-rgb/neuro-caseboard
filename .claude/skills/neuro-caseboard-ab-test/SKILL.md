@@ -47,15 +47,23 @@ ls ~/.config/gcloud/application_default_credentials.json   # Vertex ADC must exi
      `evaluation/failure-ledger.jsonl` it targets; a broad change → the worst-N scorers.
    - Full sweep on request: pass all 67 ids. State which ids you chose and why.
 
-3. **Re-answer** into an immutable run dir (resumable; one id per call avoids the runner's
-   contiguous-range limitation). Run it in the BACKGROUND so you can watch progress and stop early:
+3. **Re-answer** into an immutable run dir (resumable). Use the **memory-guarded parallel runner**
+   — it cuts wall-clock ~2× on an idle box and is engineered for this 16 GB WSL2 machine. Run it in
+   the BACKGROUND so you can watch progress and stop early:
    ```bash
    RUN=evaluation/runs/<change>-$(date +%Y%m%d-%H%M%S)
-   for ID in <ids>; do
-     python3 evaluation/scripts/run_benchmark.py --run-dir "$RUN" --start-id "$ID" --end-id "$ID" --resume
-   done
+   python3 evaluation/scripts/run_benchmark_parallel.py --run-dir "$RUN" --ids "<ids>"
    python3 evaluation/scripts/finalize_run.py --run-dir "$RUN"
    ```
+   The wrapper drives the same one-id-per-call `--resume` loop, so behaviour is identical to the
+   sequential form — it just runs up to **N=2** shards concurrently, each in its own
+   `$RUN/shard-<i>` dir (no shared-`run.jsonl` write contention), then merges to `$RUN/run.jsonl`.
+   **Memory gate (why N is capped at 2):** per-worker peak RSS ≈ 5 GB; `N×5 + ~2 GB OS` must stay
+   under 16 GB or the box swaps and wedges. The gate reads available RAM and **degrades 2→1** under
+   pressure (e.g. another run already going), and **aborts with a "close these" report** — it never
+   kills processes — if not even one worker fits. Add `--dry-run` to see the decision first.
+   *Fallback* (debugging a single id, or if the wrapper misbehaves): the raw sequential loop still
+   works — `for ID in <ids>; do python3 evaluation/scripts/run_benchmark.py --run-dir "$RUN" --start-id "$ID" --end-id "$ID" --resume; done`.
    Answers land atomically one-per-question; poll with `ab_progress.py` (see Observability below).
 
 4. **Attribution check.** Confirm the change reached the graded answers — e.g. for a new book,
