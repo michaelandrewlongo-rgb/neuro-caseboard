@@ -39,6 +39,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
+from neuro_caseboard.answer_verify import verification_to_dict
+
 app = FastAPI(title="neuro-caseboard API", version="0.1.0")
 
 # The browser talks to the API through the Vite dev-proxy (same origin), so CORS is not
@@ -365,6 +367,7 @@ def ask(req: AskRequest):
         "citations": [_citation_dict(c) for c in (result.citations or [])],
         "figures": [_figure_dict(f) for f in (result.figures or [])],
         "literature": _literature_dict(getattr(result, "literature", None)),
+        "verification": verification_to_dict(getattr(result, "verification", None)),
     }
 
 

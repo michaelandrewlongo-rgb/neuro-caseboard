@@ -33,3 +33,26 @@ def test_uncited_excluded_from_denominator():
 def test_missing_premise_is_non_destructive():
     v = verify_answer("A figure-only reference [3].", {})
     assert v.n_unsupported == 0
+
+
+def test_verification_to_dict_shape():
+    from neuro_caseboard.answer_verify import verification_to_dict, AnswerVerification, ClaimVerdict
+    v = AnswerVerification([ClaimVerdict("x [1].", ["1"], False, 10)], 1, 1)
+    assert verification_to_dict(v) == {"n_cited_claims": 1, "n_unsupported": 1,
+                                       "groundedness": 0.0, "unsupported_markers": ["1"]}
+    assert verification_to_dict(None) is None
+
+
+def test_verification_notice_lists_unsupported_markers():
+    from neuro_caseboard.answer_verify import verification_notice, AnswerVerification, ClaimVerdict
+    v = AnswerVerification([ClaimVerdict("x [1].", ["1"], False, 5),
+                            ClaimVerdict("y [2].", ["2"], True, 20)], 2, 1)
+    note = verification_notice(v)
+    assert "needs-verification" in note.lower()
+    assert "[1]" in note and "[2]" not in note
+
+
+def test_verification_notice_empty_when_supported_or_none():
+    from neuro_caseboard.answer_verify import verification_notice, AnswerVerification, ClaimVerdict
+    assert verification_notice(None) == ""
+    assert verification_notice(AnswerVerification([ClaimVerdict("x [1].", ["1"], True, 20)], 1, 0)) == ""

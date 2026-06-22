@@ -74,3 +74,23 @@ def verify_answer(answer: str, premises: dict, *, verifier=None) -> "AnswerVerif
             n_unsup += 1
         verdicts.append(ClaimVerdict(span.text, span.markers, supported, len(premise)))
     return AnswerVerification(verdicts, n_cited, n_unsup)
+
+
+def verification_to_dict(v) -> "dict | None":
+    if v is None:
+        return None
+    return {
+        "n_cited_claims": v.n_cited_claims,
+        "n_unsupported": v.n_unsupported,
+        "groundedness": v.groundedness(),
+        "unsupported_markers": v.unsupported_markers(),
+    }
+
+
+def verification_notice(v) -> str:
+    """Human-readable needs-verification notice for display surfaces; '' when nothing to flag."""
+    if v is None or v.n_unsupported <= 0:
+        return ""
+    markers = ", ".join(f"[{m}]" for m in v.unsupported_markers())
+    return (f"⚠ {v.n_unsupported} cited claim(s) flagged needs-verification "
+            f"(not entailed by the cited source): {markers}")
