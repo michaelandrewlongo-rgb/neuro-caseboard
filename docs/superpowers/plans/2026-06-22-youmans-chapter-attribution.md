@@ -48,3 +48,35 @@ flagged for the operator.
 code exclusion) and **re-index** (`python -m neuro_core.scripts.build_index --book Youmans`) so the live
 index reflects the corrected attribution and drops the contamination. Until then the live index still
 contains the bad data; this slice only fixes go-forward indexing + metadata.
+
+---
+
+## Review Findings (PR #57, slice-2 increment 6)
+
+- [MUST] (none) — safety property empirically discharged across all 18 corpus books: `content_end`
+  fires ONLY on Youmans (boundary 6330 = Icke title page); `None` chapter handled at every sink;
+  off-by-one correct (keeps p6329, drops p6330+).
+- [SHOULD] `neuro_core/ingest.py` `_is_random_token` (+ "cover" front-matter prefix) over-drops
+  LEGITIMATE bookmarks → new mis-attribution: "Laminotomy/Foraminotomy/Discectomy" (Benzel),
+  "Sedation/Analgesia/Anesthesia", "MYCOBACTERIAL/TUBERCULOSIS", "INDICATIONS/CONTRAINDICATIONS"
+  (Bridwell ×5), "Diskectomy/Osteophytectomy" (Surgical Anatomy) — slash-joined section titles; and
+  "Covered Stent Technique" dropped by the "cover" startswith prefix. Fix: `_is_random_token` should
+  require a digit (real garbage "5yk4n23…" has digits) and/or treat `"/" in t`/purely-alphabetic as
+  NOT random; make "cover" an EXACT match, not a prefix.
+- [SHOULD] `tests/neuro_core/test_ingest_chapter.py` content_end-exclusion test is tautological
+  (asserts `6330>=6330`, never calls `extract_pages`). The exclusion loop (ingest.py:151, the most
+  safety-critical line) is untested. Fix: build a synthetic PDF via `doc.set_toc([...])` with a
+  contamination bookmark and assert the contaminated pagenos are ABSENT from `extract_pages` records.
+- [NIT] renegade contamination arm is position-independent — gate on `pg > last_medical` to remove the
+  latent "contamination before medical content would truncate the book" footgun (zero-FP today).
+- [NIT] `_chapter_entries` is now dead code (no callers) — remove it.
+
+### Review tasks
+- [ ] review: [SHOULD] fix `_is_random_token` to not drop slash-joined/alphabetic section titles
+  (require a digit and/or treat "/" as non-random); make the "cover" front-matter filter an exact
+  match not a prefix. Add a regression test asserting those real titles (e.g.
+  "Laminotomy/Foraminotomy/Discectomy", "Covered Stent Technique") are KEPT.
+- [ ] review: [SHOULD] replace the tautological content_end test with a real `extract_pages` test
+  (synthetic PDF + set_toc contamination bookmark → assert contaminated pagenos absent from records).
+- [ ] review: [nits] gate the renegade-mind contamination arm on `pg > last_medical`; remove the dead
+  `_chapter_entries` function.
