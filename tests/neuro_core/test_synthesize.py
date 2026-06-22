@@ -140,3 +140,14 @@ def test_synthesize_without_directive_is_unchanged():
     hits = [Hit(id="a", book="B", chapter="C", page=1, text="t1")]
     synthesize("q", hits, [], [], sc)
     assert "never merge" not in sc.user.lower()  # no directive injected
+
+
+def test_citation_carries_source_text():
+    from neuro_core import synthesize as S
+    from neuro_core.index import Hit
+    hits = [Hit(id="a", book="Youmans", chapter="Ch1", page=42, text="The MCA supplies the lateral cortex.")]
+    class _Synth:
+        def generate(self, system, user, images): return "Answer [1]."
+    out = S.synthesize("q", hits, [], [], _Synth())
+    assert out.citations[0].n == 1
+    assert out.citations[0].text == "The MCA supplies the lateral cortex."
