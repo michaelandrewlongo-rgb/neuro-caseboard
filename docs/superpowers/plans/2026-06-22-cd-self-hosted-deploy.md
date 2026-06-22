@@ -206,7 +206,7 @@ CMD ["uvicorn", "api.server:app", "--host", "0.0.0.0", "--port", "8001"]
 **Interfaces consumed:** the image from Task 3 (`ghcr.io/...:latest` or local `build: .`); env names from `neuro_core/config.py` (`INDEX_DIR` gates `corpus`; `ASSETS_DIR` = figures; `CORPUS_DIR` = re-index only; `SYNTH_PROVIDER`/`GOOGLE_CLOUD_PROJECT`/`GOOGLE_CLOUD_LOCATION`/`VERTEX_MODEL`); `GOOGLE_APPLICATION_CREDENTIALS` (read by `api.server._adc_present()`); `NCBI_API_KEY` (literature lane).
 **Produces:** `scripts/cd-pull-deploy.sh` (Task 5) drives `docker compose pull/up`; honors `CASEBOARD_IMAGE` to pin/rollback.
 
-- [ ] **Task 4** — Create `docker-compose.yml`:
+- [x] **Task 4** — Create `docker-compose.yml`:
 
 ```yaml
 # Single-process serve of the Caseboard GUI+API. Live data + secrets are MOUNTED read-only at
