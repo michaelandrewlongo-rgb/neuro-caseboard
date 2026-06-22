@@ -61,7 +61,7 @@ def synthesize_woven(question, hits, figures, images, records, synth_client,
 
     answer = synth_client.generate(WOVEN_SYSTEM, user, images)
 
-    citations = [Citation(n=i, book=h.book, chapter=h.chapter or "", page=h.page)
+    citations = [Citation(n=i, book=h.book, chapter=h.chapter or "", page=h.page, text=h.text)
                  for i, h in enumerate(hits, 1)]
     for f in appended:
         citations.append(Citation(n=f.source_n, book=f.book, chapter=f.chapter or "",
