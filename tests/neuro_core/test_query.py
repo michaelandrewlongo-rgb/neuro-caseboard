@@ -1,6 +1,6 @@
 # tests/test_query.py
 import neuro_core.query as q
-from neuro_core.query import Engine, QueryResult, Figure, Clarification
+from neuro_core.query import Engine, QueryResult, Figure, Clarification, _offdomain, _subdomains_in
 from neuro_core.query_analyze import VariantRewrite, Gate, QueryAnalysis
 from neuro_core.index import Hit
 from neuro_core.synthesize import Synthesis, Citation
@@ -454,3 +454,69 @@ def test_gate_trip_not_ambiguous_falls_through_as_normal():
     result = eng.query("decompressive craniectomy steps?")
     assert isinstance(result, QueryResult)
     assert "Assuming" not in result.answer
+
+
+# ---------------------------------------------------------------------------
+# P2 #7 — vascular sub-domain demotion in _retrieve()
+# ---------------------------------------------------------------------------
+
+def _vasc_hits():
+    """[AVM, aneurysm, neutral] — AVM FIRST so that without the fix it ranks above the
+    aneurysm hit (FakeReranker returns hits[:top_k] in input order)."""
+    avm = Hit(id="avm", book="B", chapter="C", page=1,
+              text="stereotactic radiosurgery for an arteriovenous malformation; "
+                   "nidus targeting and Spetzler-Martin grading")
+    aneurysm = Hit(id="an", book="B", chapter="C", page=2,
+                   text="anterior communicating artery aneurysm clipping technique")
+    neutral = Hit(id="ne", book="B", chapter="C", page=3,
+                  text="operative positioning and pin placement")
+    return avm, aneurysm, neutral
+
+
+def test_offdomain_avm_hit_demoted_below_aneurysm_and_neutral():
+    avm, aneurysm, neutral = _vasc_hits()
+    eng = _engine(FakeConfig(), FakeIndex([avm, aneurysm, neutral]), FakeSynthClient())
+    top = eng._retrieve("ruptured ACoA aneurysm clipping")
+    ids = [h.id for h in top]
+    assert "avm" in ids                          # demoted, NOT dropped (recall-safe)
+    assert ids.index("avm") > ids.index("an")    # off-subdomain AVM sinks below the aneurysm hit
+    assert ids.index("avm") > ids.index("ne")    # ...and below the neutral hit
+    # On-domain hits keep their original (score) order relative to each other.
+    assert ids.index("an") < ids.index("ne")
+
+
+def test_non_vascular_query_preserves_order():
+    h1 = Hit(id="a", book="B", chapter="C", page=1, text="vestibular schwannoma microsurgical resection")
+    h2 = Hit(id="b", book="B", chapter="C", page=2, text="facial nerve monitoring")
+    h3 = Hit(id="c", book="B", chapter="C", page=3, text="cerebellopontine angle approach")
+    eng = _engine(FakeConfig(), FakeIndex([h1, h2, h3]), FakeSynthClient())
+    top = eng._retrieve("vestibular schwannoma resection")
+    assert [h.id for h in top] == ["a", "b", "c"]  # no query subdomain → stable sort is a no-op
+
+
+def test_both_subdomains_query_does_not_demote():
+    avm, aneurysm, neutral = _vasc_hits()
+    eng = _engine(FakeConfig(), FakeIndex([avm, aneurysm, neutral]), FakeSynthClient())
+    # Query names BOTH subdomains → len(q_subs) != 1 → demotion disabled, order unchanged.
+    top = eng._retrieve("compare aneurysm clipping versus AVM radiosurgery")
+    assert [h.id for h in top] == ["avm", "an", "ne"]
+
+
+def test_offdomain_pure_helper():
+    # Confident single query subdomain, chunk in a DIFFERENT one → True (both directions).
+    assert _offdomain("ruptured ACoA aneurysm",
+                      "stereotactic radiosurgery for an arteriovenous malformation") is True
+    assert _offdomain("AVM nidus radiosurgery",
+                      "anterior communicating artery aneurysm clipping") is True
+    # Same subdomain → False.
+    assert _offdomain("aneurysm clipping", "aneurysm coiling outcomes") is False
+    # No query subdomain → never True (recall-safe).
+    assert _offdomain("glioma resection",
+                      "stereotactic radiosurgery for an arteriovenous malformation nidus") is False
+
+
+def test_subdomains_in_pure_helper():
+    assert _subdomains_in("ruptured ACoA aneurysm clipping") == {"aneurysm"}
+    assert _subdomains_in("AVM nidus radiosurgery") == {"avm"}
+    assert _subdomains_in("compare aneurysm clipping versus AVM radiosurgery") == {"aneurysm", "avm"}
+    assert _subdomains_in("operative positioning and pin placement") == set()
