@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { Figure } from "@/lib/api"
 import { figureIsEnlargeable } from "@/lib/figures"
 
@@ -98,6 +98,11 @@ export default function FigureGrid({ figures }: { figures: Figure[] }) {
     dialogRef.current?.showModal()
     document.body.style.overflow = "hidden"
   }
+
+  // A native <dialog> fires `close` on .close()/ESC but NOT on React unmount, so if this
+  // component unmounts while the lightbox is open (e.g. browser Back), the body scroll-lock
+  // would be stranded. Restore it on unmount as a safety net.
+  useEffect(() => () => { document.body.style.overflow = "" }, [])
 
   if (!figures.length) return null
   return (

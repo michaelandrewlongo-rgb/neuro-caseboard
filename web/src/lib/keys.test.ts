@@ -21,4 +21,9 @@ describe("isCmdK (⌘K / Ctrl+K command-field shortcut)", () => {
   it("is false for a modifier with the wrong key", () => {
     expect(isCmdK({ metaKey: true, ctrlKey: false, key: "j" })).toBe(false)
   })
+
+  it("is false for Shift/Alt variants (don't hijack Ctrl+Shift+K devtools)", () => {
+    expect(isCmdK({ metaKey: false, ctrlKey: true, key: "k", shiftKey: true })).toBe(false)
+    expect(isCmdK({ metaKey: true, ctrlKey: false, key: "k", altKey: true })).toBe(false)
+  })
 })
