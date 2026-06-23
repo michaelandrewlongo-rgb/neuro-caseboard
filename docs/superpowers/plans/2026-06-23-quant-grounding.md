@@ -13,7 +13,7 @@ themselves are already rendered in the section cards just below, so the panel st
 
 ---
 
-- [ ] **Step 1 — Thread claim context through quant extraction + render it on the chip (frontend only)**
+- [x] **Step 1 — Thread claim context through quant extraction + render it on the chip (frontend only)**
   - `web/src/lib/quant.ts`:
     - `Metric` gains `context?: string` (the source-claim text the value was extracted from).
     - `extractMetrics(text: string, context?: string): Metric[]` — optional 2nd arg; attach `context` to
