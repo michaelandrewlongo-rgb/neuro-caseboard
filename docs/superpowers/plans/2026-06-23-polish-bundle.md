@@ -54,3 +54,20 @@ satisfied for two of them).
 an existing hint honest; the chips are example text; scroll-lock + flash-color are deferred polish from
 slices 5/6. Reduced-motion: `citation-flash-lit` is covered by the existing global `animation` reduced-
 motion guard (same as `citation-flash`).
+
+---
+
+## Review Findings (PR #69, slice-14 increment 59) — VERDICT: CHANGES REQUESTED (1 MUST)
+
+Reviewer verified empirically: isCmdK + tests correct; NavBar listener added/removed in useEffect (no leak),
+preventDefault before navigate; CSS literature flash CORRECTLY ordered (equal specificity → later rule wins
+on source order — clean); chips unique; no-ops respected; harness green (58/build/lint exit 0).
+
+- [x] review: [MUST] FigureGrid scroll-lock unmount leak — DONE (4e5ae73): added
+  `useEffect(() => () => { document.body.style.overflow = "" }, [])` so unmount-while-open (browser Back)
+  restores body scroll. Explicit close paths already restored via onClose.
+- [x] review: [SHOULD] isCmdK excludes Shift/Alt — DONE (4e5ae73): `&& !e.shiftKey && !e.altKey` (optional
+  fields so existing fixtures still type-check) + test asserting Ctrl+Shift+K / Cmd+Opt+K → false.
+- [x] review: [NIT] CSS comment — DONE (4e5ae73): reworded to "equal specificity, wins by SOURCE ORDER —
+  keep AFTER the generic rule".
+- Re-verify: vitest **59** (+1 shift/alt test), build green, lint clean (explicit exit 0/0/0).
