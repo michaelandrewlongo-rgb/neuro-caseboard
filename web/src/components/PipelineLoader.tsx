@@ -1,22 +1,27 @@
 import { useEffect, useState } from "react"
-import BlurText from "@/components/BlurText"
+import StepChecklist from "@/components/StepChecklist"
+import { advanceStep } from "@/lib/loaderSteps"
 import { cn } from "@/lib/utils"
 
-/** Generic slow-call loader: glass panel with a mono eyebrow, pulsing crimson dot, and a
-    BlurText status line cycling real pipeline stages plus shimmer placeholders.
-    Animation lives in the chrome, never in clinical content. */
+/** Generic slow-call loader: glass panel with a mono eyebrow and a persistent,
+    MONOTONIC step checklist (advances by clamp, never wraps back) plus shimmer
+    placeholders. Animation lives in the chrome, never in clinical content. */
 export default function PipelineLoader({
   steps,
   estimate,
   bars = 6,
+  eyebrow = "Processing · Pipeline",
+  srText,
 }: {
   steps: string[]
   estimate: string
   bars?: number
+  eyebrow?: string
+  srText?: string
 }) {
   const [i, setI] = useState(0)
   useEffect(() => {
-    const t = setInterval(() => setI((p) => (p + 1) % steps.length), 3200)
+    const t = setInterval(() => setI((p) => advanceStep(p, steps.length)), 3200)
     return () => clearInterval(t)
   }, [steps.length])
 
@@ -27,38 +32,20 @@ export default function PipelineLoader({
       aria-live="polite"
       aria-busy="true"
     >
-      {/* Teal mono eyebrow */}
+      {/* Mono eyebrow */}
       <p
-        className="mb-3 font-mono text-[10px] font-bold uppercase tracking-[0.18em]"
+        className="mb-4 font-mono text-[10px] font-bold uppercase tracking-[0.18em]"
         style={{ color: "#6b93ff" }}
         aria-hidden
       >
-        Processing · Pipeline
+        {eyebrow}
       </p>
 
-      <div className="flex items-center gap-3">
-        {/* Pulsing crimson status dot — pulse keyframe in index.css, guarded by reduced-motion */}
-        <span
-          className="inline-block h-2 w-2 shrink-0 rounded-full"
-          style={{
-            background: "#6b93ff",
-            boxShadow: "0 0 8px rgba(107,147,255,.7)",
-            animation: "pulse 2.4s ease-in-out infinite",
-          }}
-          aria-hidden
-        />
-        <div aria-hidden className="min-w-0">
-          <BlurText
-            key={i}
-            text={steps[i]}
-            animateBy="words"
-            delay={40}
-            className="font-mono text-sm text-foreground"
-          />
-        </div>
-        {/* Stable, non-animated text the screen reader announces (the cycling stages are decorative). */}
-        <span className="sr-only">Working on your request. {estimate}</span>
-      </div>
+      {/* Persistent monotonic checklist (static labels → never blank) */}
+      <StepChecklist steps={steps} current={i} />
+
+      {/* Stable, non-animated text the screen reader announces (the checklist is decorative). */}
+      <span className="sr-only">{srText ?? `Working on your request. ${estimate}`}</span>
 
       {/* Shimmer bars — animate-pulse is disabled under prefers-reduced-motion in index.css */}
       <div className="mt-6 flex flex-col gap-3" aria-hidden>

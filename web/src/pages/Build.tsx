@@ -24,7 +24,7 @@ const HINTS = [
 ]
 
 const BUILD_STEPS = [
-  "Designing the case-specific question set · Vertex…",
+  "Designing the case-specific question set…",
   "Retrieving grounded passages per card…",
   "Auditing evidence · supported / verify / quarantine…",
   "Attaching textbook figures…",
