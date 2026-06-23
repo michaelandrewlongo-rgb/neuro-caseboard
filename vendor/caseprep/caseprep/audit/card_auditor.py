@@ -223,6 +223,11 @@ def _paper_text(paper: dict[str, Any]) -> str:
     return f"{paper.get('title', '')} {paper.get('text_snippet', '')}"
 
 
+def _plural(n: int, noun: str) -> str:
+    """``1 paper`` / ``2 papers`` — avoids the ``1 papers`` mis-pluralization."""
+    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
+
+
 # ── audit logic ──────────────────────────────────────────────────────────────
 
 
@@ -280,7 +285,7 @@ def _audit_card(card, *, topic: str) -> AuditedCard:
         # - No domain match + term overlap → needs_review (some signal)
         # - Neither → unclassified, falls through to needs_review
 
-        if contradictions:
+        if contradictions and not domain_match:
             off_target.append(pid)
         elif domain_match and term_overlap:
             supported.append(pid)
@@ -296,7 +301,7 @@ def _audit_card(card, *, topic: str) -> AuditedCard:
     if supported:
         ac.audit_status = "supported"
         ac.audit_reason = (
-            f"{len(supported)} papers in matching clinical domain "
+            f"{_plural(len(supported), 'paper')} in matching clinical domain "
             f"({case_domain or 'unknown'})"
         )
         ac.supporting_paper_ids = supported
@@ -304,7 +309,7 @@ def _audit_card(card, *, topic: str) -> AuditedCard:
     elif off_target and not supported:
         ac.audit_status = "off_target"
         ac.audit_reason = (
-            f"{len(off_target)} papers contradict expected domain "
+            f"{_plural(len(off_target), 'paper')} contradict expected domain "
             f"({case_domain or 'unknown'})"
         )
         ac.contradicting_paper_ids = off_target
