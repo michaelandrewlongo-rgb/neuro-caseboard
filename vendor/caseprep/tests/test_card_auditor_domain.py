@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from caseprep.audit.card_auditor import _audit_card, _plural
+from caseprep.audit.card_auditor import _audit_card, _plural, accepted_papers
 
 
 def _card(*, question: str, why: str, papers: list[dict]) -> SimpleNamespace:
@@ -115,3 +115,72 @@ def test_plural_helper():
     assert _plural(1, "paper") == "1 paper"
     assert _plural(2, "paper") == "2 papers"
     assert _plural(0, "paper") == "0 papers"
+
+
+# ── PR #63 review fixes (word-boundary domain matching) ──────────────────────
+
+NOISE_MENINGIOMA_PAPER = {
+    "id": "M1",
+    "title": "Clinical aspects of meningioma.",
+    "text_snippet": "Surgical resection of a meningioma.",
+}
+
+
+def test_off_domain_meningioma_with_substring_noise_stays_quarantined():
+    """MUST (PR #63 review). The clinical-safety regression guard.
+
+    An off-domain meningioma paper whose only "vascular" signal is substring
+    NOISE — ``clinical`` and ``surgical`` both CONTAIN "ica", and ``aspects`` is
+    the plain English word (intended as the ASPECTS stroke score) — must NOT be
+    mis-detected as vascular and must stay quarantined.
+
+    Pre-fix (unbounded ``term in lower`` substring matching + ``"aspects"`` still
+    in the vascular lexicon) this paper scored vascular=2 (ica-in-clinical/surgical
+    + aspects) > tumor=1 (meningioma), so ``_detect_domain`` returned "vascular" →
+    ``domain_match`` True → its "meningioma" contradiction was NOT quarantined → it
+    escaped into ``needs_review`` (and ``accepted_papers``, i.e. citable in the
+    primary dossier). Word-boundary matching makes vascular=0, and dropping the
+    ``"aspects"`` noise term keeps it so → tumor=1 → ``off_target`` again. This test
+    FAILS on the pre-fix code (it is classified ``needs_review``) and PASSES after.
+    """
+    card = _card(
+        question=VASCULAR_QUESTION, why=VASCULAR_WHY, papers=[NOISE_MENINGIOMA_PAPER]
+    )
+    audited = _audit_card(card, topic=VASCULAR_TOPIC)
+    # It must be quarantined, never spared into a citable status.
+    assert audited.audit_status == "off_target", audited.audit_reason
+    assert audited.audit_status != "supported"
+    # The paper id is recorded as contradicting and is NOT in the accepted set.
+    assert "M1" in audited.contradicting_paper_ids
+    assert "M1" not in [p["id"] for p in accepted_papers(audited)]
+    assert accepted_papers(audited) == []
+
+
+def test_off_target_reason_pluralization_one_paper():
+    """SHOULD (PR #63 review). The OFF_TARGET reason string also pluralizes:
+    exactly 1 off_target paper reads ``1 paper contradict`` (not ``1 papers``)."""
+    paper = {
+        "id": "T2",
+        "title": "Awake craniotomy for glioma resection",
+        "text_snippet": "Gross total resection (GTR) achieved with motor mapping of eloquent cortex.",
+    }
+    card = _card(question=VASCULAR_QUESTION, why=VASCULAR_WHY, papers=[paper])
+    audited = _audit_card(card, topic=VASCULAR_TOPIC)
+    assert audited.audit_status == "off_target", audited.audit_reason
+    assert "1 paper " in audited.audit_reason
+    assert "1 papers" not in audited.audit_reason
+
+
+def test_paper_domain_none_with_contradiction_only_is_off_target():
+    """SHOULD (PR #63 review). A paper with NO positive lexicon signal
+    (``paper_domain`` is None → ``domain_match`` False) but a single contradiction
+    token ("acdf") on a vascular case must still be quarantined as off_target."""
+    paper = {
+        "id": "A1",
+        "title": "A case report",
+        "text_snippet": "acdf",
+    }
+    card = _card(question=VASCULAR_QUESTION, why=VASCULAR_WHY, papers=[paper])
+    audited = _audit_card(card, topic=VASCULAR_TOPIC)
+    assert audited.audit_status == "off_target", audited.audit_reason
+    assert "A1" in audited.contradicting_paper_ids

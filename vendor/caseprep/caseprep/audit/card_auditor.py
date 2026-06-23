@@ -15,6 +15,7 @@ clinical domain clearly contradicts the case.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 from caseprep.core.contracts import SlotConfidence
@@ -146,7 +147,12 @@ _DOMAIN_LEXICON: dict[str, tuple[str, ...]] = {
         "mca", "ica", "aca", "pca", "basilar", "stroke",
         "large vessel occlusion", "lvo", "embolization",
         "flow diversion", "stent retriever", "aspiration thrombectomy",
-        "tici", "mtici", "nihss", "aspects",
+        "tici", "mtici", "nihss",
+        # NOTE: "aspects" (the ASPECTS stroke score) was dropped here — it is a
+        # plain English word that word-boundary matching does NOT save, so it
+        # false-matched off-domain papers ("clinical aspects of meningioma") and
+        # corrupted the domain-density argmax. "ica" is KEPT: word boundaries
+        # (\bica\b) make it safe as the internal-carotid-artery token.
     ),
 }
 
@@ -178,13 +184,32 @@ _DOMAIN_CONTRADICTIONS: dict[str, tuple[str, ...]] = {
 # ── keyword extraction ───────────────────────────────────────────────────────
 
 
+def _has_term(text_lower: str, term: str) -> bool:
+    """Whole-token (word-boundary) membership test — replaces the old unbounded
+    ``term in text_lower`` substring check.
+
+    Short tokens like ``"ica"`` no longer fire inside ``clinical``/``surgical``/
+    ``cortical`` and ``"cord"`` no longer fires inside ``record``; ``aca``/``pca``/
+    ``mca``/``gtr``/``eor`` only match as standalone tokens. Multi-word and
+    hyphenated terms (e.g. ``"gross total resection"``, ``"far-lateral"``) are
+    matched literally — ``re.escape`` leaves spaces literal and escapes the hyphen,
+    and the ``\\b`` anchors sit on the alphanumeric outer ends of every term.
+
+    Known limitation: ``\\b`` is exact, so a term does not match its own plural
+    (``\\bmeningioma\\b`` does not match "meningiomas"). This is symmetric across
+    the positive lexicon and the contradiction lexicon. ``text_lower`` is expected
+    to already be lower-cased by the caller.
+    """
+    return re.search(rf"\b{re.escape(term)}\b", text_lower) is not None
+
+
 def _extract_domain_terms(text: str) -> set[str]:
     """Extract domain-signalling terms from text."""
     lower = text.lower()
     found: set[str] = set()
     for terms in _DOMAIN_LEXICON.values():
         for term in terms:
-            if term in lower:
+            if _has_term(lower, term):
                 found.add(term)
     return found
 
@@ -201,7 +226,7 @@ def _extract_contradiction_terms(text: str, expected_domain: str) -> set[str]:
         return set()
     terms = _DOMAIN_CONTRADICTIONS.get(expected_domain, ())
     lower = text.lower()
-    return {t for t in terms if t in lower}
+    return {t for t in terms if _has_term(lower, t)}
 
 
 def _detect_domain(text: str) -> str | None:
@@ -209,7 +234,7 @@ def _detect_domain(text: str) -> str | None:
     lower = text.lower()
     scores: dict[str, int] = {}
     for domain, terms in _DOMAIN_LEXICON.items():
-        score = sum(1 for t in terms if t in lower)
+        score = sum(1 for t in terms if _has_term(lower, t))
         if score > 0:
             scores[domain] = score
     if not scores:
