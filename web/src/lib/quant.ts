@@ -10,6 +10,8 @@ export type MetricKind = "percent" | "count" | "interval" | "pvalue" | "duration
 export interface Metric {
   value: string
   kind: MetricKind
+  /** Source-claim text the value was extracted from (grounding context). Undefined for 1-arg calls. */
+  context?: string
 }
 
 const PATTERNS: [MetricKind, RegExp][] = [
@@ -21,8 +23,11 @@ const PATTERNS: [MetricKind, RegExp][] = [
   ["ratio", /\b\d+(?:\.\d+)?\s?(?:to|\/)\s?\d+(?:\.\d+)?\b/gi],
 ]
 
-/** Extract metrics from one text, de-duplicated by (kind, value), in pattern then source order. */
-export function extractMetrics(text: string): Metric[] {
+/**
+ * Extract metrics from one text, de-duplicated by (kind, value), in pattern then source order.
+ * Pass `context` (the source-claim text) to tether each value to its claim for grounding.
+ */
+export function extractMetrics(text: string, context?: string): Metric[] {
   const out: Metric[] = []
   const seen = new Set<string>()
   for (const [kind, re] of PATTERNS) {
@@ -31,18 +36,24 @@ export function extractMetrics(text: string): Metric[] {
       const key = `${kind}:${value.toLowerCase()}`
       if (seen.has(key)) continue
       seen.add(key)
-      out.push({ value, kind })
+      out.push({ value, kind, context })
     }
   }
   return out
 }
 
-/** Aggregate metrics across many claim texts (the dossier outcome summary). */
-export function summarizeDossier(texts: string[]): { metrics: Metric[]; counts: Record<string, number> } {
+/**
+ * Aggregate metrics across many claims (the dossier outcome summary). Each item carries the
+ * source-claim `context` so every value stays traceable. Dedup by (kind, value) keeps the FIRST
+ * occurrence — so a metric retains the context of the first claim it appeared in.
+ */
+export function summarizeDossier(
+  items: Array<{ text: string; context?: string }>,
+): { metrics: Metric[]; counts: Record<string, number> } {
   const metrics: Metric[] = []
   const seen = new Set<string>()
-  for (const t of texts) {
-    for (const m of extractMetrics(t)) {
+  for (const it of items) {
+    for (const m of extractMetrics(it.text, it.context)) {
       const key = `${m.kind}:${m.value.toLowerCase()}`
       if (seen.has(key)) continue
       seen.add(key)

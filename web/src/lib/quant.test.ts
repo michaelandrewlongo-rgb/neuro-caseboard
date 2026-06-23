@@ -20,13 +20,28 @@ describe("quant outcome extraction (BACKLOG P5 #15)", () => {
 
   it("aggregates de-duplicated metrics across claims with kind counts", () => {
     const { metrics, counts } = summarizeDossier([
-      "Occlusion 90% in the cohort.",
-      "Occlusion 90% in the cohort.", // duplicate -> counted once
-      "Complication rate 3% (n=120).",
+      { text: "Occlusion 90% in the cohort.", context: "Occlusion at follow-up" },
+      { text: "Occlusion 90% in the cohort.", context: "Restated elsewhere" }, // duplicate -> counted once
+      { text: "Complication rate 3% (n=120).", context: "Complication rate" },
     ])
     expect(metrics.length).toBe(3) // 90%, 3%, n=120
     expect(counts.percent).toBe(2)
     expect(counts.count).toBe(1)
+  })
+
+  it("attaches the source-claim context to every extracted metric", () => {
+    const metrics = extractMetrics("recurrence was 9–14%", "Recurrence after GTR")
+    expect(metrics.length).toBeGreaterThan(0)
+    for (const m of metrics) expect(m.context).toBe("Recurrence after GTR")
+  })
+
+  it("keeps the FIRST source claim's context across cross-claim dedup", () => {
+    const { metrics } = summarizeDossier([
+      { text: "rate 9%", context: "A" },
+      { text: "rate 9%", context: "B" },
+    ])
+    expect(metrics.length).toBe(1)
+    expect(metrics[0].context).toBe("A")
   })
 
   it("never invents numbers — output values are substrings of the input", () => {

@@ -448,7 +448,9 @@ export default function DossierView({
   // BACKLOG P5 #15: quantitative outcome summary — numbers literally present in the dossier's
   // claims (rates, denominators, CIs, p-values, follow-up). Never fabricated.
   const { metrics: quantMetrics, counts: quantCounts } = summarizeDossier(
-    dossier.sections.flatMap((s) => s.claims.map((c) => `${c.text} ${c.why}`)),
+    dossier.sections.flatMap((s) =>
+      s.claims.map((c) => ({ text: `${c.text} ${c.why}`, context: c.text })),
+    ),
   )
 
   // Under a non-"all" filter every SectionCard with no matching claim returns null; if NONE match
@@ -470,6 +472,7 @@ export default function DossierView({
               {Object.entries(quantCounts)
                 .map(([k, n]) => `${k}: ${n}`)
                 .join("  ·  ")}
+              {"  ·  hover a value for its source claim"}
             </p>
             <div className="flex flex-wrap gap-2">
               {quantMetrics.map((m, i) => (
@@ -477,6 +480,8 @@ export default function DossierView({
                   key={i}
                   className="rounded-md px-2 py-0.5 font-mono text-xs font-semibold"
                   style={{ background: "rgba(107,147,255,.12)", color: "#6b93ff" }}
+                  title={m.context}
+                  aria-label={m.context ? `${m.value} — ${m.context}` : m.value}
                 >
                   {m.value}
                 </span>
