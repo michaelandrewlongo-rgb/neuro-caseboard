@@ -40,3 +40,18 @@ themselves are already rendered in the section cards just below, so the panel st
 **Non-regression invariant:** never fabricates — values remain literal substrings of claim text; the only
 change is carrying the source claim alongside each value (more grounding, not less). The `app/quant_support.py`
 Ask-side mirror is a separate path — out of scope.
+
+---
+
+## Review Findings (PR #64, slice-9 increment 33) — VERDICT: APPROVE (0 MUST, 1 SHOULD, 2 NIT)
+
+Reviewer verified: no missed caller of the changed `summarizeDossier` signature (only DossierView + test);
+first-occurrence dedup keeps the right context; no fabrication; harness green (vitest 42, build, lint).
+
+- [x] review: [SHOULD] a11y — DONE (8ee597a): dropped the name-prohibited `aria-label`, kept `title` for
+  mouse, added `<span className="sr-only"> — {m.context}</span>` companion. Verified `sr-only` is emitted
+  in the built CSS (Tailwind generated it from usage — no custom CSS). vitest 42, build green, lint clean.
+- [accept] review: [NIT] first-wins dedup context (a recurring value shows its first claim's context) —
+  defensible, leave.
+- [accept] review: [NIT] no DossierView markup test (component has no unit test) + no assert of the
+  undefined-context 1-arg path — genuinely minor; quant.ts faithfully carries whatever context it's given.
