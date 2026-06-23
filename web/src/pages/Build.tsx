@@ -23,6 +23,11 @@ const HINTS = [
   "awake left temporal glioma",
 ]
 
+const ENRICH_HELP =
+  "Enrich each question card with retrieved corpus evidence (the Enricher stage). Off builds the card scaffold without attached sources — faster."
+const LLM_HELP =
+  "Generate the case-specific question set with the LLM Explorer (richer, tailored). Off uses the deterministic question template — faster."
+
 const BUILD_STEPS = [
   "Designing the case-specific question set…",
   "Retrieving grounded passages per card…",
@@ -188,26 +193,32 @@ export default function Build() {
           </Button>
         </div>
         <div className="flex flex-wrap gap-5 text-sm text-muted-foreground">
-          <label className="flex items-center gap-2">
+          <label className="flex items-center gap-2" title={ENRICH_HELP}>
             <input
               type="checkbox"
               checked={enrich}
               onChange={(e) => setEnrich(e.target.checked)}
               disabled={loading}
               className="accent-primary"
+              aria-describedby="enrich-help"
             />
             Corpus enrichment
+            <span aria-hidden className="cursor-help text-[11px] opacity-60">ⓘ</span>
           </label>
-          <label className="flex items-center gap-2">
+          <span id="enrich-help" className="sr-only">{ENRICH_HELP}</span>
+          <label className="flex items-center gap-2" title={LLM_HELP}>
             <input
               type="checkbox"
               checked={useLlm}
               onChange={(e) => setUseLlm(e.target.checked)}
               disabled={loading}
               className="accent-primary"
+              aria-describedby="llm-help"
             />
             LLM explorer
+            <span aria-hidden className="cursor-help text-[11px] opacity-60">ⓘ</span>
           </label>
+          <span id="llm-help" className="sr-only">{LLM_HELP}</span>
         </div>
       </form>
 
