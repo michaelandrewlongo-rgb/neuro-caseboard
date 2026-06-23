@@ -8,6 +8,7 @@ import SourcesList from "@/components/ask/SourcesList"
 import LiteratureBlock from "@/components/ask/LiteratureBlock"
 import { CitationAudit } from "@/components/ask/CitationAudit"
 import { StructuresRadar } from "@/components/ask/StructuresRadar"
+import { citationSummary } from "@/lib/citationSummary"
 
 const HINTS = [
   "borders of the cavernous sinus",
@@ -117,13 +118,7 @@ export default function Ask() {
             className="font-mono text-[11px] uppercase tracking-[0.14em]"
             style={{ color: "#6b93ff" }}
           >
-            {(() => {
-              const g = resp.citations.length
-              const l = resp.literature?.citations.length ?? 0
-              const t = g + l
-              if (t === 0) return "No citations in this response"
-              return `${g} of ${t} citations from grounded corpus${l > 0 ? ` · ${l} from literature` : ""}`
-            })()}
+            {citationSummary(resp.citations.length, resp.literature?.citations.length ?? 0)}
           </p>
           {/* Telemetry row — Citation Audit (real data) + Structures Radar (not available) */}
           <div className="grid grid-cols-2 gap-4">

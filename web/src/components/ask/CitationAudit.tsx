@@ -4,7 +4,7 @@
  * HONEST DATA MAPPING (clinical tool — binding):
  * Drives EvidenceGauge from REAL counts derived from AskResponse:
  *   - grounded = citations.length            (corpus / textbook citations — indexed and grounded)
- *   - toLit    = literature?.citations.length ?? 0  (PubMed literature — not from the grounded corpus)
+ *   - toLit    = literature?.citations.length ?? 0  (PubMed literature — the live literature lane, a separate evidence lane from the textbook corpus)
  *   - total    = grounded + toLit
  *
  * No counts are fabricated. If the response carries zero citations the gauge renders at zero.
@@ -56,13 +56,13 @@ export function CitationAudit({ citations, literature }: CitationAuditProps) {
                 className="tnum font-mono text-[17px] font-bold leading-none"
                 style={{ color: "#ededed" }}
               >
-                {grounded}/{total}
+                {total}
               </span>
               <span
                 className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.18em]"
                 style={{ color: "#8a8a8a" }}
               >
-                GROUNDED
+                CITED
               </span>
             </div>
           </EvidenceGauge>
@@ -74,7 +74,7 @@ export function CitationAudit({ citations, literature }: CitationAuditProps) {
               style={{ background: "#34e07f", boxShadow: "0 0 6px #34e07f" }}
             />
             <span className="font-mono text-[10px] uppercase tracking-[0.12em]" style={{ color: "#a8a8a8" }}>
-              Corpus ({grounded})
+              Textbook corpus ({grounded})
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -83,7 +83,7 @@ export function CitationAudit({ citations, literature }: CitationAuditProps) {
               style={{ background: "#ffc94d", boxShadow: "0 0 6px #ffc94d" }}
             />
             <span className="font-mono text-[10px] uppercase tracking-[0.12em]" style={{ color: "#a8a8a8" }}>
-              Literature ({toLit})
+              PubMed literature ({toLit})
             </span>
           </div>
           {total === 0 && (
