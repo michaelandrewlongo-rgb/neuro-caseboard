@@ -10,10 +10,11 @@ import {
 import { Button, Card, Eyebrow } from "@/components/ui"
 import PipelineLoader from "@/components/PipelineLoader"
 import { EvidenceGauge } from "@/components/charts/EvidenceGauge"
-import PlanningMetrics from "@/components/build/PlanningMetrics"
+import PlanningMetrics, { planningHasData } from "@/components/build/PlanningMetrics"
 import DossierView, { type ClaimMark, type ClaimFilter } from "@/components/build/DossierView"
 import RememberedPanel from "@/components/build/RememberedPanel"
 import { subsetClaims } from "@/lib/claimFilter"
+import { heroGridColumns } from "@/lib/heroPanels"
 
 const HINTS = [
   "left retrosigmoid vestibular schwannoma",
@@ -362,9 +363,23 @@ export default function Build() {
           {/* Remembered panel */}
           {remembered !== null && <RememberedPanel remembered={remembered} />}
 
-          {/* ── Telemetry grid 1.15fr / 1fr / 1.05fr ── */}
-          <div className="grid gap-4" style={{ gridTemplateColumns: "1.15fr 1fr 1.05fr" }}>
-            {/* Risk topology — no backing data in BuildResponse; honest "not available" */}
+          {/* ── Telemetry grid — only panels backed by real engine data render ──
+              Evidence Integrity always has data. Risk Topology and Planning
+              Metrics hide when empty (no fabricated clinical numbers) and the
+              grid reflows so collapsed panels leave no dead columns. Each panel
+              reappears automatically once its gate flips true. */}
+          {(() => {
+            // Risk Topology has no BuildResponse field yet; gate it on a future
+            // `resp.dossier.riskTopology`-style field. False today → block hidden.
+            const showRisk = false
+            // <PlanningMetrics /> is rendered below with no props today, so the
+            // same emptiness check the panel uses returns false → block hidden.
+            const showPlanning = planningHasData({})
+            const visiblePanels = 1 + (showRisk ? 1 : 0) + (showPlanning ? 1 : 0)
+            return (
+          <div className="grid gap-4" style={{ gridTemplateColumns: heroGridColumns(visiblePanels) }}>
+            {/* Risk topology — no backing data in BuildResponse; hidden until the engine populates it */}
+            {showRisk && (
             <div
               className="flex flex-col gap-3 p-4"
               style={{
@@ -395,6 +410,7 @@ export default function Build() {
                 </p>
               </div>
             </div>
+            )}
 
             {/* Evidence integrity — driven by real EvidenceSummary */}
             <div
@@ -487,9 +503,11 @@ export default function Build() {
               </div>
             </div>
 
-            {/* Planning metrics — no backing data; renders honestly as "not available" */}
-            <PlanningMetrics />
+            {/* Planning metrics — hidden until the engine populates planning fields */}
+            {showPlanning && <PlanningMetrics />}
           </div>
+            )
+          })()}
 
           {/* ── Evidence filter segmented control ── */}
           <div

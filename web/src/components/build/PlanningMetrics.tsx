@@ -255,24 +255,38 @@ export interface PlanningMetricsProps {
   csfLeakPct?: number
 }
 
-export default function PlanningMetrics({
-  facialPres,
-  facialPresProvenance,
-  hearingPres,
-  hearingPresProvenance,
-  gtr,
-  gtrProvenance,
-  orTimeHr,
-  csfLeakPct,
-}: PlanningMetricsProps) {
+/**
+ * planningHasData — true when the engine supplied at least one planning field.
+ * Pure helper: used both to early-return null inside the panel and to gate the
+ * Dossier hero column from Build.tsx, so the two stay in lockstep.
+ */
+export function planningHasData(p: PlanningMetricsProps): boolean {
+  return (
+    p.facialPres !== undefined ||
+    p.hearingPres !== undefined ||
+    p.gtr !== undefined ||
+    p.orTimeHr !== undefined ||
+    p.csfLeakPct !== undefined
+  )
+}
+
+export default function PlanningMetrics(props: PlanningMetricsProps) {
+  const {
+    facialPres,
+    facialPresProvenance,
+    hearingPres,
+    hearingPresProvenance,
+    gtr,
+    gtrProvenance,
+    orTimeHr,
+    csfLeakPct,
+  } = props
   const reducedMotion = useReducedMotion()
 
-  const hasAnyData =
-    facialPres !== undefined ||
-    hearingPres !== undefined ||
-    gtr !== undefined ||
-    orTimeHr !== undefined ||
-    csfLeakPct !== undefined
+  // Honest hide-when-empty: with no engine-provided planning fields there is
+  // nothing to show, so render nothing rather than a dead "not available" box.
+  // Reappears automatically once any field is populated.
+  if (!planningHasData(props)) return null
 
   return (
     <div
@@ -291,99 +305,79 @@ export default function PlanningMetrics({
         Planning Metrics
       </p>
 
-      {!hasAnyData ? (
-        /* Honest "not available" state — no fabricated clinical numbers */
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 py-6 text-center">
+      <div className="flex flex-col gap-3">
+        <MetricBar
+          label="Facial pres."
+          value={facialPres}
+          color="#34e07f"
+          trackColor="rgba(52,224,127,.12)"
+          labelColor="#34e07f"
+          provenance={facialPresProvenance}
+          reducedMotion={reducedMotion}
+        />
+        <MetricBar
+          label="Hearing pres."
+          value={hearingPres}
+          color="#ffc94d"
+          trackColor="rgba(255,201,77,.12)"
+          labelColor="#ffc94d"
+          provenance={hearingPresProvenance}
+          reducedMotion={reducedMotion}
+        />
+        <MetricBar
+          label="GTR"
+          value={gtr}
+          color="#6b93ff"
+          trackColor="rgba(107,147,255,.12)"
+          labelColor="#6b93ff"
+          provenance={gtrProvenance}
+          reducedMotion={reducedMotion}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div
+          className="flex flex-col gap-0.5 p-3"
+          style={{
+            background: "rgba(255,255,255,.04)",
+            border: "1px solid rgba(255,255,255,.07)",
+            borderRadius: "11px",
+          }}
+        >
           <span
-            className="font-mono text-[9px] font-bold uppercase tracking-[0.14em]"
-            style={{ color: "#666666" }}
-          >
-            Not available
-          </span>
-          <p
-            className="max-w-[16ch] text-[11px] leading-relaxed"
+            className="font-mono text-[9px] uppercase tracking-[0.14em]"
             style={{ color: "#8a8a8a" }}
           >
-            No planning data from engine
-          </p>
+            EST OR TIME
+          </span>
+          <span
+            className="font-mono text-base font-bold"
+            style={{ color: "#ededed" }}
+          >
+            {orTimeHr !== undefined ? `${orTimeHr} hr` : "—"}
+          </span>
         </div>
-      ) : (
-        <>
-          <div className="flex flex-col gap-3">
-            <MetricBar
-              label="Facial pres."
-              value={facialPres}
-              color="#34e07f"
-              trackColor="rgba(52,224,127,.12)"
-              labelColor="#34e07f"
-              provenance={facialPresProvenance}
-              reducedMotion={reducedMotion}
-            />
-            <MetricBar
-              label="Hearing pres."
-              value={hearingPres}
-              color="#ffc94d"
-              trackColor="rgba(255,201,77,.12)"
-              labelColor="#ffc94d"
-              provenance={hearingPresProvenance}
-              reducedMotion={reducedMotion}
-            />
-            <MetricBar
-              label="GTR"
-              value={gtr}
-              color="#6b93ff"
-              trackColor="rgba(107,147,255,.12)"
-              labelColor="#6b93ff"
-              provenance={gtrProvenance}
-              reducedMotion={reducedMotion}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div
-              className="flex flex-col gap-0.5 p-3"
-              style={{
-                background: "rgba(255,255,255,.04)",
-                border: "1px solid rgba(255,255,255,.07)",
-                borderRadius: "11px",
-              }}
-            >
-              <span
-                className="font-mono text-[9px] uppercase tracking-[0.14em]"
-                style={{ color: "#8a8a8a" }}
-              >
-                EST OR TIME
-              </span>
-              <span
-                className="font-mono text-base font-bold"
-                style={{ color: "#ededed" }}
-              >
-                {orTimeHr !== undefined ? `${orTimeHr} hr` : "—"}
-              </span>
-            </div>
-            <div
-              className="flex flex-col gap-0.5 p-3"
-              style={{
-                background: "rgba(255,90,90,.07)",
-                border: "1px solid rgba(255,90,90,.18)",
-                borderRadius: "11px",
-              }}
-            >
-              <span
-                className="font-mono text-[9px] uppercase tracking-[0.14em]"
-                style={{ color: "#ff5a5a" }}
-              >
-                CSF LEAK RISK
-              </span>
-              <span
-                className="font-mono text-base font-bold"
-                style={{ color: "#ff5a5a" }}
-              >
-                {csfLeakPct !== undefined ? `${csfLeakPct}%` : "—"}
-              </span>
-            </div>
-          </div>
-        </>
-      )}
+        <div
+          className="flex flex-col gap-0.5 p-3"
+          style={{
+            background: "rgba(255,90,90,.07)",
+            border: "1px solid rgba(255,90,90,.18)",
+            borderRadius: "11px",
+          }}
+        >
+          <span
+            className="font-mono text-[9px] uppercase tracking-[0.14em]"
+            style={{ color: "#ff5a5a" }}
+          >
+            CSF LEAK RISK
+          </span>
+          <span
+            className="font-mono text-base font-bold"
+            style={{ color: "#ff5a5a" }}
+          >
+            {csfLeakPct !== undefined ? `${csfLeakPct}%` : "—"}
+          </span>
+        </div>
+      </div>
     </div>
   )
 }
