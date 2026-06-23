@@ -52,3 +52,14 @@ the last sub-item / the checkboxes. They actually mark the whole claim (`onMark(
 `onMark(heading, claim, mark)`), no engine/data change. The new `aria-pressed`/`aria-label` strengthen a11y
 (toggle state was color-only). Honest invariant intact — no fabricated affordance (sub-items stay
 non-interactive because the model can't mark them).
+
+---
+
+## Review (PR #66, slice-11 increment 45) — VERDICT: APPROVE (no findings), reviewed INLINE
+
+16-line, single-file presentational diff; reviewed by reading the full final block. Verified: real
+`<button>` elements so `aria-label`/`aria-pressed` are valid + announced (sidesteps the slice-9
+name-prohibited-`<span>` trap); toggle state now conveyed beyond color (was color-only — WCAG fix);
+footer separator + "Mark this card" label detach controls from the `☐` considerations; no contrast-rule
+violation (inline `#6b93ff` on dark surface); sub-items left non-interactive (no false affordance);
+existing styles/onClick unchanged. VERIFY already green (vitest 48, build, lint exit 0/0/0). No REVIEW_FIX.
