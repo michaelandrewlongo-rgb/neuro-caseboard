@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { NavLink, useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
+import { isCmdK } from "@/lib/keys"
 import { getHealth, type Health } from "@/lib/api"
 
 // ── Route definitions ─────────────────────────────────────────────────────────
@@ -157,6 +158,19 @@ export default function NavBar() {
       .finally(() => setHealthLoading(false))
     return () => ctrl.abort()
   }, [])
+
+  // Make the ⌘K hint honest: a global Cmd/Ctrl+K jumps to Ask — the same
+  // navigation the command-field button performs on click. No palette overlay.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isCmdK(e)) {
+        e.preventDefault()
+        navigate("/ask")
+      }
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [navigate])
 
   const healthStatus: HealthStatus = healthLoading
     ? "loading"

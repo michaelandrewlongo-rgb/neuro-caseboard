@@ -96,6 +96,7 @@ export default function FigureGrid({ figures }: { figures: Figure[] }) {
   function enlarge(fig: Figure) {
     setSelected(fig)
     dialogRef.current?.showModal()
+    document.body.style.overflow = "hidden"
   }
 
   if (!figures.length) return null
@@ -112,7 +113,10 @@ export default function FigureGrid({ figures }: { figures: Figure[] }) {
           and aria-modal for free. ESC fires `close` → onClose clears `selected`. */}
       <dialog
         ref={dialogRef}
-        onClose={() => setSelected(null)}
+        onClose={() => {
+          setSelected(null)
+          document.body.style.overflow = ""
+        }}
         onClick={(e) => {
           // Clicking the ::backdrop has target === the dialog element; inner content won't match.
           if (e.target === dialogRef.current) dialogRef.current?.close()

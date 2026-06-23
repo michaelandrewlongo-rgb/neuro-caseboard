@@ -15,6 +15,8 @@ const HINTS = [
   "blood supply of the lateral medulla",
   "Wallenberg syndrome findings",
   "watershed infarct territories",
+  "anterior communicating artery perforators",
+  "Spetzler-Martin AVM grading",
 ]
 
 export default function Ask() {

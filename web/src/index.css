@@ -207,6 +207,16 @@
   animation: citation-flash 1.1s ease-out;
 }
 
+@keyframes citation-flash-lit {
+  from { background-color: rgba(255,102,216,.30); }
+  to   { background-color: transparent; }
+}
+/* Literature sources flash plum (their own lane accent), not textbook-blue.
+   More specific than [id^="src-"] so it wins for src-literature-* targets. */
+[id^="src-literature-"]:target {
+  animation: citation-flash-lit 1.1s ease-out;
+}
+
 /* ============================================================
    Reduced-motion guard — disable ALL looping/entrance
    animations when the user prefers reduced motion.

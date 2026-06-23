@@ -21,6 +21,8 @@ const HINTS = [
   "C5-6 ACDF",
   "right carotid endarterectomy",
   "awake left temporal glioma",
+  "ruptured ACoA aneurysm clipping",
+  "left temporal AVM resection",
 ]
 
 const ENRICH_HELP =
