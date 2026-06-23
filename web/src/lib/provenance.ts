@@ -22,7 +22,10 @@ export const PROVENANCE_LABEL: Record<Provenance, string> = {
 }
 
 const MARKER_RE = /^\[(L|C)?(\d+)\]$/
-const SPLIT_RE = /(\[(?:L|C)?\d+\])/g
+// Matches a whole bracket of ONE OR MORE comma-separated tokens: [2] · [2, 11] · [L2, C3].
+const SPLIT_RE = /(\[\s*(?:L|C)?\d+(?:\s*,\s*(?:L|C)?\d+)*\s*\])/g
+// Anchored variant (no /g) for testing whether a split part IS a bracket group.
+const GROUP_RE = /^\[\s*(?:L|C)?\d+(?:\s*,\s*(?:L|C)?\d+)*\s*\]$/
 
 export function classifyMarker(token: string): Marker | null {
   const m = MARKER_RE.exec(token)
@@ -34,13 +37,26 @@ export function classifyMarker(token: string): Marker | null {
 
 export type Segment = { text: string } | { marker: Marker }
 
-/** Split prose into ordered text / marker segments (markers classified by provenance). */
+/**
+ * Split prose into ordered text / marker segments (markers classified by provenance).
+ *
+ * A bracket group may hold one OR MORE comma-separated tokens; each becomes its own marker
+ * segment, so a combined `[2, 11]` yields two chips just like two single `[2]` `[11]` would.
+ * Single `[n]` is the 1-token case → identical output to the original parser.
+ */
 export function splitCitations(text: string): Segment[] {
-  return text
-    .split(SPLIT_RE)
-    .filter((s) => s !== "")
-    .map((part): Segment => {
-      const marker = classifyMarker(part)
-      return marker ? { marker } : { text: part }
-    })
+  const segments: Segment[] = []
+  for (const part of text.split(SPLIT_RE)) {
+    if (part === "") continue
+    if (GROUP_RE.test(part)) {
+      // Extract each individual token (`L3`, `C2`, `11`) and classify it on its own.
+      for (const tok of part.match(/(?:L|C)?\d+/g) ?? []) {
+        const marker = classifyMarker(`[${tok}]`)
+        if (marker) segments.push({ marker })
+      }
+    } else {
+      segments.push({ text: part })
+    }
+  }
+  return segments
 }

@@ -192,6 +192,21 @@
   animation: signal-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
+/* --- Jump-confirmation flash (P2 #6) ---
+   When a citation chip sets the URL hash, the matching source <li> (id="src-textbook-N"
+   / "src-literature-N") becomes :target and briefly flashes blue → transparent, confirming
+   where the page scrolled. A CSS animation outranks the <li>'s inline `background` in the
+   cascade, so the keyframe visibly overrides it. Covers both lanes via the [id^="src-"] prefix.
+   ponytail ceiling: :target won't re-fire when the SAME chip is clicked twice (hash unchanged);
+   a JS hashchange re-trigger is the upgrade path if that case ever matters. */
+@keyframes citation-flash {
+  from { background-color: rgba(107,147,255,.40); }
+  to   { background-color: transparent; }
+}
+[id^="src-"]:target {
+  animation: citation-flash 1.1s ease-out;
+}
+
 /* ============================================================
    Reduced-motion guard — disable ALL looping/entrance
    animations when the user prefers reduced motion.
