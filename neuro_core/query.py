@@ -15,6 +15,33 @@ from .figure_guards import figure_offtarget
 from .query_analyze import ambiguity_gate, query_analyze, CLARIFY_THRESHOLD, VariantRewrite
 
 
+# Vascular sub-domain affinity (P2 #7): a ruptured-aneurysm query must not surface AVM-radiosurgery
+# chunks. Inlined here (not imported from caseprep/ontology) to keep neuro_core dependency-clean.
+_VASCULAR_SUBDOMAINS = {
+    "aneurysm": ("aneurysm", "acoa", "anterior communicating", "pcom", "mca aneurysm",
+                 "basilar tip", "subarachnoid", "sah", "clipping", "coiling", "vasospasm"),
+    "avm": ("arteriovenous malformation", "avm", "nidus", "radiosurgery", "spetzler",
+            "dural arteriovenous", "davf", "cavernous malformation", "cavernoma"),
+}
+
+
+def _subdomains_in(text: str) -> set[str]:
+    """Vascular sub-domains whose keywords appear in text (lowercased substring match)."""
+    low = (text or "").lower()
+    return {sub for sub, kws in _VASCULAR_SUBDOMAINS.items() if any(k in low for k in kws)}
+
+
+def _offdomain(query: str, text: str) -> bool:
+    """True iff the query is confidently ONE vascular subdomain and the chunk is confidently in a
+    DIFFERENT one (and not the query's). Recall-safe: no confident single query subdomain → never True."""
+    q = _subdomains_in(query)
+    if len(q) != 1:
+        return False
+    (q_sub,) = tuple(q)
+    h = _subdomains_in(text)
+    return bool(h) and q_sub not in h
+
+
 @dataclass
 class Figure:
     source_n: int
@@ -192,7 +219,9 @@ class Engine:
     def _retrieve(self, question):
         qv = self.embedder.embed_query(question)
         hits = self.index.hybrid_search(question, qv, self.config.retrieve_k)
-        return self.reranker.rerank(question, hits, self.config.rerank_k)
+        ranked = self.reranker.rerank(question, hits, self.config.retrieve_k)  # score all candidates (no extra CE cost)
+        ranked.sort(key=lambda h: _offdomain(question, h.text))  # stable: off-subdomain hits sink to the bottom, score order preserved within groups
+        return ranked[: self.config.rerank_k]
 
     def _plan_query(self, question):
         """Shared disambiguation seam. Returns a Clarification (ask, no briefing) or
