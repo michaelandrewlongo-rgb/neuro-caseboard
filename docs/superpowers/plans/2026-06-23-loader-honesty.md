@@ -52,3 +52,21 @@ arrives (rather than looping). True per-stage progress would need backend stream
 **Non-regression:** reduced-motion guards (pulse / animate-pulse disabled) and the `sr-only` announcements
 are preserved; no clinical content animates; the loaders are pure presentation — no data/engine change.
 Scrubbing "Vertex" removes an infra-leak, consistent with the honest-surface invariant.
+
+---
+
+## Review Findings (PR #65, slice-10 increment 39) — VERDICT: APPROVE (0 MUST, 3 NITs)
+
+Reviewer verified empirically: `advanceStep` safe for total 0/1 (no negative index/crash; holds at last —
+anti-backward); StepChecklist never indexes `steps[i]` (refactor removed the crash risk); timer holds on
+last step (setState same value → React bails); no interval leak; AskLoader consolidation is appearance/
+a11y byte-parity (eyebrow/srText carried, 6 shimmer widths identical, role/aria-live/aria-busy preserved);
+Build/Cards default-parity confirmed against `f32c6b5^`; harness green (48/build/lint).
+
+- [x] review: [NIT] `BlurText.tsx` ORPHANED — DONE: verified 0 importers (grep exit 1), `git rm`'d it;
+  harness still green (vitest 48, build no "Could not resolve", lint clean) → confirms it was dead.
+- [accept] review: [NIT] `Home.tsx`/`HealthPanel.tsx` "Vertex" mentions remain — DELIBERATE infra-status
+  badges ("ENGINE · VERTEX", "Synthesis · Vertex"), not transient loader leaks. The P3 #10 bug is the
+  loader; these are out of scope and intentional. Leave.
+- [accept] review: [NIT] no `total=0` test — safe (`→0`/`→[]`) and no caller passes empty steps (all ≥4).
+  YAGNI; skip.
