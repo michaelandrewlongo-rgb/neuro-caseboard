@@ -59,3 +59,35 @@ Do NOT touch retrieval (#7, merged) or other "1 papers" sites (#14 mops up any r
 **Non-regression invariant:** preserves honest evidence auditing — genuinely off-domain papers are still
 quarantined as off_target; the change only stops mislabeling in-domain papers, matching the auditor's
 stated "default to needs_review, reject only on clear domain contradiction" rule. No fabrication.
+
+---
+
+## Review Findings (PR #63, slice-8 increment 27) — VERDICT: CHANGES REQUESTED (1 MUST)
+
+Reviewer empirically REPRODUCED a clinical-safety regression introduced by the `not domain_match` gate.
+Root cause: the gate now rests on `_detect_domain`'s argmax, but `_extract_domain_terms`/`_detect_domain`/
+`_extract_contradiction_terms` use **unbounded `term in lower` substring matching**, and the vascular
+lexicon has two NOISE terms — `"ica"` (fires inside clinical/surgical/cortical/…) and `"aspects"` (the
+plain English word, intended as the ASPECTS stroke score). So a meningioma paper "Clinical aspects of
+meningioma. Surgical resection…" scores vascular=2 (ica+aspects) > tumor=1 → `domain_match=True` → its
+"meningioma" contradiction is NOT quarantined → escapes into `supported`/`needs_review` → `compile.py`
+keeps it in the PRIMARY dossier (citable). Pre-fix it was off_target (rejected appendix). Verified via
+trace through compile.py:46/159/220. (Same substring class as slice-7's accepted NIT — but here it flips
+a quarantine OFF, so it is a MUST, not fails-safe.)
+
+### Review tasks
+- [x] review: [MUST] de-noise domain detection — DONE (e0048cc): shared `_has_term(text_lower, term)` uses
+  `re.search(r"\b{re.escape(term)}\b", …)` across `_extract_domain_terms`/`_detect_domain`/
+  `_extract_contradiction_terms`; dropped `"aspects"` from the vascular lexicon. Gate kept.
+- [x] review: [MUST] regression test — DONE (e0048cc): `test_off_domain_meningioma_with_substring_noise_
+  stays_quarantined` (off_target, M1 in contradicting_paper_ids, accepted_papers == []); confirmed FAILS
+  on pre-fix (`needs_review`), PASSES after.
+- [x] review: [SHOULD] test gaps — DONE (e0048cc): off_target reason pluralization + `paper_domain is None`
+  + contradiction-only edge tests added.
+- [x] review: [NIT] verb agreement — left as-is (out of scope).
+- [x] review: FULL `vendor/caseprep/tests` green after the change — **530 passed** (e0048cc).
+- [x] review: FOLLOW-UP (fcc5671) — word-boundary matching was plural-blind (a plural-only off-domain
+  paper "meningiomas"/"gliomas" would escape into a citable status, same harm class). Added trailing `s?`
+  to `_has_term` to cover regular `-s` plurals (the high-value tumor `-oma` terms); irregular plurals
+  documented as out-of-scope. + `test_off_domain_plural_only_contradiction_still_quarantined`. Full
+  caseprep suite **531 passed**.
