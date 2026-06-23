@@ -9,12 +9,15 @@ touching the legit corpus.
 
 Why detection is **index-based** (not PDF-TOC based)
 ----------------------------------------------------
-The first version of this script derived the contamination boundary from the *PDF* TOC
-(``ingest._classify_toc -> content_end``). That is unreliable against a live index: the
-Youmans PDF was re-modified after indexing, so the appended David-Icke book sits at *PDF*
-pages 7354+ while the *index* (built earlier) carries it at *index* pages 6330+ — a ~1024
-page offset — and ``_classify_toc`` returns ``None`` on the current PDF anyway. The PDF and
-the index page numbers are simply out of sync, so detection MUST come from the index itself.
+The boundary used for cleaning must be authoritative *for the index rows we delete*, so we
+derive it from the index itself, not the PDF. Two reasons: (1) the deletion targets index
+rows (``book``/``page``), so the index's own ``page``/``chapter`` data is the only thing that
+correctly identifies which rows to remove; (2) an index can drift from its source PDF (a PDF
+re-modified after indexing, inconsistent/duplicate TOC bookmarks — the Youmans TOC bookmarks
+even list the appended book's chapters at two different page numbers), so a PDF-derived
+boundary can mis-map onto the index. (The shipped ingest guard ``ingest._classify_toc`` does
+correctly return ``content_end=6330`` for the current Youmans PDF and matches the physical
+boundary, so a *re-index* stays clean; this script cleans an *already-built* index.)
 
 We therefore detect the boundary purely from the indexed ``chunks`` rows
 (``book``/``page``/``chapter``/``text``), independent of any PDF:
