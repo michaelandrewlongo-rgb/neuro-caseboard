@@ -46,11 +46,12 @@ Reviewer verified empirically: vitest 31 pass, build green, gating consistent (v
 rendered blocks), planningHasData both branches correct, heroGridColumns edge cases safe, no contrast
 regression (panels on dark surface, no text-primary/success/amber), honesty invariant intact.
 
-- [ ] review: [SHOULD] `PlanningMetrics.tsx` exporting `planningHasData` (a non-component value) trips
+- [x] review: [SHOULD] `PlanningMetrics.tsx` exporting `planningHasData` (a non-component value) trips
   `react-refresh/only-export-components` (lint, not a CI gate; HMR/DX only). Fix = move `planningHasData`
   into `heroPanels.ts` (the existing pure-helper module) and repoint the test import. Cleaner than an
-  eslint-disable; consolidates both layout helpers.
-- [ ] review: [NIT] Build.tsx comments (369/381/506) + PlanningMetrics.tsx:288 say panels "reappear
+  eslint-disable; consolidates both layout helpers. DONE (2f4b960): `npm run lint` now clean; vitest 31,
+  build green. heroPanels.ts gained a structural `PlanningFields` interface so it needs no React import.
+- [x] review: [NIT] Build.tsx comments (369/381/506) + PlanningMetrics.tsx:288 say panels "reappear
   automatically once its gate flips true" — but both gates are hardcoded constants (`showRisk=false`,
   `planningHasData({})`), so nothing flips without a code edit. Reword to "reappears once a real field is
-  wired into this gate" so the placeholder isn't implied to be live-connected.
+  wired into this gate" so the placeholder isn't implied to be live-connected. DONE (2f4b960).
