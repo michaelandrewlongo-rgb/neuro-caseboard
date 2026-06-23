@@ -161,12 +161,24 @@ function ClaimCard({
           </div>
         )}
 
-        {/* Rehearsal mark controls */}
+        {/* Rehearsal mark controls — a distinct card footer (top separator) so the
+            ✗/★ toggles read as marks on the WHOLE claim, not the ☐ considerations above. */}
         {r.rehearsal && (
-          <div className="mt-3 flex gap-2">
+          <div
+            className="mt-3 flex items-center gap-2 pt-3"
+            style={{ borderTop: "1px solid rgba(255,255,255,.06)" }}
+          >
+            <span
+              className="mr-1 font-mono text-[9px] font-bold uppercase tracking-[0.14em]"
+              style={{ color: "#6b93ff" }}
+            >
+              Mark this card
+            </span>
             <button
               type="button"
               onClick={() => r.onMark?.(heading, claim, "wrong")}
+              aria-label="Mark this claim wrong"
+              aria-pressed={active === "wrong"}
               className="font-mono text-[11px] transition-colors"
               style={{
                 padding: "2px 8px",
@@ -182,6 +194,8 @@ function ClaimCard({
             <button
               type="button"
               onClick={() => r.onMark?.(heading, claim, "important")}
+              aria-label="Mark this claim important"
+              aria-pressed={active === "important"}
               className="font-mono text-[11px] transition-colors"
               style={{
                 padding: "2px 8px",
