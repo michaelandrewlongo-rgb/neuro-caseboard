@@ -10,11 +10,11 @@ import {
 import { Button, Card, Eyebrow } from "@/components/ui"
 import PipelineLoader from "@/components/PipelineLoader"
 import { EvidenceGauge } from "@/components/charts/EvidenceGauge"
-import PlanningMetrics, { planningHasData } from "@/components/build/PlanningMetrics"
+import PlanningMetrics from "@/components/build/PlanningMetrics"
 import DossierView, { type ClaimMark, type ClaimFilter } from "@/components/build/DossierView"
 import RememberedPanel from "@/components/build/RememberedPanel"
 import { subsetClaims } from "@/lib/claimFilter"
-import { heroGridColumns } from "@/lib/heroPanels"
+import { heroGridColumns, planningHasData } from "@/lib/heroPanels"
 
 const HINTS = [
   "left retrosigmoid vestibular schwannoma",
@@ -367,7 +367,7 @@ export default function Build() {
               Evidence Integrity always has data. Risk Topology and Planning
               Metrics hide when empty (no fabricated clinical numbers) and the
               grid reflows so collapsed panels leave no dead columns. Each panel
-              reappears automatically once its gate flips true. */}
+              reappears once a real engine field is wired into its gate below. */}
           {(() => {
             // Risk Topology has no BuildResponse field yet; gate it on a future
             // `resp.dossier.riskTopology`-style field. False today → block hidden.

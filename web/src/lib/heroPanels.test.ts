@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { heroGridColumns } from "./heroPanels"
-import { planningHasData } from "../components/build/PlanningMetrics"
+import { heroGridColumns, planningHasData } from "./heroPanels"
 
 describe("heroGridColumns (Dossier hero reflow)", () => {
   it("maps visible-panel count to grid template columns", () => {

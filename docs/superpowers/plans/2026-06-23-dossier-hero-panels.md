@@ -37,3 +37,20 @@ say so). Forward-compatible: panels reappear if the engine ever populates them.
 **Note:** the backlog listed `compile.py`/`model.py` as targets for the "populate from engine" option;
 that path is intentionally NOT taken (no honest data to populate; fabrication is unsafe in a clinical
 tool). This slice is the "collapse when empty" option, frontend-only.
+
+---
+
+## Review Findings (PR #59, slice-4 increment 6) — VERDICT: APPROVE (no MUSTs)
+
+Reviewer verified empirically: vitest 31 pass, build green, gating consistent (visiblePanels matches
+rendered blocks), planningHasData both branches correct, heroGridColumns edge cases safe, no contrast
+regression (panels on dark surface, no text-primary/success/amber), honesty invariant intact.
+
+- [ ] review: [SHOULD] `PlanningMetrics.tsx` exporting `planningHasData` (a non-component value) trips
+  `react-refresh/only-export-components` (lint, not a CI gate; HMR/DX only). Fix = move `planningHasData`
+  into `heroPanels.ts` (the existing pure-helper module) and repoint the test import. Cleaner than an
+  eslint-disable; consolidates both layout helpers.
+- [ ] review: [NIT] Build.tsx comments (369/381/506) + PlanningMetrics.tsx:288 say panels "reappear
+  automatically once its gate flips true" — but both gates are hardcoded constants (`showRisk=false`,
+  `planningHasData({})`), so nothing flips without a code edit. Reword to "reappears once a real field is
+  wired into this gate" so the placeholder isn't implied to be live-connected.

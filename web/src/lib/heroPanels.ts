@@ -12,3 +12,29 @@ export function heroGridColumns(visible: number): string {
   if (visible === 1) return "minmax(0, 460px)"
   return ""
 }
+
+/** The engine-populated numeric fields that decide whether Planning Metrics has data. */
+export interface PlanningFields {
+  facialPres?: number
+  hearingPres?: number
+  gtr?: number
+  orTimeHr?: number
+  csfLeakPct?: number
+}
+
+/**
+ * planningHasData — true when the engine supplied at least one planning field.
+ * Pure helper kept here (not in the component) so it carries no React import and
+ * doesn't trip react-refresh/only-export-components. Used both to early-return
+ * null inside <PlanningMetrics/> and to gate the Dossier hero column from
+ * Build.tsx, so the two stay in lockstep.
+ */
+export function planningHasData(p: PlanningFields): boolean {
+  return (
+    p.facialPres !== undefined ||
+    p.hearingPres !== undefined ||
+    p.gtr !== undefined ||
+    p.orTimeHr !== undefined ||
+    p.csfLeakPct !== undefined
+  )
+}

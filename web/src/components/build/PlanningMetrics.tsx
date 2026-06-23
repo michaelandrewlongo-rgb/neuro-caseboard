@@ -17,6 +17,7 @@
 
 import { useCallback, useId, useRef, useState } from "react"
 import { cn } from "../../lib/utils"
+import { planningHasData } from "../../lib/heroPanels"
 
 /** Per-metric provenance data. Forward-compatible scaffolding — no engine fields emit this yet. */
 export interface Provenance {
@@ -255,21 +256,6 @@ export interface PlanningMetricsProps {
   csfLeakPct?: number
 }
 
-/**
- * planningHasData — true when the engine supplied at least one planning field.
- * Pure helper: used both to early-return null inside the panel and to gate the
- * Dossier hero column from Build.tsx, so the two stay in lockstep.
- */
-export function planningHasData(p: PlanningMetricsProps): boolean {
-  return (
-    p.facialPres !== undefined ||
-    p.hearingPres !== undefined ||
-    p.gtr !== undefined ||
-    p.orTimeHr !== undefined ||
-    p.csfLeakPct !== undefined
-  )
-}
-
 export default function PlanningMetrics(props: PlanningMetricsProps) {
   const {
     facialPres,
@@ -285,7 +271,7 @@ export default function PlanningMetrics(props: PlanningMetricsProps) {
 
   // Honest hide-when-empty: with no engine-provided planning fields there is
   // nothing to show, so render nothing rather than a dead "not available" box.
-  // Reappears automatically once any field is populated.
+  // Reappears once the engine wires a real value into one of these fields.
   if (!planningHasData(props)) return null
 
   return (
