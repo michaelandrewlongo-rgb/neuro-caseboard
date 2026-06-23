@@ -15,6 +15,7 @@ clinical domain clearly contradicts the case.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 from caseprep.core.contracts import SlotConfidence
@@ -146,7 +147,12 @@ _DOMAIN_LEXICON: dict[str, tuple[str, ...]] = {
         "mca", "ica", "aca", "pca", "basilar", "stroke",
         "large vessel occlusion", "lvo", "embolization",
         "flow diversion", "stent retriever", "aspiration thrombectomy",
-        "tici", "mtici", "nihss", "aspects",
+        "tici", "mtici", "nihss",
+        # NOTE: "aspects" (the ASPECTS stroke score) was dropped here — it is a
+        # plain English word that word-boundary matching does NOT save, so it
+        # false-matched off-domain papers ("clinical aspects of meningioma") and
+        # corrupted the domain-density argmax. "ica" is KEPT: word boundaries
+        # (\bica\b) make it safe as the internal-carotid-artery token.
     ),
 }
 
@@ -178,13 +184,36 @@ _DOMAIN_CONTRADICTIONS: dict[str, tuple[str, ...]] = {
 # ── keyword extraction ───────────────────────────────────────────────────────
 
 
+def _has_term(text_lower: str, term: str) -> bool:
+    """Whole-token (word-boundary) membership test — replaces the old unbounded
+    ``term in text_lower`` substring check.
+
+    Short tokens like ``"ica"`` no longer fire inside ``clinical``/``surgical``/
+    ``cortical`` and ``"cord"`` no longer fires inside ``record``; ``aca``/``pca``/
+    ``mca``/``gtr``/``eor`` only match as standalone tokens. Multi-word and
+    hyphenated terms (e.g. ``"gross total resection"``, ``"far-lateral"``) are
+    matched literally — ``re.escape`` leaves spaces literal and escapes the hyphen,
+    and the ``\\b`` anchors sit on the alphanumeric outer ends of every term.
+
+    Regular ``-s`` plurals are matched (the trailing ``s?``), so ``"meningioma"``
+    matches "meningiomas", ``"glioma"`` matches "gliomas", etc. — important because
+    the highest-value contradiction terms (tumor ``-oma`` names) pluralize regularly.
+    Known limitation: irregular medical plurals are NOT matched
+    (``laminectomy``→"laminectom**ies**", ``metastasis``→"metasta**ses**",
+    ``nidus``→"nid**i**") — handling those needs a stemmer (out of scope, ponytail).
+    Symmetric across the positive and contradiction lexicons. ``text_lower`` is
+    expected to already be lower-cased by the caller.
+    """
+    return re.search(rf"\b{re.escape(term)}s?\b", text_lower) is not None
+
+
 def _extract_domain_terms(text: str) -> set[str]:
     """Extract domain-signalling terms from text."""
     lower = text.lower()
     found: set[str] = set()
     for terms in _DOMAIN_LEXICON.values():
         for term in terms:
-            if term in lower:
+            if _has_term(lower, term):
                 found.add(term)
     return found
 
@@ -201,7 +230,7 @@ def _extract_contradiction_terms(text: str, expected_domain: str) -> set[str]:
         return set()
     terms = _DOMAIN_CONTRADICTIONS.get(expected_domain, ())
     lower = text.lower()
-    return {t for t in terms if t in lower}
+    return {t for t in terms if _has_term(lower, t)}
 
 
 def _detect_domain(text: str) -> str | None:
@@ -209,7 +238,7 @@ def _detect_domain(text: str) -> str | None:
     lower = text.lower()
     scores: dict[str, int] = {}
     for domain, terms in _DOMAIN_LEXICON.items():
-        score = sum(1 for t in terms if t in lower)
+        score = sum(1 for t in terms if _has_term(lower, t))
         if score > 0:
             scores[domain] = score
     if not scores:
@@ -221,6 +250,11 @@ def _detect_domain(text: str) -> str | None:
 def _paper_text(paper: dict[str, Any]) -> str:
     """Get the searchable text from a paper summary."""
     return f"{paper.get('title', '')} {paper.get('text_snippet', '')}"
+
+
+def _plural(n: int, noun: str) -> str:
+    """``1 paper`` / ``2 papers`` — avoids the ``1 papers`` mis-pluralization."""
+    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
 
 
 # ── audit logic ──────────────────────────────────────────────────────────────
@@ -280,7 +314,7 @@ def _audit_card(card, *, topic: str) -> AuditedCard:
         # - No domain match + term overlap → needs_review (some signal)
         # - Neither → unclassified, falls through to needs_review
 
-        if contradictions:
+        if contradictions and not domain_match:
             off_target.append(pid)
         elif domain_match and term_overlap:
             supported.append(pid)
@@ -296,7 +330,7 @@ def _audit_card(card, *, topic: str) -> AuditedCard:
     if supported:
         ac.audit_status = "supported"
         ac.audit_reason = (
-            f"{len(supported)} papers in matching clinical domain "
+            f"{_plural(len(supported), 'paper')} in matching clinical domain "
             f"({case_domain or 'unknown'})"
         )
         ac.supporting_paper_ids = supported
@@ -304,7 +338,7 @@ def _audit_card(card, *, topic: str) -> AuditedCard:
     elif off_target and not supported:
         ac.audit_status = "off_target"
         ac.audit_reason = (
-            f"{len(off_target)} papers contradict expected domain "
+            f"{_plural(len(off_target), 'paper')} contradict expected domain "
             f"({case_domain or 'unknown'})"
         )
         ac.contradicting_paper_ids = off_target
