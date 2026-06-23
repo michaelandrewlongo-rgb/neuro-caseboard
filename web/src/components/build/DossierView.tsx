@@ -481,9 +481,12 @@ export default function DossierView({
                   className="rounded-md px-2 py-0.5 font-mono text-xs font-semibold"
                   style={{ background: "rgba(107,147,255,.12)", color: "#6b93ff" }}
                   title={m.context}
-                  aria-label={m.context ? `${m.value} — ${m.context}` : m.value}
                 >
                   {m.value}
+                  {/* a11y: `title` is mouse-only and aria-label is name-prohibited on a
+                      generic <span>; an sr-only companion is read during DOM traversal so the
+                      source-claim grounding reaches screen-reader users too. */}
+                  {m.context && <span className="sr-only"> — {m.context}</span>}
                 </span>
               ))}
             </div>
