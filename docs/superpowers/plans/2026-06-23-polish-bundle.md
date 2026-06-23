@@ -16,7 +16,7 @@ satisfied for two of them).
 
 ---
 
-- [ ] **Step 1 — Make the ⌘K affordance true (wire Cmd/Ctrl+K → Ask)**
+- [x] **Step 1 — Make the ⌘K affordance true (wire Cmd/Ctrl+K → Ask)**
   - `NavBar.tsx:254-264` shows a `⌘K` `<kbd>` hint inside the "Ask the corpus…" button, but NO keydown
     handler exists anywhere → false affordance.
   - `web/src/lib/keys.ts` (NEW, pure): `isCmdK(e: { metaKey: boolean; ctrlKey: boolean; key: string }):
@@ -28,18 +28,18 @@ satisfied for two of them).
     to the same navigation the button already does is the minimal honest fix — the hint now does what it
     promises.)
 
-- [ ] **Step 2 — Cerebrovascular onboarding chips (Ask + Build)**
+- [x] **Step 2 — Cerebrovascular onboarding chips (Ask + Build)**
   - `Ask.tsx:13-18` `HINTS`: append 1-2 cerebrovascular question examples (e.g.
     "anterior communicating artery perforators", "Spetzler-Martin AVM grading").
   - `Build.tsx:19-24` `HINTS`: append 1-2 cerebrovascular case examples distinct from the existing
     "right carotid endarterectomy" (e.g. "ruptured ACoA aneurysm clipping", "left temporal AVM resection").
 
-- [ ] **Step 3 — Figure lightbox body-scroll-lock (deferred from #5)**
+- [x] **Step 3 — Figure lightbox body-scroll-lock (deferred from #5)**
   - `FigureGrid.tsx`: in `enlarge()` (~:96-99) add `document.body.style.overflow = "hidden"`; in the
     `<dialog onClose>` (~:115) restore `document.body.style.overflow = ""`. `onClose` is the single
     chokepoint for ESC / backdrop / × close paths, so one restore site covers all.
 
-- [ ] **Step 4 — Lane-appropriate jump-flash color (deferred from #6)**
+- [x] **Step 4 — Lane-appropriate jump-flash color (deferred from #6)**
   - `web/src/index.css` (after the existing `@keyframes citation-flash` + `[id^="src-"]:target`, :202-208):
     add `@keyframes citation-flash-lit { from { background-color: rgba(255,102,216,.30); } to {
     background-color: transparent; } }` and `[id^="src-literature-"]:target { animation: citation-flash-lit
