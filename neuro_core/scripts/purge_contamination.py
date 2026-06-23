@@ -65,6 +65,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import sys
@@ -416,11 +417,14 @@ def do_apply(db, index_dir):
               f"(page >= {info['boundary']})")
 
     # (3) Rewrite the captions JSONL, dropping lines for deleted figures.
+    # Atomic write (tmp + os.replace) so a crash mid-rewrite can't corrupt the file.
     dropped_caps = 0
     if caps_path.exists() and deleted_fig_ids:
         kept, dropped_caps = _filter_caption_lines(
             caps_path.read_text().splitlines(), deleted_fig_ids)
-        caps_path.write_text(("\n".join(kept) + "\n") if kept else "")
+        tmp_caps = caps_path.with_suffix(caps_path.suffix + ".tmp")
+        tmp_caps.write_text(("\n".join(kept) + "\n") if kept else "")
+        os.replace(tmp_caps, caps_path)
 
     print(f"\nPurged {deleted_chunks} chunks + {deleted_figs} figures; "
           f"dropped {dropped_caps} caption line(s). Backup: {backup}")
