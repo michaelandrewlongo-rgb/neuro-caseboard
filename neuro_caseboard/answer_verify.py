@@ -3,7 +3,12 @@
 import re
 from dataclasses import dataclass, field
 
-from neuro_caseboard.entailment import get_default_verifier, should_cite, unsupported_entities
+from neuro_caseboard.entailment import (
+    _content_tokens,
+    get_default_verifier,
+    should_cite,
+    unsupported_entities,
+)
 
 _MARKER = re.compile(r"\[(L?\d+)\]")
 _SENT = re.compile(r"(?<=[.!?])\s+")
@@ -84,7 +89,12 @@ def verify_answer(answer: str, premises: dict, *, verifier=None) -> "AnswerVerif
         supported = should_cite(premise, claim_text, verifier)
         # Precision guard: a salient medical entity asserted in the claim but absent from its cited
         # premise is a cross-source bleed (recall can't catch it — the other tokens satisfy overlap).
-        bleed = sorted(unsupported_entities(claim_text, premise))
+        # Mirror should_cite's conservative abstain: when the premise is too thin to judge (e.g. an
+        # empty PubMed abstract), skip the bleed check rather than flag an unjudgeable [L#] claim.
+        min_tok = getattr(verifier, "min_premise_tokens", 5)
+        bleed = []
+        if len(_content_tokens(premise)) >= min_tok:
+            bleed = sorted(unsupported_entities(claim_text, premise))
         if bleed:
             supported = False
         if not supported:  # count once per claim (don't double-count a recall-fail that also bleeds)

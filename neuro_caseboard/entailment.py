@@ -20,15 +20,31 @@ _STOP = {"the", "and", "for", "with", "that", "this", "are", "must", "its", "int
 
 # Word endings that mark a salient clinical entity (lesion / inflammation / operation / deficit).
 # Anchored at the token end; case-insensitive (tokens are lowercased before matching).
+# `(?<!gn)osis` blocks diagnosis/prognosis (common clinical prose) while keeping stenosis/sclerosis/
+# necrosis; `asis` catches metastasis and `desis` catches arthrodesis/spondylodesis.
 _MEDICAL_SUFFIX = re.compile(
-    r"(oma|omas|itis|osis|ectomy|otomy|ostomy|plasty|pathy|plegia|paresis|algia|"
-    r"emia|aemia|cele|rrhage|rrhagia|rrhea|rrhoea|stenosis|sclerosis|malacia|oplasty)$",
+    r"(oma|omas|itis|(?<!gn)osis|ectomy|otomy|ostomy|plasty|pathy|plegia|paresis|algia|"
+    r"emia|aemia|cele|rrhage|rrhagia|rrhea|rrhoea|stenosis|sclerosis|malacia|oplasty|asis|desis)$",
     re.IGNORECASE,
 )
+
+# Non-clinical words that happen to carry a medical suffix but are not clinical entities; excluded
+# from medical_entities so they never trigger a bleed flag. (diagnosis/prognosis are handled by the
+# `(?<!gn)osis` lookbehind above; clinical suffix words like "apathy" are deliberately NOT listed.)
+_BENIGN_WORDS = frozenset({
+    "academia", "bohemia", "diploma", "empathy", "sympathy",
+    "telepathy", "antipathy", "nostalgia",
+})
 
 
 def _content_tokens(text: str) -> set[str]:
     return {t for t in _TOKEN.findall((text or "").lower()) if len(t) >= 3 and t not in _STOP}
+
+
+def _singular(tok: str) -> str:
+    """Strip a single trailing plural "s" (only for tokens long enough that "s" is a suffix, not a
+    stem letter), so a plural claim entity matches its singular premise form ("gliomas"→"glioma")."""
+    return tok[:-1] if tok.endswith("s") and len(tok) > 3 else tok
 
 
 def medical_entities(text: str) -> set[str]:
@@ -36,15 +52,17 @@ def medical_entities(text: str) -> set[str]:
     bearing a medical suffix. Generic prose words never match the suffix set, so this is a low
     false-positive proxy for "named pathology/operation/deficit" rather than ordinary vocabulary."""
     return {t for t in _TOKEN.findall((text or "").lower())
-            if len(t) >= 6 and _MEDICAL_SUFFIX.search(t)}
+            if len(t) >= 6 and _MEDICAL_SUFFIX.search(t) and t not in _BENIGN_WORDS}
 
 
 def unsupported_entities(claim: str, premise: str) -> set[str]:
     """Medical entities asserted in ``claim`` but absent from its cited ``premise`` token set —
     a cross-source content bleed (e.g. "cavernoma" appearing in a glioma answer's sentence whose
-    cited span never mentions it). Uses the same tokenizer/lowercasing on both sides."""
-    premise_tokens = set(_TOKEN.findall((premise or "").lower()))
-    return {e for e in medical_entities(claim) if e not in premise_tokens}
+    cited span never mentions it). Uses the same tokenizer/lowercasing on both sides, comparing on
+    a singular-normalized form so a pluralized claim entity ("gliomas") matches its singular premise
+    token ("glioma") rather than false-flagging as a bleed."""
+    premise_singulars = {_singular(t) for t in _TOKEN.findall((premise or "").lower())}
+    return {e for e in medical_entities(claim) if _singular(e) not in premise_singulars}
 
 
 @runtime_checkable
