@@ -195,12 +195,16 @@ def _has_term(text_lower: str, term: str) -> bool:
     matched literally — ``re.escape`` leaves spaces literal and escapes the hyphen,
     and the ``\\b`` anchors sit on the alphanumeric outer ends of every term.
 
-    Known limitation: ``\\b`` is exact, so a term does not match its own plural
-    (``\\bmeningioma\\b`` does not match "meningiomas"). This is symmetric across
-    the positive lexicon and the contradiction lexicon. ``text_lower`` is expected
-    to already be lower-cased by the caller.
+    Regular ``-s`` plurals are matched (the trailing ``s?``), so ``"meningioma"``
+    matches "meningiomas", ``"glioma"`` matches "gliomas", etc. — important because
+    the highest-value contradiction terms (tumor ``-oma`` names) pluralize regularly.
+    Known limitation: irregular medical plurals are NOT matched
+    (``laminectomy``→"laminectom**ies**", ``metastasis``→"metasta**ses**",
+    ``nidus``→"nid**i**") — handling those needs a stemmer (out of scope, ponytail).
+    Symmetric across the positive and contradiction lexicons. ``text_lower`` is
+    expected to already be lower-cased by the caller.
     """
-    return re.search(rf"\b{re.escape(term)}\b", text_lower) is not None
+    return re.search(rf"\b{re.escape(term)}s?\b", text_lower) is not None
 
 
 def _extract_domain_terms(text: str) -> set[str]:

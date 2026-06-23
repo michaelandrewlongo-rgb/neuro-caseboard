@@ -156,6 +156,28 @@ def test_off_domain_meningioma_with_substring_noise_stays_quarantined():
     assert accepted_papers(audited) == []
 
 
+def test_off_domain_plural_only_contradiction_still_quarantined():
+    """REVIEW FOLLOW-UP (PR #63). Word-boundary matching must still catch REGULAR
+    ``-s`` plurals (the ``s?`` in ``_has_term``), else an off-domain tumor paper
+    that names ONLY plural forms ("meningiomas", "gliomas") would escape off_target
+    into a citable status — the same harm class as the noise-term MUST.
+
+    Fails on the bare-``\\b`` matching (no contradiction term matches the plurals →
+    paper falls through to ``needs_review`` and is citable); passes with ``s?``
+    (paper_domain=tumor via the plurals, contradiction present → ``off_target``).
+    """
+    paper = {
+        "id": "M2",
+        "title": "Surgical management of multiple meningiomas",
+        "text_snippet": "A series of resected meningiomas and gliomas; recurrence was analyzed.",
+    }
+    card = _card(question=VASCULAR_QUESTION, why=VASCULAR_WHY, papers=[paper])
+    audited = _audit_card(card, topic=VASCULAR_TOPIC)
+    assert audited.audit_status == "off_target", audited.audit_reason
+    assert "M2" in audited.contradicting_paper_ids
+    assert "M2" not in [p["id"] for p in accepted_papers(audited)]
+
+
 def test_off_target_reason_pluralization_one_paper():
     """SHOULD (PR #63 review). The OFF_TARGET reason string also pluralizes:
     exactly 1 off_target paper reads ``1 paper contradict`` (not ``1 papers``)."""
