@@ -68,14 +68,14 @@ flag, never deletion). Upgrade path: synonym/lemma normalization. Acceptable for
 - [NIT] under-fires on `metastasis` (-asis) and `arthrodesis`/`spondylodesis` (-desis) — optional add.
 
 ### Review tasks
-- [ ] review: [MUST] tighten `_MEDICAL_SUFFIX` so `-osis` does not match diagnosis/prognosis
+- [x] review: [MUST] tighten `_MEDICAL_SUFFIX` so `-osis` does not match diagnosis/prognosis
   (`(?<!gn)osis`); verify stenosis/sclerosis/necrosis still match.
-- [ ] review: [MUST] normalize singular/plural in `unsupported_entities` (strip trailing -s on both
+- [x] review: [MUST] normalize singular/plural in `unsupported_entities` (strip trailing -s on both
   sides) so "gliomas" over a "glioma" premise is NOT flagged.
-- [ ] review: [SHOULD] abstain on thin/empty premise in the bleed check (skip when premise content
+- [x] review: [SHOULD] abstain on thin/empty premise in the bleed check (skip when premise content
   tokens < min_premise_tokens), mirroring `should_cite`.
-- [ ] review: [SHOULD] add a small benign-word stoplist (academia, bohemia, diploma, empathy, sympathy,
+- [x] review: [SHOULD] add a small benign-word stoplist (academia, bohemia, diploma, empathy, sympathy,
   telepathy, antipathy, nostalgia) excluded from `medical_entities` (keep apathy).
-- [ ] review: [SHOULD] add non-regression tests: "diagnosis is glioma [2]" (premise lacks "diagnosis")
+- [x] review: [SHOULD] add non-regression tests: "diagnosis is glioma [2]" (premise lacks "diagnosis")
   NOT flagged; "gliomas" vs "glioma" premise NOT flagged; empty-premise [L#] claim NOT flagged.
-- [ ] review: [nits] also match `-asis` (metastasis) and `-desis` (arthrodesis); fix notice count wording.
+- [x] review: [nits] also match `-asis` (metastasis) and `-desis` (arthrodesis); fix notice count wording.
