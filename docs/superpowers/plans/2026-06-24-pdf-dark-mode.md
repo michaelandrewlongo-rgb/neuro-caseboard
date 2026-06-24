@@ -137,7 +137,7 @@ git commit -m "feat(pdf): theme-aware base_css with SIGNAL (dark) + PRINT (light
 - Consumes: `base_css(theme)` from Task 1.
 - Produces: `build_caseboard_html(dossier, *, subtitle="", today=None, theme="signal") -> str`; `render_caseboard_pdf(dossier, out_path, *, subtitle="", theme="signal") -> str`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_caseboard_pdf.py` (reuse the module's existing dossier fixture/builder; if it builds a `Dossier` inline, mirror that):
 
@@ -155,13 +155,13 @@ def test_build_caseboard_html_defaults_to_signal(_min_dossier):
 
 (If no shared dossier fixture exists, add a module-level `_min_dossier` pytest fixture building the smallest valid `Dossier` — copy the construction already used by the file's other tests.)
 
-- [ ] **Step 2: Run the test, verify it fails** — `pytest -q tests/test_caseboard_pdf.py` → FAIL (`theme` unexpected kwarg).
+- [x] **Step 2: Run the test, verify it fails** — `pytest -q tests/test_caseboard_pdf.py` → FAIL (`theme` unexpected kwarg).
 
-- [ ] **Step 3: Implement** — add `theme="signal"` to both signatures; change the CSS join from `EXEC_NAVY_CSS, _CASE_EXTRA_CSS` to `base_css(theme), _CASE_EXTRA_CSS` (import `base_css`); in `render_caseboard_pdf`, pass `theme` into `build_caseboard_html(...)`. Swap any `2px solid #000` / `box-shadow:…#000` / `border-radius:0` inside `_CASE_EXTRA_CSS` for `var(--border) solid var(--line)` / removed / `var(--radius)`.
+- [x] **Step 3: Implement** — add `theme="signal"` to both signatures; change the CSS join from `EXEC_NAVY_CSS, _CASE_EXTRA_CSS` to `base_css(theme), _CASE_EXTRA_CSS` (import `base_css`); in `render_caseboard_pdf`, pass `theme` into `build_caseboard_html(...)`. Swap any `2px solid #000` / `box-shadow:…#000` / `border-radius:0` inside `_CASE_EXTRA_CSS` for `var(--border) solid var(--line)` / removed / `var(--radius)`.
 
-- [ ] **Step 4: Run the test, verify it passes** — `pytest -q tests/test_caseboard_pdf.py` → PASS.
+- [x] **Step 4: Run the test, verify it passes** — `pytest -q tests/test_caseboard_pdf.py` → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add neuro_caseboard/caseboard_pdf.py tests/test_caseboard_pdf.py
