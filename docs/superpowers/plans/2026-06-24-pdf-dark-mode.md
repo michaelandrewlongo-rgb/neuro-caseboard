@@ -286,3 +286,18 @@ git commit -m "build(pdf): add Playwright Chromium to the image so the deployed 
 2. Confirm the container now has Chromium: `docker exec … python3 -c "import playwright"` succeeds.
 3. `POST /api/build/pdf` for a sample topic; confirm the returned PDF is the **HTML dark** render (not the brutalist fpdf2 fallback) — e.g. first-page PNG eyeball, or assert the response is larger / styled.
 4. Render a `CASEBOARD_PDF_STYLE=print` PDF and eyeball it (light, ink-friendly).
+
+---
+
+## Review Findings (PR #73)
+
+- [SHOULD] neuro_caseboard/caseboard_pdf.py:42-44 — `_FALLBACK_BANNER_CSS` not tokenized: hardcoded `#a9781b`/`rgba(169,120,27,.10)`/`#7a5a14` → poor contrast on the dark SIGNAL ground (legibility regression from the default flip).
+- [NIT] neuro_caseboard/exec_navy.py:21,30 — `--line-soft` defined in both token sets but never referenced (dead token).
+- [NIT] tests/test_pipeline.py (~887) — `open(path,"wb").write(...)` never closed → ResourceWarning; use `Path(path).write_bytes(...)`.
+- [NIT] tests/test_pipeline.py — routing test covers only `render_case_pdf`; no direct assertion for `render_ask_pdf` or `_pdf_theme("clinical")→None`.
+- [NIT] caseboard_pdf.py:5, briefing_pdf.py:6,23 — docstrings still describe the old white/brutalist identity (doc rot).
+
+### Review tasks
+
+- [ ] review: tokenize `_FALLBACK_BANNER_CSS` in caseboard_pdf.py so the degraded-dossier banner is legible on BOTH dark and print grounds — use `var(--verify)` for the rail/accent, a `var(--line)`-style border, and `var(--ink)`/`var(--muted)` for text instead of the hardcoded amber hex. Add/extend a test asserting the banner uses tokens (no hardcoded `#a9781b`/`#7a5a14`). [the SHOULD]
+- [ ] review: knock out the cheap NITs while in these files — remove the unused `--line-soft` token from both SIGNAL/PRINT sets in exec_navy.py; fix the ResourceWarning in tests/test_pipeline.py (`Path(path).write_bytes(...)`); add one parallel assertion for `render_ask_pdf` routing + a `_pdf_theme("clinical") is None` unit check; refresh the stale white/brutalist docstrings in caseboard_pdf.py and briefing_pdf.py to the token-driven dark-default reality.
