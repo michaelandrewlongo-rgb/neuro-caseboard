@@ -2,9 +2,10 @@
 question-answer shape.
 
 Renders a query result (markdown answer + numbered textbook citations + optional contemporary
-PubMed literature + figures) in the current "Neo Brutalism" identity (shared with the web console
-and the build dossier via exec_navy.py): white ground, black 2px borders, red/yellow/blue accents,
-square corners, hard offset shadows, DM Sans + Space Mono.
+PubMed literature + figures) in the token-driven "Signal" identity (shared with the web console
+and the build dossier via exec_navy.py): a dark ground by default (``theme="signal"``) with a
+switchable light/ink ``theme="print"`` variant, both fed from CSS ``:root`` tokens — accent rails,
+rounded panels, DM Sans + Space Mono.
 
 ``build_briefing_html`` is pure and dependency-light (unit-tested offline). ``render_briefing_pdf``
 needs the ``briefing`` extra (Playwright + a Chromium binary).
@@ -15,25 +16,26 @@ import datetime as dt
 import html
 import re
 
-from neuro_caseboard.exec_navy import EXEC_NAVY_CSS, img_data_uri
+from neuro_caseboard.exec_navy import base_css, img_data_uri
 
 DEFAULT_EYEBROW = "Ask · Citation-grounded"
 
-# Q&A-only selectors layered on the shared brutalist sheet (masthead, eyebrow chip, title,
-# rule, section headers, figures and footer all come from EXEC_NAVY_CSS).
+# Q&A-only selectors layered on the shared token-driven sheet (masthead, eyebrow chip, title,
+# rule, section headers, figures and footer all come from base_css(theme); colors are tokens,
+# so these selectors inherit the dark-default / print-variant ground automatically).
 ASK_CSS = """
-.answer{ font-family:var(--read); font-size:11pt; line-height:1.55; color:#000; max-width:165mm; }
+.answer{ font-family:var(--read); font-size:11pt; line-height:1.55; color:var(--ink); max-width:165mm; }
 .answer p{ margin:0 0 2.6mm; }
 .answer ul{ margin:0 0 3mm; padding-left:6mm; } .answer li{ margin:0 0 1.2mm; }
-.answer strong{ color:#000; font-weight:700; }
-.answer h2{ font-family:var(--ui); font-weight:700; font-size:13pt; color:#000;
-  letter-spacing:-.01em; margin:6mm 0 2mm; padding-top:3mm; border-top:2px solid #000; }
+.answer strong{ color:var(--ink); font-weight:700; }
+.answer h2{ font-family:var(--ui); font-weight:700; font-size:13pt; color:var(--ink);
+  letter-spacing:-.01em; margin:6mm 0 2mm; padding-top:3mm; border-top:var(--border) solid var(--line); }
 .answer h3{ font-family:var(--ui); font-weight:700; font-size:10.5pt; color:var(--accent);
   margin:4mm 0 1.5mm; }
-.sources{ border:2px solid #000; border-radius:0; padding:1mm 4mm; max-width:165mm;
-  box-shadow:3px 3px 0 0 #000; }
-.src{ font-family:var(--read); font-size:9.6pt; color:#000; padding:1.8mm 0;
-  border-top:2px solid #000; }
+.sources{ border:var(--border) solid var(--line); border-radius:var(--radius); padding:1mm 4mm;
+  max-width:165mm; }
+.src{ font-family:var(--read); font-size:9.6pt; color:var(--ink); padding:1.8mm 0;
+  border-top:var(--border) solid var(--line); }
 .src:first-child{ border-top:none; }
 .src .n, .src .ln{ font-family:var(--mono); font-size:7pt; color:var(--accent); font-weight:700;
   margin-right:2mm; }
@@ -134,13 +136,14 @@ def _figures_html(result) -> str:
 
 
 def build_briefing_html(result, *, title: str, subtitle: str = "",
-                        eyebrow: str = DEFAULT_EYEBROW, today: str | None = None) -> str:
-    """Pure: render a Q&A result to a brutalist HTML briefing string. Figures whose image
+                        eyebrow: str = DEFAULT_EYEBROW, today: str | None = None,
+                        theme: str = "signal") -> str:
+    """Pure: render a Q&A result to a themed HTML briefing string. Figures whose image
     file can't be read are skipped (never crash, never emit a broken image)."""
     today = today or dt.date.today().isoformat()
     parts = [
         "<!doctype html><html><head><meta charset='utf-8'><style>",
-        EXEC_NAVY_CSS, ASK_CSS,
+        base_css(theme), ASK_CSS,
         "</style></head><body>",
         '<div class="masthead"><div class="mh-brand"><span class="sq"></span>NEURO·CASEBOARD</div>',
         '<div class="mh-eyebrow">Neuro·Caseboard · clinical briefing</div></div>',
@@ -163,11 +166,11 @@ def build_briefing_html(result, *, title: str, subtitle: str = "",
 
 
 def render_briefing_pdf(result, out_path, *, title: str, subtitle: str = "",
-                        eyebrow: str = DEFAULT_EYEBROW) -> str:
+                        eyebrow: str = DEFAULT_EYEBROW, theme: str = "signal") -> str:
     """Render the briefing to an A4 PDF via Playwright/Chromium. Requires the ``briefing`` extra
     and an installed Chromium binary."""
     from playwright.sync_api import sync_playwright
-    doc = build_briefing_html(result, title=title, subtitle=subtitle, eyebrow=eyebrow)
+    doc = build_briefing_html(result, title=title, subtitle=subtitle, eyebrow=eyebrow, theme=theme)
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page()
