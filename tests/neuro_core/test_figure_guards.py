@@ -187,6 +187,19 @@ def test_nonanatomical_figure_drops_title_divider_blank_pages():
         "Neurovascular structures of the cerebellopontine angle are shown") is False
 
 
+def test_nonanatomical_figure_keeps_intraop_absence_findings():
+    # Clinical-observation absence claims (identified/visible/present) describe a real
+    # intraoperative FINDING, not a publishing artifact — they must stay anatomical (False).
+    assert nonanatomical_figure(
+        "No distinct anatomic plane is identified between tumor and brainstem") is False
+    assert nonanatomical_figure(
+        "No normal anatomy is visible at this depth") is False
+    # the original pilot title-page caption (a DEPICTION verb, "shown") still trips (True).
+    assert nonanatomical_figure(
+        "Title page with no anatomical structures, surgical instruments, "
+        "or patient positioning shown") is True
+
+
 def test_figure_offtarget_drops_nonanatomical_page_topic_agnostically():
     junk = ("Title page with no anatomical structures, surgical instruments, "
             "or patient positioning shown")

@@ -227,7 +227,8 @@ def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=N
     if lane_a is None:
         from neuro_core.query import query
         def lane_a():
-            return query(question, config=config, force=force)
+            return query(question, config=config, force=force,
+                         skip_disambiguation=skip_disambiguation)
     if lane_b is None:
         def lane_b():
             return build_literature_section(question, config=config)

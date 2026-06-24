@@ -294,8 +294,8 @@ class Engine:
                       "sources).**\n\n" + answer)
         return QueryResult(answer=answer, citations=syn.citations, figures=figures)
 
-    def query(self, question):
-        plan = self._plan_query(question)
+    def query(self, question, *, skip_disambiguation=False):
+        plan = self._plan_query(question, skip_disambiguation=skip_disambiguation)
         if isinstance(plan, Clarification):
             return plan
         return self._answer(plan.question, plan.top, plan.variant)
@@ -335,11 +335,11 @@ def get_engine(config=None):
     return _engine
 
 
-def query(question, config=None, force=False):
+def query(question, config=None, force=False, skip_disambiguation=False):
     config = config or load_config()
     if config.synth_provider == "local" and config.gpu_guard:
         ensure_gpu_ready(config, force=force)
-    return get_engine(config).query(question)
+    return get_engine(config).query(question, skip_disambiguation=skip_disambiguation)
 
 
 def plan_retrieval(question, config=None, force=False, skip_disambiguation=False):

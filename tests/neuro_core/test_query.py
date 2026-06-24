@@ -267,7 +267,7 @@ def test_select_figures_no_synthesis(tmp_path):
 
 def _stub_engine(_config):
     class _E:
-        def query(self, question):
+        def query(self, question, *, skip_disambiguation=False):
             return f"ANS:{question}"
     return _E()
 

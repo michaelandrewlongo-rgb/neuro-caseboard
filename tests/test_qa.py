@@ -105,6 +105,41 @@ def test_answer_question_separate_path_when_flag_off(monkeypatch):
     assert out.answer == "Textbook answer [1]."
 
 
+def test_answer_question_forwards_skip_disambiguation_on_nonwoven_path(monkeypatch):
+    # Parity with the woven path: with the weave flag OFF and no lanes injected, the
+    # non-woven branch must forward skip_disambiguation through neuro_core.query.query.
+    monkeypatch.setenv("NEURO_CASEBOARD_SKIP_DOTENV", "1")
+    monkeypatch.delenv("LITERATURE_WEAVE", raising=False)
+    import neuro_core.query as ncq
+    captured = {}
+
+    def _spy_query(question, *, config=None, force=False, skip_disambiguation=False):
+        captured["skip_disambiguation"] = skip_disambiguation
+        return _query_result()
+
+    monkeypatch.setattr(ncq, "query", _spy_query)
+    out = answer_question("unilateral FTP rewrite", lane_b=lambda: None,
+                          skip_disambiguation=True)
+    assert isinstance(out, QAResult)
+    assert captured.get("skip_disambiguation") is True
+
+
+def test_answer_question_nonwoven_default_skip_disambiguation_off(monkeypatch):
+    # DEFAULT-OFF parity: the flag stays False when not requested (byte-identical default).
+    monkeypatch.setenv("NEURO_CASEBOARD_SKIP_DOTENV", "1")
+    monkeypatch.delenv("LITERATURE_WEAVE", raising=False)
+    import neuro_core.query as ncq
+    captured = {}
+
+    def _spy_query(question, *, config=None, force=False, skip_disambiguation=False):
+        captured["skip_disambiguation"] = skip_disambiguation
+        return _query_result()
+
+    monkeypatch.setattr(ncq, "query", _spy_query)
+    answer_question("q", lane_b=lambda: None)
+    assert captured.get("skip_disambiguation") is False
+
+
 def test_retrieve_records_cache_key_includes_recency_boost():
     from neuro_caseboard.qa import retrieve_records
 

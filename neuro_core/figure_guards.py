@@ -154,11 +154,15 @@ _NONANATOMICAL_PAGE = (
     "intentionally left blank", "blank page", "this page intentionally",
 )
 # An explicit ABSENCE claim: "no <anatomy/structures/instruments/landmarks/positioning/
-# content> ... shown/depicted/present/visible/illustrated/identified". The leading \bno\b
-# word-boundary avoids matching substrings like "neurovascular" or "anosmia".
+# content> ... shown/depicted/illustrated/pictured". The leading \bno\b word-boundary avoids
+# matching substrings like "neurovascular" or "anosmia". The trailing verb alternation is
+# limited to DEPICTION verbs (what a publishing-artifact caption says about a page) — NOT
+# clinical-observation verbs (present/visible/identified), which legitimately appear in real
+# intraop captions stating an anatomic *finding* is absent, e.g. "No distinct anatomic plane
+# is identified between tumor and brainstem".
 _NO_CONTENT_SHOWN = re.compile(
     r"\bno\b[^.]*\b(?:anatom\w*|structures?|instruments?|landmarks?|positioning|content)\b"
-    r"[^.]*\b(?:shown|depicted|present|visible|illustrated|identified)\b",
+    r"[^.]*\b(?:shown|depicted|illustrated|pictured)\b",
     re.IGNORECASE,
 )
 
