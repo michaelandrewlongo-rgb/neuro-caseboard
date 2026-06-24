@@ -34,6 +34,16 @@ def test_build_briefing_html_has_exec_navy_tokens_and_content():
     assert "Ask · Citation-grounded" in doc         # eyebrow chip
 
 
+def test_build_briefing_html_signal_dark_print_light():
+    dark = build_briefing_html(_Result(), title="Q", theme="signal")
+    light = build_briefing_html(_Result(), title="Q", theme="print")
+    assert "--bg:#000000" in dark and "--bg:#ffffff" in light
+
+
+def test_build_briefing_html_defaults_to_signal():
+    assert "--bg:#000000" in build_briefing_html(_Result(), title="Q")
+
+
 def test_build_briefing_html_skips_unreadable_figure():
     # the only figure points at a bogus path -> dropped, no crash, no broken <figure>
     doc = build_briefing_html(_Result(), title="T")
