@@ -18,7 +18,7 @@ class _Result:
 
 
 def test_cli_ask_prints_answer_sources_and_figures(capsys, monkeypatch):
-    monkeypatch.setattr("neuro_core.query.query", lambda q, config=None, force=False: _Result())
+    monkeypatch.setattr("neuro_core.query.query", lambda q, config=None, force=False, **_: _Result())
     rc = cli.main(["ask", "facial nerve schwannoma"])
     out = capsys.readouterr().out
     assert rc == 0
@@ -30,7 +30,7 @@ def test_cli_ask_prints_answer_sources_and_figures(capsys, monkeypatch):
 def test_cli_ask_gpu_not_ready_exits_1(capsys, monkeypatch):
     from neuro_core.gpu_guard import GpuNotReadyError
 
-    def _boom(q, config=None, force=False):
+    def _boom(q, config=None, force=False, **_):
         raise GpuNotReadyError("no cuda")
 
     monkeypatch.setattr("neuro_core.query.query", _boom)
@@ -78,7 +78,7 @@ def test_ask_prints_clarification(monkeypatch, capsys):
     # `from neuro_core.query import query` and calls query(question, config=..., force=...)
     # at call time, so patching the module attribute makes it pick up our stub.
     import neuro_core.query as q
-    monkeypatch.setattr(q, "query", lambda question, config=None, force=False: clar)
+    monkeypatch.setattr(q, "query", lambda question, config=None, force=False, **_: clar)
 
     rc = cli.main(["ask", "decompressive craniectomy steps?"])
     out = capsys.readouterr().out
@@ -123,7 +123,7 @@ def test_cli_cards_unbuilt_index_exits_1(capsys, monkeypatch):
 
 def test_cli_ask_pdf_writes_file(tmp_path, monkeypatch):
     monkeypatch.setenv("CASEBOARD_PDF_STYLE", "clinical")  # offline fpdf2 path, no Chromium
-    monkeypatch.setattr("neuro_core.query.query", lambda q, config=None, force=False: _Result())
+    monkeypatch.setattr("neuro_core.query.query", lambda q, config=None, force=False, **_: _Result())
     out = tmp_path / "ask.pdf"
     rc = cli.main(["ask", "facial nerve schwannoma", "--pdf", "-o", str(out)])
     assert rc == 0
@@ -137,7 +137,7 @@ def test_cli_ask_clarification_writes_no_pdf(tmp_path, monkeypatch, capsys):
                          variants=[VariantRewrite("unilateral FTP hemicraniectomy", "a"),
                                    VariantRewrite("bifrontal (Kjellberg) decompression", "b")])
     import neuro_core.query as q
-    monkeypatch.setattr(q, "query", lambda question, config=None, force=False: clar)
+    monkeypatch.setattr(q, "query", lambda question, config=None, force=False, **_: clar)
     out = tmp_path / "nope.pdf"
     rc = cli.main(["ask", "decompressive craniectomy steps?", "--pdf", "-o", str(out)])
     assert rc == 0
