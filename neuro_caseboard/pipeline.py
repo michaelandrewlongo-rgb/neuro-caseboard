@@ -327,25 +327,38 @@ def _exec_renderer_unavailable(exc: Exception) -> bool:
     return (type(exc).__module__ or "").startswith("playwright")
 
 
+def _pdf_theme(style: str) -> str | None:
+    """Map CASEBOARD_PDF_STYLE to an HTML theme, or None to force the fpdf2 fallback.
+    signal/print -> that theme; legacy 'exec' or anything unknown -> 'signal'; 'clinical' -> None."""
+    s = (style or "").strip().lower()
+    if s == "clinical":
+        return None
+    if s in ("signal", "print"):
+        return s
+    return "signal"   # 'exec' (legacy default) and unknown values
+
+
 def render_case_pdf(dossier, topic, path):
     """Render the case-board PDF — the single source of truth for every ``build`` pathway
     (CLI ``caseboard build --pdf`` and the Streamlit Build lane).
 
-    Default is the Neo Brutalism design that matches the web console (``caseboard_pdf``,
-    HTML->PDF via Playwright/Chromium). Falls back to the offline fpdf2 renderer when the exec
-    renderer is unavailable (e.g. no Chromium in CI) or when ``CASEBOARD_PDF_STYLE=clinical`` is
-    set. Returns the written path."""
-    style = os.environ.get("CASEBOARD_PDF_STYLE", "exec").strip().lower()
-    if style != "clinical":
+    Default is the dark Signal HTML PDF that matches the web console (``caseboard_pdf``,
+    HTML->PDF via Playwright/Chromium); ``CASEBOARD_PDF_STYLE=print`` selects the light/ink
+    theme. Falls back to the offline fpdf2 renderer when the exec renderer is unavailable
+    (e.g. no Chromium in CI) or when ``CASEBOARD_PDF_STYLE=clinical`` is set. Returns the
+    written path."""
+    style = os.environ.get("CASEBOARD_PDF_STYLE", "signal").strip().lower()
+    theme = _pdf_theme(style)
+    if theme is not None:
         try:
             from neuro_caseboard.caseboard_pdf import render_caseboard_pdf
-            render_caseboard_pdf(dossier, path, subtitle=topic)
+            render_caseboard_pdf(dossier, path, subtitle=topic, theme=theme)
             return Path(path)
         except Exception as e:
             if not _exec_renderer_unavailable(e):
                 raise  # a real bug in the exec renderer — surface it, don't mask it
             logging.getLogger(__name__).warning(
-                "Neo Brutalism PDF renderer unavailable (%r); using the clinical fpdf2 "
+                "Signal HTML PDF renderer unavailable (%r); using the clinical fpdf2 "
                 "fallback.", e)
     art = render_pdf(dossier, path)
     return Path(art.path)
@@ -355,21 +368,23 @@ def render_ask_pdf(result, question, path):
     """Render the ask (Q&A) PDF — the single source of truth for every ``ask`` pathway
     (CLI ``caseboard ask --pdf`` and the Streamlit Ask lane).
 
-    Default is the Neo Brutalism briefing that matches the web console (``briefing_pdf``,
-    HTML->PDF via Playwright/Chromium). Falls back to the offline fpdf2 renderer when the exec
-    renderer is unavailable (e.g. no Chromium in CI) or when ``CASEBOARD_PDF_STYLE=clinical`` is
-    set. Returns the written path."""
-    style = os.environ.get("CASEBOARD_PDF_STYLE", "exec").strip().lower()
-    if style != "clinical":
+    Default is the dark Signal HTML briefing that matches the web console (``briefing_pdf``,
+    HTML->PDF via Playwright/Chromium); ``CASEBOARD_PDF_STYLE=print`` selects the light/ink
+    theme. Falls back to the offline fpdf2 renderer when the exec renderer is unavailable
+    (e.g. no Chromium in CI) or when ``CASEBOARD_PDF_STYLE=clinical`` is set. Returns the
+    written path."""
+    style = os.environ.get("CASEBOARD_PDF_STYLE", "signal").strip().lower()
+    theme = _pdf_theme(style)
+    if theme is not None:
         try:
             from neuro_caseboard.briefing_pdf import render_briefing_pdf
-            render_briefing_pdf(result, path, title=question)
+            render_briefing_pdf(result, path, title=question, theme=theme)
             return Path(path)
         except Exception as e:
             if not _exec_renderer_unavailable(e):
                 raise  # a real bug in the exec renderer — surface it, don't mask it
             logging.getLogger(__name__).warning(
-                "Neo Brutalism ask PDF renderer unavailable (%r); using the clinical fpdf2 "
+                "Signal HTML ask PDF renderer unavailable (%r); using the clinical fpdf2 "
                 "fallback.", e)
     from neuro_caseboard.briefing_pdf import render_briefing_clinical_pdf
     render_briefing_clinical_pdf(result, path, title=question)

@@ -183,3 +183,40 @@ def test_render_ask_pdf_reraises_real_bug(monkeypatch, tmp_path):
     from neuro_caseboard.pipeline import render_ask_pdf
     with pytest.raises(AttributeError):
         render_ask_pdf({"answer": "A.", "citations": [], "figures": []}, "Q?", tmp_path / "c.pdf")
+
+
+@pytest.fixture
+def _min_dossier():
+    from neuro_caseboard.model import Dossier, EvidenceSummary, Section, Claim
+    return Dossier(
+        title="C5–6 ACDF",
+        summary=EvidenceSummary(supported=1, to_verify=0, quarantined=0),
+        sections=[Section(
+            heading="Anatomy at risk", intro="Structures near the approach.",
+            claims=[Claim(text="The vertebral artery runs in the foramen transversarium.",
+                          why="Avoid far-lateral dissection.", status="supported")])])
+
+
+def test_render_case_pdf_routes_style_to_theme(monkeypatch, tmp_path, _min_dossier):
+    # CASEBOARD_PDF_STYLE maps to the HTML theme threaded into render_caseboard_pdf:
+    # unset/exec (legacy) -> signal, print -> print. render_case_pdf imports the renderer
+    # at call time, so patching the source attribute captures the theme kwarg.
+    calls = {}
+
+    def fake_render(dossier, path, *, subtitle="", theme="signal"):
+        calls["theme"] = theme
+        open(path, "wb").write(b"%PDF-1.4")
+        return str(path)
+
+    monkeypatch.setattr("neuro_caseboard.caseboard_pdf.render_caseboard_pdf", fake_render)
+    from neuro_caseboard.pipeline import render_case_pdf
+
+    monkeypatch.delenv("CASEBOARD_PDF_STYLE", raising=False)           # default -> signal
+    render_case_pdf(_min_dossier, "topic", tmp_path / "a.pdf")
+    assert calls["theme"] == "signal"
+    monkeypatch.setenv("CASEBOARD_PDF_STYLE", "print")
+    render_case_pdf(_min_dossier, "topic", tmp_path / "b.pdf")
+    assert calls["theme"] == "print"
+    monkeypatch.setenv("CASEBOARD_PDF_STYLE", "exec")                  # legacy -> signal
+    render_case_pdf(_min_dossier, "topic", tmp_path / "c.pdf")
+    assert calls["theme"] == "signal"
