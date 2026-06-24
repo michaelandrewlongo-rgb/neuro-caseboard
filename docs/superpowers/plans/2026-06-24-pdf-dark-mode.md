@@ -221,7 +221,7 @@ git commit -m "feat(pdf): thread theme through the briefing HTML builder"
 - Consumes: `render_caseboard_pdf(..., theme=…)`, `render_briefing_pdf(..., theme=…)` from Tasks 2–3.
 - Behavior: a helper `_pdf_theme(style) -> str | None` returns `"signal"`/`"print"` for HTML themes, or `None` for `clinical` (→ fpdf2). `exec`/unset → `"signal"`.
 
-- [ ] **Step 1: Write the failing test** — monkeypatch the HTML renderer to capture the `theme` it's called with (no Chromium needed):
+- [x] **Step 1: Write the failing test** — monkeypatch the HTML renderer to capture the `theme` it's called with (no Chromium needed):
 
 ```python
 def test_render_case_pdf_routes_style_to_theme(monkeypatch, tmp_path, _min_dossier):
@@ -240,13 +240,13 @@ def test_render_case_pdf_routes_style_to_theme(monkeypatch, tmp_path, _min_dossi
 
 (If `_min_dossier` isn't shared, build the smallest valid `Dossier` inline as the file's other tests do.)
 
-- [ ] **Step 2: Run the test, verify it fails** — `pytest -q tests/test_pipeline.py::test_render_case_pdf_routes_style_to_theme` → FAIL.
+- [x] **Step 2: Run the test, verify it fails** — `pytest -q tests/test_pipeline.py::test_render_case_pdf_routes_style_to_theme` → FAIL.
 
-- [ ] **Step 3: Implement** — add `_pdf_theme(style)`; in both `render_case_pdf`/`render_ask_pdf`, default the env read to `"signal"`, compute `theme = _pdf_theme(style)`; when `theme` is not None and Chromium import succeeds, call the HTML renderer with `theme=theme`; else (`clinical` or import/launch failure) keep the existing fpdf2 fallback.
+- [x] **Step 3: Implement** — add `_pdf_theme(style)`; in both `render_case_pdf`/`render_ask_pdf`, default the env read to `"signal"`, compute `theme = _pdf_theme(style)`; when `theme` is not None and Chromium import succeeds, call the HTML renderer with `theme=theme`; else (`clinical` or import/launch failure) keep the existing fpdf2 fallback.
 
-- [ ] **Step 4: Run the test, verify it passes** — `pytest -q tests/test_pipeline.py` → PASS (run the whole file to catch regressions in the existing fallback tests).
+- [x] **Step 4: Run the test, verify it passes** — `pytest -q tests/test_pipeline.py` → PASS (run the whole file to catch regressions in the existing fallback tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add neuro_caseboard/pipeline.py tests/test_pipeline.py
