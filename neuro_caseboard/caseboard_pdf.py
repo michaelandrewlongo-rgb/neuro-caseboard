@@ -14,7 +14,7 @@ from __future__ import annotations
 import datetime as dt
 import html
 
-from neuro_caseboard.exec_navy import EXEC_NAVY_CSS, inline, img_data_uri
+from neuro_caseboard.exec_navy import base_css, inline, img_data_uri
 from neuro_caseboard.model import Dossier, fallback_notice
 
 _STATUS_LABEL = {"supported": "Corpus-supported", "verify": "To verify"}
@@ -25,14 +25,14 @@ VERIFY_BANNER = ("Confidential — clinical decision support only; "
                  "the surgeon verifies every recommendation.")
 _CASE_EXTRA_CSS = """
 .verify-banner{ position:fixed; bottom:0; left:0; right:0; padding:3px 14mm;
-  font-family:var(--mono); font-size:7pt; font-weight:700; letter-spacing:.02em; color:#000;
-  background:var(--yellow); border-top:2px solid #000; text-align:center; }
+  font-family:var(--mono); font-size:7pt; font-weight:700; letter-spacing:.02em; color:var(--bg);
+  background:var(--yellow); border-top:var(--border) solid var(--line); text-align:center; }
 .content{ padding-bottom:14mm; }
-.litblock{ margin:3mm 0 1mm; border:2px solid #000; border-left:5px solid var(--blue);
-  padding:3mm 4mm; box-shadow:3px 3px 0 0 #000; }
+.litblock{ margin:3mm 0 1mm; border:var(--border) solid var(--line); border-left:5px solid var(--blue);
+  border-radius:var(--radius); padding:3mm 4mm; }
 .litblock .lh{ font-family:var(--ui); font-weight:700; font-size:9.5pt; color:var(--blue);
   letter-spacing:.02em; text-transform:uppercase; }
-.litblock .ln{ font-family:var(--read); font-size:9.6pt; color:#000; margin:1mm 0; }
+.litblock .ln{ font-family:var(--read); font-size:9.6pt; color:var(--ink); margin:1mm 0; }
 .litblock .lc{ font-family:var(--read); font-size:8.6pt; color:var(--muted); padding:.6mm 0; }
 .litblock .lc .k{ font-family:var(--mono); font-size:7pt; font-weight:700; color:var(--blue); margin-right:2mm; }
 .litblock a{ color:var(--blue); text-decoration:none; }
@@ -95,9 +95,11 @@ def _figure_html(fig) -> str:
             f'{inline(fig.caption)}{cite}{rel}</figcaption></figure>')
 
 
-def build_caseboard_html(dossier: Dossier, *, subtitle: str = "", today: str | None = None) -> str:
-    """Pure: render a Dossier to a brutalist HTML string (figures whose file can't be read
-    are kept caption-only, never crash)."""
+def build_caseboard_html(dossier: Dossier, *, subtitle: str = "", today: str | None = None,
+                         theme: str = "signal") -> str:
+    """Pure: render a Dossier to a themed HTML string (figures whose file can't be read
+    are kept caption-only, never crash). ``theme`` in ``{"signal","print"}`` selects the
+    dark (screen) or light (print) token set; anything else falls back to ``signal``."""
     today = today or dt.date.today().isoformat()
     s = dossier.summary
     keys = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
@@ -105,7 +107,7 @@ def build_caseboard_html(dossier: Dossier, *, subtitle: str = "", today: str | N
 
     out = [
         "<!doctype html><html><head><meta charset='utf-8'><style>",
-        EXEC_NAVY_CSS, _CASE_EXTRA_CSS,
+        base_css(theme), _CASE_EXTRA_CSS,
         _FALLBACK_BANNER_CSS if notice else "",
         "</style></head><body>",
         f'<div class="verify-banner">{html.escape(VERIFY_BANNER)}</div>',
@@ -175,11 +177,12 @@ def build_caseboard_html(dossier: Dossier, *, subtitle: str = "", today: str | N
     return "".join(out)
 
 
-def render_caseboard_pdf(dossier: Dossier, out_path, *, subtitle: str = "") -> str:
+def render_caseboard_pdf(dossier: Dossier, out_path, *, subtitle: str = "",
+                         theme: str = "signal") -> str:
     """Render the dossier to an A4 PDF at ``out_path`` via Playwright/Chromium. Requires the
     ``briefing`` optional dependency and an installed Chromium binary."""
     from playwright.sync_api import sync_playwright
-    doc = build_caseboard_html(dossier, subtitle=subtitle)
+    doc = build_caseboard_html(dossier, subtitle=subtitle, theme=theme)
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page()

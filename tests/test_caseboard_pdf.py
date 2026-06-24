@@ -48,3 +48,14 @@ def test_build_caseboard_html_renders_section_literature_axis():
     assert "Contemporary Literature" in doc
     assert "[L1]" in doc and "ACDF RCT" in doc
     assert "https://doi.org/10.1/abc" in doc
+
+
+def test_build_caseboard_html_signal_is_dark_print_is_light():
+    dark = build_caseboard_html(_dossier(), subtitle="X", theme="signal")
+    light = build_caseboard_html(_dossier(), subtitle="X", theme="print")
+    assert "--bg:#000000" in dark and "--accent:#6b93ff" in dark
+    assert "--bg:#ffffff" in light and "--accent:#2a52cc" in light
+
+
+def test_build_caseboard_html_defaults_to_signal():
+    assert "--bg:#000000" in build_caseboard_html(_dossier(), subtitle="X")
