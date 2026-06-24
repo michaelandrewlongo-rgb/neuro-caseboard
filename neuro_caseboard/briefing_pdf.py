@@ -2,9 +2,10 @@
 question-answer shape.
 
 Renders a query result (markdown answer + numbered textbook citations + optional contemporary
-PubMed literature + figures) in the current "Neo Brutalism" identity (shared with the web console
-and the build dossier via exec_navy.py): white ground, black 2px borders, red/yellow/blue accents,
-square corners, hard offset shadows, DM Sans + Space Mono.
+PubMed literature + figures) in the token-driven "Signal" identity (shared with the web console
+and the build dossier via exec_navy.py): a dark ground by default (``theme="signal"``) with a
+switchable light/ink ``theme="print"`` variant, both fed from CSS ``:root`` tokens — accent rails,
+rounded panels, DM Sans + Space Mono.
 
 ``build_briefing_html`` is pure and dependency-light (unit-tested offline). ``render_briefing_pdf``
 needs the ``briefing`` extra (Playwright + a Chromium binary).
@@ -19,8 +20,9 @@ from neuro_caseboard.exec_navy import base_css, img_data_uri
 
 DEFAULT_EYEBROW = "Ask · Citation-grounded"
 
-# Q&A-only selectors layered on the shared brutalist sheet (masthead, eyebrow chip, title,
-# rule, section headers, figures and footer all come from EXEC_NAVY_CSS).
+# Q&A-only selectors layered on the shared token-driven sheet (masthead, eyebrow chip, title,
+# rule, section headers, figures and footer all come from base_css(theme); colors are tokens,
+# so these selectors inherit the dark-default / print-variant ground automatically).
 ASK_CSS = """
 .answer{ font-family:var(--read); font-size:11pt; line-height:1.55; color:var(--ink); max-width:165mm; }
 .answer p{ margin:0 0 2.6mm; }

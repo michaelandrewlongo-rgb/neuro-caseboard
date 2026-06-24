@@ -18,7 +18,7 @@ import re
 SIGNAL_TOKENS = """:root{
   --bg:#000000; --panel:#0a0a0a; --panel-grad:linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.012));
   --ink:#ededed; --muted:#8a8a8a; --faint:#6b6b6b;
-  --line:rgba(255,255,255,.09); --line-soft:rgba(255,255,255,.06);
+  --line:rgba(255,255,255,.09);
   --accent:#6b93ff; --blue:#6b93ff; --yellow:#ffc94d;
   --supported:#34e07f; --verify:#ffc94d; --quar:#ff5a5a;
   --ui:'DM Sans',system-ui,sans-serif; --read:'DM Sans',system-ui,sans-serif; --mono:'Space Mono',ui-monospace,monospace;
@@ -27,7 +27,7 @@ SIGNAL_TOKENS = """:root{
 PRINT_TOKENS = """:root{
   --bg:#ffffff; --panel:#fafafa; --panel-grad:none;
   --ink:#1a1a1a; --muted:#555555; --faint:#777777;
-  --line:#e5e5e5; --line-soft:#eeeeee;
+  --line:#e5e5e5;
   --accent:#2a52cc; --blue:#2a52cc; --yellow:#b45309;
   --supported:#1a7f4b; --verify:#b45309; --quar:#c8102e;
   --ui:'DM Sans',system-ui,sans-serif; --read:'DM Sans',system-ui,sans-serif; --mono:'Space Mono',ui-monospace,monospace;

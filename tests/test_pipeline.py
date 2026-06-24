@@ -4,6 +4,8 @@ Exercises the offline path (no retriever), which is deterministic and corpus-fre
 runs anywhere. Live corpus enrichment is covered by manual end-to-end runs.
 """
 
+from pathlib import Path
+
 import pytest
 
 from neuro_caseboard.pipeline import classify_profile, build_dossier
@@ -205,7 +207,7 @@ def test_render_case_pdf_routes_style_to_theme(monkeypatch, tmp_path, _min_dossi
 
     def fake_render(dossier, path, *, subtitle="", theme="signal"):
         calls["theme"] = theme
-        open(path, "wb").write(b"%PDF-1.4")
+        Path(path).write_bytes(b"%PDF-1.4")
         return str(path)
 
     monkeypatch.setattr("neuro_caseboard.caseboard_pdf.render_caseboard_pdf", fake_render)
@@ -220,3 +222,39 @@ def test_render_case_pdf_routes_style_to_theme(monkeypatch, tmp_path, _min_dossi
     monkeypatch.setenv("CASEBOARD_PDF_STYLE", "exec")                  # legacy -> signal
     render_case_pdf(_min_dossier, "topic", tmp_path / "c.pdf")
     assert calls["theme"] == "signal"
+
+
+def test_render_ask_pdf_routes_style_to_theme(monkeypatch, tmp_path):
+    # Mirror of the case routing test for the ask (Q&A) pathway: CASEBOARD_PDF_STYLE maps to the
+    # HTML theme threaded into render_briefing_pdf. render_ask_pdf imports the renderer at call
+    # time, so patching the source attribute captures the theme kwarg.
+    calls = {}
+
+    def fake_render(result, path, *, title="", theme="signal"):
+        calls["theme"] = theme
+        Path(path).write_bytes(b"%PDF-1.4")
+        return str(path)
+
+    monkeypatch.setattr("neuro_caseboard.briefing_pdf.render_briefing_pdf", fake_render)
+    from neuro_caseboard.pipeline import render_ask_pdf
+    result = {"answer": "A.", "citations": [], "figures": []}
+
+    monkeypatch.delenv("CASEBOARD_PDF_STYLE", raising=False)           # default -> signal
+    render_ask_pdf(result, "Q?", tmp_path / "a.pdf")
+    assert calls["theme"] == "signal"
+    monkeypatch.setenv("CASEBOARD_PDF_STYLE", "print")
+    render_ask_pdf(result, "Q?", tmp_path / "b.pdf")
+    assert calls["theme"] == "print"
+    monkeypatch.setenv("CASEBOARD_PDF_STYLE", "exec")                  # legacy -> signal
+    render_ask_pdf(result, "Q?", tmp_path / "c.pdf")
+    assert calls["theme"] == "signal"
+
+
+def test_pdf_theme_maps_style_to_theme():
+    # Direct unit check of the style->theme map shared by both render_*_pdf routers.
+    from neuro_caseboard.pipeline import _pdf_theme
+    assert _pdf_theme("clinical") is None       # forces the offline fpdf2 fallback
+    assert _pdf_theme("print") == "print"
+    assert _pdf_theme("exec") == "signal"        # legacy default
+    assert _pdf_theme("signal") == "signal"
+    assert _pdf_theme("nonsense") == "signal"    # unknown -> signal

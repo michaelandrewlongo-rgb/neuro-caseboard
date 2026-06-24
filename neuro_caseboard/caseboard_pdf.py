@@ -1,10 +1,11 @@
 """Case-board PDF — render a Dossier to a print-grade PDF that matches the web console (web/).
 
 Where ``render_pdf.py`` (fpdf2) emits a plain light clinical document, this renders the **build
-dossier** in the current "Neo Brutalism" identity (shared with the web UI and the ask briefing
-via exec_navy.py): white ground, black 2px borders, red/yellow/blue accents, square corners, hard
-offset shadows, DM Sans + Space Mono — an evidence-mix proportion bar + stat cards + legend, and
-status-marker claim cards with indented ``Why:`` rationale. HTML → PDF via Playwright/Chromium.
+dossier** in the token-driven "Signal" identity (shared with the web UI and the ask briefing via
+exec_navy.py): a dark ground by default (``theme="signal"``) with a switchable light/ink
+``theme="print"`` variant, both fed from CSS ``:root`` tokens — accent rails, rounded panels,
+DM Sans + Space Mono — an evidence-mix proportion bar + stat cards + legend, and status-marker
+claim cards with indented ``Why:`` rationale. HTML → PDF via Playwright/Chromium.
 
 ``build_caseboard_html`` is pure and dependency-light (testable offline). ``render_caseboard_pdf``
 needs the ``briefing`` extra (Playwright + a Chromium binary).
@@ -39,10 +40,16 @@ _CASE_EXTRA_CSS = """
 """
 
 # CSS injected only when the dossier is degraded so the class name never appears in normal output.
+# Tokenized like .litblock/.metric so it reads on BOTH grounds: the amber identity lives in the
+# left rail / label (var(--verify)), the panel/line tokens carry the frame, and the body text is
+# var(--ink) — never a hardcoded dark hex (illegible on the dark-default --bg:#000000 ground).
 _FALLBACK_BANNER_CSS = (
-    '.fallback-banner{ margin:3mm 0 1mm; padding:2.5mm 3.5mm; border-left:4px solid #a9781b;'
-    '  background:rgba(169,120,27,.10); font-family:var(--ui); font-size:9.5pt; color:#7a5a14; }'
-    '.fallback-banner b{ text-transform:uppercase; letter-spacing:.04em; margin-right:2mm; }'
+    '.fallback-banner{ margin:3mm 0 1mm; padding:2.5mm 3.5mm;'
+    '  border:var(--border) solid var(--line); border-left:4px solid var(--verify);'
+    '  border-radius:var(--radius); background:var(--panel); font-family:var(--ui);'
+    '  font-size:9.5pt; color:var(--ink); }'
+    '.fallback-banner b{ text-transform:uppercase; letter-spacing:.04em; margin-right:2mm;'
+    '  color:var(--verify); }'
 )
 
 
