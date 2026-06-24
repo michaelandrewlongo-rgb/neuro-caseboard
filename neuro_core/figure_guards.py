@@ -142,6 +142,38 @@ _CRANIAL_BOOKS = ("rhoton", "fukushima", "greenberg")  # Schmidek/NeuroICU/Neuro
 # so it is left to the per-figure caption/region guards rather than a blanket book block.
 
 
+# Topic-agnostic publishing-artifact guard. Non-anatomical front/divider/blank pages
+# (title pages, section dividers, tables of contents, copyright/dedication pages) and
+# captions that explicitly state no anatomy/instruments are shown get retrieved and can
+# rank #1 on a figure query. The signal is generic CAPTION TEXT — never a clinical phrase
+# or a book name — so this stays fully topic-agnostic.
+_NONANATOMICAL_PAGE = (
+    "title page", "half title", "table of contents", "list of contents",
+    "copyright page", "dedication page", "frontispiece", "list of contributors",
+    "section divider", "part divider", "chapter divider", "divider page",
+    "intentionally left blank", "blank page", "this page intentionally",
+)
+# An explicit ABSENCE claim: "no <anatomy/structures/instruments/landmarks/positioning/
+# content> ... shown/depicted/present/visible/illustrated/identified". The leading \bno\b
+# word-boundary avoids matching substrings like "neurovascular" or "anosmia".
+_NO_CONTENT_SHOWN = re.compile(
+    r"\bno\b[^.]*\b(?:anatom\w*|structures?|instruments?|landmarks?|positioning|content)\b"
+    r"[^.]*\b(?:shown|depicted|present|visible|illustrated|identified)\b",
+    re.IGNORECASE,
+)
+
+
+def nonanatomical_figure(caption: str) -> bool:
+    """Topic-agnostic: True when a caption marks the page as a non-anatomical publishing
+    artifact (title/divider/blank/contents/copyright page) or explicitly states it shows
+    no anatomical/surgical content. Driven only by generic caption signals — never a
+    clinical phrase or a book name."""
+    cap = (caption or "").lower()
+    if any(p in cap for p in _NONANATOMICAL_PAGE):
+        return True
+    return bool(_NO_CONTENT_SHOWN.search(cap))
+
+
 def figure_offtarget(caption: str, topic: str, book: str = "", context: str = "",
                      *, guards: str = "full") -> bool:
     """True when a figure is from a clearly different region than the case — by the
@@ -158,6 +190,8 @@ def figure_offtarget(caption: str, topic: str, book: str = "", context: str = ""
     cap = (caption or "").lower()
     top = (topic or "").lower()
     bk = (book or "").lower()
+    if nonanatomical_figure(caption):
+        return True                          # non-anatomical title/divider/blank page (topic-agnostic)
     if guards == "full" and any(x in cap for x in _DIAGNOSTIC_IMAGE):
         return True                          # diagnostic scan, not operative atlas anatomy
     if any(x in cap for x in _NONOP_ANGIO):

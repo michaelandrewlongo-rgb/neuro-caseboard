@@ -3,6 +3,7 @@ neuro_core.figure_retriever._row_caption. Moved from tests/test_retrieve.py as p
 the caseboard-to-neuro_core migration."""
 
 from neuro_core.figure_guards import figure_offtarget as _figure_offtarget
+from neuro_core.figure_guards import figure_offtarget, nonanatomical_figure
 from neuro_core.figure_retriever import _row_caption
 
 
@@ -166,3 +167,34 @@ def test_strict_blocks_nonop_angio_positioning():
 
 def test_full_is_the_default_guards():
     assert _figure_offtarget("Lumbar pedicle screw", "mca aneurysm", book="Benzel Spine") is True
+
+
+def test_nonanatomical_figure_drops_title_divider_blank_pages():
+    # the exact pilot caption: a title page ranked #1 on a vestibular-schwannoma query
+    assert nonanatomical_figure(
+        "Title page with no anatomical structures, surgical instruments, "
+        "or patient positioning shown") is True
+    assert nonanatomical_figure("Part III divider page") is True
+    assert nonanatomical_figure("This page intentionally left blank") is True
+    assert nonanatomical_figure("Table of contents") is True
+    assert nonanatomical_figure("Copyright page") is True
+    # a real operative-anatomy caption is kept
+    assert nonanatomical_figure(
+        "Left retrosigmoid exposure of the cerebellopontine angle with the "
+        "facial and vestibulocochlear nerves") is False
+    # a caption that mentions 'structures' POSITIVELY is kept (no absence claim)
+    assert nonanatomical_figure(
+        "Neurovascular structures of the cerebellopontine angle are shown") is False
+
+
+def test_figure_offtarget_drops_nonanatomical_page_topic_agnostically():
+    junk = ("Title page with no anatomical structures, surgical instruments, "
+            "or patient positioning shown")
+    # dropped on BOTH the Q&A (strict) and board (full) paths, for unrelated topics
+    assert figure_offtarget(junk, "surgical approaches to a vestibular schwannoma",
+                            guards="strict") is True
+    assert figure_offtarget(junk, "C1-C2 atlantoaxial fixation", guards="full") is True
+    # a genuine CPA plate on the same question is still kept
+    assert figure_offtarget(
+        "Left cerebellopontine angle: AICA between the facial and vestibulocochlear nerves",
+        "surgical approaches to a vestibular schwannoma", guards="strict") is False
