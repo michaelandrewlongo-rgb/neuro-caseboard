@@ -347,13 +347,7 @@ function DeckTelemetry({ cards }: { cards: Card[] }) {
   }
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 1.1fr 1fr",
-        gap: "1rem",
-      }}
-    >
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_1.1fr_1fr]">
       {/* ── Match Strength ── */}
       <div style={{ ...glassPanel, display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         <p
@@ -609,7 +603,7 @@ function CardsResult({
           No cards match this filter.
         </p>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {displayCards.map((c) => {
             const origIdx = allCards.indexOf(c)
             return (

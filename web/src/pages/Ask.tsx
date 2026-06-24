@@ -7,7 +7,6 @@ import FigureGrid from "@/components/ask/FigureGrid"
 import SourcesList from "@/components/ask/SourcesList"
 import LiteratureBlock from "@/components/ask/LiteratureBlock"
 import { CitationAudit } from "@/components/ask/CitationAudit"
-import { StructuresRadar } from "@/components/ask/StructuresRadar"
 import { citationSummary } from "@/lib/citationSummary"
 
 const HINTS = [
@@ -122,10 +121,9 @@ export default function Ask() {
           >
             {citationSummary(resp.citations.length, resp.literature?.citations.length ?? 0)}
           </p>
-          {/* Telemetry row — Citation Audit (real data) + Structures Radar (not available) */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Citation Audit — honest citation counts (corpus + literature lanes) */}
+          <div className="sm:max-w-md">
             <CitationAudit citations={resp.citations} literature={resp.literature} />
-            <StructuresRadar answer={resp.answer} />
           </div>
         </div>
       )}
