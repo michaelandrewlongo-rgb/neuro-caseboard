@@ -223,10 +223,16 @@ class Engine:
         ranked.sort(key=lambda h: _offdomain(question, h.text))  # stable: off-subdomain hits sink to the bottom, score order preserved within groups
         return ranked[: self.config.rerank_k]
 
-    def _plan_query(self, question):
+    def _plan_query(self, question, *, skip_disambiguation=False):
         """Shared disambiguation seam. Returns a Clarification (ask, no briefing) or
         a _Resolved (the question + passages to answer, possibly variant-resolved).
-        Keeps prose (query) and figures (select_figures) on the SAME chosen variant."""
+        Keeps prose (query) and figures (select_figures) on the SAME chosen variant.
+
+        ``skip_disambiguation`` is set when the caller already resolved a variant (a
+        variant rewrite is unambiguous by construction): retrieve and answer directly,
+        skipping the gate + the LLM analyze pass. Default path is unchanged."""
+        if skip_disambiguation:
+            return _Resolved(question, self._retrieve(question), None)
         top = self._retrieve(question)
         gate = self.gate_fn(question, top)
         if not gate.tripped:
@@ -250,10 +256,10 @@ class Engine:
         figures, _ = self._collect_figures(plan.question, plan.top)
         return figures
 
-    def retrieve_for_synthesis(self, question):
+    def retrieve_for_synthesis(self, question, *, skip_disambiguation=False):
         """Retrieve passages + figures without synthesizing (for the woven Ask path).
         Returns a Clarification (ambiguous, no answer) or a RetrievalBundle."""
-        plan = self._plan_query(question)
+        plan = self._plan_query(question, skip_disambiguation=skip_disambiguation)
         if isinstance(plan, Clarification):
             return plan
         figures, images = self._collect_figures(plan.question, plan.top)
@@ -336,8 +342,9 @@ def query(question, config=None, force=False):
     return get_engine(config).query(question)
 
 
-def plan_retrieval(question, config=None, force=False):
+def plan_retrieval(question, config=None, force=False, skip_disambiguation=False):
     config = config or load_config()
     if config.synth_provider == "local" and config.gpu_guard:
         ensure_gpu_ready(config, force=force)
-    return get_engine(config).retrieve_for_synthesis(question)
+    return get_engine(config).retrieve_for_synthesis(
+        question, skip_disambiguation=skip_disambiguation)

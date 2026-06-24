@@ -276,6 +276,9 @@ class AskRequest(BaseModel):
     # Local single-user tool: default to bypassing the GPU-readiness guard so it "just runs".
     # A real GpuNotReadyError (e.g. genuinely out of memory) is still surfaced honestly.
     force: bool = True
+    # Set by the SPA on a variant-pick re-entry: the question is already a disambiguated
+    # variant rewrite (unambiguous by construction), so skip the gate + analyze pass.
+    skip_disambiguation: bool = False
 
 
 def _citation_location(book: str, chapter: str, page) -> str:
@@ -348,7 +351,8 @@ def ask(req: AskRequest):
     from neuro_caseboard.qa import answer_question
 
     try:
-        result = answer_question(question, force=req.force)
+        result = answer_question(question, force=req.force,
+                                 skip_disambiguation=req.skip_disambiguation)
     except GpuNotReadyError as e:
         # Honest "try again" state — the retrieval models need GPU headroom right now.
         return JSONResponse(status_code=503,

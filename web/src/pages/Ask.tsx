@@ -28,7 +28,7 @@ export default function Ask() {
 
   useEffect(() => () => ctrlRef.current?.abort(), [])
 
-  async function run(q: string) {
+  async function run(q: string, opts?: { skipDisambiguation?: boolean }) {
     const text = q.trim()
     if (!text || loading) return
     ctrlRef.current?.abort()
@@ -40,7 +40,7 @@ export default function Ask() {
     setNetError(null)
     setLoading(true)
     try {
-      const r = await askQuestion(text, ctrl.signal)
+      const r = await askQuestion(text, ctrl.signal, opts?.skipDisambiguation ?? false)
       if (!ctrl.signal.aborted) setResp(r)
     } catch (e) {
       const err = e as { name?: string; message?: string }
@@ -124,7 +124,9 @@ export default function Ask() {
         </Card>
       )}
 
-      {resp && !loading && <ResultView resp={resp} onPickVariant={(q) => void run(q)} />}
+      {resp && !loading && (
+        <ResultView resp={resp} onPickVariant={(q) => void run(q, { skipDisambiguation: true })} />
+      )}
     </div>
   )
 }

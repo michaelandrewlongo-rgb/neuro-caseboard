@@ -82,6 +82,21 @@ def test_answer_question_routes_to_woven_when_flag_on(monkeypatch):
     assert qa.answer_question("q") == "WOVEN"
 
 
+def test_answer_question_forwards_skip_disambiguation(monkeypatch):
+    monkeypatch.setenv("NEURO_CASEBOARD_SKIP_DOTENV", "1")
+    monkeypatch.setenv("LITERATURE_WEAVE", "1")
+    import neuro_caseboard.qa as qa
+    captured = {}
+
+    def _spy(*a, **k):
+        captured.update(k)
+        return "WOVEN"
+
+    monkeypatch.setattr(qa, "_answer_question_woven", _spy)
+    assert qa.answer_question("unilateral FTP rewrite", skip_disambiguation=True) == "WOVEN"
+    assert captured.get("skip_disambiguation") is True
+
+
 def test_answer_question_separate_path_when_flag_off(monkeypatch):
     monkeypatch.setenv("NEURO_CASEBOARD_SKIP_DOTENV", "1")
     monkeypatch.delenv("LITERATURE_WEAVE", raising=False)
