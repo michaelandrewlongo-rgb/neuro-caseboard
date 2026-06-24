@@ -14,9 +14,10 @@ export default function AskLoader() {
   return (
     <PipelineLoader
       steps={ASK_STEPS}
-      estimate="Usually 30–80 seconds — retrieval, citation-grounded synthesis, and a live literature lookup."
+      estimate="Usually about 2 minutes — retrieval, citation-grounded synthesis, and a live PubMed lookup."
       eyebrow="Ask · Corpus Retrieval"
-      srText="Working on your answer — searching the corpus, synthesizing a cited answer, and scanning recent literature. This usually takes 30–80 seconds."
+      srText="Working on your answer — searching the corpus, synthesizing a cited answer, and scanning recent literature. This usually takes about 2 minutes."
+      stepIntervalMs={20000}
     />
   )
 }

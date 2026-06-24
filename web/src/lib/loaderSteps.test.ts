@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { advanceStep, stepStates } from "./loaderSteps"
+import { advanceStep, stepStates, formatElapsed } from "./loaderSteps"
 
 describe("advanceStep (monotonic clamp — never wraps backward)", () => {
   it("advances by one within range", () => {
@@ -31,5 +31,20 @@ describe("stepStates (done / active / pending)", () => {
 
   it("handles the single-step edge case", () => {
     expect(stepStates(1, 0)).toEqual(["active"])
+  })
+})
+
+describe("formatElapsed (live loader stopwatch)", () => {
+  it("formats sub-minute as 0:SS with a zero-padded seconds field", () => {
+    expect(formatElapsed(0)).toBe("0:00")
+    expect(formatElapsed(7)).toBe("0:07")
+  })
+  it("rolls over into minutes", () => {
+    expect(formatElapsed(83)).toBe("1:23")
+    expect(formatElapsed(114)).toBe("1:54")
+  })
+  it("floors fractional seconds and clamps negatives to 0:00", () => {
+    expect(formatElapsed(12.9)).toBe("0:12")
+    expect(formatElapsed(-5)).toBe("0:00")
   })
 })
