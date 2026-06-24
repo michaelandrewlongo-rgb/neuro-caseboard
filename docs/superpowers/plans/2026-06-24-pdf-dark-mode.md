@@ -33,7 +33,7 @@ Replace the single white-brutalist `EXEC_NAVY_CSS` constant with a `base_css(the
 - Produces: module constant `EXEC_NAVY_CSS: str = base_css("signal")` (unchanged import name).
 - `inline()` and `img_data_uri()` are untouched.
 
-- [ ] **Step 1: Update + add tests**
+- [x] **Step 1: Update + add tests**
 
 In `tests/test_exec_navy.py`, change the import to `from neuro_caseboard.exec_navy import EXEC_NAVY_CSS, base_css, inline, img_data_uri`, REPLACE `test_css_carries_the_brand_tokens` and append theme tests:
 
@@ -71,12 +71,12 @@ def test_unknown_style_falls_back_to_signal():
     assert base_css("nonsense") == base_css("signal")
 ```
 
-- [ ] **Step 2: Run the tests, verify they fail**
+- [x] **Step 2: Run the tests, verify they fail**
 
 Run: `cd <worktree> && PYTHONPATH=vendor/caseprep python3 -m pytest -q tests/test_exec_navy.py`
 Expected: FAIL (`base_css` not defined / old `#ff3333` token).
 
-- [ ] **Step 3: Implement `base_css` + token sets**
+- [x] **Step 3: Implement `base_css` + token sets**
 
 In `neuro_caseboard/exec_navy.py`, replace the `EXEC_NAVY_CSS = """…"""` literal with two `:root` token strings and a structural body that uses only `var(--…)`. Define:
 
@@ -111,12 +111,12 @@ def base_css(theme: str = "signal") -> str:
 EXEC_NAVY_CSS = base_css("signal")
 ```
 
-- [ ] **Step 4: Run the tests, verify they pass**
+- [x] **Step 4: Run the tests, verify they pass**
 
 Run: `cd <worktree> && PYTHONPATH=vendor/caseprep python3 -m pytest -q tests/test_exec_navy.py`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add neuro_caseboard/exec_navy.py tests/test_exec_navy.py
