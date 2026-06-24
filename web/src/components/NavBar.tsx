@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react"
-import { NavLink, useNavigate } from "react-router-dom"
+import { NavLink, useNavigate, useLocation } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { isCmdK } from "@/lib/keys"
 import { getHealth, type Health } from "@/lib/api"
+import { shouldShowNavSearch } from "@/lib/navSearch"
 
 // ── Route definitions ─────────────────────────────────────────────────────────
 // Ask → /ask, Dossier → /build, Cards → /cards  (labels match the design spec)
@@ -144,6 +145,7 @@ function HealthPill({ status }: { status: HealthStatus }) {
 // ── NavBar ────────────────────────────────────────────────────────────────────
 export default function NavBar() {
   const navigate = useNavigate()
+  const { pathname } = useLocation()
 
   // Fetch health once on mount — same pattern as HealthPanel, no new mechanism
   const [health, setHealth]       = useState<Health | null>(null)
@@ -231,7 +233,8 @@ export default function NavBar() {
           ))}
         </ul>
 
-        {/* ── Center: "Ask the corpus" command field with ⌘K hint ── */}
+        {/* ── Center: "Ask the corpus" command field with ⌘K hint — hidden on /ask (page owns the input) ── */}
+        {shouldShowNavSearch(pathname) ? (
         <button
           type="button"
           onClick={() => navigate("/ask")}
@@ -277,6 +280,9 @@ export default function NavBar() {
             ⌘K
           </kbd>
         </button>
+        ) : (
+          <div className="mx-auto flex-1" aria-hidden />
+        )}
 
         {/* ── Right: ENGINE ONLINE pill + avatar ── */}
         <div className="flex shrink-0 items-center gap-3">
