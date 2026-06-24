@@ -32,7 +32,7 @@ COPY vendor ./vendor
 RUN python -m venv /opt/venv \
  && . /opt/venv/bin/activate \
  && pip install --upgrade pip \
- && pip install ".[vertex,models]"
+ && pip install ".[vertex,models,briefing]"
 
 # ---- Stage 3: slim runtime ----
 FROM python:3.12-slim AS runtime
@@ -47,6 +47,10 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=py-build /opt/venv /opt/venv
+# Chromium for the HTML->PDF PDF path (the dark Signal render). The `briefing` extra put the
+# `playwright` CLI in /opt/venv; this fetches a real Chromium + its system libs. Without it
+# /api/build/pdf silently falls back to the fpdf2 brutalist renderer instead of the HTML theme.
+RUN playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*
 COPY api ./api
 COPY --from=web-build /web/dist ./web/dist
 EXPOSE 8001
