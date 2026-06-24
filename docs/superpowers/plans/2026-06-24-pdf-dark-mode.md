@@ -265,13 +265,13 @@ So the deployed `/api/build/pdf` renders the dark HTML path instead of the fpdf2
 
 **Interfaces:** none (infra).
 
-- [ ] **Step 1: Edit the Dockerfile** — in the `py-build` stage, ensure the briefing extra is installed (e.g. `pip install .[briefing]` or add `playwright` to the installed set so it lands in `/opt/venv`). In the `runtime` stage, after the venv COPY, add: `RUN playwright install --with-deps chromium` (PATH already includes `/opt/venv/bin`). Keep `libgomp1`.
+- [x] **Step 1: Edit the Dockerfile** — in the `py-build` stage, ensure the briefing extra is installed (e.g. `pip install .[briefing]` or add `playwright` to the installed set so it lands in `/opt/venv`). In the `runtime` stage, after the venv COPY, add: `RUN playwright install --with-deps chromium` (PATH already includes `/opt/venv/bin`). Keep `libgomp1`.
 
-- [ ] **Step 2: Add the compose default** — add `CASEBOARD_PDF_STYLE: ${CASEBOARD_PDF_STYLE:-signal}` under the `caseboard` service `environment:` block in `docker-compose.yml`.
+- [x] **Step 2: Add the compose default** — add `CASEBOARD_PDF_STYLE: ${CASEBOARD_PDF_STYLE:-signal}` under the `caseboard` service `environment:` block in `docker-compose.yml`.
 
-- [ ] **Step 3: Verify the harness still passes** (the Python tests are unaffected): `cd <worktree> && PYTHONPATH=vendor/caseprep python3 -m pytest -q tests/test_exec_navy.py tests/test_caseboard_pdf.py tests/test_briefing_pdf.py tests/test_pipeline.py` → PASS.
+- [x] **Step 3: Verify the harness still passes** (the Python tests are unaffected): `cd <worktree> && PYTHONPATH=vendor/caseprep python3 -m pytest -q tests/test_exec_navy.py tests/test_caseboard_pdf.py tests/test_briefing_pdf.py tests/test_pipeline.py` → PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add Dockerfile docker-compose.yml
