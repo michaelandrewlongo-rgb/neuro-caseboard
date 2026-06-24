@@ -181,7 +181,7 @@ Same change for the Ask briefing: `build_briefing_html` injects `base_css(theme)
 **Interfaces:**
 - Produces: `build_briefing_html(result, *, title, subtitle="", …, theme="signal") -> str`; `render_briefing_pdf(result, out_path, *, title, subtitle="", …, theme="signal") -> str`.
 
-- [ ] **Step 1: Write the failing test** — mirror Task 2's test against `build_briefing_html` using the file's existing `result` fixture/builder:
+- [x] **Step 1: Write the failing test** — mirror Task 2's test against `build_briefing_html` using the file's existing `result` fixture/builder:
 
 ```python
 def test_build_briefing_html_signal_dark_print_light(_min_result):
@@ -194,13 +194,13 @@ def test_build_briefing_html_defaults_to_signal(_min_result):
     assert "--bg:#000000" in build_briefing_html(_min_result, title="Q")
 ```
 
-- [ ] **Step 2: Run the test, verify it fails** — `pytest -q tests/test_briefing_pdf.py` → FAIL.
+- [x] **Step 2: Run the test, verify it fails** — `pytest -q tests/test_briefing_pdf.py` → FAIL.
 
-- [ ] **Step 3: Implement** — add `theme="signal"` to both signatures; change the CSS join to `base_css(theme), ASK_CSS` (import `base_css`); pass `theme` in `render_briefing_pdf`; soften `ASK_CSS` brutalist borders/shadows/radius to tokens.
+- [x] **Step 3: Implement** — add `theme="signal"` to both signatures; change the CSS join to `base_css(theme), ASK_CSS` (import `base_css`); pass `theme` in `render_briefing_pdf`; soften `ASK_CSS` brutalist borders/shadows/radius to tokens.
 
-- [ ] **Step 4: Run the test, verify it passes** — `pytest -q tests/test_briefing_pdf.py` → PASS.
+- [x] **Step 4: Run the test, verify it passes** — `pytest -q tests/test_briefing_pdf.py` → PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add neuro_caseboard/briefing_pdf.py tests/test_briefing_pdf.py
