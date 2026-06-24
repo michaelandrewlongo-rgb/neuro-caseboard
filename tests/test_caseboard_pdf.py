@@ -18,7 +18,7 @@ def test_build_caseboard_html_carries_exec_navy_tokens_and_content():
     doc = build_caseboard_html(_dossier(), subtitle="cervical case")
     assert "NEURO·CASEBOARD" in doc                 # masthead brand
     assert "DM+Sans" in doc and "Space+Mono" in doc      # Neo Brutalism fonts
-    assert "#ff3333" in doc                              # red primary accent
+    assert "#6b93ff" in doc                              # Signal (dark) blue accent
     assert "C5–6 ACDF" in doc                       # title
     assert "<b>vertebral artery</b>" in doc              # inline bold via shared helper
     assert "Corpus-supported" in doc                     # status-marker label

@@ -29,7 +29,7 @@ def test_build_briefing_html_has_exec_navy_tokens_and_content():
     assert "<strong>refractory</strong>" in doc          # markdown bold -> html
     # Neo Brutalism design tokens
     assert "DM+Sans" in doc and "Space+Mono" in doc
-    assert "#ff3333" in doc                              # red primary accent
+    assert "#6b93ff" in doc                              # Signal (dark) blue accent
     assert "NEURO·CASEBOARD" in doc                 # masthead brand
     assert "Ask · Citation-grounded" in doc         # eyebrow chip
 
