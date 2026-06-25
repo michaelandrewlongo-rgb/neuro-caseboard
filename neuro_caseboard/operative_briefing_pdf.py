@@ -45,7 +45,7 @@ def _clip(s: str, n: int) -> str:
 # Colors via a <style> block + classes — var() does NOT resolve in SVG presentation
 # attributes, only in CSS (advisor).
 _ALGO_CSS = """
-  .n{ rx:5; ry:5; stroke:var(--line); stroke-width:1; }
+  .n{ rx:5; ry:5; stroke:var(--muted); stroke-width:1; }
   .n.decision{ fill:var(--panel); stroke:var(--accent); }
   .n.action{ fill:var(--panel); }
   .n.terminal{ fill:var(--panel); stroke:var(--supported); }
