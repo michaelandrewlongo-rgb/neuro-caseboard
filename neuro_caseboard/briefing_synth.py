@@ -140,16 +140,19 @@ def parse_algorithm(text: str):
         line = raw.strip()
         if not line:
             continue
-        if "->" in line:
-            left, _, cond = line.partition("|")
-            src, _, dst = left.partition("->")
-            if src.strip() and dst.strip():
-                edges.append(AlgoEdge(src=src.strip(), dst=dst.strip(), condition=cond.strip()))
-        elif line.count("|") >= 2:
+        # Fix 3: check node shape (>=2 pipes) BEFORE edge shape ('->' present),
+        # so a node whose label contains '->' (e.g. "advance wire -> ICA") is not
+        # misrouted to the edge branch and silently dropped.
+        if line.count("|") >= 2:
             nid, kind, label = (p.strip() for p in line.split("|", 2))
             kind = kind if kind in ("decision", "action", "terminal") else "decision"
             if nid:
                 nodes.append(AlgoNode(id=nid, label=label, kind=kind))
+        elif "->" in line:
+            left, _, cond = line.partition("|")
+            src, _, dst = left.partition("->")
+            if src.strip() and dst.strip():
+                edges.append(AlgoEdge(src=src.strip(), dst=dst.strip(), condition=cond.strip()))
     return DecisionAlgorithm(nodes=nodes, edges=edges) if nodes else None
 
 
@@ -286,6 +289,12 @@ def subspecialty_of(case) -> str:
 
 def build_section_prompt(key: str, packet, case, subspecialty: str):
     fmt = _FORMAT.get(key, _FORMAT["prose"])
+    if key == "equipment":
+        cls = _EQUIP_CLASS.get(subspecialty)
+        if cls is not None:
+            field_names = [n for n in cls.model_fields if n not in ("kind", "source_refs")]
+            fmt = (fmt + f"\nUse EXACTLY these field keys (snake_case), one per line, "
+                   f"semicolon-separated values: {', '.join(field_names)}")
     user = (f"SECTION={key} ({_SECTION_TITLES[key]})\n"
             f"Case: {case.to_topic()}\nSubspecialty: {subspecialty}\n\n"
             f"EVIDENCE (cite these numbers only):\n{packet.prompt_block}\n\n"
@@ -328,6 +337,24 @@ def synthesize_briefing(case, dossier, packet, synth_client, *,
             brief.algorithm = parse_algorithm(text)
 
     references = _assemble_references(brief, packet)
+
+    # Fix 2: reconcile dangling citations — after reference assembly, any source_ref that did
+    # not land in `references` (i.e. the LLM cited a ref not in the packet) is pruned from
+    # every holder in the briefing.  For a prose BriefingItem whose refs were all dangling
+    # (had refs, now empty), flip unsupported=True so the grounding invariant holds.
+    # TreatmentModality and EquipmentPlan have no unsupported field — prune-only.
+    resolved = {r.ref_id for r in references}
+    for sec in brief.sections:
+        for item in sec.items:
+            had_refs = bool(item.source_refs)
+            item.source_refs = [r for r in item.source_refs if r in resolved]
+            if had_refs and not item.source_refs:
+                item.unsupported = True
+    for mod in brief.modalities:
+        mod.source_refs = [r for r in mod.source_refs if r in resolved]
+    if brief.equipment is not None:
+        brief.equipment.source_refs = [r for r in brief.equipment.source_refs if r in resolved]
+
     return brief, references, failed
 
 

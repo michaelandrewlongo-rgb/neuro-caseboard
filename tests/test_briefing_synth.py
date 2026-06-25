@@ -197,3 +197,77 @@ def test_subspecialty_of_endovascular():
     from neuro_caseboard.intake import deterministic_parse
     case = deterministic_parse("basilar tip aneurysm coiling")
     assert bs.subspecialty_of(case) == "endovascular"
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for Fixes 1–3 (messy/realistic model output)
+# ---------------------------------------------------------------------------
+
+def test_equipment_prompt_contains_field_names():
+    """build_section_prompt for the equipment section must inject the schema's snake_case field
+    names so the model emits exactly those keys. Pre-fix: the prompt never lists them → any
+    natural-language reply (e.g. "Positioning & monitoring:") parses to an all-empty plan."""
+    from neuro_caseboard.briefing_synth import build_section_prompt, _EQUIP_CLASS
+    packet = _packet()
+    _, user_prompt = build_section_prompt("equipment", packet, FakeCase(), "cranial")
+    cls = _EQUIP_CLASS["cranial"]
+    expected_fields = [n for n in cls.model_fields if n not in ("kind", "source_refs")]
+    for fname in expected_fields:
+        assert fname in user_prompt, (
+            f"equipment prompt is missing snake_case field name '{fname}'; "
+            f"the model will use natural-language keys that parse_equipment won't match")
+
+
+def test_synthesize_dangling_ref_pruned_and_unsupported():
+    """A prose item citing only T9 (not in the 1-source packet) must have source_refs cleared
+    and unsupported flipped to True after synthesize_briefing. Pre-fix: T9 survives in
+    source_refs and unsupported stays False, violating the grounding invariant."""
+
+    class DanglingFakeSynth:
+        def generate(self, system, user, images):
+            key = next(k for k in bs.SECTION_KEYS if f"SECTION={k}" in user)
+            if key == "pathology":
+                return "[critical] some out-of-packet finding {T9}\n"
+            if key == "modalities":
+                return "### Clipping\nrole: durable\npreferred: yes\nrefs: T1\n"
+            if key == "equipment":
+                return "access_strategy: transfemoral\nrefs: T1\n"
+            if key == "management":
+                return ("[high] Treat early {T1}\n---ALGORITHM---\n"
+                        "N1 | decision | Ruptured?\nN2 | action | Secure\nN1 -> N2 | yes\n")
+            return f"[critical] {key} claim {{T1}}\n"
+
+    brief, refs, _ = bs.synthesize_briefing(
+        FakeCase(), FakeDossier(), _packet(), DanglingFakeSynth(), subspecialty="endovascular")
+
+    pathology_sec = next(s for s in brief.sections if s.key == "pathology")
+    critical_item = pathology_sec.items[0]
+
+    # Dangling T9 must be pruned from source_refs
+    assert "T9" not in critical_item.source_refs, (
+        "T9 was not pruned even though it has no entry in the packet")
+    # item had refs but all dangling → unsupported must be flipped True
+    assert critical_item.unsupported is True, (
+        "item cited T9 (all dangling) but unsupported was not set True")
+    # no BriefingReference with ref_id T9 must exist
+    ref_ids = {r.ref_id for r in refs}
+    assert "T9" not in ref_ids, "T9 appeared in assembled references despite not being in packet"
+
+
+def test_parse_algorithm_node_with_arrow_in_label_is_not_dropped():
+    """A node line whose label contains '->' must be parsed as a node, not dropped as an edge.
+    Pre-fix: the '->' check runs before the '| >= 2' check → the line is misrouted to the edge
+    branch, the node is silently dropped, and the algorithm graph is incomplete."""
+    txt = ("intro prose ignored\n"
+           "---ALGORITHM---\n"
+           "N1 | decision | Guide in vessel?\n"
+           "N2 | action | advance wire -> ICA\n"
+           "N1 -> N2 | yes\n")
+    algo = bs.parse_algorithm(txt)
+    assert algo is not None
+    node_ids = [n.id for n in algo.nodes]
+    assert "N2" in node_ids, (
+        f"N2 node was dropped (got {node_ids}); "
+        "a label containing '->' must not be misrouted to the edge branch")
+    n2 = next(n for n in algo.nodes if n.id == "N2")
+    assert "advance wire -> ICA" == n2.label

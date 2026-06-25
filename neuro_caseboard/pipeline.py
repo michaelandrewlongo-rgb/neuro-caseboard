@@ -374,7 +374,7 @@ def build_briefing_bundle(query, *, use_llm=None, enrich=True, retriever=None,
             "" if packet.textbook else "no textbook evidence",
             "" if (bool(literature) and packet.pubmed) else "no contemporary literature",
             fig_reason])),
-        model=os.environ.get("BRIEFING_SYNTH_MODEL", "gemini-2.5-flash"),
+        model=getattr(synth_client, "model", os.environ.get("BRIEFING_SYNTH_MODEL", "gemini-2.5-flash")),
     )
     return OperativeBriefingBundle(
         topic=case.to_topic(), case=case, briefing=brief, figures=figures,
