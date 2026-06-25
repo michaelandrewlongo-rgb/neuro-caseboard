@@ -13,7 +13,16 @@ class FRec:
 class FigRetriever:
     """12 unique plates spread across the 4 intents (3 each)."""
     def retrieve(self, query, topic="", top_n=8):
-        intent = query.split()[-1]
+        # Map query back to intent name by checking which keyword is present
+        intent = "unknown"
+        if "pathology" in query:
+            intent = "pathology"
+        elif "anatomy" in query:
+            intent = "anatomy"
+        elif "technique" in query:
+            intent = "technique"
+        elif "device" in query:
+            intent = "device"
         return [FRec(f"/figs/{intent}_{i}.png", cap=f"{intent} {i}") for i in range(3)]
 
 
