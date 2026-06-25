@@ -165,3 +165,36 @@ def test_fit_allows_page_two_and_always_converges():
     r = fit_briefing_page(_briefing(), measure=lambda doc: 2)  # never fits 1 page
     assert r.pages <= 2                     # the hard invariant
     assert any(x.startswith("page2") for x in r.rungs)
+
+
+# --- Task 5: figure atlas + references page ----------------------------------------
+from neuro_caseboard.briefing_model import BriefingFigure, BriefingReference
+from neuro_caseboard.operative_briefing_pdf import (
+    build_figure_atlas_html, build_references_html)
+
+
+def test_atlas_keeps_caption_when_image_unreadable():
+    figs = [BriefingFigure(fig_id="BF1", image_path="/no/such/file.png",
+                           caption="Circle of Willis", citation="Rhoton 2002", intent="anatomy")]
+    html_ = build_figure_atlas_html(figs)
+    assert "Circle of Willis" in html_ and "Rhoton 2002" in html_   # caption survives bad path
+    assert "BF1" in html_
+    assert build_figure_atlas_html([]) == ""
+
+
+def test_references_keep_T_and_L_namespaces_distinct():
+    refs = [
+        BriefingReference(ref_id="T1", kind="textbook", citation="Youmans ch. 12, p. 210",
+                          sections=["pathology"]),
+        BriefingReference(ref_id="L1", kind="pubmed",
+                          citation="Smith et al. Stroke 2024", meta={"pmid": "123"},
+                          sections=["management"]),
+    ]
+    out = build_references_html(refs)
+    assert "T1" in out and "L1" in out
+    # distinct groups: textbook header precedes the literature header
+    assert out.index("Textbook") < out.index("Literature")
+    assert "Youmans ch. 12, p. 210" in out and "Smith et al. Stroke 2024" in out
+    assert "123" in out                                  # pmid surfaced
+    assert "pathology" in out and "management" in out    # support map
+    assert build_references_html([]) == ""

@@ -313,3 +313,85 @@ def fit_briefing_page(briefing, measure, *, theme: str = "signal", compress=None
     # exceed this — they don't (critical core is small).
     pages = attempt(b, floor, ("optional", "high"))
     return result(b, floor, ("optional", "high"), pages, "page2:critical-only")
+
+
+# --- figure atlas + references page (separate pages, after the briefing) -----------
+# Atlas/refs get their own additive CSS so they stay independent of the page-1 scalable
+# block. Figures are break-inside:avoid with a max-height so 1–2 land per page by aspect.
+_ATLAS_CSS = """
+.bf-break{ break-before:page; }
+.bf-page-h{ font-family:var(--mono); font-size:7pt; font-weight:700; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--accent); padding:12mm 16mm 0; }
+.bf-atlas{ padding:3mm 16mm 0; }
+.bf-fig{ break-inside:avoid; margin:0 0 5mm; border:1px solid var(--line);
+  border-radius:var(--radius); overflow:hidden; background:var(--panel); }
+.bf-fig img{ display:block; width:100%; max-height:118mm; object-fit:contain;
+  border-bottom:1px solid var(--line); }
+.bf-fig figcaption{ padding:3mm 4mm; font-family:var(--read); font-size:9.5pt; line-height:1.4;
+  color:var(--muted); }
+.bf-fig .fid{ font-family:var(--mono); font-size:7pt; font-weight:700; color:var(--accent);
+  margin-right:2mm; }
+.bf-fig .src{ display:block; margin-top:1.2mm; color:var(--faint); }
+.bf-refs{ padding:3mm 16mm 14mm; }
+.bf-refs h3{ font-family:var(--ui); font-weight:700; font-size:11pt; color:var(--ink);
+  border-top:1px solid var(--line); padding-top:2mm; margin:5mm 0 2mm; }
+.bf-ref{ font-family:var(--read); font-size:9pt; color:var(--ink); margin:0 0 1.6mm;
+  padding-left:9mm; text-indent:-9mm; }
+.bf-ref .rid{ font-family:var(--mono); font-size:7.5pt; font-weight:700; color:var(--accent);
+  margin-right:2mm; }
+.bf-ref .map{ display:block; font-family:var(--mono); font-size:6.6pt; color:var(--muted);
+  text-transform:uppercase; letter-spacing:.08em; text-indent:0; }
+"""
+
+
+def _figure_html(fig) -> str:
+    from neuro_caseboard.exec_navy import img_data_uri
+    try:
+        img = f'<img src="{img_data_uri(fig.image_path)}">'
+    except Exception:
+        img = ""                                         # never emit a broken image; keep caption
+    src_bits = " · ".join(p for p in (fig.citation, fig.source_n, fig.intent) if p)
+    src = f'<span class="src">{_esc(src_bits)}</span>' if src_bits else ""
+    return (f'<figure class="bf-fig">{img}<figcaption>'
+            f'<span class="fid">{_esc(fig.fig_id)}</span>{_esc(fig.caption)}{src}'
+            f'</figcaption></figure>')
+
+
+def build_figure_atlas_html(figures, theme: str = "signal") -> str:
+    if not figures:
+        return ""
+    figs = "".join(_figure_html(f) for f in figures)
+    return ('<div class="bf-break"></div>'
+            '<div class="bf-page-h">Figure Atlas — high-yield plates</div>'
+            f'<div class="bf-atlas">{figs}</div>')
+
+
+def _ref_html(ref) -> str:
+    mapline = ""
+    if ref.sections:
+        mapline = f'<span class="map">supports: {_esc(", ".join(ref.sections))}</span>'
+    extra = ""
+    for k in ("pmid", "doi", "url", "page", "book"):
+        v = (ref.meta or {}).get(k)
+        if v:
+            extra += f" · {_esc(str(v))}"
+    return (f'<div class="bf-ref"><span class="rid">{_esc(ref.ref_id)}</span>'
+            f'{_esc(ref.citation)}{extra}{mapline}</div>')
+
+
+def build_references_html(references, theme: str = "signal") -> str:
+    if not references:
+        return ""
+    tb = [r for r in references if r.kind == "textbook"]
+    lit = [r for r in references if r.kind == "pubmed"]
+    out = ['<div class="bf-break"></div>',
+           '<div class="bf-page-h">References &amp; Evidence</div>',
+           '<div class="bf-refs">']
+    if tb:
+        out.append("<h3>Textbook sources</h3>")
+        out.extend(_ref_html(r) for r in tb)
+    if lit:
+        out.append("<h3>Contemporary Literature</h3>")
+        out.extend(_ref_html(r) for r in lit)
+    out.append("</div>")
+    return "".join(out)
