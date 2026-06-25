@@ -1,6 +1,20 @@
 // Typed client for the FastAPI engine wrapper. All calls go through the Vite proxy at /api,
 // so the browser sees one origin and there is no CORS / auth surface.
 
+import type {
+  OperativeBriefing,
+  BriefingFigure,
+  BriefingReference,
+  BriefingProvenance,
+  BriefingSection,
+  BriefingItem,
+  TreatmentModality,
+  DecisionAlgorithm,
+  AlgoNode,
+  AlgoEdge,
+  EquipmentPlan,
+} from "./briefingTypes"
+
 export interface HealthProbe {
   available?: boolean
   ok?: boolean
@@ -277,4 +291,78 @@ export async function getPreferences(
   const res = await fetch("/api/preferences", { signal })
   if (!res.ok) throw new Error(`/api/preferences returned ${res.status}`)
   return (await res.json()) as { count: number; preferences: PreferenceOut[] }
+}
+
+// ----- Briefing (Operative Briefing Bundle) --------------------------------------------------
+// Core shapes are generated from the Pydantic schema (briefingTypes.ts, imported at the top of
+// this file). The served JSON adds two hand-maintained seams: figures gain a browser image_url/
+// availability, and `dossier` is the existing Dossier interface above (the Pydantic model
+// serializes it as opaque Any).
+
+export type {
+  OperativeBriefing,
+  BriefingFigure,
+  BriefingReference,
+  BriefingProvenance,
+  BriefingSection,
+  BriefingItem,
+  TreatmentModality,
+  DecisionAlgorithm,
+  AlgoNode,
+  AlgoEdge,
+  EquipmentPlan,
+}
+
+export interface BriefingFigureView extends BriefingFigure {
+  image_url: string | null
+  image_available: boolean
+}
+
+export type BriefingResponse =
+  | {
+      kind: "briefing"
+      build_id: string
+      topic: string
+      case: unknown
+      briefing: OperativeBriefing
+      figures: BriefingFigureView[]
+      references: BriefingReference[]
+      dossier: Dossier
+      provenance: BriefingProvenance
+    }
+  | { kind: "unavailable"; reason: string }
+  | { kind: "error"; error: string }
+
+export async function buildBriefing(
+  topic: string,
+  opts: { enrich: boolean; use_llm: boolean; use_prefs?: boolean },
+  signal?: AbortSignal,
+): Promise<BriefingResponse> {
+  const res = await fetch("/api/briefing", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ topic, enrich: opts.enrich, use_llm: opts.use_llm, use_prefs: opts.use_prefs ?? true }),
+    signal,
+  })
+  const data = (await res.json().catch(() => null)) as BriefingResponse | null
+  if (data && typeof data === "object" && "kind" in data) return data
+  return { kind: "error", error: `Unexpected response (${res.status})` }
+}
+
+/** Fetch the briefing PDF for a cached build_id (no rebuild — exported == displayed). */
+export async function fetchBriefingPdf(build_id: string, signal?: AbortSignal): Promise<Blob> {
+  const res = await fetch("/api/briefing/pdf", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ build_id }),
+    signal,
+  })
+  if (!res.ok) {
+    const msg = await res
+      .json()
+      .then((d) => d?.error)
+      .catch(() => null)
+    throw new Error(msg || `Briefing PDF export failed (${res.status})`)
+  }
+  return await res.blob()
 }
