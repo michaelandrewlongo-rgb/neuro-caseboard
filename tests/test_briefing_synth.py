@@ -1,4 +1,5 @@
 from neuro_caseboard import briefing_synth as bs
+from neuro_caseboard.case_context import CaseContext
 from neuro_caseboard.briefing_model import (
     BriefingSection, DecisionAlgorithm, TreatmentModality,
     SpineEquipment, EndovascularEquipment,
@@ -157,3 +158,42 @@ def test_synthesize_failure_isolation():
     assert failed == ["risks"]
     assert all(s.key != "risks" or not s.items for s in brief.sections)  # risks empty/absent
     assert any(s.key == "technique" for s in brief.sections)             # others still land
+
+
+# ---------------------------------------------------------------------------
+# subspecialty_of — 3-tier fallback regression tests
+# ---------------------------------------------------------------------------
+
+def test_subspecialty_of_deterministic_spine_acdf():
+    """deterministic_parse("C5-6 ACDF") → to_topic()="C5-6" (level only, "ACDF" dropped),
+    so tier-1 misses; tier-3 raw-dictation scan finds "acdf" → spine."""
+    from neuro_caseboard.intake import deterministic_parse
+    case = deterministic_parse("C5-6 ACDF")
+    assert bs.subspecialty_of(case) == "spine"
+
+
+def test_subspecialty_of_llm_cranial_with_spine_comorbidity():
+    """An LLM-parsed cranial case whose raw_dictation contains a spine comorbidity must NOT
+    be mis-routed to spine. Tier-1 classifies 'temporal lobe resection glioma' as cranial
+    (no spine signal); tier-2 finds 'temporal lobe resection' + 'glioma' → no spine signal;
+    tier-3 is SKIPPED because source='llm'. Result: 'cranial'."""
+    # Construct directly as the LLM parse would produce it — structured fields populated,
+    # source="llm", raw_dictation contains a spine comorbidity token.
+    case = CaseContext(
+        procedure="temporal lobe resection",
+        pathology="glioma",
+        surgical_goal="gross total resection",
+        location="left temporal lobe",
+        raw_dictation="temporal lobe resection for epilepsy; cervical spondylosis",
+        source="llm",
+    )
+    # Confirm the regression: the old code would scan raw_dictation and find "cervical" → "spine".
+    # With the fix, tier-3 is gated on source != "llm", so the cranial case stays cranial.
+    assert bs.subspecialty_of(case) == "cranial"
+
+
+def test_subspecialty_of_endovascular():
+    """An endovascular/vascular case routes to 'endovascular'."""
+    from neuro_caseboard.intake import deterministic_parse
+    case = deterministic_parse("basilar tip aneurysm coiling")
+    assert bs.subspecialty_of(case) == "endovascular"

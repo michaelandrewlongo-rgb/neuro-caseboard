@@ -244,15 +244,39 @@ _SYSTEM = (
 def subspecialty_of(case) -> str:
     """Map the case to one of the three equipment schemas via the existing profile classifier.
 
-    Falls back to the raw dictation / presentation text when ``to_topic()`` drops procedure
-    tokens (e.g. deterministic_parse("C5-6 ACDF") → to_topic()="C5-6", losing "ACDF")."""
+    Three-tier fallback that consults the OPERATION fields, not comorbidities:
+
+    1. classify_profile(case.to_topic()) — the synthesized topic (geometry + plan).
+    2. If empty: join the structured operation fields (procedure, pathology, surgical_goal,
+       target) which the LLM parse populates and which contain no comorbidity prose.
+    3. If STILL empty AND source != "llm": fall back to the raw dictation / presentation.
+       For deterministic parses the raw text is the terse original query (no comorbidity
+       prose), so it is safe. For LLM parses the structured fields are authoritative — we
+       MUST NOT scan the full clinical note which may contain comorbidity text that would
+       mis-route a cranial case mentioning a spine comorbidity.
+    """
     from neuro_caseboard.pipeline import classify_profile
+
+    # Tier 1: synthesized topic string.
     prof = classify_profile(case.to_topic())
     if not prof:
-        # to_topic() may lose procedure tokens (e.g. ACDF) when a spine level is extracted;
-        # the raw_dictation / presentation is the most complete source for classification.
+        # Tier 2: operation fields only (procedure, pathology, surgical_goal, target).
+        # These are populated by the LLM parse and describe the planned operation;
+        # comorbidities live in case.comorbidities, NOT here.
+        op_fields = " ".join(filter(None, [
+            getattr(case, "procedure", ""),
+            getattr(case, "pathology", ""),
+            getattr(case, "surgical_goal", ""),
+            case.target() if callable(getattr(case, "target", None)) else getattr(case, "target", ""),
+        ]))
+        prof = classify_profile(op_fields)
+    if not prof and getattr(case, "source", "") != "llm":
+        # Tier 3: raw text for deterministic parses only. The deterministic parser stores the
+        # terse original query (e.g. "C5-6 ACDF") — no comorbidity prose — so scanning it is
+        # safe. Never do this for LLM parses; source="llm" → structured fields are canonical.
         raw = getattr(case, "raw_dictation", "") or getattr(case, "presentation", "")
         prof = classify_profile(raw)
+
     if prof == "spine":
         return "spine"
     if prof == "vascular":
