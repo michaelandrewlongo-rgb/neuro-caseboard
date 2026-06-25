@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n api,web -c cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",
-    "dev:api": "cd .. && CORPUS_DIR=${CORPUS_DIR:-/home/michael/textbook_pdfs} python3 -m uvicorn api.server:app --host 127.0.0.1 --port ${API_PORT:-8001} --reload",
+    "dev:api": "cd .. && CORPUS_DIR=${CORPUS_DIR:-/home/michael/textbook_pdfs} BRIEFING_SYNTH_CONCURRENCY=${BRIEFING_SYNTH_CONCURRENCY:-2} BRIEFING_SYNTH_RETRIES=${BRIEFING_SYNTH_RETRIES:-3} python3 -m uvicorn api.server:app --host 127.0.0.1 --port ${API_PORT:-8001} --reload",
     "dev:web": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
