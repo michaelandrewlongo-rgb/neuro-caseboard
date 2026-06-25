@@ -104,6 +104,50 @@ def test_retrieve_for_synthesis_carries_resolved_variant():
     assert index.called_with[0] == "uni rewrite"  # figures collected on the resolved query
 
 
+def test_skip_disambiguation_bypasses_gate_and_analyze():
+    # A variant rewrite is unambiguous by construction: skip_disambiguation must retrieve
+    # and resolve directly, never calling the cheap gate OR the expensive analyze LLM pass.
+    hits = [Hit(id="a", book="B", chapter="C", page=1, text="t1")]
+    calls = {"gate": 0, "analyze": 0}
+
+    def gate(q, h):
+        calls["gate"] += 1
+        return Gate(tripped=True, axis="x")
+
+    def analyze(q, h, sc):
+        calls["analyze"] += 1
+        raise AssertionError("analyze must not run on a resolved variant rewrite")
+
+    index = FakeIndex(hits)
+    eng = _engine(index, gate_fn=gate, analyze_fn=analyze)
+    bundle = eng.retrieve_for_synthesis("unilateral FTP hemicraniectomy steps",
+                                        skip_disambiguation=True)
+    assert isinstance(bundle, RetrievalBundle)
+    assert bundle.question == "unilateral FTP hemicraniectomy steps"
+    assert bundle.variant is None
+    assert index.called_with[0] == "unilateral FTP hemicraniectomy steps"  # retrieved once, on the rewrite
+    assert calls == {"gate": 0, "analyze": 0}
+
+
+def test_default_still_runs_gate_and_analyze():
+    # Parity guard: without the flag, a gate trip still spends the analyze pass (existing behavior).
+    hits = [Hit(id="a", book="B", chapter="C", page=1, text="t1")]
+    calls = {"analyze": 0}
+    vr1 = VariantRewrite("unilateral FTP hemicraniectomy", "uni rewrite")
+    vr2 = VariantRewrite("bifrontal (Kjellberg) decompression", "bifrontal rewrite")
+
+    def analyze(q, h, sc):
+        calls["analyze"] += 1
+        return QueryAnalysis(ambiguous=True, axis="x", variants=[vr1, vr2],
+                             chosen=vr1, confidence=0.2)
+
+    eng = _engine(FakeIndex(hits), gate_fn=lambda q, h: Gate(tripped=True, axis="x"),
+                  analyze_fn=analyze)
+    out = eng.retrieve_for_synthesis("decompressive craniectomy steps?")
+    assert isinstance(out, Clarification)
+    assert calls["analyze"] == 1
+
+
 def test_plan_retrieval_runs_guard_for_local(monkeypatch):
     calls = {}
 
@@ -112,7 +156,7 @@ def test_plan_retrieval_runs_guard_for_local(monkeypatch):
         gpu_guard = True
 
     class _E:
-        def retrieve_for_synthesis(self, question):
+        def retrieve_for_synthesis(self, question, *, skip_disambiguation=False):
             return f"BUNDLE:{question}"
 
     monkeypatch.setattr(q, "ensure_gpu_ready",

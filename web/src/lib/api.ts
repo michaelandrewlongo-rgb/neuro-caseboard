@@ -89,11 +89,12 @@ export type AskResponse =
   | { kind: "unavailable"; reason: string }
   | { kind: "error"; error: string }
 
-export async function askQuestion(question: string, signal?: AbortSignal): Promise<AskResponse> {
+export async function askQuestion(question: string, signal?: AbortSignal,
+                                  skipDisambiguation = false): Promise<AskResponse> {
   const res = await fetch("/api/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, skip_disambiguation: skipDisambiguation }),
     signal,
   })
   // Every outcome (answer / clarification / unavailable / error) is a JSON body carrying `kind`,

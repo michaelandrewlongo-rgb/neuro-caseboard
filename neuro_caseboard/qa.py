@@ -134,7 +134,8 @@ def _retrieve_literature_for_weave(question, *, lit_config, synth_client):
 
 
 def _answer_question_woven(question, *, config=None, force=False, lit_config=None,
-                           synth_client=None, plan_a=None, retrieve_b=None):
+                           synth_client=None, plan_a=None, retrieve_b=None,
+                           skip_disambiguation=False):
     """One woven answer from textbook ([n]) + literature ([L#]). Lane A errors propagate;
     Lane B failures degrade to a textbook-only answer. Mirrors Engine._answer's empty-guard,
     refusal handling, and variant prepend (the woven path bypasses Engine._answer)."""
@@ -148,7 +149,8 @@ def _answer_question_woven(question, *, config=None, force=False, lit_config=Non
         synth_client = make_synth_client(config or load_config())
     if plan_a is None:
         def plan_a():
-            return plan_retrieval(question, config=config, force=force)
+            return plan_retrieval(question, config=config, force=force,
+                                  skip_disambiguation=skip_disambiguation)
     if retrieve_b is None:
         def retrieve_b():
             return _retrieve_literature_for_weave(question, lit_config=lit_config,
@@ -205,7 +207,8 @@ def _answer_question_woven(question, *, config=None, force=False, lit_config=Non
                     literature=lit, verification=verification)
 
 
-def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=None) -> QAResult:
+def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=None,
+                    skip_disambiguation=False) -> QAResult:
     """Run Lane A and Lane B concurrently. Lane A errors propagate; Lane B failures drop
     the section. `lane_a`/`lane_b` are injectable no-arg callables (for tests).
 
@@ -218,12 +221,14 @@ def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=N
         lit_config = load_literature_config()
         if lit_config.weave:
             return _answer_question_woven(question, config=config, force=force,
-                                          lit_config=lit_config)
+                                          lit_config=lit_config,
+                                          skip_disambiguation=skip_disambiguation)
 
     if lane_a is None:
         from neuro_core.query import query
         def lane_a():
-            return query(question, config=config, force=force)
+            return query(question, config=config, force=force,
+                         skip_disambiguation=skip_disambiguation)
     if lane_b is None:
         def lane_b():
             return build_literature_section(question, config=config)

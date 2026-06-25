@@ -7,7 +7,7 @@ import FigureGrid from "@/components/ask/FigureGrid"
 import SourcesList from "@/components/ask/SourcesList"
 import LiteratureBlock from "@/components/ask/LiteratureBlock"
 import { CitationAudit } from "@/components/ask/CitationAudit"
-import { citationSummary } from "@/lib/citationSummary"
+import { auditSummaryLabel } from "@/lib/askLayout"
 
 const HINTS = [
   "borders of the cavernous sinus",
@@ -28,7 +28,7 @@ export default function Ask() {
 
   useEffect(() => () => ctrlRef.current?.abort(), [])
 
-  async function run(q: string) {
+  async function run(q: string, opts?: { skipDisambiguation?: boolean }) {
     const text = q.trim()
     if (!text || loading) return
     ctrlRef.current?.abort()
@@ -40,7 +40,7 @@ export default function Ask() {
     setNetError(null)
     setLoading(true)
     try {
-      const r = await askQuestion(text, ctrl.signal)
+      const r = await askQuestion(text, ctrl.signal, opts?.skipDisambiguation ?? false)
       if (!ctrl.signal.aborted) setResp(r)
     } catch (e) {
       const err = e as { name?: string; message?: string }
@@ -112,22 +112,6 @@ export default function Ask() {
         </div>
       )}
 
-      {resp?.kind === "answer" && !loading && (
-        <div className="flex flex-col gap-4">
-          {/* Status line — honest counts derived from real AskResponse fields */}
-          <p
-            className="font-mono text-[11px] uppercase tracking-[0.14em]"
-            style={{ color: "#6b93ff" }}
-          >
-            {citationSummary(resp.citations.length, resp.literature?.citations.length ?? 0)}
-          </p>
-          {/* Citation Audit — honest citation counts (corpus + literature lanes) */}
-          <div className="sm:max-w-md">
-            <CitationAudit citations={resp.citations} literature={resp.literature} />
-          </div>
-        </div>
-      )}
-
       {loading && <AskLoader />}
 
       {netError && !loading && (
@@ -140,7 +124,9 @@ export default function Ask() {
         </Card>
       )}
 
-      {resp && !loading && <ResultView resp={resp} onPickVariant={(q) => void run(q)} />}
+      {resp && !loading && (
+        <ResultView resp={resp} onPickVariant={(q) => void run(q, { skipDisambiguation: true })} />
+      )}
     </div>
   )
 }
@@ -191,13 +177,22 @@ function ResultView({
     )
   }
 
-  // kind === "answer"
+  // kind === "answer" — lead with the answer; the Citation Audit is secondary (it restates
+  // counts the sources already carry), so it is collapsed below the answer and sources.
   return (
     <div className="flex flex-col gap-6">
       <AnswerView text={resp.answer} />
       <FigureGrid figures={resp.figures} />
       <SourcesList citations={resp.citations} />
       {resp.literature && <LiteratureBlock literature={resp.literature} />}
+      <details className="surface p-4">
+        <summary className="cursor-pointer font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+          {auditSummaryLabel(resp.citations.length, resp.literature?.citations.length ?? 0)}
+        </summary>
+        <div className="mt-4 sm:max-w-md">
+          <CitationAudit citations={resp.citations} literature={resp.literature} />
+        </div>
+      </details>
     </div>
   )
 }

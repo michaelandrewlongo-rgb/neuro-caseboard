@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import StepChecklist from "@/components/StepChecklist"
-import { advanceStep } from "@/lib/loaderSteps"
+import { advanceStep, formatElapsed } from "@/lib/loaderSteps"
 import { cn } from "@/lib/utils"
 
 /** Generic slow-call loader: glass panel with a mono eyebrow and a persistent,
@@ -12,18 +12,25 @@ export default function PipelineLoader({
   bars = 6,
   eyebrow = "Processing · Pipeline",
   srText,
+  stepIntervalMs = 3200,
 }: {
   steps: string[]
   estimate: string
   bars?: number
   eyebrow?: string
   srText?: string
+  stepIntervalMs?: number
 }) {
   const [i, setI] = useState(0)
+  const [elapsed, setElapsed] = useState(0)
   useEffect(() => {
-    const t = setInterval(() => setI((p) => advanceStep(p, steps.length)), 3200)
+    const t = setInterval(() => setI((p) => advanceStep(p, steps.length)), stepIntervalMs)
     return () => clearInterval(t)
-  }, [steps.length])
+  }, [steps.length, stepIntervalMs])
+  useEffect(() => {
+    const t = setInterval(() => setElapsed((s) => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
 
   return (
     <div
@@ -61,8 +68,12 @@ export default function PipelineLoader({
         ))}
       </div>
 
-      <p className="mt-5 font-mono text-xs text-muted-foreground" aria-hidden>
-        {estimate}
+      <p
+        className="mt-5 flex items-center justify-between gap-3 font-mono text-xs text-muted-foreground"
+        aria-hidden
+      >
+        <span>{estimate}</span>
+        <span className="tnum shrink-0">Elapsed {formatElapsed(elapsed)}</span>
       </p>
     </div>
   )

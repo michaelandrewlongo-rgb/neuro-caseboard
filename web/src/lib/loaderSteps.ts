@@ -22,3 +22,12 @@ export function stepStates(total: number, current: number): StepState[] {
     i < current ? "done" : i === current ? "active" : "pending",
   )
 }
+
+/** Format an elapsed-seconds count as M:SS for the live loader stopwatch (e.g. 83 -> "1:23").
+    Floors fractional seconds and clamps negatives to "0:00". */
+export function formatElapsed(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds))
+  const m = Math.floor(s / 60)
+  const r = s % 60
+  return `${m}:${r.toString().padStart(2, "0")}`
+}
