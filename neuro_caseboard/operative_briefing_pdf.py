@@ -114,7 +114,7 @@ def build_algorithm_svg(algo, theme: str = "signal") -> str:
             parts.append(f'<rect class="n {kind}" x="{x:.1f}" y="{y:.1f}" '
                          f'width="{BW}" height="{BH}"/>')
             parts.append(f'<text class="nt" x="{x + BW / 2:.1f}" y="{y + BH / 2 + 3:.1f}" '
-                         f'text-anchor="middle">{html.escape(_clip(n.label, 26))}</text>')
+                         f'text-anchor="middle">{html.escape(_clip(_strip_markers(n.label), 26))}</text>')
     for e in edges:
         sx, _, sb = pos[e.src]
         dx, dt_, _ = pos[e.dst]
@@ -122,7 +122,7 @@ def build_algorithm_svg(algo, theme: str = "signal") -> str:
         if e.condition:
             mx, my = (sx + dx) / 2, (sb + dt_) / 2
             parts.append(f'<text class="ec" x="{mx:.1f}" y="{my:.1f}" '
-                         f'text-anchor="middle">{html.escape(e.condition)}</text>')
+                         f'text-anchor="middle">{html.escape(_strip_markers(e.condition))}</text>')
     parts.append("</svg>")
     return "".join(parts)
 
@@ -180,14 +180,21 @@ def _esc(s: str) -> str:
 
 
 # §11 hard invariant: NO visible citation markers on page 1. We never render source_refs, but
-# Plan 1's LLM prose can leave literal markers ([T1], [L2], [3]) inside item text — strip those
-# at the renderer so the invariant holds regardless of upstream cleanliness. Targeted to citation
-# shapes only ([T#]/[L#]/[bare digits]) so clinical brackets like "[Grade II]" survive.
+# Plan 1's LLM prose can leave literal markers ([T1], [L2], [3]) in ANY field — items, modality
+# advantages, equipment values, notes, the disclaimer, even algorithm labels. So every page-1
+# visible string is routed through _vis() (= strip markers, then escape). Targeted to citation
+# shapes only ([T#]/[L#]/[bare digits]) so clinical brackets like "[Grade II]" survive. The atlas
+# captions and references page do NOT strip — that is where citations are supposed to appear.
 _CITE_MARKER = re.compile(r"\s*\[(?:[TLtl]\s*\d+|\d+)\]")
 
 
 def _strip_markers(text: str) -> str:
     return _CITE_MARKER.sub("", text or "").strip()
+
+
+def _vis(s: str) -> str:
+    """Every page-1 visible string goes through here: strip citation markers, then escape."""
+    return _esc(_strip_markers(s))
 
 
 def _items_html(items, drop) -> str:
@@ -196,7 +203,7 @@ def _items_html(items, drop) -> str:
         if it.priority in drop:
             continue
         cls = "bf-item unsupported" if it.unsupported else "bf-item"
-        out.append(f'<div class="{cls}">{_esc(_strip_markers(it.text))}</div>')  # source_refs NOT rendered
+        out.append(f'<div class="{cls}">{_vis(it.text)}</div>')  # source_refs NOT rendered
     return "".join(out)
 
 
@@ -206,10 +213,10 @@ def _modalities_html(mods) -> str:
     cards = []
     for m in mods:
         pref = " pref" if m.preferred else ""
-        adv = "".join(f"<li>+ {_esc(a)}</li>" for a in m.advantages)
-        lim = "".join(f"<li>− {_esc(x)}</li>" for x in m.limitations)
-        ro = f'<div class="ro">{_esc(m.role)}</div>' if m.role else ""
-        cards.append(f'<div class="bf-mod{pref}"><div class="nm">{_esc(m.name)}</div>{ro}'
+        adv = "".join(f"<li>+ {_vis(a)}</li>" for a in m.advantages)
+        lim = "".join(f"<li>− {_vis(x)}</li>" for x in m.limitations)
+        ro = f'<div class="ro">{_vis(m.role)}</div>' if m.role else ""
+        cards.append(f'<div class="bf-mod{pref}"><div class="nm">{_vis(m.name)}</div>{ro}'
                      f'<ul>{adv}{lim}</ul></div>')
     return f'<div class="bf-mods">{"".join(cards)}</div>'
 
@@ -227,7 +234,7 @@ def _equipment_html(equip) -> str:
             continue
         label = field_name.replace("_", " ").title()
         rows.append(f'<div class="bf-eq-row"><span class="bf-eq-k">{_esc(label)}</span>'
-                    f'<span class="bf-eq-v">{_esc("; ".join(vals))}</span></div>')
+                    f'<span class="bf-eq-v">{_vis("; ".join(vals))}</span></div>')
     if not rows:
         return ""
     return (f'<div class="bf-eq"><div class="bf-eq-kind">{_esc(kind)} setup</div>'
@@ -236,14 +243,14 @@ def _equipment_html(equip) -> str:
 
 def _page1_body(briefing, *, drop: tuple = ()) -> str:
     out = ['<div class="bf-eyebrow">Operative Briefing</div>',
-           f'<div class="bf-title">{_esc(briefing.title)}</div>']
+           f'<div class="bf-title">{_vis(briefing.title)}</div>']
     for sec in briefing.sections:
         items = _items_html(sec.items, drop)
         if not items and not sec.note:
             continue
-        out.append(f'<div class="bf-sec"><div class="bf-sec-h">{_esc(sec.title)}</div>{items}')
+        out.append(f'<div class="bf-sec"><div class="bf-sec-h">{_vis(sec.title)}</div>{items}')
         if sec.note:
-            out.append(f'<div class="bf-note">{_esc(sec.note)}</div>')
+            out.append(f'<div class="bf-note">{_vis(sec.note)}</div>')
         out.append("</div>")
     svg = build_algorithm_svg(briefing.algorithm)
     if svg:
@@ -256,10 +263,10 @@ def _page1_body(briefing, *, drop: tuple = ()) -> str:
     if eq:
         out.append(f'<div class="bf-sec"><div class="bf-sec-h">Equipment</div>{eq}</div>')
     if briefing.unknowns:
-        items = " · ".join(_esc(u) for u in briefing.unknowns)
+        items = " · ".join(_vis(u) for u in briefing.unknowns)
         out.append(f'<div class="bf-unknowns"><b>Case-specific unknowns:</b> {items}</div>')
     if briefing.disclaimer:
-        out.append(f'<div class="bf-disc">{_esc(briefing.disclaimer)}</div>')
+        out.append(f'<div class="bf-disc">{_vis(briefing.disclaimer)}</div>')
     return "".join(out)
 
 

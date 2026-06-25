@@ -4,10 +4,13 @@ Pure HTML/SVG builders + the fit ladder are exercised with fakes — no Chromium
 The Chromium-bound orchestrator is tested only for its honest-error path and pure assembly.
 """
 import io
+import re
 
 import pypdf
 
 from neuro_caseboard.operative_briefing_pdf import count_pdf_pages
+
+MARKER_RE = re.compile(r"\[(?:[TLtl]\s*\d+|\d+)\]")  # citation-marker shapes that must not show on page 1
 
 
 def _blank_pdf(n: int) -> bytes:
@@ -99,13 +102,20 @@ def test_page1_has_no_images_or_citation_markers():
 
 
 def test_page1_strips_inline_citation_markers():
-    # §11: even if upstream prose embeds literal markers in item text, none reach page 1.
-    b = OperativeBriefing(title="t", sections=[BriefingSection(key="x", title="X", items=[
-        BriefingItem(text="Clip the aneurysm [T1] before rupture [L2]; see [3].",
-                     priority="critical")])])
+    # §11: markers embedded by upstream prose must not reach page 1 — from ANY field, not just
+    # items (the spine regression leaked them from equipment values).
+    b = OperativeBriefing(
+        title="Aneurysm [T9]",
+        sections=[BriefingSection(key="x", title="Pathology [L7]", note="Note with [3].", items=[
+            BriefingItem(text="Clip the aneurysm [T1] before rupture [L2]; see [3].",
+                         priority="critical")])],
+        modalities=[TreatmentModality(name="Coiling [T4]", advantages=["less invasive [L5]"])],
+        equipment=SpineEquipment(cage_class_sizing=["PEEK 12mm [1]; verify [T2]"]),
+        unknowns=["Rupture status [L8]"],
+        disclaimer="Verify everything [T6].")
     body = _page1_body(b)
-    assert "[T1]" not in body and "[L2]" not in body and "[3]" not in body
-    assert "Clip the aneurysm" in body and "before rupture" in body
+    assert not MARKER_RE.search(body)                # zero citation markers anywhere on page 1
+    assert "Clip the aneurysm" in body and "PEEK 12mm" in body and "Coiling" in body
     # clinical brackets are NOT citation shapes and must survive
     b2 = OperativeBriefing(title="t", sections=[BriefingSection(key="x", title="X", items=[
         BriefingItem(text="Spetzler-Martin [Grade II] lesion.", priority="critical")])])
