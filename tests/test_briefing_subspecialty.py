@@ -1,6 +1,13 @@
-"""Profile-specificity + cross-domain leakage controls.
+"""Routing-specificity: verify subspecialty cases route to the correct equipment schema.
 
-We assert STRUCTURE and ABSENCE, never hardcoded clinical answer text.
+Equipment is a discriminated union (kind="spine" | "endovascular" | "cranial"), so once
+the routing signal eq.kind matches, the Pydantic type system structurally guarantees field
+separation (e.g., SpineEquipment lacks catheters_wires by type definition, not by runtime
+check). These tests verify:
+1. The routing signal eq.kind is set correctly per subspecialty.
+2. The expected content fields (eq.cage_class_sizing, eq.devices, eq.instruments_clips)
+   are present in the routed schema, proving the bundle was enriched by synthesis.
+3. A cross-profile assertion proves the three subspecialties route to DISTINCT kinds.
 
 NOTE ON FAKES: The brief's minimal TRec/TextRetriever stubs are INSUFFICIENT for
 build_briefing_bundle, which calls build_case_dossier(enrich=True).  The caseprep
@@ -52,18 +59,40 @@ def _bundle(query):
 
 def test_spine_case_uses_spine_equipment_schema():
     eq = _bundle("C5-6 ACDF").briefing.equipment
+    # Routing: spine case routes to SpineEquipment (kind="spine").
+    # Content: synthesizer populated cage_class_sizing field (present + non-empty).
     assert eq.kind == "spine" and eq.cage_class_sizing
-    # negative control: no endovascular catheter fields exist on the spine schema
-    assert not hasattr(eq, "catheters_wires")
 
 
-def test_endovascular_case_uses_endo_schema_no_spine_cage():
+def test_endovascular_case_uses_endo_schema():
     eq = _bundle("ruptured ACoA aneurysm coiling").briefing.equipment
+    # Routing: endovascular case routes to EndovascularEquipment (kind="endovascular").
+    # Content: synthesizer populated devices field (present + non-empty).
     assert eq.kind == "endovascular" and eq.devices
-    assert not hasattr(eq, "cage_class_sizing")        # no TLIF cage in an endovascular case
 
 
-def test_cranial_case_uses_cranial_schema_no_endo_catheters():
+def test_cranial_case_uses_cranial_schema():
     eq = _bundle("left retrosigmoid vestibular schwannoma").briefing.equipment
+    # Routing: cranial case routes to CranialEquipment (kind="cranial").
+    # Content: synthesizer populated instruments_clips field (present + non-empty).
     assert eq.kind == "cranial" and eq.instruments_clips
-    assert not hasattr(eq, "catheters_wires")          # no endovascular catheters in open cranial
+
+
+def test_three_profiles_route_distinctly():
+    """Prove the three subspecialties route to DISTINCT equipment kinds.
+
+    This is the genuinely non-vacuous cross-case routing check: if subspecialty
+    routing were broken and (e.g.) spine and cranial both routed to CranialEquipment,
+    this test would catch it immediately.
+    """
+    cranial_bundle = _bundle("left retrosigmoid vestibular schwannoma")
+    spine_bundle = _bundle("C5-6 ACDF")
+    endo_bundle = _bundle("ruptured ACoA aneurysm coiling")
+
+    kinds = {
+        cranial_bundle.briefing.equipment.kind,
+        spine_bundle.briefing.equipment.kind,
+        endo_bundle.briefing.equipment.kind,
+    }
+    # All three subspecialties must route to distinct kinds.
+    assert len(kinds) == 3, f"Expected 3 distinct kinds, got {kinds}"
