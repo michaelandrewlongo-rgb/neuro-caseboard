@@ -201,3 +201,135 @@ def parse_equipment(text: str, subspecialty: str):
     data = {f: _as_items(kv[f]) for f in fields if f in kv}
     refs, _ = _split_refs(kv.get("refs", ""))
     return cls(source_refs=refs, **data)
+
+
+# ---------------------------------------------------------------------------
+# Task 4: 7-call concurrent orchestrator + reference assembly
+# ---------------------------------------------------------------------------
+from concurrent.futures import ThreadPoolExecutor
+
+from neuro_caseboard.briefing_model import BriefingReference, OperativeBriefing
+
+_SECTION_TITLES = {
+    "pathology": "Case & Pathology Frame", "management": "Management Strategy",
+    "modalities": "Treatment Modalities", "workup": "Preoperative Workup & Optimization",
+    "technique": "Operative Strategy & Technique", "risks": "Risks, Complications & Rescue",
+    "equipment": "Equipment & Device Plan",
+}
+
+# What each section must emit. The prose grammar is enforced by these instructions + the parsers.
+_FORMAT = {
+    "prose": ("Output one claim per line: `[critical|high|optional] claim text {refs}` where refs "
+              "are the bracketed source numbers, e.g. {T1, L2}. Use {verify} when no source "
+              "supports the claim. No other prose, no headings."),
+    "management": ("First, prose claim lines: `[critical|high|optional] text {refs}`. Then a line "
+                   "`---ALGORITHM---` followed by 4–7 nodes `id | decision|action|terminal | label` "
+                   "and edges `src -> dst | condition`."),
+    "modalities": ("For each viable modality output a block:\n### <name>\nrole: ...\nadvantages: a; b\n"
+                   "limitations: a; b\nfavoring: a; b\npreferred: yes|no\nrefs: T1, L2"),
+    "equipment": ("Output `key: value` lines for THIS subspecialty's fields only "
+                  "(semicolon-separated lists), plus a final `refs: T#, L#` line. Name device "
+                  "CLASSES, not commercial products unless a source supports it."),
+}
+
+_SYSTEM = (
+    "You are an attending neurosurgeon writing ONE section of a dense, case-specific operative "
+    "briefing for another attending. Be high-yield; skip basics. Cite the bracketed source "
+    "number for every substantive claim — textbook [T#], contemporary studies [L#], never merged. "
+    "Never invent a citation, device, dose, threshold, or rate. If the sources do not support a "
+    "specific, mark it {verify}. Do not include figures or a bibliography."
+)
+
+
+def subspecialty_of(case) -> str:
+    """Map the case to one of the three equipment schemas via the existing profile classifier."""
+    from neuro_caseboard.pipeline import classify_profile
+    prof = classify_profile(case.to_topic())
+    if prof == "spine":
+        return "spine"
+    if prof == "vascular":
+        return "endovascular"
+    return "cranial"   # skull_base / open / unclassified default to the cranial schema
+
+
+def build_section_prompt(key: str, packet, case, subspecialty: str):
+    fmt = _FORMAT.get(key, _FORMAT["prose"])
+    user = (f"SECTION={key} ({_SECTION_TITLES[key]})\n"
+            f"Case: {case.to_topic()}\nSubspecialty: {subspecialty}\n\n"
+            f"EVIDENCE (cite these numbers only):\n{packet.prompt_block}\n\n"
+            f"TASK: Write the {_SECTION_TITLES[key]} section.\n{fmt}")
+    return _SYSTEM, user
+
+
+def _synth_one(key, packet, case, subspecialty, synth_client):
+    system, user = build_section_prompt(key, packet, case, subspecialty)
+    return synth_client.generate(system, user, [])   # images unused for text synthesis
+
+
+def synthesize_briefing(case, dossier, packet, synth_client, *,
+                        subspecialty=None, max_workers=7):
+    """Run all 7 section calls concurrently (all-to-all over `packet`), parse each into the model,
+    and assemble the references + support map from the refs actually cited. Failure-isolated:
+    a section whose call raises is recorded in `failed_sections` and left empty."""
+    subspecialty = subspecialty or subspecialty_of(case)
+    raw, failed = {}, []
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futs = {ex.submit(_synth_one, k, packet, case, subspecialty, synth_client): k
+                for k in SECTION_KEYS}
+        for fut, k in ((f, futs[f]) for f in futs):
+            try:
+                raw[k] = fut.result()
+            except Exception:
+                failed.append(k)
+    failed.sort(key=SECTION_KEYS.index)
+
+    brief = OperativeBriefing(title=f"Operative Briefing — {case.to_topic()}")
+    for k in SECTION_KEYS:
+        text = raw.get(k, "")
+        if k in PROSE_KEYS:
+            brief.sections.append(parse_prose_section(k, _SECTION_TITLES[k], text))
+        elif k == "modalities":
+            brief.modalities = parse_modalities(text)
+        elif k == "equipment":
+            brief.equipment = parse_equipment(text, subspecialty)
+        if k == "management":
+            brief.algorithm = parse_algorithm(text)
+
+    references = _assemble_references(brief, packet)
+    return brief, references, failed
+
+
+def _all_refs_with_sections(brief):
+    """Yield (ref_id, section_key) for every cited ref across the briefing (the support map)."""
+    for s in brief.sections:
+        for it in s.items:
+            for r in it.source_refs:
+                yield r, s.key
+    for m in brief.modalities:
+        for r in m.source_refs:
+            yield r, "modalities"
+    if brief.equipment:
+        for r in brief.equipment.source_refs:
+            yield r, "equipment"
+
+
+def _assemble_references(brief, packet) -> list[BriefingReference]:
+    used = {}
+    for ref_id, sec in _all_refs_with_sections(brief):
+        used.setdefault(ref_id, set()).add(sec)
+    tb = {t["ref_id"]: t for t in packet.textbook}
+    pm = {p["ref_id"]: p for p in packet.pubmed}
+    refs = []
+    for ref_id in sorted(used, key=lambda r: (r[0], int(r[1:]))):
+        secs = sorted(used[ref_id])
+        if ref_id in tb:
+            t = tb[ref_id]
+            refs.append(BriefingReference(ref_id=ref_id, kind="textbook", citation=t["citation"],
+                                          meta={"book": t["book"], "page": t["page"]}, sections=secs))
+        elif ref_id in pm:
+            p = pm[ref_id]
+            refs.append(BriefingReference(ref_id=ref_id, kind="pubmed", citation=p.get("title", ""),
+                                          meta={k: p[k] for k in ("journal", "year", "pmid", "doi", "url") if k in p},
+                                          sections=secs))
+        # ponytail: a ref the LLM invented that isn't in the packet is dropped here — no fabrication.
+    return refs
