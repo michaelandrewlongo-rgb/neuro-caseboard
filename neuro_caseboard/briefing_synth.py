@@ -242,9 +242,17 @@ _SYSTEM = (
 
 
 def subspecialty_of(case) -> str:
-    """Map the case to one of the three equipment schemas via the existing profile classifier."""
+    """Map the case to one of the three equipment schemas via the existing profile classifier.
+
+    Falls back to the raw dictation / presentation text when ``to_topic()`` drops procedure
+    tokens (e.g. deterministic_parse("C5-6 ACDF") → to_topic()="C5-6", losing "ACDF")."""
     from neuro_caseboard.pipeline import classify_profile
     prof = classify_profile(case.to_topic())
+    if not prof:
+        # to_topic() may lose procedure tokens (e.g. ACDF) when a spine level is extracted;
+        # the raw_dictation / presentation is the most complete source for classification.
+        raw = getattr(case, "raw_dictation", "") or getattr(case, "presentation", "")
+        prof = classify_profile(raw)
     if prof == "spine":
         return "spine"
     if prof == "vascular":
