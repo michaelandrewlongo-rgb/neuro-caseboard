@@ -312,6 +312,75 @@ def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=No
     return dossier
 
 
+def briefing_synth_client(config=None):
+    """A Gemini-Flash synth client for the per-section briefing calls (cheaper/faster than the
+    Pro client used for woven Ask). Honors BRIEFING_SYNTH_MODEL; falls back to make_synth_client."""
+    from neuro_core.config import load_config
+    from neuro_core.synth_clients import make_synth_client, VertexSynthClient
+    cfg = config or load_config()
+    model = os.environ.get("BRIEFING_SYNTH_MODEL", "gemini-2.5-flash")
+    if getattr(cfg, "synth_provider", "") == "vertex":
+        return VertexSynthClient(cfg.google_cloud_project, cfg.google_cloud_location, model)
+    return make_synth_client(cfg)   # non-vertex deployments use their configured client/model
+
+
+def build_briefing_bundle(query, *, use_llm=None, enrich=True, retriever=None,
+                          fig_retriever=None, synth_client=None, literature=None, prefs=None):
+    """Query → OperativeBriefingBundle. Reuses the case substrate (parse_dictation →
+    build_case_dossier), then runs the section-aware 7-call synthesis + figure selection.
+    All heavy collaborators are injectable so the whole path is testable offline."""
+    from neuro_caseboard.intake import parse_dictation, deterministic_parse
+    from neuro_caseboard import briefing_synth as bsy
+    from neuro_caseboard.briefing_figures import select_briefing_figures
+    from neuro_caseboard.briefing_model import (OperativeBriefingBundle, BriefingProvenance)
+
+    if use_llm is None:
+        use_llm = llm_enabled()
+    case = deterministic_parse(query) if use_llm is False else parse_dictation(query)
+
+    # literature: None → config flag; the case dossier attaches PubMed when enabled.
+    if literature is None:
+        from neuro_caseboard.literature.config import load_literature_config
+        literature = load_literature_config().enabled
+
+    dossier = build_case_dossier(case, enrich=enrich, use_llm=use_llm,
+                                 literature=literature, prefs=prefs, retriever=retriever,
+                                 fig_retriever=fig_retriever)
+
+    if retriever is None and enrich:
+        retriever = build_retriever()
+    if synth_client is None:
+        synth_client = briefing_synth_client()
+
+    packet = bsy.gather_briefing_evidence(case, dossier, retriever)
+    subspec = bsy.subspecialty_of(case)
+    brief, references, failed = bsy.synthesize_briefing(
+        case, dossier, packet, synth_client, subspecialty=subspec)
+    brief.unknowns = case.missing_critical()
+    brief.disclaimer = ("Decision support only — the surgeon verifies every recommendation "
+                        "against primary sources.")
+
+    if fig_retriever is None and enrich and _figures_enabled():
+        from neuro_caseboard.retrieve import build_figure_retriever
+        fig_retriever = build_figure_retriever()
+    figures, fig_reason = select_briefing_figures(case, fig_retriever)
+
+    provenance = BriefingProvenance(
+        textbook_ok=bool(packet.textbook),
+        literature_ok=bool(literature) and bool(packet.pubmed),
+        failed_sections=failed,
+        degraded=bool(failed) or not packet.textbook,
+        reason="; ".join(filter(None, [
+            "" if packet.textbook else "no textbook evidence",
+            "" if (bool(literature) and packet.pubmed) else "no contemporary literature",
+            fig_reason])),
+        model=getattr(synth_client, "model", os.environ.get("BRIEFING_SYNTH_MODEL", "gemini-2.5-flash")),
+    )
+    return OperativeBriefingBundle(
+        topic=case.to_topic(), case=case, briefing=brief, figures=figures,
+        references=references, dossier=dossier, provenance=provenance)
+
+
 def _slug(topic: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (topic or "").lower()).strip("-")[:40] or "case"
 
