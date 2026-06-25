@@ -248,6 +248,27 @@ def test_parse_prose_strips_square_bracket_markers():
     assert it.text == "Stent placement helps wide-neck aneurysms."
 
 
+def test_parse_prose_accepts_unbracketed_priority_prefix():
+    """The live model frequently OMITS the brackets — `critical claim {T3}`, not `[critical] ...`.
+    parse_prose_section must accept both, or a whole (sometimes jailing-rich) section silently
+    drops to 0 items. (live V4: the technique content was generated + grounded but lost.)"""
+    txt = ("critical Endovascular treatment is viable for VADA {T3}.\n"
+           "high The jailing technique deploys the stent while the coiling microcatheter is in the "
+           "aneurysm {T10, T12}.\n")
+    sec = bs.parse_prose_section("technique", "Technique", txt)
+    assert [i.priority for i in sec.items] == ["critical", "high"]
+    assert sec.items[1].source_refs == ["T10", "T12"]
+    assert "jailing technique" in sec.items[1].text.lower()
+    assert "{" not in sec.items[1].text
+
+
+def test_parse_prose_does_not_mistag_capitalized_sentence_start():
+    # A line beginning with a capitalized word that happens to be a priority word is NOT a priority
+    # marker (the model emits lowercase tokens) — must be skipped, not mis-tagged + first-word-stripped.
+    sec = bs.parse_prose_section("risks", "Risks", "Critical care monitoring is required postoperatively.\n")
+    assert sec.items == []
+
+
 def test_parse_modalities_scrubs_inline_markers():
     # {verify} / [T#] markers the model drops into modality text must not leak (§11); the real
     # refs still come from the `refs:` line.

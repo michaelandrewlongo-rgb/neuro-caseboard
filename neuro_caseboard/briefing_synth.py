@@ -130,7 +130,12 @@ PROSE_KEYS = {"pathology", "management", "workup", "technique", "risks"}
 # refs AND leaked the markers onto the briefing (a §11 violation). A marker is a [..]/{..} group
 # whose content is only ref tokens (T#/L#/digits), "verify", and separators; clinical brackets
 # like "[Grade II]" (content is not ref tokens) are left untouched. (live V4 regression)
-_PRIORITY_LINE = re.compile(r"^\[(critical|high|optional)\]\s*(.*)$", re.DOTALL)
+# Accept the priority token bracketed `[critical]` OR bare lowercase `critical` — the live model
+# omits the brackets roughly half the time, which silently dropped whole (sometimes jailing-rich)
+# sections to 0 items. Bare must be LOWERCASE so a capitalized sentence ("Critical care…") is not
+# mistaken for a priority marker (the model emits lowercase tokens). (live V4 technique drop)
+_PRIORITY_LINE = re.compile(
+    r"^\s*(?:\[(critical|high|optional)\]|(critical|high|optional))[:.\-]?\s+(.+)$", re.DOTALL)
 _REFY = r"(?:[TLtl]\d+|\d+|verify)"
 _MARKER = re.compile(
     r"\[\s*" + _REFY + r"(?:[\s,;]+" + _REFY + r")*\s*\]"
@@ -182,7 +187,8 @@ def parse_prose_section(key: str, title: str, text: str) -> BriefingSection:
         m = _PRIORITY_LINE.match(line)
         if not m:
             continue  # ponytail: skip un-tagged lines rather than guess a priority
-        priority, body = m.groups()
+        priority = m.group(1) or m.group(2)   # bracketed | bare lowercase
+        body = m.group(3)
         clean, refs = _extract_refs_and_clean(body)
         if not clean:
             continue
