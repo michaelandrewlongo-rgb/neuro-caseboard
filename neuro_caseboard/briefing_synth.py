@@ -7,7 +7,13 @@ a fake, exactly like woven_synth.py.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
+
+from neuro_caseboard.briefing_model import (
+    AlgoEdge, AlgoNode, BriefingItem, BriefingSection, CranialEquipment,
+    DecisionAlgorithm, EndovascularEquipment, SpineEquipment, TreatmentModality,
+)
 
 SECTION_KEYS = ["pathology", "management", "modalities", "workup",
                 "technique", "risks", "equipment"]
@@ -89,3 +95,109 @@ def gather_briefing_evidence(case, dossier, retriever) -> EvidencePacket:
             meta = ", ".join(s for s in (p.get("journal", ""), str(p.get("year") or "")) if s)
             lines.append(f"[{p['ref_id']}] {p.get('title','')} — {meta}")
     return EvidencePacket(textbook=textbook, pubmed=pubmed, prompt_block="\n".join(lines))
+
+
+PROSE_KEYS = {"pathology", "management", "workup", "technique", "risks"}
+
+_PROSE_LINE = re.compile(r"^\[(critical|high|optional)\]\s*(.*?)\s*(\{([^}]*)\})?\s*$")
+_REF_TOKEN = re.compile(r"^[TL]\d+$")
+_ALGO_MARK = "---ALGORITHM---"
+
+
+def _split_refs(blob: str) -> tuple[list[str], bool]:
+    """Return (resolved T#/L# refs, unsupported_flag). Non-ref tokens (e.g. 'verify') or an
+    empty brace → unsupported. ponytail: tolerant — unknown tokens just mean 'no real source'."""
+    toks = [t.strip() for t in (blob or "").split(",") if t.strip()]
+    refs = [t for t in toks if _REF_TOKEN.match(t)]
+    unsupported = (not refs)  # no resolvable source → clinician-verify
+    return refs, unsupported
+
+
+def parse_prose_section(key: str, title: str, text: str) -> BriefingSection:
+    items = []
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if line == _ALGO_MARK:
+            break  # algorithm block (management) is parsed separately
+        m = _PROSE_LINE.match(line)
+        if not m:
+            continue  # ponytail: skip un-tagged lines rather than guess a priority
+        priority, body, _, refblob = m.groups()
+        refs, unsupported = _split_refs(refblob)
+        if not body:
+            continue
+        items.append(BriefingItem(text=body, priority=priority,
+                                  source_refs=refs, unsupported=unsupported))
+    return BriefingSection(key=key, title=title, items=items)
+
+
+def parse_algorithm(text: str):
+    if _ALGO_MARK not in (text or ""):
+        return None
+    block = text.split(_ALGO_MARK, 1)[1]
+    nodes, edges = [], []
+    for raw in block.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if "->" in line:
+            left, _, cond = line.partition("|")
+            src, _, dst = left.partition("->")
+            if src.strip() and dst.strip():
+                edges.append(AlgoEdge(src=src.strip(), dst=dst.strip(), condition=cond.strip()))
+        elif line.count("|") >= 2:
+            nid, kind, label = (p.strip() for p in line.split("|", 2))
+            kind = kind if kind in ("decision", "action", "terminal") else "decision"
+            if nid:
+                nodes.append(AlgoNode(id=nid, label=label, kind=kind))
+    return DecisionAlgorithm(nodes=nodes, edges=edges) if nodes else None
+
+
+def _kv_lines(text: str) -> dict:
+    out = {}
+    for raw in (text or "").splitlines():
+        if ":" in raw:
+            k, _, v = raw.partition(":")
+            out[k.strip().lower()] = v.strip()
+    return out
+
+
+def _as_items(v: str) -> list[str]:
+    return [s.strip() for s in (v or "").split(";") if s.strip()]
+
+
+def parse_modalities(text: str) -> list[TreatmentModality]:
+    mods = []
+    blocks = re.split(r"^###\s+", text or "", flags=re.MULTILINE)
+    for blk in blocks:
+        blk = blk.strip()
+        if not blk:
+            continue
+        name, _, rest = blk.partition("\n")
+        kv = _kv_lines(rest)
+        refs, _ = _split_refs(kv.get("refs", "").replace(",", ","))
+        mods.append(TreatmentModality(
+            name=name.strip(),
+            role=kv.get("role", ""),
+            advantages=_as_items(kv.get("advantages", "")),
+            limitations=_as_items(kv.get("limitations", "")),
+            favoring=_as_items(kv.get("favoring", "")),
+            preferred=kv.get("preferred", "").strip().lower() in ("yes", "true", "1"),
+            source_refs=refs,
+        ))
+    return mods
+
+
+_EQUIP_CLASS = {"cranial": CranialEquipment, "spine": SpineEquipment,
+                "endovascular": EndovascularEquipment}
+
+
+def parse_equipment(text: str, subspecialty: str):
+    cls = _EQUIP_CLASS.get(subspecialty)
+    if cls is None:
+        return None
+    kv = _kv_lines(text)
+    fields = {n for n in cls.model_fields if n not in ("kind", "source_refs")}
+    data = {f: _as_items(kv[f]) for f in fields if f in kv}
+    refs, _ = _split_refs(kv.get("refs", ""))
+    return cls(source_refs=refs, **data)
