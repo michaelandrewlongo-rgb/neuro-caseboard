@@ -36,12 +36,34 @@ class FakeDossier:
 def test_gather_issues_one_query_per_section_and_numbers_sources():
     r = FakeRetriever()
     packet = bs.gather_briefing_evidence(FakeCase(), FakeDossier(), r)
-    # one intent query per briefing section (7)
-    assert len(r.calls) == len(bs.SECTION_KEYS)
+    # one intent query per briefing section (7) + one procedure-keyed technique probe
+    assert len(r.calls) == len(bs.SECTION_KEYS) + 1
     # textbook sources are numbered T1.. in order, deduped by citation
     ids = [t["ref_id"] for t in packet.textbook]
     assert ids == [f"T{i+1}" for i in range(len(ids))]
     assert "T1" in packet.prompt_block
+
+
+def test_gather_adds_procedure_keyed_technique_probe_decoupled_from_pathology():
+    """The per-section queries are all `{case-topic} {suffix}`; the patient-specific pathology
+    dominates hybrid retrieval and starves the pool of GENERAL procedural-technique knowledge
+    (e.g. stent-coiling jailing/trans-cell). gather must ALSO issue a procedure-keyed probe —
+    the planned operation + subspecialty deployment vocab, WITHOUT the pathology. (V4 SAC feedback)"""
+    seen = []
+
+    class RecRetriever:
+        def retrieve(self, query, top_n=6):
+            seen.append(query)
+            return []
+
+    case = CaseContext(laterality="right", pathology="dissecting aneurysm",
+                       procedure="stent-assisted coil embolization")
+    assert bs.subspecialty_of(case) == "endovascular"
+    bs.gather_briefing_evidence(case, FakeDossier(), RecRetriever())
+    probe = [q for q in seen if "jailing" in q.lower()]
+    assert probe, f"no procedure-keyed technique probe issued; queries={seen}"
+    assert "stent-assisted coil embolization" in probe[0]       # keyed on the procedure
+    assert "dissecting aneurysm" not in probe[0]                # NOT over-constrained by pathology
 
 
 def test_gather_dedups_identical_citations():
@@ -154,10 +176,110 @@ def test_synthesize_all_sections_land_and_refs_resolve():
 def test_synthesize_failure_isolation():
     brief, refs, failed = bs.synthesize_briefing(
         FakeCase(), FakeDossier(), _packet(), FakeSynth(fail=["risks"]),
-        subspecialty="cranial")
+        subspecialty="cranial", sleep=lambda *a: None)
     assert failed == ["risks"]
     assert all(s.key != "risks" or not s.items for s in brief.sections)  # risks empty/absent
     assert any(s.key == "technique" for s in brief.sections)             # others still land
+
+
+# ---------------------------------------------------------------------------
+# Grounding/§11 regression: the model writes citations INSIDE the sentence (before the period),
+# not as a line-final token. parse_prose_section must still extract them into source_refs AND
+# strip them from the visible text — otherwise refs are lost (wrongly "clinician-verify") and the
+# {T#} markers leak onto the briefing (a §11 violation). Surfaced live on the V4 query.
+# ---------------------------------------------------------------------------
+
+def test_parse_prose_extracts_refs_despite_trailing_punctuation():
+    txt = "[critical] Stent-assisted coiling treats wide-neck aneurysms {T1, L2}.\n"
+    sec = bs.parse_prose_section("technique", "Technique", txt)
+    it = sec.items[0]
+    assert it.source_refs == ["T1", "L2"]                 # grounding restored
+    assert it.unsupported is False                        # cited → supported, not clinician-verify
+    assert "{" not in it.text and "}" not in it.text      # §11: no marker leak in the prose
+    assert it.text == "Stent-assisted coiling treats wide-neck aneurysms."   # period kept, tidy
+
+
+def test_parse_prose_strips_inline_marker_mid_sentence():
+    txt = "[high] Stenting {T7} enhances coiling of wide-neck cases.\n"
+    sec = bs.parse_prose_section("technique", "Technique", txt)
+    it = sec.items[0]
+    assert it.source_refs == ["T7"]
+    assert "{" not in it.text
+    assert it.text == "Stenting enhances coiling of wide-neck cases."
+
+
+def test_parse_prose_dedups_refs_and_keeps_clean_line_final_case():
+    # line-final markers (the pre-existing happy path) must still work; duplicate refs collapse
+    txt = "[critical] Secure the aneurysm early {T1, L2}\n[optional] minor note {verify}\n"
+    sec = bs.parse_prose_section("risks", "Risks", txt)
+    assert sec.items[0].source_refs == ["T1", "L2"]
+    assert sec.items[0].text == "Secure the aneurysm early"
+    assert sec.items[1].unsupported is True               # {verify} → no resolvable ref
+
+
+def test_synthesize_retries_transient_throttle():
+    """A section call that fails once then succeeds must NOT end in failed_sections — the live
+    Vertex-Flash throttle drops most concurrent calls; a bounded retry recovers them."""
+    class FlakySynth(FakeSynth):
+        def __init__(self):
+            super().__init__()
+            self.attempts = {}
+
+        def generate(self, system, user, images):
+            key = next(k for k in bs.SECTION_KEYS if f"SECTION={k}" in user)
+            self.attempts[key] = self.attempts.get(key, 0) + 1
+            if self.attempts[key] == 1:
+                raise RuntimeError("429 throttled")
+            return super().generate(system, user, images)
+
+    brief, refs, failed = bs.synthesize_briefing(
+        FakeCase(), FakeDossier(), _packet(), FlakySynth(),
+        subspecialty="endovascular", sleep=lambda *a: None)
+    assert failed == []                                   # every transient throttle recovered
+
+
+def test_parse_prose_strips_square_bracket_markers():
+    # The model also emits SQUARE comma-list markers (not just curly) — must extract + strip both.
+    txt = "[high] Stent placement helps wide-neck aneurysms [T7, L1].\n"
+    sec = bs.parse_prose_section("technique", "Technique", txt)
+    it = sec.items[0]
+    assert it.source_refs == ["T7", "L1"]
+    assert "[" not in it.text and "]" not in it.text
+    assert it.text == "Stent placement helps wide-neck aneurysms."
+
+
+def test_parse_prose_accepts_unbracketed_priority_prefix():
+    """The live model frequently OMITS the brackets — `critical claim {T3}`, not `[critical] ...`.
+    parse_prose_section must accept both, or a whole (sometimes jailing-rich) section silently
+    drops to 0 items. (live V4: the technique content was generated + grounded but lost.)"""
+    txt = ("critical Endovascular treatment is viable for VADA {T3}.\n"
+           "high The jailing technique deploys the stent while the coiling microcatheter is in the "
+           "aneurysm {T10, T12}.\n")
+    sec = bs.parse_prose_section("technique", "Technique", txt)
+    assert [i.priority for i in sec.items] == ["critical", "high"]
+    assert sec.items[1].source_refs == ["T10", "T12"]
+    assert "jailing technique" in sec.items[1].text.lower()
+    assert "{" not in sec.items[1].text
+
+
+def test_parse_prose_does_not_mistag_capitalized_sentence_start():
+    # A line beginning with a capitalized word that happens to be a priority word is NOT a priority
+    # marker (the model emits lowercase tokens) — must be skipped, not mis-tagged + first-word-stripped.
+    sec = bs.parse_prose_section("risks", "Risks", "Critical care monitoring is required postoperatively.\n")
+    assert sec.items == []
+
+
+def test_parse_modalities_scrubs_inline_markers():
+    # {verify} / [T#] markers the model drops into modality text must not leak (§11); the real
+    # refs still come from the `refs:` line.
+    txt = ("### Stent-assisted coiling {verify}\nrole: reconstructive {verify}\n"
+           "advantages: durable [T7, L1]; low recurrence\nrefs: T7\n")
+    mods = bs.parse_modalities(txt)
+    m = mods[0]
+    assert "{" not in m.name and "{" not in m.role
+    assert all("[" not in a and "{" not in a for a in m.advantages)
+    assert m.name == "Stent-assisted coiling" and m.role == "reconstructive"
+    assert m.source_refs == ["T7"]
 
 
 # ---------------------------------------------------------------------------

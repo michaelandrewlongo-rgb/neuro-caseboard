@@ -7,7 +7,10 @@ a fake, exactly like woven_synth.py.
 """
 from __future__ import annotations
 
+import os
+import random
 import re
+import time
 from dataclasses import dataclass, field
 
 from neuro_caseboard.briefing_model import (
@@ -28,6 +31,22 @@ SECTION_QUERIES = {
     "technique":  "{topic} operative technique approach positioning critical steps anatomy",
     "risks":      "{topic} complications risks rescue bailout management",
     "equipment":  "{topic} equipment instrumentation devices implants adjuncts",
+}
+
+# Procedural-technique vocabulary, keyed by subspecialty. The per-section queries above are all
+# `{case-topic} {suffix}` and the patient-specific PATHOLOGY dominates hybrid retrieval — so the
+# GENERAL deployment/operative technique knowledge (e.g. stent-coiling jailing/trans-cell, which
+# lives in a general 'Stent-Assisted Coiling' chapter, not indexed to a specific aneurysm) never
+# enters the pool. gather_briefing_evidence issues ONE extra probe: `case.procedure` + this vocab,
+# deliberately WITHOUT pathology/laterality, so those high-yield passages are retrieved.
+# (surgeon feedback: V4 stent-assisted coiling omitted jailing / through-the-tines)
+_TECHNIQUE_VOCAB = {
+    "endovascular": ("deployment technique microcatheter jailing trans-cell through the stent "
+                     "struts flow diversion balloon remodeling coiling steps bailout"),
+    "cranial": ("operative technique craniotomy exposure microsurgical dissection clip "
+                "application retraction critical steps"),
+    "spine": ("operative technique exposure decompression instrumentation screw placement "
+              "fusion critical steps"),
 }
 
 
@@ -63,10 +82,16 @@ def gather_briefing_evidence(case, dossier, retriever) -> EvidencePacket:
     """One intent query per briefing section through `retriever`, pooled with the dossier's
     PubMed citations, deduped and numbered T#/L#. Returns the packet + a rendered prompt block."""
     topic = case.to_topic()
+    queries = [SECTION_QUERIES[k].format(topic=topic) for k in SECTION_KEYS]
+    # Procedure-keyed technique probe (decoupled from pathology) so general deployment/operative
+    # technique passages enter the all-to-all pool — see _TECHNIQUE_VOCAB.
+    proc = (getattr(case, "procedure", "") or "").strip()
+    if proc:
+        vocab = _TECHNIQUE_VOCAB.get(subspecialty_of(case), "")
+        queries.append(f"{proc} {vocab}".strip())
     textbook, seen_cite = [], {}
     if retriever is not None:
-        for key in SECTION_KEYS:
-            q = SECTION_QUERIES[key].format(topic=topic)
+        for q in queries:
             try:
                 recs = retriever.retrieve(q, top_n=6) or []
             except Exception:
@@ -99,9 +124,36 @@ def gather_briefing_evidence(case, dossier, retriever) -> EvidencePacket:
 
 PROSE_KEYS = {"pathology", "management", "workup", "technique", "risks"}
 
-_PROSE_LINE = re.compile(r"^\[(critical|high|optional)\]\s*(.*?)\s*(\{([^}]*)\})?\s*$")
+# Priority prefix only; the citation markers are extracted from ANYWHERE in the body, not just
+# line-final — the model writes them inside the sentence (e.g. "… aneurysms {T1, L2}.") and in
+# BOTH bracket styles ({T1, L2} AND [T7, L1]), so a line-anchored or curly-only capture dropped
+# refs AND leaked the markers onto the briefing (a §11 violation). A marker is a [..]/{..} group
+# whose content is only ref tokens (T#/L#/digits), "verify", and separators; clinical brackets
+# like "[Grade II]" (content is not ref tokens) are left untouched. (live V4 regression)
+# Accept the priority token bracketed `[critical]` OR bare lowercase `critical` — the live model
+# omits the brackets roughly half the time, which silently dropped whole (sometimes jailing-rich)
+# sections to 0 items. Bare must be LOWERCASE so a capitalized sentence ("Critical care…") is not
+# mistaken for a priority marker (the model emits lowercase tokens). (live V4 technique drop)
+_PRIORITY_LINE = re.compile(
+    r"^\s*(?:\[(critical|high|optional)\]|(critical|high|optional))[:.\-]?\s+(.+)$", re.DOTALL)
+_REFY = r"(?:[TLtl]\d+|\d+|verify)"
+_MARKER = re.compile(
+    r"\[\s*" + _REFY + r"(?:[\s,;]+" + _REFY + r")*\s*\]"
+    r"|\{\s*" + _REFY + r"(?:[\s,;]+" + _REFY + r")*\s*\}", re.IGNORECASE)
+_REF_IN_MARKER = re.compile(r"[TL]\d+", re.IGNORECASE)
+_SPACE_BEFORE_PUNCT = re.compile(r"\s+([.,;:)])")
 _REF_TOKEN = re.compile(r"^[TL]\d+$")
 _ALGO_MARK = "---ALGORITHM---"
+
+
+def _scrub_markers(text: str) -> str:
+    """Strip every citation marker (both bracket styles) from a visible string; tidy whitespace.
+    Used for non-prose fields (modality/equipment text) so §11 holds on web AND PDF at the source."""
+    if not text:
+        return text
+    clean = _MARKER.sub("", text)
+    clean = _SPACE_BEFORE_PUNCT.sub(r"\1", clean)
+    return re.sub(r"\s{2,}", " ", clean).strip()
 
 
 def _split_refs(blob: str) -> tuple[list[str], bool]:
@@ -113,21 +165,35 @@ def _split_refs(blob: str) -> tuple[list[str], bool]:
     return refs, unsupported
 
 
+def _extract_refs_and_clean(body: str) -> tuple[str, list[str]]:
+    """Pull every {T#/L#}|[T#/L#] citation marker out of `body` (wherever it sits, either bracket
+    style), dedup the refs in order, and return the marker-free, tidied text — keeping §11 and the
+    grounding map (source_refs) consistent regardless of bracket style or marker placement."""
+    refs: list[str] = []
+    for m in _MARKER.finditer(body):
+        for tok in _REF_IN_MARKER.findall(m.group(0)):
+            tok = tok.upper()
+            if tok not in refs:
+                refs.append(tok)
+    return _scrub_markers(body), refs
+
+
 def parse_prose_section(key: str, title: str, text: str) -> BriefingSection:
     items = []
     for raw in (text or "").splitlines():
         line = raw.strip()
         if line == _ALGO_MARK:
             break  # algorithm block (management) is parsed separately
-        m = _PROSE_LINE.match(line)
+        m = _PRIORITY_LINE.match(line)
         if not m:
             continue  # ponytail: skip un-tagged lines rather than guess a priority
-        priority, body, _, refblob = m.groups()
-        refs, unsupported = _split_refs(refblob)
-        if not body:
+        priority = m.group(1) or m.group(2)   # bracketed | bare lowercase
+        body = m.group(3)
+        clean, refs = _extract_refs_and_clean(body)
+        if not clean:
             continue
-        items.append(BriefingItem(text=body, priority=priority,
-                                  source_refs=refs, unsupported=unsupported))
+        items.append(BriefingItem(text=clean, priority=priority,
+                                  source_refs=refs, unsupported=(not refs)))
     return BriefingSection(key=key, title=title, items=items)
 
 
@@ -179,12 +245,15 @@ def parse_modalities(text: str) -> list[TreatmentModality]:
         name, _, rest = blk.partition("\n")
         kv = _kv_lines(rest)
         refs, _ = _split_refs(kv.get("refs", "").replace(",", ","))
+        # Scrub stray inline markers ({verify}, [T7, L1]) the model drops into modality text — the
+        # real refs come from the `refs:` line; markers in the visible fields would violate §11.
+        scrub_list = lambda v: [s for s in (_scrub_markers(x) for x in _as_items(v)) if s]
         mods.append(TreatmentModality(
-            name=name.strip(),
-            role=kv.get("role", ""),
-            advantages=_as_items(kv.get("advantages", "")),
-            limitations=_as_items(kv.get("limitations", "")),
-            favoring=_as_items(kv.get("favoring", "")),
+            name=_scrub_markers(name),
+            role=_scrub_markers(kv.get("role", "")),
+            advantages=scrub_list(kv.get("advantages", "")),
+            limitations=scrub_list(kv.get("limitations", "")),
+            favoring=scrub_list(kv.get("favoring", "")),
             preferred=kv.get("preferred", "").strip().lower() in ("yes", "true", "1"),
             source_refs=refs,
         ))
@@ -201,7 +270,9 @@ def parse_equipment(text: str, subspecialty: str):
         return None
     kv = _kv_lines(text)
     fields = {n for n in cls.model_fields if n not in ("kind", "source_refs")}
-    data = {f: _as_items(kv[f]) for f in fields if f in kv}
+    # Scrub stray inline markers from equipment values (§11) — refs come from the `refs:` line.
+    data = {f: [s for s in (_scrub_markers(v) for v in _as_items(kv[f])) if s]
+            for f in fields if f in kv}
     refs, _ = _split_refs(kv.get("refs", ""))
     return cls(source_refs=refs, **data)
 
@@ -302,20 +373,42 @@ def build_section_prompt(key: str, packet, case, subspecialty: str):
     return _SYSTEM, user
 
 
-def _synth_one(key, packet, case, subspecialty, synth_client):
+def _synth_one(key, packet, case, subspecialty, synth_client, *,
+               retries=2, backoff=2.0, sleep=time.sleep):
+    """One section call, with bounded retry. The live Vertex-Flash lane throttles concurrent
+    calls (429), so a transient failure is retried with exponential backoff + jitter before it
+    counts as a real failure. `sleep` is injected so tests run instantly."""
     system, user = build_section_prompt(key, packet, case, subspecialty)
-    return synth_client.generate(system, user, [])   # images unused for text synthesis
+    last = None
+    for attempt in range(retries + 1):
+        try:
+            return synth_client.generate(system, user, [])   # images unused for text synthesis
+        except Exception as e:
+            last = e
+            if attempt < retries:
+                sleep(backoff * (2 ** attempt) + random.uniform(0, 0.4))
+    raise last
 
 
 def synthesize_briefing(case, dossier, packet, synth_client, *,
-                        subspecialty=None, max_workers=7):
+                        subspecialty=None, max_workers=None, retries=None,
+                        backoff=2.0, sleep=time.sleep):
     """Run all 7 section calls concurrently (all-to-all over `packet`), parse each into the model,
     and assemble the references + support map from the refs actually cited. Failure-isolated:
-    a section whose call raises is recorded in `failed_sections` and left empty."""
+    a section whose call raises (after retries) is recorded in `failed_sections` and left empty.
+
+    Concurrency + retry are tunable (env-overridable) because firing all 7 calls at once gets the
+    live Flash lane rate-limited — fewer concurrent calls + a bounded retry recover the stragglers.
+    """
     subspecialty = subspecialty or subspecialty_of(case)
+    if max_workers is None:
+        max_workers = max(1, int(os.environ.get("BRIEFING_SYNTH_CONCURRENCY", "3")))
+    if retries is None:
+        retries = max(0, int(os.environ.get("BRIEFING_SYNTH_RETRIES", "2")))
     raw, failed = {}, []
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        futs = {ex.submit(_synth_one, k, packet, case, subspecialty, synth_client): k
+        futs = {ex.submit(_synth_one, k, packet, case, subspecialty, synth_client,
+                          retries=retries, backoff=backoff, sleep=sleep): k
                 for k in SECTION_KEYS}
         for fut, k in ((f, futs[f]) for f in futs):
             try:

@@ -180,12 +180,16 @@ def _esc(s: str) -> str:
 
 
 # §11 hard invariant: NO visible citation markers on page 1. We never render source_refs, but
-# Plan 1's LLM prose can leave literal markers ([T1], [L2], [3]) in ANY field — items, modality
-# advantages, equipment values, notes, the disclaimer, even algorithm labels. So every page-1
-# visible string is routed through _vis() (= strip markers, then escape). Targeted to citation
-# shapes only ([T#]/[L#]/[bare digits]) so clinical brackets like "[Grade II]" survive. The atlas
-# captions and references page do NOT strip — that is where citations are supposed to appear.
-_CITE_MARKER = re.compile(r"\s*\[(?:[TLtl]\s*\d+|\d+)\]")
+# Plan 1's LLM prose can leave literal markers in ANY field — items, modality advantages,
+# equipment values, notes, the disclaimer, even algorithm labels. So every page-1 visible string
+# is routed through _vis() (= strip markers, then escape). BOTH bracket styles the synth emits are
+# stripped: square [T1]/[L2]/[3] AND curly {T1, L2} (the guided-prose format). Targeted to citation
+# shapes only (T#/L#/bare digits, or a curly group of just ref tokens) so clinical brackets like
+# "[Grade II]" survive. The atlas captions and references page do NOT strip — citations belong there.
+_REFY = r"(?:[TLtl]\d+|\d+|verify)"
+_CITE_MARKER = re.compile(
+    r"\s*(?:\[\s*" + _REFY + r"(?:[\s,;]+" + _REFY + r")*\s*\]"
+    r"|\{\s*" + _REFY + r"(?:[\s,;]+" + _REFY + r")*\s*\})", re.IGNORECASE)
 
 
 def _strip_markers(text: str) -> str:
