@@ -26,6 +26,15 @@ def _tokens(theme: str) -> str:
     return PRINT_TOKENS if theme == "print" else SIGNAL_TOKENS
 
 
+# Brand fonts (Signal identity). Must be the FIRST rule in the stylesheet — CSS drops an
+# @import that follows any other rule — so it is prepended to the whole <style> block. We
+# can't get it from base_css() because we deliberately exclude exec_navy._STRUCTURE_CSS
+# (its fixed-pt text classes would defeat the fit ladder's --fs font scaling).
+_FONT_IMPORT = ("@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@"
+                "9..40,400;9..40,500;9..40,600;9..40,700&family=Space+Mono:wght@400;700"
+                "&display=swap');")
+
+
 def _clip(s: str, n: int) -> str:
     s = s or ""
     return s if len(s) <= n else s[: n - 1] + "…"
@@ -245,7 +254,7 @@ def _page1_body(briefing, *, drop: tuple = ()) -> str:
 def build_briefing_page_html(briefing, *, fs: float = 1.0, drop: tuple = (),
                              theme: str = "signal") -> str:
     return ("<!doctype html><html><head><meta charset='utf-8'><style>"
-            f"{_tokens(theme)}{_BRIEFING_PAGE_CSS}</style></head><body>"
+            f"{_FONT_IMPORT}{_tokens(theme)}{_BRIEFING_PAGE_CSS}</style></head><body>"
             f'<div class="bf-page" style="--fs:{fs}">{_page1_body(briefing, drop=drop)}</div>'
             "</body></html>")
 
@@ -405,7 +414,7 @@ def _assemble_full_doc(page1_fragment: str, atlas_body: str, refs_body: str, *,
                        fs: float, theme: str, title: str, topic: str) -> str:
     return ("<!doctype html><html><head><meta charset='utf-8'><title>"
             f"{_esc(title)}</title><style>"
-            f"{_tokens(theme)}{_BRIEFING_PAGE_CSS}{_ATLAS_CSS}</style></head><body>"
+            f"{_FONT_IMPORT}{_tokens(theme)}{_BRIEFING_PAGE_CSS}{_ATLAS_CSS}</style></head><body>"
             f'<div class="bf-page" style="--fs:{fs}">{page1_fragment}</div>'
             f"{atlas_body}{refs_body}</body></html>")
 
