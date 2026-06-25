@@ -1,7 +1,7 @@
 """Guard the build (Dossier) Executive-Navy HTML builder — proves the exec_navy extraction
 left the build pathway's output intact (this builder had no offline test before)."""
 from neuro_caseboard.caseboard_pdf import build_caseboard_html
-from neuro_caseboard.model import Dossier, EvidenceSummary, Section, Claim
+from neuro_caseboard.model import Dossier, EvidenceSummary, Section, Claim, Provenance
 
 
 def _dossier():
@@ -18,7 +18,7 @@ def test_build_caseboard_html_carries_exec_navy_tokens_and_content():
     doc = build_caseboard_html(_dossier(), subtitle="cervical case")
     assert "NEURO·CASEBOARD" in doc                 # masthead brand
     assert "DM+Sans" in doc and "Space+Mono" in doc      # Neo Brutalism fonts
-    assert "#ff3333" in doc                              # red primary accent
+    assert "#6b93ff" in doc                              # Signal (dark) blue accent
     assert "C5–6 ACDF" in doc                       # title
     assert "<b>vertebral artery</b>" in doc              # inline bold via shared helper
     assert "Corpus-supported" in doc                     # status-marker label
@@ -48,3 +48,43 @@ def test_build_caseboard_html_renders_section_literature_axis():
     assert "Contemporary Literature" in doc
     assert "[L1]" in doc and "ACDF RCT" in doc
     assert "https://doi.org/10.1/abc" in doc
+
+
+def test_build_caseboard_html_signal_is_dark_print_is_light():
+    dark = build_caseboard_html(_dossier(), subtitle="X", theme="signal")
+    light = build_caseboard_html(_dossier(), subtitle="X", theme="print")
+    assert "--bg:#000000" in dark and "--accent:#6b93ff" in dark
+    assert "--bg:#ffffff" in light and "--accent:#2a52cc" in light
+
+
+def test_build_caseboard_html_defaults_to_signal():
+    assert "--bg:#000000" in build_caseboard_html(_dossier(), subtitle="X")
+
+
+def _degraded_dossier():
+    d = _dossier()
+    d.provenance = Provenance(source="deterministic", degraded=True, reason="llm_error")
+    return d
+
+
+def test_fallback_banner_css_is_tokenized_and_legible_on_both_grounds():
+    # The degraded-dossier banner is appended AFTER base_css(theme); it must read on the dark
+    # default (--bg:#000000) ground, so it carries CSS tokens — never the old hardcoded amber.
+    doc = build_caseboard_html(_degraded_dossier())
+    assert 'class="fallback-banner"' in doc          # banner actually rendered (dossier degraded)
+    assert "#a9781b" not in doc                       # old hardcoded amber rail — gone
+    assert "#7a5a14" not in doc                       # old hardcoded dark-mustard text — gone
+    # Tokenized: amber identity in the rail/label via --verify, frame + body via panel/line/ink.
+    assert "border-left:4px solid var(--verify)" in doc
+    assert "background:var(--panel)" in doc
+    assert "color:var(--ink)" in doc
+
+    # And the same on the print ground — still tokens, still no hardcoded hexes.
+    light = build_caseboard_html(_degraded_dossier(), theme="print")
+    assert "#a9781b" not in light and "#7a5a14" not in light
+    assert "var(--verify)" in light
+
+
+def test_fallback_banner_css_absent_on_clean_dossier():
+    # The banner CSS is injected only when degraded, so the class never leaks into normal output.
+    assert "fallback-banner" not in build_caseboard_html(_dossier())

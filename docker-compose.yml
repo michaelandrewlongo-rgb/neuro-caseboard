@@ -15,6 +15,7 @@ services:
     restart: unless-stopped
     environment:
       SYNTH_PROVIDER: vertex
+      CASEBOARD_PDF_STYLE: ${CASEBOARD_PDF_STYLE:-signal}
       CASEBOARD_LLM_PROVIDER: ${CASEBOARD_LLM_PROVIDER:-vertex}
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:?set GOOGLE_CLOUD_PROJECT in the box .env}
       GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-us-central1}
