@@ -547,6 +547,117 @@ def build_pdf(req: BuildPdfRequest):
 
 
 # ---------------------------------------------------------------------------------------------
+# Briefing: the Operative Briefing Bundle surface (spec §9). Additive to /api/build*. Builds the
+# bundle (pipeline.build_briefing_bundle — the SAME call the renderer/CLI verification use),
+# caches the REAL bundle object, and serves it as JSON with figures augmented for the browser.
+# The PDF endpoint serves the CACHED bundle (exported == displayed) — never a silent rebuild.
+# ---------------------------------------------------------------------------------------------
+
+from neuro_caseboard.briefing_model import BRIEFING_SCHEMA_VERSION
+
+_BRIEFING_CACHE: "OrderedDict[str, tuple]" = OrderedDict()
+_BRIEFING_CACHE_MAX = 8
+
+
+def _briefing_key(topic: str, enrich: bool, use_llm: bool, use_prefs: bool) -> str:
+    # schema_version in the key so a model bump can't collide with a stale cached bundle.
+    raw = f"{BRIEFING_SCHEMA_VERSION}|{topic}|{enrich}|{use_llm}|{use_prefs}"
+    return hashlib.sha1(raw.encode()).hexdigest()[:16]
+
+
+def _cache_briefing(topic: str, enrich: bool, use_llm: bool, use_prefs: bool, bundle) -> str:
+    key = _briefing_key(topic, enrich, use_llm, use_prefs)
+    _BRIEFING_CACHE[key] = (topic, bundle)
+    _BRIEFING_CACHE.move_to_end(key)
+    while len(_BRIEFING_CACHE) > _BRIEFING_CACHE_MAX:
+        _BRIEFING_CACHE.popitem(last=False)
+    return key
+
+
+def _briefing_response(bundle, build_id: str) -> dict:
+    """Serialize the bundle for the browser: Pydantic self-serializes (case/dossier via the
+    model's field_serializers); we only augment each figure with a browser-loadable image_url +
+    an availability flag (mirrors _figure_dict). image_path is kept so the PDF renderer can read
+    the file directly off the cached object."""
+    data = bundle.model_dump(mode="json")
+    for fig in data.get("figures", []):
+        path = fig.get("image_path", "") or ""
+        fig["image_url"] = _image_url(path)
+        fig["image_available"] = _safe_image_path(path) is not None
+    data["build_id"] = build_id
+    return data
+
+
+class BriefingBuildRequest(BaseModel):
+    topic: str
+    enrich: bool = True
+    use_llm: bool = True
+    use_prefs: bool = True
+
+
+def _do_build_briefing(topic: str, enrich: bool, use_llm: bool, prefs=None):
+    from neuro_caseboard.pipeline import build_briefing_bundle
+    return build_briefing_bundle(topic, enrich=enrich,
+                                 use_llm=None if use_llm else False, prefs=prefs)
+
+
+@app.post("/api/briefing")
+def briefing(req: BriefingBuildRequest):
+    topic = (req.topic or "").strip()
+    if not topic:
+        return JSONResponse(status_code=422, content={"kind": "error", "error": "empty topic"})
+
+    from neuro_core.gpu_guard import GpuNotReadyError
+    prefs = None
+    if req.use_prefs:
+        from neuro_caseboard.preferences import load_preferences, default_store_path
+        prefs = load_preferences(default_store_path()) or None
+    try:
+        bundle = _do_build_briefing(topic, req.enrich, req.use_llm, prefs)
+    except GpuNotReadyError as e:
+        return JSONResponse(status_code=503,
+                            content={"kind": "unavailable", "reason": f"GPU not ready: {e}"})
+    except Exception as e:
+        return JSONResponse(status_code=500,
+                            content={"kind": "error", "error": f"{type(e).__name__}: {e}"})
+
+    build_id = _cache_briefing(topic, req.enrich, req.use_llm, req.use_prefs, bundle)
+    return _briefing_response(bundle, build_id)
+
+
+class BriefingPdfRequest(BaseModel):
+    build_id: str
+
+
+@app.post("/api/briefing/pdf")
+def briefing_pdf(req: BriefingPdfRequest):
+    # exported == displayed: serve the CACHED bundle. The 7-call synthesis is nondeterministic,
+    # so a rebuild would render different content than what the browser is showing. Miss -> honest
+    # error telling the client to (re)build first, NOT a silent divergent rebuild.
+    entry = _BRIEFING_CACHE.get(req.build_id or "")
+    if entry is None:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "no cached build for that build_id — POST /api/briefing first"})
+    topic, bundle = entry
+
+    from neuro_caseboard.operative_briefing_pdf import render_operative_briefing_pdf
+    from neuro_caseboard.pipeline import _slug
+    tmp_dir = Path(tempfile.mkdtemp(prefix="caseboard_briefing_pdf_"))
+    pdf_path = tmp_dir / "operative-briefing.pdf"
+    try:
+        render_operative_briefing_pdf(bundle, pdf_path)
+    except RuntimeError as e:
+        # Plan 2 raises RuntimeError("renderer unavailable …") when Chromium/Playwright is absent.
+        return JSONResponse(status_code=503, content={"error": f"{e}"})
+    except Exception as e:
+        return JSONResponse(status_code=500,
+                            content={"error": f"PDF render failed: {type(e).__name__}: {e}"})
+    return FileResponse(pdf_path, media_type="application/pdf",
+                        filename=f"{_slug(topic)}-operative-briefing.pdf")
+
+
+# ---------------------------------------------------------------------------------------------
 # Rehearsal: surgeon marks the board (wrong/missing/important) -> distil into profile-keyed
 # operative preferences (persisted) -> rebuild the board with them applied. GET /api/preferences
 # surfaces what is remembered (provenance: action, pattern, weight, source cases). Same engine
