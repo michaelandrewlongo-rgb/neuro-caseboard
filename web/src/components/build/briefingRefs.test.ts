@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { splitRefs } from "./BriefingReferences"
+import { splitRefs } from "./briefingRefs"
 import type { BriefingReference } from "@/lib/api"
 
 const refs: BriefingReference[] = [
