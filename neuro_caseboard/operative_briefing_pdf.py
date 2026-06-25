@@ -186,7 +186,10 @@ def _esc(s: str) -> str:
 # stripped: square [T1]/[L2]/[3] AND curly {T1, L2} (the guided-prose format). Targeted to citation
 # shapes only (T#/L#/bare digits, or a curly group of just ref tokens) so clinical brackets like
 # "[Grade II]" survive. The atlas captions and references page do NOT strip — citations belong there.
-_CITE_MARKER = re.compile(r"\s*(?:\[(?:[TLtl]\s*\d+|\d+)\]|\{[\sTLtl\d,;]+\})")
+_REFY = r"(?:[TLtl]\d+|\d+|verify)"
+_CITE_MARKER = re.compile(
+    r"\s*(?:\[\s*" + _REFY + r"(?:[\s,;]+" + _REFY + r")*\s*\]"
+    r"|\{\s*" + _REFY + r"(?:[\s,;]+" + _REFY + r")*\s*\})", re.IGNORECASE)
 
 
 def _strip_markers(text: str) -> str:

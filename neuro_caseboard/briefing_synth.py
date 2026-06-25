@@ -102,15 +102,31 @@ def gather_briefing_evidence(case, dossier, retriever) -> EvidencePacket:
 
 PROSE_KEYS = {"pathology", "management", "workup", "technique", "risks"}
 
-# Priority prefix only; the {..} citation markers are extracted from ANYWHERE in the body, not
-# just line-final — the model writes them inside the sentence (e.g. "… aneurysms {T1, L2}."), and
-# a trailing period used to defeat a line-anchored capture, dropping refs AND leaking the marker
-# onto the briefing (a §11 violation). (live V4 regression)
+# Priority prefix only; the citation markers are extracted from ANYWHERE in the body, not just
+# line-final — the model writes them inside the sentence (e.g. "… aneurysms {T1, L2}.") and in
+# BOTH bracket styles ({T1, L2} AND [T7, L1]), so a line-anchored or curly-only capture dropped
+# refs AND leaked the markers onto the briefing (a §11 violation). A marker is a [..]/{..} group
+# whose content is only ref tokens (T#/L#/digits), "verify", and separators; clinical brackets
+# like "[Grade II]" (content is not ref tokens) are left untouched. (live V4 regression)
 _PRIORITY_LINE = re.compile(r"^\[(critical|high|optional)\]\s*(.*)$", re.DOTALL)
-_BRACE = re.compile(r"\{([^}]*)\}")
+_REFY = r"(?:[TLtl]\d+|\d+|verify)"
+_MARKER = re.compile(
+    r"\[\s*" + _REFY + r"(?:[\s,;]+" + _REFY + r")*\s*\]"
+    r"|\{\s*" + _REFY + r"(?:[\s,;]+" + _REFY + r")*\s*\}", re.IGNORECASE)
+_REF_IN_MARKER = re.compile(r"[TL]\d+", re.IGNORECASE)
 _SPACE_BEFORE_PUNCT = re.compile(r"\s+([.,;:)])")
 _REF_TOKEN = re.compile(r"^[TL]\d+$")
 _ALGO_MARK = "---ALGORITHM---"
+
+
+def _scrub_markers(text: str) -> str:
+    """Strip every citation marker (both bracket styles) from a visible string; tidy whitespace.
+    Used for non-prose fields (modality/equipment text) so §11 holds on web AND PDF at the source."""
+    if not text:
+        return text
+    clean = _MARKER.sub("", text)
+    clean = _SPACE_BEFORE_PUNCT.sub(r"\1", clean)
+    return re.sub(r"\s{2,}", " ", clean).strip()
 
 
 def _split_refs(blob: str) -> tuple[list[str], bool]:
@@ -123,18 +139,16 @@ def _split_refs(blob: str) -> tuple[list[str], bool]:
 
 
 def _extract_refs_and_clean(body: str) -> tuple[str, list[str]]:
-    """Pull every {T#/L#} citation marker out of `body` (wherever it sits), dedup the refs in
-    order, and return the marker-free, tidied text. Keeps the §11 invariant (no visible markers)
-    and the grounding map (source_refs) consistent regardless of where the model placed the cite."""
+    """Pull every {T#/L#}|[T#/L#] citation marker out of `body` (wherever it sits, either bracket
+    style), dedup the refs in order, and return the marker-free, tidied text — keeping §11 and the
+    grounding map (source_refs) consistent regardless of bracket style or marker placement."""
     refs: list[str] = []
-    for blob in _BRACE.findall(body):
-        for r in _split_refs(blob)[0]:
-            if r not in refs:
-                refs.append(r)
-    clean = _BRACE.sub("", body)
-    clean = _SPACE_BEFORE_PUNCT.sub(r"\1", clean)   # "aneurysms ." -> "aneurysms."
-    clean = re.sub(r"\s{2,}", " ", clean).strip()   # collapse the gap a mid-sentence marker left
-    return clean, refs
+    for m in _MARKER.finditer(body):
+        for tok in _REF_IN_MARKER.findall(m.group(0)):
+            tok = tok.upper()
+            if tok not in refs:
+                refs.append(tok)
+    return _scrub_markers(body), refs
 
 
 def parse_prose_section(key: str, title: str, text: str) -> BriefingSection:
@@ -203,12 +217,15 @@ def parse_modalities(text: str) -> list[TreatmentModality]:
         name, _, rest = blk.partition("\n")
         kv = _kv_lines(rest)
         refs, _ = _split_refs(kv.get("refs", "").replace(",", ","))
+        # Scrub stray inline markers ({verify}, [T7, L1]) the model drops into modality text — the
+        # real refs come from the `refs:` line; markers in the visible fields would violate §11.
+        scrub_list = lambda v: [s for s in (_scrub_markers(x) for x in _as_items(v)) if s]
         mods.append(TreatmentModality(
-            name=name.strip(),
-            role=kv.get("role", ""),
-            advantages=_as_items(kv.get("advantages", "")),
-            limitations=_as_items(kv.get("limitations", "")),
-            favoring=_as_items(kv.get("favoring", "")),
+            name=_scrub_markers(name),
+            role=_scrub_markers(kv.get("role", "")),
+            advantages=scrub_list(kv.get("advantages", "")),
+            limitations=scrub_list(kv.get("limitations", "")),
+            favoring=scrub_list(kv.get("favoring", "")),
             preferred=kv.get("preferred", "").strip().lower() in ("yes", "true", "1"),
             source_refs=refs,
         ))
@@ -225,7 +242,9 @@ def parse_equipment(text: str, subspecialty: str):
         return None
     kv = _kv_lines(text)
     fields = {n for n in cls.model_fields if n not in ("kind", "source_refs")}
-    data = {f: _as_items(kv[f]) for f in fields if f in kv}
+    # Scrub stray inline markers from equipment values (§11) — refs come from the `refs:` line.
+    data = {f: [s for s in (_scrub_markers(v) for v in _as_items(kv[f])) if s]
+            for f in fields if f in kv}
     refs, _ = _split_refs(kv.get("refs", ""))
     return cls(source_refs=refs, **data)
 

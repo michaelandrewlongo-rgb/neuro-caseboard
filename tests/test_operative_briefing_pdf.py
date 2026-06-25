@@ -279,3 +279,12 @@ def test_strip_markers_removes_curly_and_square_citations():
     assert _strip_markers("Coiling treats wide-neck aneurysms {T1, L2}.") == "Coiling treats wide-neck aneurysms."
     assert _strip_markers("Secure the aneurysm early [T3]") == "Secure the aneurysm early"
     assert _strip_markers("Internal trapping {T4} is low-risk.") == "Internal trapping is low-risk."
+
+
+def test_strip_markers_robust_comma_lists_verify_and_clinical():
+    from neuro_caseboard.operative_briefing_pdf import _strip_markers
+    assert _strip_markers("Stent placement helps [T7, L1].") == "Stent placement helps."
+    assert _strip_markers("reconstructive {verify}") == "reconstructive"
+    assert _strip_markers("preserve perforators [T6, T10]") == "preserve perforators"
+    # clinical brackets (content is NOT ref tokens) must survive
+    assert _strip_markers("Spetzler-Martin [Grade II]") == "Spetzler-Martin [Grade II]"

@@ -216,6 +216,29 @@ def test_synthesize_retries_transient_throttle():
     assert failed == []                                   # every transient throttle recovered
 
 
+def test_parse_prose_strips_square_bracket_markers():
+    # The model also emits SQUARE comma-list markers (not just curly) — must extract + strip both.
+    txt = "[high] Stent placement helps wide-neck aneurysms [T7, L1].\n"
+    sec = bs.parse_prose_section("technique", "Technique", txt)
+    it = sec.items[0]
+    assert it.source_refs == ["T7", "L1"]
+    assert "[" not in it.text and "]" not in it.text
+    assert it.text == "Stent placement helps wide-neck aneurysms."
+
+
+def test_parse_modalities_scrubs_inline_markers():
+    # {verify} / [T#] markers the model drops into modality text must not leak (§11); the real
+    # refs still come from the `refs:` line.
+    txt = ("### Stent-assisted coiling {verify}\nrole: reconstructive {verify}\n"
+           "advantages: durable [T7, L1]; low recurrence\nrefs: T7\n")
+    mods = bs.parse_modalities(txt)
+    m = mods[0]
+    assert "{" not in m.name and "{" not in m.role
+    assert all("[" not in a and "{" not in a for a in m.advantages)
+    assert m.name == "Stent-assisted coiling" and m.role == "reconstructive"
+    assert m.source_refs == ["T7"]
+
+
 # ---------------------------------------------------------------------------
 # subspecialty_of — 3-tier fallback regression tests
 # ---------------------------------------------------------------------------
