@@ -33,6 +33,22 @@ SECTION_QUERIES = {
     "equipment":  "{topic} equipment instrumentation devices implants adjuncts",
 }
 
+# Procedural-technique vocabulary, keyed by subspecialty. The per-section queries above are all
+# `{case-topic} {suffix}` and the patient-specific PATHOLOGY dominates hybrid retrieval — so the
+# GENERAL deployment/operative technique knowledge (e.g. stent-coiling jailing/trans-cell, which
+# lives in a general 'Stent-Assisted Coiling' chapter, not indexed to a specific aneurysm) never
+# enters the pool. gather_briefing_evidence issues ONE extra probe: `case.procedure` + this vocab,
+# deliberately WITHOUT pathology/laterality, so those high-yield passages are retrieved.
+# (surgeon feedback: V4 stent-assisted coiling omitted jailing / through-the-tines)
+_TECHNIQUE_VOCAB = {
+    "endovascular": ("deployment technique microcatheter jailing trans-cell through the stent "
+                     "struts flow diversion balloon remodeling coiling steps bailout"),
+    "cranial": ("operative technique craniotomy exposure microsurgical dissection clip "
+                "application retraction critical steps"),
+    "spine": ("operative technique exposure decompression instrumentation screw placement "
+              "fusion critical steps"),
+}
+
 
 @dataclass
 class EvidencePacket:
@@ -66,10 +82,16 @@ def gather_briefing_evidence(case, dossier, retriever) -> EvidencePacket:
     """One intent query per briefing section through `retriever`, pooled with the dossier's
     PubMed citations, deduped and numbered T#/L#. Returns the packet + a rendered prompt block."""
     topic = case.to_topic()
+    queries = [SECTION_QUERIES[k].format(topic=topic) for k in SECTION_KEYS]
+    # Procedure-keyed technique probe (decoupled from pathology) so general deployment/operative
+    # technique passages enter the all-to-all pool — see _TECHNIQUE_VOCAB.
+    proc = (getattr(case, "procedure", "") or "").strip()
+    if proc:
+        vocab = _TECHNIQUE_VOCAB.get(subspecialty_of(case), "")
+        queries.append(f"{proc} {vocab}".strip())
     textbook, seen_cite = [], {}
     if retriever is not None:
-        for key in SECTION_KEYS:
-            q = SECTION_QUERIES[key].format(topic=topic)
+        for q in queries:
             try:
                 recs = retriever.retrieve(q, top_n=6) or []
             except Exception:

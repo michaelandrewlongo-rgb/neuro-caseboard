@@ -36,12 +36,34 @@ class FakeDossier:
 def test_gather_issues_one_query_per_section_and_numbers_sources():
     r = FakeRetriever()
     packet = bs.gather_briefing_evidence(FakeCase(), FakeDossier(), r)
-    # one intent query per briefing section (7)
-    assert len(r.calls) == len(bs.SECTION_KEYS)
+    # one intent query per briefing section (7) + one procedure-keyed technique probe
+    assert len(r.calls) == len(bs.SECTION_KEYS) + 1
     # textbook sources are numbered T1.. in order, deduped by citation
     ids = [t["ref_id"] for t in packet.textbook]
     assert ids == [f"T{i+1}" for i in range(len(ids))]
     assert "T1" in packet.prompt_block
+
+
+def test_gather_adds_procedure_keyed_technique_probe_decoupled_from_pathology():
+    """The per-section queries are all `{case-topic} {suffix}`; the patient-specific pathology
+    dominates hybrid retrieval and starves the pool of GENERAL procedural-technique knowledge
+    (e.g. stent-coiling jailing/trans-cell). gather must ALSO issue a procedure-keyed probe —
+    the planned operation + subspecialty deployment vocab, WITHOUT the pathology. (V4 SAC feedback)"""
+    seen = []
+
+    class RecRetriever:
+        def retrieve(self, query, top_n=6):
+            seen.append(query)
+            return []
+
+    case = CaseContext(laterality="right", pathology="dissecting aneurysm",
+                       procedure="stent-assisted coil embolization")
+    assert bs.subspecialty_of(case) == "endovascular"
+    bs.gather_briefing_evidence(case, FakeDossier(), RecRetriever())
+    probe = [q for q in seen if "jailing" in q.lower()]
+    assert probe, f"no procedure-keyed technique probe issued; queries={seen}"
+    assert "stent-assisted coil embolization" in probe[0]       # keyed on the procedure
+    assert "dissecting aneurysm" not in probe[0]                # NOT over-constrained by pathology
 
 
 def test_gather_dedups_identical_citations():
