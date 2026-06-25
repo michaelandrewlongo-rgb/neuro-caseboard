@@ -395,3 +395,86 @@ def build_references_html(references, theme: str = "signal") -> str:
         out.extend(_ref_html(r) for r in lit)
     out.append("</div>")
     return "".join(out)
+
+
+# --- full-doc assembly + Chromium orchestrator + LLM-compress factory --------------
+_PDF_MARGIN = {"top": "0", "bottom": "0", "left": "0", "right": "0"}
+
+
+def _assemble_full_doc(page1_fragment: str, atlas_body: str, refs_body: str, *,
+                       fs: float, theme: str, title: str, topic: str) -> str:
+    return ("<!doctype html><html><head><meta charset='utf-8'><title>"
+            f"{_esc(title)}</title><style>"
+            f"{_tokens(theme)}{_BRIEFING_PAGE_CSS}{_ATLAS_CSS}</style></head><body>"
+            f'<div class="bf-page" style="--fs:{fs}">{page1_fragment}</div>'
+            f"{atlas_body}{refs_body}</body></html>")
+
+
+def _make_compress(synth_client):
+    """Return compress(briefing)->tightened copy, or None when no client (ladder skips rung 3)."""
+    if synth_client is None:
+        return None
+
+    def compress(briefing):
+        flat = [(si, ii) for si, sec in enumerate(briefing.sections)
+                for ii, _ in enumerate(sec.items)]
+        if not flat:
+            return briefing
+        lines = [briefing.sections[si].items[ii].text for si, ii in flat]
+        system = ("You tighten operative-briefing bullet lines. Rewrite each numbered line "
+                  "more concisely. Preserve every clinical fact, number, device, and dose. "
+                  "Add nothing. Output exactly one rewritten line per input line, same order, "
+                  "no numbering.")
+        user = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(lines))
+        try:
+            out = synth_client.generate(system, user, [])
+        except Exception:
+            return briefing
+        new = [ln.strip() for ln in (out or "").splitlines() if ln.strip()]
+        if len(new) != len(lines):
+            return briefing                       # shape mismatch -> don't risk dropping facts
+        copy = briefing.model_copy(deep=True)
+        for (si, ii), txt in zip(flat, new):
+            copy.sections[si].items[ii].text = txt
+        return copy
+
+    return compress
+
+
+def render_operative_briefing_pdf(bundle, out_path, *, theme: str | None = None,
+                                  synth_client=None) -> str:
+    """Render the bundle to an A4 PDF at out_path. Requires the `briefing` extra + Chromium."""
+    if theme is None:
+        theme = os.environ.get("CASEBOARD_PDF_STYLE", "signal")
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception as e:                          # ImportError, or None injected in tests
+        raise RuntimeError(
+            "renderer unavailable: the operative-briefing PDF needs the `briefing` extra "
+            "(Playwright + a Chromium binary)") from e
+    if sync_playwright is None:
+        raise RuntimeError("renderer unavailable: Playwright not importable")
+
+    briefing = bundle.briefing
+    title = getattr(briefing, "title", "") or getattr(bundle, "topic", "")
+    atlas = build_figure_atlas_html(getattr(bundle, "figures", []) or [], theme)
+    refs = build_references_html(getattr(bundle, "references", []) or [], theme)
+    compress = _make_compress(synth_client)
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+
+        def measure(doc: str) -> int:
+            page.set_content(doc, wait_until="load")
+            data = page.pdf(format="A4", print_background=True, margin=_PDF_MARGIN)
+            return count_pdf_pages(data)
+
+        fit = fit_briefing_page(briefing, measure, theme=theme, compress=compress)
+        doc = _assemble_full_doc(fit.fragment, atlas, refs, fs=fit.fs, theme=theme,
+                                 title=title, topic=getattr(bundle, "topic", ""))
+        page.set_content(doc, wait_until="networkidle")
+        page.evaluate("async () => { await document.fonts.ready; }")
+        page.pdf(path=str(out_path), format="A4", print_background=True, margin=_PDF_MARGIN)
+        browser.close()
+    return str(out_path)

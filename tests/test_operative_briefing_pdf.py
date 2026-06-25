@@ -198,3 +198,52 @@ def test_references_keep_T_and_L_namespaces_distinct():
     assert "123" in out                                  # pmid surfaced
     assert "pathology" in out and "management" in out    # support map
     assert build_references_html([]) == ""
+
+
+# --- Task 6: full-doc assembly + orchestrator + compress factory --------------------
+import sys
+
+import pytest
+
+from neuro_caseboard.operative_briefing_pdf import (
+    _assemble_full_doc, _make_compress, render_operative_briefing_pdf)
+
+
+def test_assemble_orders_briefing_then_atlas_then_refs():
+    doc = _assemble_full_doc("PAGE1", "ATLAS", "REFS", fs=0.9, theme="signal",
+                             title="T", topic="x")
+    assert doc.startswith("<!doctype html>")
+    assert "--fs:0.9" in doc
+    assert doc.index("PAGE1") < doc.index("ATLAS") < doc.index("REFS")   # strict ordering
+    assert "--bg:#000000" in doc                                         # signal tokens present
+
+
+def test_make_compress_none_without_client():
+    assert _make_compress(None) is None
+
+
+def test_make_compress_tightens_item_text_via_client():
+    class FakeClient:
+        model = "fake"
+        def generate(self, system, user, images):
+            return "Short A\nShort B"          # one tightened line per input item
+    brief = OperativeBriefing(title="t", sections=[BriefingSection(
+        key="pathology", title="Pathology", items=[
+            BriefingItem(text="Long original A ...", priority="critical"),
+            BriefingItem(text="Long original B ...", priority="high")])])
+    compress = _make_compress(FakeClient())
+    out = compress(brief)
+    texts = [i.text for s in out.sections for i in s.items]
+    assert texts == ["Short A", "Short B"]    # mapped back by order; counts preserved
+    # original untouched (compress returns a copy)
+    assert brief.sections[0].items[0].text.startswith("Long original A")
+
+
+def test_render_raises_honest_error_without_chromium(monkeypatch, tmp_path):
+    # simulate Playwright import failure -> honest "renderer unavailable"
+    monkeypatch.setitem(sys.modules, "playwright", None)
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", None)
+    bundle = type("B", (), {"briefing": OperativeBriefing(title="t"),
+                            "figures": [], "references": [], "topic": "x"})()
+    with pytest.raises(RuntimeError, match="renderer unavailable"):
+        render_operative_briefing_pdf(bundle, tmp_path / "out.pdf")
