@@ -115,3 +115,136 @@ def build_algorithm_svg(algo, theme: str = "signal") -> str:
                          f'text-anchor="middle">{html.escape(e.condition)}</text>')
     parts.append("</svg>")
     return "".join(parts)
+
+
+# --- page 1: body + self-contained, font-scalable CSS ------------------------------
+# Colors/fonts come from :root tokens (exec_navy); every text size is calc(var(--fs)*Npt)
+# so the fit ladder's --fs actually shrinks it. We do NOT reuse _STRUCTURE_CSS's fixed-pt
+# text classes — they'd win on specificity and the shrink rung would no-op (advisor).
+_BRIEFING_PAGE_CSS = """
+@page{ size:A4; margin:0; }
+*{ box-sizing:border-box; }
+html,body{ margin:0; background:var(--bg); -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+.bf-page{ color:var(--ink); font-family:var(--ui); padding:12mm 16mm 14mm; }
+.bf-eyebrow{ font-family:var(--mono); font-size:calc(var(--fs)*7pt); font-weight:700;
+  letter-spacing:.2em; text-transform:uppercase; color:var(--accent); }
+.bf-title{ font-family:var(--ui); font-weight:700; font-size:calc(var(--fs)*19pt);
+  letter-spacing:-.02em; line-height:1.1; margin:2mm 0 4mm; }
+.bf-sec{ margin-top:calc(var(--fs)*5mm); break-inside:avoid; }
+.bf-sec-h{ font-family:var(--ui); font-weight:700; font-size:calc(var(--fs)*11pt);
+  color:var(--ink); border-top:1px solid var(--line); padding-top:2mm; margin-bottom:1.5mm; }
+.bf-item{ font-family:var(--read); font-size:calc(var(--fs)*10pt); line-height:1.4;
+  color:var(--ink); margin:0 0 1.4mm; padding-left:4mm; text-indent:-4mm; }
+.bf-item::before{ content:"\\2014"; color:var(--accent); margin-right:2mm; }
+.bf-item.unsupported::after{ content:" \\2014 clinician-verify"; color:var(--verify);
+  font-family:var(--mono); font-size:calc(var(--fs)*7pt); text-transform:uppercase;
+  letter-spacing:.06em; }
+.bf-note{ font-family:var(--read); font-style:italic; font-size:calc(var(--fs)*9pt);
+  color:var(--muted); margin:1mm 0 0; }
+.bf-mods{ display:flex; flex-wrap:wrap; gap:3mm; margin-top:2mm; }
+.bf-mod{ flex:1 1 46%; border:1px solid var(--line); border-left:3px solid var(--line);
+  border-radius:var(--radius); padding:2.5mm 3mm; background:var(--panel); break-inside:avoid; }
+.bf-mod.pref{ border-left-color:var(--supported); }
+.bf-mod .nm{ font-family:var(--ui); font-weight:700; font-size:calc(var(--fs)*9.5pt); color:var(--ink); }
+.bf-mod .ro{ font-family:var(--read); font-size:calc(var(--fs)*8.5pt); color:var(--muted); margin:.6mm 0; }
+.bf-mod ul{ margin:.6mm 0 0; padding-left:4mm; }
+.bf-mod li{ font-family:var(--read); font-size:calc(var(--fs)*8.5pt); color:var(--ink); }
+.bf-eq{ border:1px solid var(--line); border-radius:var(--radius); padding:2.5mm 3mm;
+  background:var(--panel); margin-top:2mm; break-inside:avoid; }
+.bf-eq-kind{ font-family:var(--mono); font-size:calc(var(--fs)*7pt); font-weight:700;
+  letter-spacing:.12em; text-transform:uppercase; color:var(--accent); margin-bottom:1mm; }
+.bf-eq-row{ display:flex; gap:3mm; margin:.5mm 0; }
+.bf-eq-k{ flex:0 0 38mm; font-family:var(--ui); font-weight:600;
+  font-size:calc(var(--fs)*8.5pt); color:var(--muted); }
+.bf-eq-v{ flex:1; font-family:var(--read); font-size:calc(var(--fs)*8.5pt); color:var(--ink); }
+.bf-algo{ margin:2mm 0; }
+.bf-unknowns{ font-family:var(--read); font-size:calc(var(--fs)*8.5pt); color:var(--muted);
+  border-left:3px solid var(--verify); padding-left:3mm; margin-top:3mm; }
+.bf-disc{ font-family:var(--mono); font-size:calc(var(--fs)*7pt); color:var(--faint);
+  margin-top:4mm; padding-top:2mm; border-top:1px solid var(--line); }
+"""
+
+
+def _esc(s: str) -> str:
+    return html.escape(s or "")
+
+
+def _items_html(items, drop) -> str:
+    out = []
+    for it in items:
+        if it.priority in drop:
+            continue
+        cls = "bf-item unsupported" if it.unsupported else "bf-item"
+        out.append(f'<div class="{cls}">{_esc(it.text)}</div>')   # NB: source_refs NOT rendered
+    return "".join(out)
+
+
+def _modalities_html(mods) -> str:
+    if not mods:
+        return ""
+    cards = []
+    for m in mods:
+        pref = " pref" if m.preferred else ""
+        adv = "".join(f"<li>+ {_esc(a)}</li>" for a in m.advantages)
+        lim = "".join(f"<li>− {_esc(x)}</li>" for x in m.limitations)
+        ro = f'<div class="ro">{_esc(m.role)}</div>' if m.role else ""
+        cards.append(f'<div class="bf-mod{pref}"><div class="nm">{_esc(m.name)}</div>{ro}'
+                     f'<ul>{adv}{lim}</ul></div>')
+    return f'<div class="bf-mods">{"".join(cards)}</div>'
+
+
+def _equipment_html(equip) -> str:
+    """Generic: one renderer for all three subspecialty schemas (advisor)."""
+    if equip is None:
+        return ""
+    data = equip.model_dump()
+    kind = data.pop("kind", "")
+    data.pop("source_refs", None)
+    rows = []
+    for field_name, vals in data.items():
+        if not vals:
+            continue
+        label = field_name.replace("_", " ").title()
+        rows.append(f'<div class="bf-eq-row"><span class="bf-eq-k">{_esc(label)}</span>'
+                    f'<span class="bf-eq-v">{_esc("; ".join(vals))}</span></div>')
+    if not rows:
+        return ""
+    return (f'<div class="bf-eq"><div class="bf-eq-kind">{_esc(kind)} setup</div>'
+            f'{"".join(rows)}</div>')
+
+
+def _page1_body(briefing, *, drop: tuple = ()) -> str:
+    out = ['<div class="bf-eyebrow">Operative Briefing</div>',
+           f'<div class="bf-title">{_esc(briefing.title)}</div>']
+    for sec in briefing.sections:
+        items = _items_html(sec.items, drop)
+        if not items and not sec.note:
+            continue
+        out.append(f'<div class="bf-sec"><div class="bf-sec-h">{_esc(sec.title)}</div>{items}')
+        if sec.note:
+            out.append(f'<div class="bf-note">{_esc(sec.note)}</div>')
+        out.append("</div>")
+    svg = build_algorithm_svg(briefing.algorithm)
+    if svg:
+        out.append(f'<div class="bf-sec"><div class="bf-sec-h">Decision algorithm</div>'
+                   f'<div class="bf-algo">{svg}</div></div>')
+    mods = _modalities_html(briefing.modalities)
+    if mods:
+        out.append(f'<div class="bf-sec"><div class="bf-sec-h">Treatment options</div>{mods}</div>')
+    eq = _equipment_html(briefing.equipment)
+    if eq:
+        out.append(f'<div class="bf-sec"><div class="bf-sec-h">Equipment</div>{eq}</div>')
+    if briefing.unknowns:
+        items = " · ".join(_esc(u) for u in briefing.unknowns)
+        out.append(f'<div class="bf-unknowns"><b>Case-specific unknowns:</b> {items}</div>')
+    if briefing.disclaimer:
+        out.append(f'<div class="bf-disc">{_esc(briefing.disclaimer)}</div>')
+    return "".join(out)
+
+
+def build_briefing_page_html(briefing, *, fs: float = 1.0, drop: tuple = (),
+                             theme: str = "signal") -> str:
+    return ("<!doctype html><html><head><meta charset='utf-8'><style>"
+            f"{_tokens(theme)}{_BRIEFING_PAGE_CSS}</style></head><body>"
+            f'<div class="bf-page" style="--fs:{fs}">{_page1_body(briefing, drop=drop)}</div>'
+            "</body></html>")

@@ -62,3 +62,66 @@ def test_algorithm_svg_drops_dangling_edges():
     svg = build_algorithm_svg(algo)
     # one valid edge drawn; no crash, no phantom node
     assert svg.count("<line") == 1
+
+
+# --- Task 3: page-1 body, scalable CSS, generic equipment --------------------------
+from neuro_caseboard.briefing_model import (
+    BriefingItem, BriefingSection, CranialEquipment, EndovascularEquipment,
+    OperativeBriefing, SpineEquipment, TreatmentModality)
+from neuro_caseboard.operative_briefing_pdf import (
+    _page1_body, build_briefing_page_html)
+
+
+def _briefing(equipment=None):
+    return OperativeBriefing(
+        title="Basilar tip aneurysm",
+        sections=[BriefingSection(key="pathology", title="Pathology", items=[
+            BriefingItem(text="Wide-neck basilar apex aneurysm.", priority="critical",
+                         source_refs=["T1", "L2"]),
+            BriefingItem(text="Incidental low-risk note.", priority="optional",
+                         source_refs=["T3"])])],
+        modalities=[TreatmentModality(name="Endovascular coiling", preferred=True,
+                                      advantages=["less invasive"], limitations=["recurrence"])],
+        equipment=equipment,
+        algorithm=_algo(),
+        unknowns=["Rupture status not stated"],
+        disclaimer="Decision support only; the surgeon verifies every recommendation.")
+
+
+def test_page1_has_no_images_or_citation_markers():
+    body = _page1_body(_briefing())
+    assert "<img" not in body
+    # the hidden source_refs map must not surface as markers or bare tokens on page 1
+    assert "[T1]" not in body and "[L2]" not in body and "[T3]" not in body
+    assert "T1" not in body and "L2" not in body and "T3" not in body
+    assert "Wide-neck basilar apex aneurysm." in body
+    assert "<svg" in body                            # decision algorithm is embedded inline
+
+
+def test_page1_drop_removes_priority_keeps_critical():
+    full = _page1_body(_briefing(), drop=())
+    trimmed = _page1_body(_briefing(), drop=("optional",))
+    assert "Incidental low-risk note." in full
+    assert "Incidental low-risk note." not in trimmed
+    assert "Wide-neck basilar apex aneurysm." in trimmed   # critical survives
+
+
+def test_standalone_doc_sets_font_scale_and_theme_tokens():
+    doc = build_briefing_page_html(_briefing(), fs=0.85, theme="signal")
+    assert doc.startswith("<!doctype html>")
+    assert "--fs:0.85" in doc
+    assert "--bg:#000000" in doc                      # signal tokens
+    print_doc = build_briefing_page_html(_briefing(), theme="print")
+    assert "--bg:#ffffff" in print_doc                # print tokens
+
+
+def test_equipment_renderer_is_subspecialty_specific():
+    cranial = _page1_body(_briefing(CranialEquipment(head_fixation=["Mayfield 3-pin"])))
+    spine = _page1_body(_briefing(SpineEquipment(cage_class_sizing=["PEEK 12mm lordotic"])))
+    endo = _page1_body(_briefing(EndovascularEquipment(catheters_wires=["6F guide; 0.014 wire"])))
+    assert "Head Fixation" in cranial and "Mayfield 3-pin" in cranial
+    assert "Cage Class Sizing" in spine and "PEEK 12mm lordotic" in spine
+    assert "Catheters Wires" in endo and "6F guide; 0.014 wire" in endo
+    # negative controls: no cross-subspecialty bleed of equipment labels
+    assert "Head Fixation" not in endo and "Cage Class Sizing" not in endo
+    assert "Catheters Wires" not in cranial
