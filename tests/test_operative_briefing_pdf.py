@@ -98,6 +98,20 @@ def test_page1_has_no_images_or_citation_markers():
     assert "<svg" in body                            # decision algorithm is embedded inline
 
 
+def test_page1_strips_inline_citation_markers():
+    # §11: even if upstream prose embeds literal markers in item text, none reach page 1.
+    b = OperativeBriefing(title="t", sections=[BriefingSection(key="x", title="X", items=[
+        BriefingItem(text="Clip the aneurysm [T1] before rupture [L2]; see [3].",
+                     priority="critical")])])
+    body = _page1_body(b)
+    assert "[T1]" not in body and "[L2]" not in body and "[3]" not in body
+    assert "Clip the aneurysm" in body and "before rupture" in body
+    # clinical brackets are NOT citation shapes and must survive
+    b2 = OperativeBriefing(title="t", sections=[BriefingSection(key="x", title="X", items=[
+        BriefingItem(text="Spetzler-Martin [Grade II] lesion.", priority="critical")])])
+    assert "[Grade II]" in _page1_body(b2)
+
+
 def test_page1_drop_removes_priority_keeps_critical():
     full = _page1_body(_briefing(), drop=())
     trimmed = _page1_body(_briefing(), drop=("optional",))

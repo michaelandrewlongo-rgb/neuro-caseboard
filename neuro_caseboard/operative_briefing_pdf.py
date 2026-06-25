@@ -10,6 +10,7 @@ from __future__ import annotations
 import html
 import io
 import os
+import re
 from dataclasses import dataclass, field
 
 import pypdf
@@ -178,13 +179,24 @@ def _esc(s: str) -> str:
     return html.escape(s or "")
 
 
+# §11 hard invariant: NO visible citation markers on page 1. We never render source_refs, but
+# Plan 1's LLM prose can leave literal markers ([T1], [L2], [3]) inside item text — strip those
+# at the renderer so the invariant holds regardless of upstream cleanliness. Targeted to citation
+# shapes only ([T#]/[L#]/[bare digits]) so clinical brackets like "[Grade II]" survive.
+_CITE_MARKER = re.compile(r"\s*\[(?:[TLtl]\s*\d+|\d+)\]")
+
+
+def _strip_markers(text: str) -> str:
+    return _CITE_MARKER.sub("", text or "").strip()
+
+
 def _items_html(items, drop) -> str:
     out = []
     for it in items:
         if it.priority in drop:
             continue
         cls = "bf-item unsupported" if it.unsupported else "bf-item"
-        out.append(f'<div class="{cls}">{_esc(it.text)}</div>')   # NB: source_refs NOT rendered
+        out.append(f'<div class="{cls}">{_esc(_strip_markers(it.text))}</div>')  # source_refs NOT rendered
     return "".join(out)
 
 
@@ -410,6 +422,15 @@ def build_references_html(references, theme: str = "signal") -> str:
 _PDF_MARGIN = {"top": "0", "bottom": "0", "left": "0", "right": "0"}
 
 
+def _pdf_bytes(page, doc: str) -> bytes:
+    """The ONE rendering primitive — used for both the fit-ladder measure and the final
+    render so the page count the ladder optimizes is byte-identical to the shipped PDF.
+    Waits for networkidle + fonts so layout is in DM Sans, not the fallback font (advisor)."""
+    page.set_content(doc, wait_until="networkidle")
+    page.evaluate("async () => { await document.fonts.ready; }")
+    return page.pdf(format="A4", print_background=True, margin=_PDF_MARGIN)
+
+
 def _assemble_full_doc(page1_fragment: str, atlas_body: str, refs_body: str, *,
                        fs: float, theme: str, title: str, topic: str) -> str:
     return ("<!doctype html><html><head><meta charset='utf-8'><title>"
@@ -475,15 +496,12 @@ def render_operative_briefing_pdf(bundle, out_path, *, theme: str | None = None,
         page = browser.new_page()
 
         def measure(doc: str) -> int:
-            page.set_content(doc, wait_until="load")
-            data = page.pdf(format="A4", print_background=True, margin=_PDF_MARGIN)
-            return count_pdf_pages(data)
+            return count_pdf_pages(_pdf_bytes(page, doc))   # same primitive as the final render
 
         fit = fit_briefing_page(briefing, measure, theme=theme, compress=compress)
         doc = _assemble_full_doc(fit.fragment, atlas, refs, fs=fit.fs, theme=theme,
                                  title=title, topic=getattr(bundle, "topic", ""))
-        page.set_content(doc, wait_until="networkidle")
-        page.evaluate("async () => { await document.fonts.ready; }")
-        page.pdf(path=str(out_path), format="A4", print_background=True, margin=_PDF_MARGIN)
+        with open(out_path, "wb") as f:
+            f.write(_pdf_bytes(page, doc))
         browser.close()
     return str(out_path)
