@@ -7,7 +7,10 @@ a fake, exactly like woven_synth.py.
 """
 from __future__ import annotations
 
+import os
+import random
 import re
+import time
 from dataclasses import dataclass, field
 
 from neuro_caseboard.briefing_model import (
@@ -99,7 +102,13 @@ def gather_briefing_evidence(case, dossier, retriever) -> EvidencePacket:
 
 PROSE_KEYS = {"pathology", "management", "workup", "technique", "risks"}
 
-_PROSE_LINE = re.compile(r"^\[(critical|high|optional)\]\s*(.*?)\s*(\{([^}]*)\})?\s*$")
+# Priority prefix only; the {..} citation markers are extracted from ANYWHERE in the body, not
+# just line-final — the model writes them inside the sentence (e.g. "… aneurysms {T1, L2}."), and
+# a trailing period used to defeat a line-anchored capture, dropping refs AND leaking the marker
+# onto the briefing (a §11 violation). (live V4 regression)
+_PRIORITY_LINE = re.compile(r"^\[(critical|high|optional)\]\s*(.*)$", re.DOTALL)
+_BRACE = re.compile(r"\{([^}]*)\}")
+_SPACE_BEFORE_PUNCT = re.compile(r"\s+([.,;:)])")
 _REF_TOKEN = re.compile(r"^[TL]\d+$")
 _ALGO_MARK = "---ALGORITHM---"
 
@@ -113,21 +122,36 @@ def _split_refs(blob: str) -> tuple[list[str], bool]:
     return refs, unsupported
 
 
+def _extract_refs_and_clean(body: str) -> tuple[str, list[str]]:
+    """Pull every {T#/L#} citation marker out of `body` (wherever it sits), dedup the refs in
+    order, and return the marker-free, tidied text. Keeps the §11 invariant (no visible markers)
+    and the grounding map (source_refs) consistent regardless of where the model placed the cite."""
+    refs: list[str] = []
+    for blob in _BRACE.findall(body):
+        for r in _split_refs(blob)[0]:
+            if r not in refs:
+                refs.append(r)
+    clean = _BRACE.sub("", body)
+    clean = _SPACE_BEFORE_PUNCT.sub(r"\1", clean)   # "aneurysms ." -> "aneurysms."
+    clean = re.sub(r"\s{2,}", " ", clean).strip()   # collapse the gap a mid-sentence marker left
+    return clean, refs
+
+
 def parse_prose_section(key: str, title: str, text: str) -> BriefingSection:
     items = []
     for raw in (text or "").splitlines():
         line = raw.strip()
         if line == _ALGO_MARK:
             break  # algorithm block (management) is parsed separately
-        m = _PROSE_LINE.match(line)
+        m = _PRIORITY_LINE.match(line)
         if not m:
             continue  # ponytail: skip un-tagged lines rather than guess a priority
-        priority, body, _, refblob = m.groups()
-        refs, unsupported = _split_refs(refblob)
-        if not body:
+        priority, body = m.groups()
+        clean, refs = _extract_refs_and_clean(body)
+        if not clean:
             continue
-        items.append(BriefingItem(text=body, priority=priority,
-                                  source_refs=refs, unsupported=unsupported))
+        items.append(BriefingItem(text=clean, priority=priority,
+                                  source_refs=refs, unsupported=(not refs)))
     return BriefingSection(key=key, title=title, items=items)
 
 
@@ -302,20 +326,42 @@ def build_section_prompt(key: str, packet, case, subspecialty: str):
     return _SYSTEM, user
 
 
-def _synth_one(key, packet, case, subspecialty, synth_client):
+def _synth_one(key, packet, case, subspecialty, synth_client, *,
+               retries=2, backoff=2.0, sleep=time.sleep):
+    """One section call, with bounded retry. The live Vertex-Flash lane throttles concurrent
+    calls (429), so a transient failure is retried with exponential backoff + jitter before it
+    counts as a real failure. `sleep` is injected so tests run instantly."""
     system, user = build_section_prompt(key, packet, case, subspecialty)
-    return synth_client.generate(system, user, [])   # images unused for text synthesis
+    last = None
+    for attempt in range(retries + 1):
+        try:
+            return synth_client.generate(system, user, [])   # images unused for text synthesis
+        except Exception as e:
+            last = e
+            if attempt < retries:
+                sleep(backoff * (2 ** attempt) + random.uniform(0, 0.4))
+    raise last
 
 
 def synthesize_briefing(case, dossier, packet, synth_client, *,
-                        subspecialty=None, max_workers=7):
+                        subspecialty=None, max_workers=None, retries=None,
+                        backoff=2.0, sleep=time.sleep):
     """Run all 7 section calls concurrently (all-to-all over `packet`), parse each into the model,
     and assemble the references + support map from the refs actually cited. Failure-isolated:
-    a section whose call raises is recorded in `failed_sections` and left empty."""
+    a section whose call raises (after retries) is recorded in `failed_sections` and left empty.
+
+    Concurrency + retry are tunable (env-overridable) because firing all 7 calls at once gets the
+    live Flash lane rate-limited — fewer concurrent calls + a bounded retry recover the stragglers.
+    """
     subspecialty = subspecialty or subspecialty_of(case)
+    if max_workers is None:
+        max_workers = max(1, int(os.environ.get("BRIEFING_SYNTH_CONCURRENCY", "3")))
+    if retries is None:
+        retries = max(0, int(os.environ.get("BRIEFING_SYNTH_RETRIES", "2")))
     raw, failed = {}, []
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        futs = {ex.submit(_synth_one, k, packet, case, subspecialty, synth_client): k
+        futs = {ex.submit(_synth_one, k, packet, case, subspecialty, synth_client,
+                          retries=retries, backoff=backoff, sleep=sleep): k
                 for k in SECTION_KEYS}
         for fut, k in ((f, futs[f]) for f in futs):
             try:

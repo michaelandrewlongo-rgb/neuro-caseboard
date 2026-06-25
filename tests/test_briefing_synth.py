@@ -154,10 +154,66 @@ def test_synthesize_all_sections_land_and_refs_resolve():
 def test_synthesize_failure_isolation():
     brief, refs, failed = bs.synthesize_briefing(
         FakeCase(), FakeDossier(), _packet(), FakeSynth(fail=["risks"]),
-        subspecialty="cranial")
+        subspecialty="cranial", sleep=lambda *a: None)
     assert failed == ["risks"]
     assert all(s.key != "risks" or not s.items for s in brief.sections)  # risks empty/absent
     assert any(s.key == "technique" for s in brief.sections)             # others still land
+
+
+# ---------------------------------------------------------------------------
+# Grounding/§11 regression: the model writes citations INSIDE the sentence (before the period),
+# not as a line-final token. parse_prose_section must still extract them into source_refs AND
+# strip them from the visible text — otherwise refs are lost (wrongly "clinician-verify") and the
+# {T#} markers leak onto the briefing (a §11 violation). Surfaced live on the V4 query.
+# ---------------------------------------------------------------------------
+
+def test_parse_prose_extracts_refs_despite_trailing_punctuation():
+    txt = "[critical] Stent-assisted coiling treats wide-neck aneurysms {T1, L2}.\n"
+    sec = bs.parse_prose_section("technique", "Technique", txt)
+    it = sec.items[0]
+    assert it.source_refs == ["T1", "L2"]                 # grounding restored
+    assert it.unsupported is False                        # cited → supported, not clinician-verify
+    assert "{" not in it.text and "}" not in it.text      # §11: no marker leak in the prose
+    assert it.text == "Stent-assisted coiling treats wide-neck aneurysms."   # period kept, tidy
+
+
+def test_parse_prose_strips_inline_marker_mid_sentence():
+    txt = "[high] Stenting {T7} enhances coiling of wide-neck cases.\n"
+    sec = bs.parse_prose_section("technique", "Technique", txt)
+    it = sec.items[0]
+    assert it.source_refs == ["T7"]
+    assert "{" not in it.text
+    assert it.text == "Stenting enhances coiling of wide-neck cases."
+
+
+def test_parse_prose_dedups_refs_and_keeps_clean_line_final_case():
+    # line-final markers (the pre-existing happy path) must still work; duplicate refs collapse
+    txt = "[critical] Secure the aneurysm early {T1, L2}\n[optional] minor note {verify}\n"
+    sec = bs.parse_prose_section("risks", "Risks", txt)
+    assert sec.items[0].source_refs == ["T1", "L2"]
+    assert sec.items[0].text == "Secure the aneurysm early"
+    assert sec.items[1].unsupported is True               # {verify} → no resolvable ref
+
+
+def test_synthesize_retries_transient_throttle():
+    """A section call that fails once then succeeds must NOT end in failed_sections — the live
+    Vertex-Flash throttle drops most concurrent calls; a bounded retry recovers them."""
+    class FlakySynth(FakeSynth):
+        def __init__(self):
+            super().__init__()
+            self.attempts = {}
+
+        def generate(self, system, user, images):
+            key = next(k for k in bs.SECTION_KEYS if f"SECTION={k}" in user)
+            self.attempts[key] = self.attempts.get(key, 0) + 1
+            if self.attempts[key] == 1:
+                raise RuntimeError("429 throttled")
+            return super().generate(system, user, images)
+
+    brief, refs, failed = bs.synthesize_briefing(
+        FakeCase(), FakeDossier(), _packet(), FlakySynth(),
+        subspecialty="endovascular", sleep=lambda *a: None)
+    assert failed == []                                   # every transient throttle recovered
 
 
 # ---------------------------------------------------------------------------

@@ -270,3 +270,12 @@ def test_render_raises_honest_error_without_chromium(monkeypatch, tmp_path):
                             "figures": [], "references": [], "topic": "x"})()
     with pytest.raises(RuntimeError, match="renderer unavailable"):
         render_operative_briefing_pdf(bundle, tmp_path / "out.pdf")
+
+
+def test_strip_markers_removes_curly_and_square_citations():
+    # Defense-in-depth (§11): the synth emits curly {T#} markers; the page-1 strip must remove
+    # both curly and square citation markers, never leak them onto the briefing page.
+    from neuro_caseboard.operative_briefing_pdf import _strip_markers
+    assert _strip_markers("Coiling treats wide-neck aneurysms {T1, L2}.") == "Coiling treats wide-neck aneurysms."
+    assert _strip_markers("Secure the aneurysm early [T3]") == "Secure the aneurysm early"
+    assert _strip_markers("Internal trapping {T4} is low-risk.") == "Internal trapping is low-risk."
