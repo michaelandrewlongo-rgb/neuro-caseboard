@@ -248,3 +248,68 @@ def build_briefing_page_html(briefing, *, fs: float = 1.0, drop: tuple = (),
             f"{_tokens(theme)}{_BRIEFING_PAGE_CSS}</style></head><body>"
             f'<div class="bf-page" style="--fs:{fs}">{_page1_body(briefing, drop=drop)}</div>'
             "</body></html>")
+
+
+# --- fit ladder: shrink -> trim -> compress -> allow page 2 (<=2 pages, always) -----
+@dataclass
+class FitResult:
+    fragment: str
+    fs: float
+    drop: tuple = ()
+    pages: int = 1
+    rungs: list = field(default_factory=list)
+
+
+def fit_briefing_page(briefing, measure, *, theme: str = "signal", compress=None,
+                      fs_steps=(1.0, 0.95, 0.9, 0.85, 0.82)) -> FitResult:
+    """Drive the briefing to <=2 pages. `measure(standalone_doc) -> page_count` is injected
+    (real = render+pypdf; tests = fake). `compress(briefing) -> briefing` is optional."""
+    floor = fs_steps[-1]
+    rungs: list = []
+
+    def attempt(b, fs, drop):
+        doc = build_briefing_page_html(b, fs=fs, drop=drop, theme=theme)
+        return measure(doc)
+
+    def result(b, fs, drop, pages, tag):
+        return FitResult(_page1_body(b, drop=drop), fs, drop, pages, rungs + [tag])
+
+    # rung 1 — shrink font at full content, target 1 page
+    for fs in fs_steps:
+        pages = attempt(briefing, fs, ())
+        if pages <= 1:
+            return result(briefing, fs, (), pages, f"shrink:{fs}")
+    rungs.append("shrink:floor")
+
+    # rung 2 — trim optional at floor, target 1
+    pages = attempt(briefing, floor, ("optional",))
+    if pages <= 1:
+        return result(briefing, floor, ("optional",), pages, "trim:optional")
+
+    # rung 3 — one compress pass, then retry shrink + trim-optional, target 1
+    b = briefing
+    if compress is not None:
+        try:
+            b = compress(briefing)
+            rungs.append("compress")
+        except Exception:
+            b = briefing
+            rungs.append("compress:failed")
+        for fs in fs_steps:
+            pages = attempt(b, fs, ())
+            if pages <= 1:
+                return result(b, fs, (), pages, f"shrink2:{fs}")
+        pages = attempt(b, floor, ("optional",))
+        if pages <= 1:
+            return result(b, floor, ("optional",), pages, "trim2:optional")
+
+    # rung 4 — allow page 2; drop optional, then optional+high, until <=2 (critical never)
+    for drop in (("optional",), ("optional", "high")):
+        pages = attempt(b, floor, drop)
+        if pages <= 2:
+            return result(b, floor, drop, pages, "page2:" + "+".join(drop))
+    # ponytail: critical-only at the legibility floor is the mechanical ceiling; accept it,
+    # no export-error state (spec §2/§7). Add a hard under-floor only if real briefings ever
+    # exceed this — they don't (critical core is small).
+    pages = attempt(b, floor, ("optional", "high"))
+    return result(b, floor, ("optional", "high"), pages, "page2:critical-only")

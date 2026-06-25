@@ -125,3 +125,43 @@ def test_equipment_renderer_is_subspecialty_specific():
     # negative controls: no cross-subspecialty bleed of equipment labels
     assert "Head Fixation" not in endo and "Cage Class Sizing" not in endo
     assert "Catheters Wires" not in cranial
+
+
+# --- Task 4: fit ladder (<=2-page guarantee, injected measure/compress) -------------
+from neuro_caseboard.operative_briefing_pdf import FitResult, fit_briefing_page
+
+
+def test_fit_no_change_when_already_one_page():
+    r = fit_briefing_page(_briefing(), measure=lambda doc: 1)
+    assert isinstance(r, FitResult) and r.pages == 1 and r.fs == 1.0 and r.drop == ()
+
+
+def test_fit_shrinks_font_before_trimming():
+    # 1 page only once fs has dropped to <=0.9; never needs a trim.
+    # Anchor on the closing quote so "--fs:0.95" can't match "--fs:0.9" by substring.
+    def measure(doc):
+        return 1 if ('--fs:0.9"' in doc or '--fs:0.85"' in doc or '--fs:0.82"' in doc) else 2
+    r = fit_briefing_page(_briefing(), measure=measure)
+    assert r.pages == 1 and r.fs <= 0.9 and r.drop == ()
+    assert any(x.startswith("shrink") for x in r.rungs)
+
+
+def test_fit_trims_optional_then_calls_compress():
+    calls = {"n": 0}
+    def compress(brief):
+        calls["n"] += 1
+        return brief                       # identity; we only assert it was invoked
+    # never 1 page until compress has run AND optional trimmed
+    def measure(doc):
+        if calls["n"] >= 1 and "Incidental low-risk note." not in doc:
+            return 1
+        return 2
+    r = fit_briefing_page(_briefing(), measure=measure, compress=compress)
+    assert calls["n"] == 1 and r.pages == 1
+    assert "Incidental low-risk note." not in r.fragment
+
+
+def test_fit_allows_page_two_and_always_converges():
+    r = fit_briefing_page(_briefing(), measure=lambda doc: 2)  # never fits 1 page
+    assert r.pages <= 2                     # the hard invariant
+    assert any(x.startswith("page2") for x in r.rungs)
