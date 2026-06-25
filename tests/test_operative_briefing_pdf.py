@@ -3,10 +3,9 @@
 Pure HTML/SVG builders + the fit ladder are exercised with fakes — no Chromium, no network.
 The Chromium-bound orchestrator is tested only for its honest-error path and pure assembly.
 """
-import io
 import re
 
-import pypdf
+import fitz  # PyMuPDF
 
 from neuro_caseboard.operative_briefing_pdf import count_pdf_pages
 
@@ -14,12 +13,12 @@ MARKER_RE = re.compile(r"\[(?:[TLtl]\s*\d+|\d+)\]")  # citation-marker shapes th
 
 
 def _blank_pdf(n: int) -> bytes:
-    w = pypdf.PdfWriter()
+    doc = fitz.open()
     for _ in range(n):
-        w.add_blank_page(width=595, height=842)  # A4 points
-    buf = io.BytesIO()
-    w.write(buf)
-    return buf.getvalue()
+        doc.new_page(width=595, height=842)  # A4 points
+    data = doc.tobytes()
+    doc.close()
+    return data
 
 
 def test_count_pdf_pages_counts_rendered_pages():

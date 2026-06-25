@@ -3,24 +3,24 @@
 Three surfaces, hard-separated: page 1 is a citation-free, figure-free operative briefing
 held to <=2 pages by a fit ladder; then a figure atlas; then a references/evidence page.
 Signal print identity via exec_navy tokens. Pure HTML/SVG builders test offline; the
-Chromium orchestrator supplies the authoritative page-count measure (render -> pypdf).
+Chromium orchestrator supplies the authoritative page-count measure (render -> fitz page count).
 """
 from __future__ import annotations
 
 import html
-import io
 import os
 import re
 from dataclasses import dataclass, field
 
-import pypdf
+import fitz  # PyMuPDF — already a core dep (pyproject); avoids adding pypdf
 
 from neuro_caseboard.exec_navy import PRINT_TOKENS, SIGNAL_TOKENS
 
 
 def count_pdf_pages(data: bytes) -> int:
     """Authoritative page count of a rendered PDF (what pagination actually produced)."""
-    return len(pypdf.PdfReader(io.BytesIO(data)).pages)
+    with fitz.open(stream=data, filetype="pdf") as doc:
+        return doc.page_count
 
 
 def _tokens(theme: str) -> str:
@@ -291,7 +291,7 @@ class FitResult:
 def fit_briefing_page(briefing, measure, *, theme: str = "signal", compress=None,
                       fs_steps=(1.0, 0.95, 0.9, 0.85, 0.82)) -> FitResult:
     """Drive the briefing to <=2 pages. `measure(standalone_doc) -> page_count` is injected
-    (real = render+pypdf; tests = fake). `compress(briefing) -> briefing` is optional."""
+    (real = render+fitz; tests = fake). `compress(briefing) -> briefing` is optional."""
     floor = fs_steps[-1]
     rungs: list = []
 
