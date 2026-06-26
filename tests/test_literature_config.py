@@ -31,7 +31,7 @@ def test_woven_flags_defaults(monkeypatch):
         monkeypatch.delenv(k, raising=False)
     from neuro_caseboard.literature.config import load_literature_config
     cfg = load_literature_config()
-    assert cfg.weave is False
+    assert cfg.weave is True  # woven synthesis is the default (one integrated [n]+[L#] answer)
     assert cfg.recency_boost == 0
     assert cfg.precision_gate is True
     assert cfg.precision_min_overlap == 1

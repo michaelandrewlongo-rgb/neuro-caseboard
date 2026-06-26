@@ -68,7 +68,7 @@ class LiteratureConfig:
     cache_ttl_days: int
     ncbi_api_key: str
     cache_dir: str
-    weave: bool = False
+    weave: bool = True
     recency_boost: int = 0
     precision_gate: bool = True
     precision_min_overlap: int = 1
@@ -85,7 +85,7 @@ def load_literature_config() -> LiteratureConfig:
         ncbi_api_key=(os.environ.get("NCBI_API_KEY")
                       or os.environ.get("NCBI_API_KEY_2") or "").strip(),
         cache_dir=os.environ.get("LITERATURE_CACHE_DIR", default_cache),
-        weave=_flag(os.environ.get("LITERATURE_WEAVE", "false")),
+        weave=_flag(os.environ.get("LITERATURE_WEAVE", "true")),
         recency_boost=int(os.environ.get("LITERATURE_RECENCY_BOOST", "0")),
         precision_gate=_flag(os.environ.get("LITERATURE_PRECISION_GATE", "true")),
         precision_min_overlap=int(os.environ.get("LITERATURE_PRECISION_MIN_OVERLAP", "1")),
