@@ -321,7 +321,10 @@ def _figure_dict(f) -> dict:
 
 
 def _literature_dict(lit) -> dict | None:
-    if lit is None or not getattr(lit, "narrative", ""):
+    # Drop only when there is neither a narrative NOR any citations. The woven path
+    # (LITERATURE_WEAVE) sets narrative="" because the prose IS the answer, but still
+    # carries [L#] citations — surface them so the inline [L#] markers aren't dangling.
+    if lit is None or (not getattr(lit, "narrative", "") and not getattr(lit, "citations", None)):
         return None
     cites = []
     for c in getattr(lit, "citations", []) or []:

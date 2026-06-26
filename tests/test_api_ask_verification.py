@@ -56,3 +56,25 @@ def test_api_ask_verification_null_when_absent(monkeypatch):
     resp = client.post("/api/ask", json={"question": "q"})
     assert resp.status_code == 200
     assert resp.json()["verification"] is None
+
+
+def test_api_ask_surfaces_woven_literature_with_empty_narrative(monkeypatch):
+    """Woven mode (now the default) attaches a LiteratureSection whose narrative is EMPTY
+    (the prose IS the answer) but which still carries [L#] citations. The serializer must
+    surface those citations so the inline [L#] markers aren't dangling — regression for the
+    `_literature_dict` empty-narrative guard."""
+    import api.server as server
+    from neuro_caseboard.qa import QAResult, LiteratureSection, LiteratureCitation
+
+    lit = LiteratureSection(narrative="", citations=[
+        LiteratureCitation(n=1, pmid="999", title="A study", journal="J", year=2021,
+                           doi="10.1/x", url="")])
+    fake = QAResult(answer="Woven answer [1] with literature [L1].", citations=[],
+                    figures=[], literature=lit, verification=None)
+    monkeypatch.setattr("neuro_caseboard.qa.answer_question", lambda *a, **k: fake)
+
+    client = TestClient(server.app)
+    body = client.post("/api/ask", json={"question": "q"}).json()
+    assert body["literature"] is not None
+    assert [c["n"] for c in body["literature"]["citations"]] == [1]
+    assert body["literature"]["citations"][0]["link"] == "https://doi.org/10.1/x"
