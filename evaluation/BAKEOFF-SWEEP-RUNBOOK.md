@@ -37,24 +37,30 @@ python3 evaluation/scripts/run_benchmark.py --run-dir "$RUN" \
     --manifest evaluation/inputs/bakeoff-21.manifest.jsonl --timeout 300
 python3 evaluation/scripts/finalize_run.py --run-dir "$RUN"
 # Liveness: spot-check answers resemble the bake-off glm-5.2 quality (~86 easy / ~90 hard).
-echo "CONTROL=$RUN"   # save this path; every arm diffs against it
+CONTROL="$RUN"; echo "CONTROL=$CONTROL"   # save this path; every arm diffs against it
 ```
 
 ## 3. Env-only arms (zero code) — one var over the frozen block
 
 ```bash
 # Output breadth: RERANK_K 12 -> 20
-RERANK_K=20 RUN=evaluation/runs/rerank_k-20-$(date +%Y%m%d-%H%M%S) \
-  python3 evaluation/scripts/run_benchmark.py --run-dir "$RUN" \
+ARM=evaluation/runs/rerank_k-20-$(date +%Y%m%d-%H%M%S)
+RERANK_K=20 python3 evaluation/scripts/run_benchmark.py --run-dir "$ARM" \
     --manifest evaluation/inputs/bakeoff-21.manifest.jsonl --timeout 300
+python3 evaluation/scripts/finalize_run.py --run-dir "$ARM"
+python3 evaluation/scripts/make_pair.py "$CONTROL/run.jsonl" "$ARM/run.jsonl" "RERANK_K=20" "$ARM/baseline-vs-rerank_k-20.md"
+
 # Candidate breadth: RETRIEVE_K 40 -> 80
-RETRIEVE_K=80 RUN=evaluation/runs/retrieve_k-80-$(date +%Y%m%d-%H%M%S) \
-  python3 evaluation/scripts/run_benchmark.py --run-dir "$RUN" \
+ARM=evaluation/runs/retrieve_k-80-$(date +%Y%m%d-%H%M%S)
+RETRIEVE_K=80 python3 evaluation/scripts/run_benchmark.py --run-dir "$ARM" \
     --manifest evaluation/inputs/bakeoff-21.manifest.jsonl --timeout 300
-# (finalize_run.py on each; run-config.json now records the knob automatically)
+python3 evaluation/scripts/finalize_run.py --run-dir "$ARM"
+python3 evaluation/scripts/make_pair.py "$CONTROL/run.jsonl" "$ARM/run.jsonl" "RETRIEVE_K=80" "$ARM/baseline-vs-retrieve_k-80.md"
 ```
 
 ## 4. Make the grading sheet (per arm)
+
+`$CONTROL` from §2 and `$ARM` from §3 (the §3 block above now runs these automatically — this section shows the manual/standalone form).
 
 ```bash
 python3 evaluation/scripts/make_pair.py \
