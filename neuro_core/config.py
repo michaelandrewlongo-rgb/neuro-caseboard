@@ -7,7 +7,7 @@ DEFAULTS = {
     "INDEX_DIR": str(Path.home() / "neuro-textbook-rag" / "index"),
     "EMBED_MODEL": "BAAI/bge-large-en-v1.5",
     "RERANK_MODEL": "BAAI/bge-reranker-v2-m3",
-    "OPENROUTER_MODEL": "anthropic/claude-sonnet-4.6",
+    "OPENROUTER_MODEL": "z-ai/glm-5.2",
     "OPENROUTER_API_KEY": "",
     "LOCAL_BASE_URL": "http://localhost:11434/v1",
     "LOCAL_MODEL": "qwen2.5:7b",
@@ -22,7 +22,13 @@ DEFAULTS = {
     "RETRIEVE_K": "40",
     "RERANK_K": "12",
     "EMBED_DEVICE": "auto",
-    "SYNTH_PROVIDER": "vertex",
+    "SYNTH_PROVIDER": "openrouter",
+    # Query-disambiguation ("analyze") runs a separate, cheaper/faster model than synthesis.
+    # Disambiguation is a constrained classification task (is this query ambiguous, which
+    # variant?) — benchmarked indistinguishable in quality but ~7x faster on a flash-tier model.
+    # Empty ANALYZE_MODEL falls back to the synthesis client (historical single-client behavior).
+    "ANALYZE_PROVIDER": "openrouter",
+    "ANALYZE_MODEL": "google/gemini-3.1-flash-lite",
     "GOOGLE_CLOUD_PROJECT": "",
     "GOOGLE_CLOUD_LOCATION": "us-central1",
     "VERTEX_MODEL": "gemini-2.5-pro",
@@ -93,6 +99,8 @@ class Config:
     rerank_k: int
     embed_device: str
     synth_provider: str
+    analyze_provider: str
+    analyze_model: str
     google_cloud_project: str
     google_cloud_location: str
     vertex_model: str
@@ -140,6 +148,8 @@ def load_config(env_file=".env"):
         rerank_k=int(get("RERANK_K")),
         embed_device=get("EMBED_DEVICE"),
         synth_provider=get("SYNTH_PROVIDER"),
+        analyze_provider=get("ANALYZE_PROVIDER"),
+        analyze_model=get("ANALYZE_MODEL"),
         google_cloud_project=get("GOOGLE_CLOUD_PROJECT"),
         google_cloud_location=get("GOOGLE_CLOUD_LOCATION"),
         vertex_model=get("VERTEX_MODEL"),

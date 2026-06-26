@@ -4,6 +4,7 @@ from neuro_core.synth_clients import (
     LocalSynthClient,
     OpenRouterSynthClient,
     make_synth_client,
+    make_analyze_client,
 )
 
 
@@ -78,6 +79,37 @@ def test_make_synth_client_selects_local():
     assert isinstance(c, LocalSynthClient)
     assert c.base_url == "http://localhost:11434/v1"
     assert c.model == "qwen2.5:7b"
+
+
+def test_make_analyze_client_uses_separate_model():
+    # Disambiguation runs its own (cheaper/faster) model, distinct from synthesis.
+    class Cfg:
+        synth_provider = "openrouter"
+        analyze_provider = "openrouter"
+        analyze_model = "google/gemini-3.1-flash-lite"
+        openrouter_api_key = "k"
+        openrouter_model = "z-ai/glm-5.2"
+        google_cloud_project = "p"
+        google_cloud_location = "us-central1"
+        vertex_model = "gemini-2.5-pro"
+
+    c = make_analyze_client(Cfg())
+    assert isinstance(c, OpenRouterSynthClient)
+    assert c.model == "google/gemini-3.1-flash-lite"  # not the synthesis model
+
+
+def test_make_analyze_client_falls_back_to_synth_when_unset():
+    # Empty ANALYZE_MODEL -> reuse the synthesis client (historical single-client behavior).
+    class Cfg:
+        synth_provider = "openrouter"
+        analyze_provider = ""
+        analyze_model = ""
+        openrouter_api_key = "k"
+        openrouter_model = "z-ai/glm-5.2"
+
+    c = make_analyze_client(Cfg())
+    assert isinstance(c, OpenRouterSynthClient)
+    assert c.model == "z-ai/glm-5.2"  # same as synthesis
 
 
 def test_local_is_text_only_even_with_images():

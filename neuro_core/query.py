@@ -6,7 +6,7 @@ from .embed import Embedder
 from .index import Index, Hit, reciprocal_rank_fusion
 from .rerank import Reranker
 from .synthesize import synthesize, is_refusal, REFUSAL
-from .synth_clients import make_synth_client
+from .synth_clients import make_synth_client, make_analyze_client
 from .gpu_guard import ensure_gpu_ready
 from .visual_embed import VisualEmbedder
 from .visual_index import VisualIndex
@@ -96,12 +96,16 @@ def _variant_directive(label):
 class Engine:
     def __init__(self, config, embedder, index, reranker, synth_client,
                  synth_fn=synthesize, visual_embedder=None, visual_index=None,
-                 caption_index=None, gate_fn=ambiguity_gate, analyze_fn=query_analyze):
+                 caption_index=None, gate_fn=ambiguity_gate, analyze_fn=query_analyze,
+                 analyze_client=None):
         self.config = config
         self.embedder = embedder
         self.index = index
         self.reranker = reranker
         self.synth_client = synth_client
+        # The disambiguation (analyze) step runs on its own, typically cheaper/faster client;
+        # default to the synth client when none is supplied so direct constructions are unchanged.
+        self.analyze_client = analyze_client if analyze_client is not None else synth_client
         self.synth_fn = synth_fn
         self.gate_fn = gate_fn
         self.analyze_fn = analyze_fn
@@ -237,7 +241,7 @@ class Engine:
         gate = self.gate_fn(question, top)
         if not gate.tripped:
             return _Resolved(question, top, None)
-        analysis = self.analyze_fn(question, top, self.synth_client)
+        analysis = self.analyze_fn(question, top, self.analyze_client)
         if not analysis.ambiguous:
             return _Resolved(question, top, None)
         if analysis.confidence < CLARIFY_THRESHOLD:
@@ -313,6 +317,7 @@ def get_engine(config=None):
     index = Index(config.index_dir)
     reranker = Reranker(config.rerank_model, device=config.embed_device)
     synth_client = make_synth_client(config)
+    analyze_client = make_analyze_client(config)
     visual_embedder = None
     visual_index = None
     if config.visual_retrieval:
@@ -331,7 +336,7 @@ def get_engine(config=None):
             caption_index = None
     _engine = Engine(config, embedder, index, reranker, synth_client,
                      visual_embedder=visual_embedder, visual_index=visual_index,
-                     caption_index=caption_index)
+                     caption_index=caption_index, analyze_client=analyze_client)
     return _engine
 
 

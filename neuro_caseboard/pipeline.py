@@ -319,9 +319,13 @@ def briefing_synth_client(config=None):
     from neuro_core.synth_clients import make_synth_client, VertexSynthClient
     cfg = config or load_config()
     model = os.environ.get("BRIEFING_SYNTH_MODEL", "gemini-2.5-flash")
-    if getattr(cfg, "synth_provider", "") == "vertex":
+    # Keep the cheap Gemini-Flash briefing model whenever Vertex is reachable, regardless of
+    # the synthesis provider: the 7 concurrent per-section calls want a fast/cheap model, and
+    # the global synth default (glm-5.2) would be slower and pricier for this surface. Only
+    # genuinely non-Vertex deployments fall back to their configured synth client.
+    if getattr(cfg, "google_cloud_project", ""):
         return VertexSynthClient(cfg.google_cloud_project, cfg.google_cloud_location, model)
-    return make_synth_client(cfg)   # non-vertex deployments use their configured client/model
+    return make_synth_client(cfg)   # non-Vertex deployments use their configured client/model
 
 
 def build_briefing_bundle(query, *, use_llm=None, enrich=True, retriever=None,
