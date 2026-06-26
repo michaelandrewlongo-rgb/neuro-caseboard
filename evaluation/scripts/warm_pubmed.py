@@ -7,10 +7,13 @@ cache hit during the actual runs skips the LLM rewrite entirely — literature s
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
+
+_log = logging.getLogger(__name__)
 
 
 def warm(questions, retrieve_fn):
@@ -20,20 +23,21 @@ def warm(questions, retrieve_fn):
         try:
             recs, _ = retrieve_fn(q)
             out.append((qid, len(recs), True))
-        except Exception:  # noqa: BLE001 — one bad question must not abort warming
+        except Exception as exc:  # noqa: BLE001 — one bad question must not abort warming
+            _log.warning("warm: qid=%s failed: %r", qid, exc)
             out.append((qid, 0, False))
     return out
 
 
 def _load_questions(manifest_path):
-    rows = [json.loads(l) for l in Path(manifest_path).read_text(encoding="utf-8").splitlines()
-            if l.strip()]
+    rows = [json.loads(line) for line in Path(manifest_path).read_text(encoding="utf-8").splitlines()
+            if line.strip()]
     return [(r["id"], r["question"]) for r in rows if r.get("enabled", True)]
 
 
 def main(argv=None):
-    argv = list(sys.argv[1:] if argv is None else argv)
-    manifest = argv[0] if argv else str(REPO / "evaluation" / "inputs" / "bakeoff-21.manifest.jsonl")
+    args = list(sys.argv[1:] if argv is None else argv)
+    manifest = args[0] if args else str(REPO / "evaluation" / "inputs" / "bakeoff-21.manifest.jsonl")
 
     from neuro_caseboard.literature.config import load_literature_config
     from neuro_caseboard.qa import retrieve_records
