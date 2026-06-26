@@ -25,9 +25,13 @@ def test_phase2_defaults_present(tmp_path, monkeypatch):
     # No env file, no overrides -> Phase 2 defaults resolve.
     monkeypatch.delenv("SYNTH_PROVIDER", raising=False)
     cfg = load_config(env_file=str(tmp_path / "missing.env"))
-    assert cfg.synth_provider == "vertex"
+    # Default synthesis is glm-5.2 via OpenRouter; disambiguation runs a separate fast model.
+    assert cfg.synth_provider == "openrouter"
+    assert cfg.openrouter_model == "z-ai/glm-5.2"
+    assert cfg.analyze_provider == "openrouter"
+    assert cfg.analyze_model == "google/gemini-3.1-flash-lite"
     assert cfg.google_cloud_location == "us-central1"
-    assert cfg.vertex_model  # non-empty Pro-tier default
+    assert cfg.vertex_model  # non-empty Pro-tier default (used when SYNTH_PROVIDER=vertex)
     assert cfg.max_figure_images == 5
     assert cfg.figure_dpi == 160
     assert abs(cfg.figure_area_threshold - 0.1) < 1e-9

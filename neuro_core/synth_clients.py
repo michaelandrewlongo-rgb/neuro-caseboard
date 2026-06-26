@@ -113,3 +113,22 @@ def make_synth_client(config):
     return VertexSynthClient(config.google_cloud_project,
                              config.google_cloud_location,
                              config.vertex_model)
+
+
+def make_analyze_client(config):
+    """Client for the lightweight query-disambiguation ("analyze") step.
+
+    Disambiguation is a constrained classification task, not synthesis, so it defaults to a
+    cheaper/faster model (config ANALYZE_MODEL) — benchmarked indistinguishable in answer
+    quality but markedly faster. When ANALYZE_MODEL is empty it falls back to the synthesis
+    client, preserving the historical single-client behavior."""
+    model = getattr(config, "analyze_model", "") or ""
+    if not model:
+        return make_synth_client(config)
+    provider = getattr(config, "analyze_provider", "") or config.synth_provider
+    if provider == "local":
+        return LocalSynthClient(config.local_base_url, model)
+    if provider == "openrouter":
+        return OpenRouterSynthClient(config.openrouter_api_key, model)
+    return VertexSynthClient(config.google_cloud_project,
+                             config.google_cloud_location, model)
