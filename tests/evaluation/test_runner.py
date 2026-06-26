@@ -284,3 +284,24 @@ def test_run_id_stable_across_resume(tmp_path):
     )
     cfg2 = json.loads((run_dir / "run-config.json").read_text(encoding="utf-8"))
     assert cfg1["run_id"] == cfg2["run_id"]
+
+
+def test_parse_args_accepts_manifest_with_default():
+    ns = runner._parse_args(["--run-dir", "r"])
+    assert Path(ns.manifest) == runner.MANIFEST
+    ns2 = runner._parse_args(["--run-dir", "r", "--manifest", "eval/x.jsonl"])
+    assert ns2.manifest == "eval/x.jsonl"
+
+
+def test_run_benchmark_honors_custom_manifest(tmp_path):
+    manifest = tmp_path / "mini.jsonl"
+    manifest.write_text(
+        json.dumps({"id": "Q-1", "domain": "Test", "question": "What?",
+                    "benchmark_version": "x", "enabled": True}) + "\n",
+        encoding="utf-8",
+    )
+    produced = runner.run_benchmark(
+        tmp_path / "run", answer_fn=lambda q: make_qaresult(answer="ok"),
+        manifest_path=manifest, sleep_fn=lambda _s: None,
+    )
+    assert [r["question_id"] for r in produced] == ["Q-1"]

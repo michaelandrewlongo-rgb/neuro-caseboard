@@ -488,6 +488,11 @@ def _parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         help="Per-question timeout in seconds (default: %(default)s).",
     )
     p.add_argument("--resume", action="store_true", help="Skip questions already in run.jsonl.")
+    p.add_argument(
+        "--manifest",
+        default=str(MANIFEST),
+        help="Manifest JSONL to run (default: the frozen 67-Q benchmark).",
+    )
     return p.parse_args(list(argv) if argv is not None else None)
 
 
@@ -499,6 +504,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         end_id=args.end_id,
         timeout=args.timeout,
         resume=args.resume,
+        manifest_path=Path(args.manifest),
     )
     by_status: dict[str, int] = {}
     for rec in produced:
