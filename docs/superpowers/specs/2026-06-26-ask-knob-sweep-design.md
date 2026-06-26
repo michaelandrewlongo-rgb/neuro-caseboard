@@ -92,9 +92,12 @@ The whole Ask path is OpenRouter + PubMed — **no Vertex / ADC needed** for the
 
 ## 5. Validity controls (the load-bearing part)
 
-1. **Harness honesty.** `evaluation/scripts/run_benchmark.py:170-171` *hard-overrides*
-   `SYNTH_PROVIDER=vertex VERTEX_MODEL=gemini-2.5-pro`. Patch it to **honor the env** so glm-5.2
-   actually runs. Without this every run is silently Vertex Gemini.
+1. **Harness honesty (corrected after reading the code).** The runner does **not** force a
+   provider — `run_benchmark.py:170-171` are *display-only defaults* inside `model_configuration()`;
+   the engine call (`answer_question` → `load_config()`) honours the **real** env. Two real risks:
+   (a) the live shell carries a stale `SYNTH_PROVIDER=vertex`, so the frozen env block (§4) must
+   export `openrouter` explicitly; (b) `run-config.json` provenance is stale-display (`vertex`) and
+   omits retrieval knobs — fixed by extending `model_configuration()` (Phase 0).
 2. **Explicit frozen env block** (§4) on every arm — single-variable guarantee.
 3. **Index fingerprint.** Record row counts + `id`-sha256 for `chunks`/`figures`/`cards` before
    the sweep; re-check after the embedder re-index. The embedder arm builds into a **separate
@@ -105,9 +108,9 @@ The whole Ask path is OpenRouter + PubMed — **no Vertex / ADC needed** for the
    `LITERATURE_WEAVE` is on, which is default-true).
 5. **Vascular-sort invariant.** `query.py:227` (the off-domain stable sort) stays in **every**
    reranker arm, including RRF-only — else that arm silently changes two things.
-6. **Knob stamping.** `run-config.json` captures only the 4 model knobs, **not** retrieval knobs.
-   Stamp the knob value in the run-dir name **and** a `NOTES.md`, or the arms are
-   indistinguishable after the fact.
+6. **Auto-provenance over manual stamping.** Extend `model_configuration()` (Phase 0) so
+   `run-config.json` auto-captures the retrieval knobs; still give each run a descriptive dir name
+   (`<knob>-<value>-<ts>`). No reliance on a hand-written NOTES file for load-bearing provenance.
 
 ---
 
@@ -115,10 +118,14 @@ The whole Ask path is OpenRouter + PubMed — **no Vertex / ADC needed** for the
 
 ### Phase 0 — make the harness honest + runnable on 21 Qs  *(code, ~no API cost)*
 
-- Patch `run_benchmark.py` to honor `SYNTH_PROVIDER` (drop the vertex hard-override).
-- Add a `--manifest <path>` flag (or `MANIFEST_PATH` env) to `run_benchmark.py` so a **standalone
-  21-Q manifest** can be run **without polluting** the frozen 67-Q
-  `evaluation/inputs/benchmark-manifest.jsonl`.
+- **Expose the manifest to the CLI.** `run_benchmark()` already accepts a `manifest_path` param;
+  add a `--manifest <path>` flag threading it through `_parse_args`/`main`, so a **standalone 21-Q
+  manifest** runs **without polluting** the frozen 67-Q `evaluation/inputs/benchmark-manifest.jsonl`.
+  (No vertex override exists to remove — the engine already honours the env via `load_config()`.)
+- **Auto-provenance.** Extend `model_configuration()` to record the true provider + retrieval knobs
+  (`OPENROUTER_MODEL`, `RETRIEVE_K`, `RERANK_K`, `RERANK_MODEL`, `EMBED_MODEL`, `ANALYZE_MODEL`,
+  `LITERATURE_WEAVE`, `LITERATURE_K`, `MAX_FIGURE_IMAGES`) so every `run-config.json` self-documents
+  its arm — replaces manual NOTES stamping.
 - Build `eval/bakeoff-21.manifest.jsonl`: the 10 hard qids (copy from the committed manifest) +
   10 easy + 1 custom (extract verbatim question text from the two bake-off glm-5.2 PDFs).
 - Runner: **serial** `run_benchmark.py` by default (21 Qs ≈ 16 min/run). Optional: cherry-pick the
@@ -132,9 +139,11 @@ The whole Ask path is OpenRouter + PubMed — **no Vertex / ADC needed** for the
 - **Fingerprint + provenance**: record commit SHA, corpus file list, and per-table row count +
   `id`-sha256 for `chunks`/`figures`/`cards` (small LanceDB snippet → `eval/index-fingerprint.json`).
 - **Arm the PubMed freeze**: warm `eval/pubmed-snapshot/` once over the 21 questions via a
-  **literature-only pass** (call `qa.retrieve_records` directly, **no synthesis → zero glm cost**),
-  set `TTL=36500`. Warming lit-only *before* the control run guarantees the control and every
-  textbook arm hit byte-identical frozen records.
+  **literature-only pass** (`qa.retrieve_records` — PubMed fetch + the cheap query-rewrite call,
+  **not** the expensive woven synthesis; ~$0.02 total), set `TTL=36500`. Warming *before* the
+  control run guarantees the control and every textbook arm hit byte-identical frozen records.
+  (`retrieve_records` caches under the deterministic `build_query_terms` key, so a later cache hit
+  skips the rewrite entirely — records stay frozen.)
 
 ### Control run  *(baseline leg; 1×, ungraded)*
 
