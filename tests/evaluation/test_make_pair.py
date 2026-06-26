@@ -20,3 +20,10 @@ def test_render_pair_orders_hard_first_and_includes_both_answers():
     # both answers present for each question
     for token in ("ctrl hard", "arm hard", "ctrl easy", "arm easy"):
         assert token in md
+
+
+def test_hard_set_is_the_11_hard_probes():
+    assert mod.HARD == {"NIS-02", "OPEN-CV-04", "OPEN-CV-07", "TUMOR-01", "TUMOR-05",
+                        "SPINE-01", "SPINE-06", "FUNCTIONAL-02", "TRAUMA-02",
+                        "GENERAL-01", "CUSTOM-11"}
+    assert len(mod.HARD) == 11

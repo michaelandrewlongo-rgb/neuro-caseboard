@@ -29,7 +29,7 @@ def render_pair(control: dict, arm: dict, hard_ids: set, knob_label: str) -> str
 
 
 HARD = {"NIS-02", "OPEN-CV-04", "OPEN-CV-07", "TUMOR-01", "TUMOR-05",
-        "SPINE-01", "SPINE-06", "FUNCTIONAL-02", "TRAUMA-02", "CUSTOM-11"}
+        "SPINE-01", "SPINE-06", "FUNCTIONAL-02", "TRAUMA-02", "GENERAL-01", "CUSTOM-11"}
 
 
 def main(argv=None):

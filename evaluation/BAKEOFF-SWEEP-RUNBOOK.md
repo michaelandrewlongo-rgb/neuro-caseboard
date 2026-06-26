@@ -1,5 +1,7 @@
 # Bake-off 21-Q Knob-Sweep Runbook
 
+> **Note:** `evaluation/inputs/bakeoff-21.manifest.jsonl` is an intentionally **off-benchmark** set (board-style `EASY-*` + `CUSTOM-11` ids, `domain: Board-style`, no `source_number`). It is NOT governed by the strict 67-Q `benchmark-manifest.schema.json` — do not point `validate_manifest.py` at it.
+
 Spec: `docs/superpowers/specs/2026-06-26-ask-knob-sweep-design.md`. One variable per arm; report `$`.
 
 ## 0. Frozen env block (paste into every fresh shell, then override ONE var)
