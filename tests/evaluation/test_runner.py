@@ -305,3 +305,21 @@ def test_run_benchmark_honors_custom_manifest(tmp_path):
         manifest_path=manifest, sleep_fn=lambda _s: None,
     )
     assert [r["question_id"] for r in produced] == ["Q-1"]
+
+
+def test_model_configuration_records_provider_and_retrieval_knobs(monkeypatch):
+    for k in ("SYNTH_PROVIDER", "OPENROUTER_MODEL", "ANALYZE_MODEL", "RETRIEVE_K",
+              "RERANK_K", "RERANK_MODEL", "EMBED_MODEL", "LITERATURE_WEAVE",
+              "LITERATURE_K", "MAX_FIGURE_IMAGES"):
+        monkeypatch.delenv(k, raising=False)
+    # defaults reflect the PR-80 engine, NOT a stale "vertex"
+    cfg = runner.model_configuration()
+    assert cfg["synth_provider"] == "openrouter"
+    assert cfg["openrouter_model"] == "z-ai/glm-5.2"
+    assert cfg["retrieve_k"] == "40"
+    assert cfg["rerank_k"] == "12"
+    assert cfg["embed_model"] == "BAAI/bge-large-en-v1.5"
+    # env overrides win
+    monkeypatch.setenv("RERANK_K", "20")
+    monkeypatch.setenv("SYNTH_PROVIDER", "openrouter")
+    assert runner.model_configuration()["rerank_k"] == "20"
