@@ -16,7 +16,7 @@ One engine assembled from **three layers**; read these together to understand an
   `chunk.py`, `embed.py`, `rerank.py`), a separate figure/visual lane
   (`figure_retriever.py`, `visual_index.py`, `figure_guards.py`), the standalone board-review
   `cards` lane (`cards_*.py`), and synthesis clients (`synth_clients.py`, `synthesize.py` —
-  Vertex/Gemini by default, see runtime note below).
+  OpenRouter `glm-5.2` by default, Vertex/Gemini alternate; see runtime note below).
 - **`neuro_caseboard/`** — orchestration + the **rebuilt report/export surface** that owns the
   data model and renderers (`model.py` → `compile.py` → `render_md.py` / `render_pdf.py`),
   plus the PubMed literature lane (`literature/`, `case_literature.py`), the citation
@@ -65,13 +65,20 @@ python -m build                                  # build sdist + wheel (matches 
 
 ## Environment & runtime (this machine)
 
-- **LLM provider is Vertex (OpenRouter is the optional alternate); there is no first-party
-  LLM-vendor key path.** Synthesis uses `SYNTH_PROVIDER=vertex`, `VERTEX_MODEL=gemini-2.5-pro`
-  (needs `GOOGLE_CLOUD_PROJECT`, ADC at `~/.config/gcloud/application_default_credentials.json`,
-  and `google-genai`); the LLM-backed Explorer lane is selected with `CASEBOARD_LLM_PROVIDER`
-  (`vertex` or `openrouter`) and otherwise falls back to the deterministic path. No first-party
-  vendor API key is used — probe Vertex (ADC + `GOOGLE_CLOUD_PROJECT`) in any health check. The
-  defaults in `neuro_core/config.py` are stale.
+- **Default Ask synthesis is OpenRouter `glm-5.2`; Vertex Gemini is the alternate (PR #80).**
+  `SYNTH_PROVIDER=openrouter` + `OPENROUTER_MODEL=z-ai/glm-5.2` is the default (best blind-graded
+  answer quality), and query **disambiguation runs a separate fast model**,
+  `ANALYZE_MODEL=google/gemini-3.1-flash-lite` (empty `ANALYZE_MODEL` reuses the synth client).
+  This needs `OPENROUTER_API_KEY` (kept in `.env`). To revert Ask synthesis to free Vertex Gemini,
+  set `SYNTH_PROVIDER=vertex` (+ `VERTEX_MODEL=gemini-2.5-pro`).
+- **Vertex is still required for Build + briefing even on the OpenRouter synth default.** The
+  Build/Case **Explorer** is independent, selected by `CASEBOARD_LLM_PROVIDER` (`vertex` default
+  on this machine), and the operative-briefing per-section calls stay on Vertex Gemini-Flash
+  whenever `GOOGLE_CLOUD_PROJECT` is set. So keep `GOOGLE_CLOUD_PROJECT` + ADC at
+  `~/.config/gcloud/application_default_credentials.json` (+ `google-genai`); probe both Vertex
+  (ADC) and OpenRouter (`OPENROUTER_API_KEY`) in any health check. `neuro_core/config.py` defaults
+  now match this (no longer stale). On this machine the old `SYNTH_PROVIDER=vertex` export in
+  `~/.bashrc` is commented out — a fresh shell / restarted session picks up the glm-5.2 default.
 - **Live data paths live outside the repo** (so git worktrees share them automatically — no symlinks):
   - Corpus PDFs: `/home/michael/textbook_pdfs` (set `CORPUS_DIR`; the `/mnt/d/...` default is stale).
   - LanceDB index + figure assets: `/home/michael/neuro-textbook-rag/index` and `.../assets/figures`.
