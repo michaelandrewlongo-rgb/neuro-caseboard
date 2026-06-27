@@ -31,3 +31,10 @@ def test_rerank_none_preserves_rrf_order_without_scorer():
     hits = [_hit("1", "bad"), _hit("2", "good match"), _hit("3", "also good")]
     out = Reranker("none").rerank("q", hits, top_k=2)
     assert [h.id for h in out] == ["1", "2"]  # original RRF order, truncated to top_k (NOT reordered)
+
+
+def test_reranker_routes_qwen_model_to_causal_lm_scorer():
+    # A Qwen3-Reranker model name routes to the causal-LM scorer, constructed lazily (no model load).
+    from neuro_core.qwen3_reranker import Qwen3Reranker
+    rr = Reranker("Qwen/Qwen3-Reranker-0.6B")
+    assert isinstance(rr.scorer, Qwen3Reranker)

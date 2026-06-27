@@ -10,9 +10,13 @@ class Reranker:
     @property
     def scorer(self):
         if self._scorer is None:
-            from sentence_transformers import CrossEncoder
-            self._scorer = CrossEncoder(
-                self.model_name, device=resolve_device(self.device))
+            if "Qwen3-Reranker" in self.model_name:
+                from .qwen3_reranker import Qwen3Reranker
+                self._scorer = Qwen3Reranker(device=resolve_device(self.device))
+            else:
+                from sentence_transformers import CrossEncoder
+                self._scorer = CrossEncoder(
+                    self.model_name, device=resolve_device(self.device))
         return self._scorer
 
     def rerank(self, query, hits, top_k):
