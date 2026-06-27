@@ -18,6 +18,10 @@ class Reranker:
     def rerank(self, query, hits, top_k):
         if not hits:
             return []
+        if self.model_name == "none":
+            # RRF-only arm: keep the hybrid-search (RRF) fusion order; no cross-encoder rescoring.
+            # (query.py applies the vascular off-domain sort + rerank_k slice afterwards, unchanged.)
+            return list(hits)[:top_k]
         pairs = [(query, h.text) for h in hits]
         scores = self.scorer.predict(pairs)
         ranked = sorted(zip(hits, scores), key=lambda hs: float(hs[1]), reverse=True)

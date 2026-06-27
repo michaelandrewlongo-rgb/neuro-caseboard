@@ -23,3 +23,11 @@ def test_rerank_orders_and_truncates():
 
 def test_rerank_empty():
     assert Reranker("fake", scorer=FakeScorer()).rerank("q", [], top_k=3) == []
+
+
+def test_rerank_none_preserves_rrf_order_without_scorer():
+    # RRF-only arm: model_name="none" keeps the RRF fusion order and never loads a cross-encoder.
+    # (No scorer injected: if rerank touched self.scorer it would try to load CrossEncoder("none").)
+    hits = [_hit("1", "bad"), _hit("2", "good match"), _hit("3", "also good")]
+    out = Reranker("none").rerank("q", hits, top_k=2)
+    assert [h.id for h in out] == ["1", "2"]  # original RRF order, truncated to top_k (NOT reordered)
