@@ -66,7 +66,8 @@ def retrieve_records(question, *, lit_config, client=None, synth_client, cache=N
         retriever = LiteratureRetriever(client, k=lit_config.k,
                                         recency_years=lit_config.recency_years,
                                         recency_boost=lit_config.recency_boost)
-        search_query = rewrite_pubmed_query(question, synth_client) or term
+        if lit_config.rewrite:
+            search_query = rewrite_pubmed_query(question, synth_client) or term
 
         async def _retrieve():
             try:

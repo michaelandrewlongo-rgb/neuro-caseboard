@@ -37,6 +37,13 @@ def test_woven_flags_defaults(monkeypatch):
     assert cfg.precision_min_overlap == 1
 
 
+def test_rewrite_flag_default_and_override(monkeypatch):
+    monkeypatch.delenv("LITERATURE_REWRITE", raising=False)
+    assert load_literature_config().rewrite is True   # PubMed query rewrite on by default
+    monkeypatch.setenv("LITERATURE_REWRITE", "false")
+    assert load_literature_config().rewrite is False
+
+
 def test_woven_flags_env_overrides(monkeypatch):
     monkeypatch.setenv("LITERATURE_WEAVE", "1")
     monkeypatch.setenv("LITERATURE_RECENCY_BOOST", "2")

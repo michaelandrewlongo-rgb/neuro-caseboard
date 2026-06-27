@@ -168,6 +168,50 @@ def test_retrieve_records_cache_key_includes_recency_boost():
     assert c0.asked[0] != c1.asked[0]  # boost must be part of the key
 
 
+def test_retrieve_records_rewrite_toggle(monkeypatch):
+    # LITERATURE_REWRITE off -> use the deterministic build_query_terms, skip the LLM rewrite.
+    import neuro_caseboard.literature.retriever as R
+    from neuro_caseboard.literature.retriever import build_query_terms
+    from neuro_caseboard.qa import retrieve_records
+
+    called = []
+    monkeypatch.setattr(R, "rewrite_pubmed_query", lambda q, sc: (called.append(q) or "REWRITTEN"))
+
+    class FakeRetriever:
+        last_query = None
+        def __init__(self, client, **kw):
+            pass
+        async def retrieve(self, question, query=None):
+            FakeRetriever.last_query = query
+            return [object()]  # non-empty -> no term fallback
+    monkeypatch.setattr(R, "LiteratureRetriever", FakeRetriever)
+
+    class MissCache:
+        def get(self, key):
+            return None
+        def set(self, key, recs):
+            pass
+
+    class FakeClient:
+        async def aclose(self):
+            pass
+
+    def cfg(rewrite):
+        return LiteratureConfig(enabled=True, recency_years=7, k=5, cache_ttl_days=14,
+                                ncbi_api_key="", cache_dir="/tmp/x", weave=True,
+                                recency_boost=0, precision_gate=True, precision_min_overlap=1,
+                                rewrite=rewrite)
+
+    _, sq = retrieve_records("q", lit_config=cfg(True), synth_client=object(),
+                             cache=MissCache(), client=FakeClient())
+    assert called == ["q"] and sq == "REWRITTEN" and FakeRetriever.last_query == "REWRITTEN"
+
+    called.clear()
+    _, sq = retrieve_records("q", lit_config=cfg(False), synth_client=object(),
+                             cache=MissCache(), client=FakeClient())
+    assert called == [] and sq == build_query_terms("q") and FakeRetriever.last_query == build_query_terms("q")
+
+
 def test_answer_question_attaches_verification():
     from types import SimpleNamespace
     from neuro_caseboard.qa import answer_question
