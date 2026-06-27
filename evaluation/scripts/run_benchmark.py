@@ -294,7 +294,9 @@ def _resolve_answer(question: str, answer_fn: Callable[..., Any]) -> tuple[Any, 
     if is_clarification(result):
         chosen = choose_variant(result)
         selected_variant = getattr(chosen, "label", None)
-        result = answer_fn(getattr(chosen, "rewrite"))
+        # Scope the rewrite to the chosen variant: do NOT re-run the disambiguation gate, or the
+        # rewrite can return a SECOND Clarification (no .answer) -> not_gradable. (double-disambig)
+        result = answer_fn(getattr(chosen, "rewrite"), skip_disambiguation=True)
     return result, selected_variant
 
 
@@ -410,10 +412,10 @@ def default_answer_fn() -> Callable[..., Any]:
     """Return a callable ``answer_fn(question) -> QAResult|Clarification`` that lazily imports the
     live engine on first use. Importing this module does NOT import the engine."""
 
-    def _answer(question: str) -> Any:
+    def _answer(question: str, skip_disambiguation: bool = False) -> Any:
         from neuro_caseboard.qa import answer_question  # heavy import, done lazily
 
-        return answer_question(question, force=True)
+        return answer_question(question, force=True, skip_disambiguation=skip_disambiguation)
 
     return _answer
 
