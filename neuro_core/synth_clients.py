@@ -1,6 +1,12 @@
 import base64
 
 
+def _is_image_input_error(exc):
+    """True for the OpenRouter rejection of figure images by a text-only model
+    (404 'No endpoints found that support image input', e.g. z-ai/glm-5.2)."""
+    return "image input" in str(exc).lower()
+
+
 class OpenRouterSynthClient:
     """OpenAI-compatible (OpenRouter) backend. Fallback when GCP credit runs out."""
 
@@ -8,6 +14,9 @@ class OpenRouterSynthClient:
         self.api_key = api_key
         self.model = model
         self._client = client
+        # Optimistically send figure images; flipped off the first time the model
+        # rejects them (text-only models like z-ai/glm-5.2 have no image endpoint).
+        self._supports_images = True
 
     @property
     def client(self):
@@ -18,6 +27,19 @@ class OpenRouterSynthClient:
         return self._client
 
     def generate(self, system, user, images):
+        send = images if self._supports_images else []
+        try:
+            return self._complete(system, user, send)
+        except Exception as e:  # scoped below: re-raised unless it's the image case
+            if self._supports_images and images and _is_image_input_error(e):
+                # Text-only model: drop the figure images and retry. The figure
+                # captions are already in the prompt text, so citations are
+                # unaffected. Remember it so later calls skip images upfront.
+                self._supports_images = False
+                return self._complete(system, user, [])
+            raise
+
+    def _complete(self, system, user, images):
         content = [{"type": "text", "text": user}]
         for img in images:
             b64 = base64.b64encode(img).decode("ascii")
