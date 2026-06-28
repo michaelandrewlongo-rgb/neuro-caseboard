@@ -161,26 +161,30 @@ def working_tree_dirty() -> bool | None:
 
 
 def model_configuration() -> dict:
-    """Cheaply discover provider/model WITHOUT invoking the engine.
+    """Cheaply discover provider/model + retrieval knobs WITHOUT invoking the engine.
 
-    Reads process env first (authoritative on this machine per the audit), falling back to the
-    stale-but-harmless defaults in ``neuro_core/config.py:DEFAULTS`` only for display.
+    Reads process env first (authoritative), falling back to the SAME defaults as
+    neuro_core/config.py for display/provenance only. Engine-free by design (no import); the
+    duplicated defaults are display strings, not the engine's source of truth.
     """
-    defaults = {
-        "SYNTH_PROVIDER": "vertex",
-        "VERTEX_MODEL": "gemini-2.5-pro",
-        "GOOGLE_CLOUD_PROJECT": "",
-        "GOOGLE_CLOUD_LOCATION": "us-central1",
-    }
+    def env(name: str, default: str) -> str:
+        return os.environ.get(name, default)
+
     return {
-        "synth_provider": os.environ.get("SYNTH_PROVIDER", defaults["SYNTH_PROVIDER"]),
-        "vertex_model": os.environ.get("VERTEX_MODEL", defaults["VERTEX_MODEL"]),
-        "google_cloud_project": os.environ.get(
-            "GOOGLE_CLOUD_PROJECT", defaults["GOOGLE_CLOUD_PROJECT"]
-        ),
-        "google_cloud_location": os.environ.get(
-            "GOOGLE_CLOUD_LOCATION", defaults["GOOGLE_CLOUD_LOCATION"]
-        ),
+        "synth_provider": env("SYNTH_PROVIDER", "openrouter"),
+        "openrouter_model": env("OPENROUTER_MODEL", "z-ai/glm-5.2"),
+        "analyze_provider": env("ANALYZE_PROVIDER", "openrouter"),
+        "analyze_model": env("ANALYZE_MODEL", "google/gemini-3.1-flash-lite"),
+        "vertex_model": env("VERTEX_MODEL", "gemini-2.5-pro"),
+        "google_cloud_project": env("GOOGLE_CLOUD_PROJECT", ""),
+        "google_cloud_location": env("GOOGLE_CLOUD_LOCATION", "us-central1"),
+        "retrieve_k": env("RETRIEVE_K", "40"),
+        "rerank_k": env("RERANK_K", "12"),
+        "rerank_model": env("RERANK_MODEL", "BAAI/bge-reranker-v2-m3"),
+        "embed_model": env("EMBED_MODEL", "BAAI/bge-large-en-v1.5"),
+        "literature_weave": env("LITERATURE_WEAVE", "true"),
+        "literature_k": env("LITERATURE_K", "12"),
+        "max_figure_images": env("MAX_FIGURE_IMAGES", "5"),
     }
 
 
@@ -290,7 +294,9 @@ def _resolve_answer(question: str, answer_fn: Callable[..., Any]) -> tuple[Any, 
     if is_clarification(result):
         chosen = choose_variant(result)
         selected_variant = getattr(chosen, "label", None)
-        result = answer_fn(getattr(chosen, "rewrite"))
+        # Scope the rewrite to the chosen variant: do NOT re-run the disambiguation gate, or the
+        # rewrite can return a SECOND Clarification (no .answer) -> not_gradable. (double-disambig)
+        result = answer_fn(getattr(chosen, "rewrite"), skip_disambiguation=True)
     return result, selected_variant
 
 
@@ -406,10 +412,10 @@ def default_answer_fn() -> Callable[..., Any]:
     """Return a callable ``answer_fn(question) -> QAResult|Clarification`` that lazily imports the
     live engine on first use. Importing this module does NOT import the engine."""
 
-    def _answer(question: str) -> Any:
+    def _answer(question: str, skip_disambiguation: bool = False) -> Any:
         from neuro_caseboard.qa import answer_question  # heavy import, done lazily
 
-        return answer_question(question, force=True)
+        return answer_question(question, force=True, skip_disambiguation=skip_disambiguation)
 
     return _answer
 
@@ -488,6 +494,11 @@ def _parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         help="Per-question timeout in seconds (default: %(default)s).",
     )
     p.add_argument("--resume", action="store_true", help="Skip questions already in run.jsonl.")
+    p.add_argument(
+        "--manifest",
+        default=str(MANIFEST),
+        help="Manifest JSONL to run (default: the frozen 67-Q benchmark).",
+    )
     return p.parse_args(list(argv) if argv is not None else None)
 
 
@@ -499,6 +510,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         end_id=args.end_id,
         timeout=args.timeout,
         resume=args.resume,
+        manifest_path=Path(args.manifest),
     )
     by_status: dict[str, int] = {}
     for rec in produced:
