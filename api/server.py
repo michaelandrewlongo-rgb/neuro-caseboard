@@ -77,9 +77,11 @@ def _probe_engine() -> dict:
 
 
 def _probe_synth() -> dict:
-    """Synthesis lane (Ask/Build LLM). This deployment uses Vertex (Gemini), NOT Anthropic:
-    available iff provider==vertex, a GCP project is configured, ADC is resolvable, and the
-    google-genai client import succeeds."""
+    """Synthesis lane (Ask/Build LLM). Probes the *configured* provider:
+    - vertex: GCP project + ADC resolvable + google-genai import.
+    - openrouter: OPENROUTER_API_KEY set + openai client import.
+    - local: base URL set + openai client import.
+    The probe is config-level (creds + client import), not a live API call."""
     info = {"available": False, "provider": None, "project": None,
             "adc": False, "client_import": False, "detail": None}
     try:
@@ -88,12 +90,12 @@ def _probe_synth() -> dict:
         info["provider"] = cfg.synth_provider
         info["project"] = cfg.google_cloud_project or None
         info["adc"] = _adc_present()
-        try:
-            import google.genai  # noqa: F401
-            info["client_import"] = True
-        except Exception as e:
-            info["detail"] = f"google-genai not importable: {type(e).__name__}: {e}"
         if cfg.synth_provider == "vertex":
+            try:
+                import google.genai  # noqa: F401
+                info["client_import"] = True
+            except Exception as e:
+                info["detail"] = f"google-genai not importable: {type(e).__name__}: {e}"
             info["available"] = bool(info["project"]) and info["adc"] and info["client_import"]
             if not info["available"] and info["detail"] is None:
                 missing = []
@@ -102,10 +104,23 @@ def _probe_synth() -> dict:
                 if not info["adc"]:
                     missing.append("ADC credentials")
                 info["detail"] = "missing: " + ", ".join(missing) if missing else None
+        elif cfg.synth_provider in ("openrouter", "local"):
+            try:
+                import openai  # noqa: F401
+                info["client_import"] = True
+            except Exception as e:
+                info["detail"] = f"openai not importable: {type(e).__name__}: {e}"
+            if cfg.synth_provider == "openrouter":
+                cred_ok = bool(getattr(cfg, "openrouter_api_key", "") or "")
+                cred_name = "OPENROUTER_API_KEY"
+            else:
+                cred_ok = bool(getattr(cfg, "local_base_url", "") or "")
+                cred_name = "LOCAL_BASE_URL"
+            info["available"] = cred_ok and info["client_import"]
+            if not info["available"] and info["detail"] is None and not cred_ok:
+                info["detail"] = f"missing: {cred_name}"
         else:
-            # Non-vertex providers (e.g. openrouter/local) are out of scope for this
-            # deployment's probe; report provider but treat availability conservatively.
-            info["detail"] = f"provider '{cfg.synth_provider}' not probed (deployment uses vertex)"
+            info["detail"] = f"unknown synth provider '{cfg.synth_provider}'"
     except Exception as e:
         info["detail"] = f"{type(e).__name__}: {e}"
     return info
