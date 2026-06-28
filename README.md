@@ -49,6 +49,16 @@ One engine, two features, exposed through one CLI and one local web app:
   teal/red signal accents, Syne display). Needs the `briefing` extra:
   `pip install -e ".[briefing]" && playwright install chromium`.
 
+### Ask synthesis model
+
+The `ask` answer is synthesized by **OpenRouter `z-ai/glm-5.2`** by default
+(`SYNTH_PROVIDER=openrouter`, best blind-graded answer quality), with query disambiguation
+routed to a separate fast model, **`google/gemini-3.1-flash-lite`** (`ANALYZE_MODEL`; an empty
+value reuses the synth client). Both need `OPENROUTER_API_KEY`. To revert Ask synthesis to free
+Vertex Gemini, set `SYNTH_PROVIDER=vertex` (+ `VERTEX_MODEL=gemini-2.5-pro`). This is independent
+of the **Build/Case** Explorer, which is selected by `CASEBOARD_LLM_PROVIDER` and defaults to
+Vertex (see *Clinical depth — the Explorer*).
+
 ### Contemporary Literature (PubMed)
 
 Every `ask` answer is augmented with a synthesized "Contemporary Literature"
