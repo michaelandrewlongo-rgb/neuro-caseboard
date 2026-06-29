@@ -26,12 +26,16 @@ One new idea: an Ask request becomes a **job** the server owns, exposed as a rep
 **SSE event log**. The client is a thin reducer over that log with a `localStorage` mirror.
 
 ```
-POST /api/ask {question, skip_disambiguation}
+POST /api/ask/start {question, skip_disambiguation}
     → create AskJob, spawn daemon thread running stream_answer(), return {job_id}  (instant)
 
 GET  /api/ask/stream/{job_id}?cursor=N   (SSE)
     → replay job.events[N:] as they appear, tail live until a `done` event, then close
 ```
+
+The existing blocking `POST /api/ask` is **kept unchanged** — `scripts/batch_ask.py` (the
+benchmark runner) and `tests/test_api_ask_verification.py` depend on its one-shot JSON contract.
+Streaming is purely additive via the two new endpoints; the SPA switches to them.
 
 ### Server-side job (api/server.py)
 
@@ -71,28 +75,41 @@ is known pre-synthesis), so accumulated deltas == canonical final with no visibl
 
 ### Streaming orchestrator (neuro_caseboard/qa_stream.py — new)
 
+> **Default path is woven.** `LITERATURE_WEAVE` defaults to `true`, so the live Ask answer is
+> the *woven* synthesis (`synthesize_woven` → one integrated `[n]`+`[L#]` answer). The streaming
+> orchestrator streams **that** path. The separate-lane (`weave=false`) path and any exception
+> fall back to the existing blocking `answer_question`, emitted as one batch.
+
 `stream_answer(question, emit, *, config=None, force=False, skip_disambiguation=False)`:
 
-1. `bundle = engine.retrieve_for_synthesis(question, skip_disambiguation=...)`
-   - `Clarification` → `emit(clarification)`, `emit(done)`, return.
-2. Build citations from `bundle.hits` (+ appended figures) — the same construction `synthesize()`
-   does today, factored into a shared `build_citations(hits, figures)` helper. `emit(sources)`,
-   `emit(figures)`.
-3. Start Lane B (`build_literature_section`) in a worker thread (concurrent, failure-safe → None).
-4. If a variant was chosen, `emit(answer_delta)` with the "Assuming …" prefix.
-5. Build the synthesis prompt (reuse `synthesize`'s prompt assembly, factored into
-   `build_synth_prompt(question, hits, figures, variant_directive)`), then iterate
-   `synth_client.generate_stream(system, user, images)`, `emit(answer_delta)` per chunk,
+1. Load `lit_config`. If `not lit_config.weave` → **batch fallback** (see below).
+2. Concurrently (ThreadPoolExecutor, mirroring `_answer_question_woven`):
+   - Lane A: `bundle = plan_retrieval(question, config, force, skip_disambiguation)`
+     (a `RetrievalBundle` with `hits/figures/images/variant`, or a `Clarification`).
+   - Lane B: `records = _retrieve_literature_for_weave(question, lit_config, synth_client)`
+     (failure-safe → `[]`).
+   - `Clarification` from Lane A → `emit(clarification)`, `emit(done)`, return.
+3. Build citations from `bundle.hits` (+ appended figures) via the shared
+   `build_citations(hits, figures)` helper (factored out of `synthesize`/`synthesize_woven`).
+   `emit(sources)`; `emit(figures)` (`bundle.figures`).
+4. If a variant was chosen, `emit(answer_delta)` with the `**Assuming … **\n\n` prefix
+   (variant is known pre-synthesis, so accumulated deltas == canonical final — no UI jump).
+5. Build the woven prompt via `build_woven_prompt(question, hits, figures, records,
+   variant_directive)` (factored out of `synthesize_woven`), then iterate
+   `synth_client.generate_stream(WOVEN_SYSTEM, user, images)`, `emit(answer_delta)` per chunk,
    accumulating `answer`.
-6. Empty-answer guard + refusal handling (parity with `_answer`): if empty after one retry →
-   canonical `REFUSAL`; if refusal → drop citations/figures. `emit(answer, refusal=…)`.
-7. Join Lane B → `emit(literature)`. `verify_answer(full_answer, premises)` → `emit(verification)`.
+6. Empty-answer guard + refusal handling (parity with `_answer_question_woven`): if empty after
+   one streamed retry → canonical `REFUSAL`; if `is_refusal(answer)` → drop citations/figures/
+   literature. `emit(answer, {answer, citations, figures, refusal})` — **authoritative**.
+7. Build the `literature` payload from `records` (the `[L#]` citations; woven narrative is `""`)
+   → `emit(literature)`. `verify_answer(full_answer, premises)` (premises = `[n]` chunk texts +
+   `[L#]` abstracts, mirroring `_answer_question_woven`) → `emit(verification)`.
 8. `emit(done)`.
 
-**Fallback:** woven mode (`LITERATURE_WEAVE`) or any exception in the streaming path → call the
-existing blocking `answer_question()` and emit `sources`/`figures`/`answer`/`literature`/
-`verification` as one batch, then `done`. Weave keeps working (un-streamed); persistence still
-applies to it. Keeps the streaming diff focused on the default path.
+**Batch fallback** (`weave=false`, or any exception raised in the streaming path): call the
+existing blocking `answer_question(question, …)` and emit `sources`/`figures`/`answer`/
+`literature`/`verification` from its `QAResult` as one batch, then `done`. Every config still
+produces a persisted, restorable answer; only token-streaming is specific to the woven default.
 
 ### Synth clients (neuro_core/synth_clients.py)
 
