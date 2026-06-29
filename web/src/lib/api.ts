@@ -14,6 +14,7 @@ import type {
   AlgoEdge,
   EquipmentPlan,
 } from "./briefingTypes"
+import type { AskEvent } from "./askStore"
 
 export interface HealthProbe {
   available?: boolean
@@ -116,6 +117,43 @@ export async function askQuestion(question: string, signal?: AbortSignal,
   const data = (await res.json().catch(() => null)) as AskResponse | null
   if (data && typeof data === "object" && "kind" in data) return data
   return { kind: "error", error: `Unexpected response (${res.status})` }
+}
+
+// ----- Ask streaming (job + SSE) -------------------------------------------------------------
+// startAsk creates a server-owned job (a daemon thread runs the pipeline) and returns its id.
+// openAskStream replays/tails the job's SSE event log from a cursor; the caller reduces events
+// into state. See askStore.ts for the event shapes and the reducer.
+
+/** Create an Ask job; returns its id immediately (generation runs server-side). */
+export async function startAsk(
+  question: string,
+  skipDisambiguation = false,
+): Promise<{ job_id: string }> {
+  const res = await fetch("/api/ask/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question, skip_disambiguation: skipDisambiguation }),
+  })
+  return (await res.json()) as { job_id: string }
+}
+
+/**
+ * Open the SSE replay/tail for a job from `cursor`. onEvent receives (event, index); it MUST
+ * close the source on a terminal event (done/error/unavailable) — EventSource auto-reconnects
+ * on any close otherwise. onError fires on a transport drop (progress is already persisted).
+ */
+export function openAskStream(
+  jobId: string,
+  cursor: number,
+  handlers: { onEvent: (ev: AskEvent, index: number) => void; onError?: () => void },
+): EventSource {
+  const es = new EventSource(`/api/ask/stream/${jobId}?cursor=${cursor}`)
+  es.onmessage = (m) => {
+    const index = m.lastEventId ? Number(m.lastEventId) : 0
+    handlers.onEvent(JSON.parse(m.data) as AskEvent, index)
+  }
+  es.onerror = () => handlers.onError?.()
+  return es
 }
 
 // ----- Build / dossier -----------------------------------------------------------------------
