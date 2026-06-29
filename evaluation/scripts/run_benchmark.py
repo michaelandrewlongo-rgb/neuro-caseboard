@@ -175,6 +175,7 @@ def model_configuration() -> dict:
         "openrouter_model": env("OPENROUTER_MODEL", "z-ai/glm-5.2"),
         "analyze_provider": env("ANALYZE_PROVIDER", "openrouter"),
         "analyze_model": env("ANALYZE_MODEL", "google/gemini-3.1-flash-lite"),
+        "deepseek_model": env("DEEPSEEK_MODEL", "deepseek-v4-flash"),
         "vertex_model": env("VERTEX_MODEL", "gemini-2.5-pro"),
         "google_cloud_project": env("GOOGLE_CLOUD_PROJECT", ""),
         "google_cloud_location": env("GOOGLE_CLOUD_LOCATION", "us-central1"),

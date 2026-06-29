@@ -122,3 +122,31 @@ def test_local_is_text_only_even_with_images():
     msgs = fake.captured["messages"]
     assert msgs[0] == {"role": "system", "content": "SYS"}
     assert msgs[1] == {"role": "user", "content": "USER"}
+
+
+def test_deepseek_client_text_only_uses_base_url():
+    fake = FakeOpenAI()
+    from neuro_core.synth_clients import DeepSeekSynthClient
+    c = DeepSeekSynthClient(api_key="k", model="deepseek-v4-flash",
+                            base_url="https://api.deepseek.com", client=fake)
+    out = c.generate("sys", "user", images=[b"\x89PNG"])  # images ignored (text-only)
+    assert out == "answer text"
+    assert c.base_url == "https://api.deepseek.com"
+    assert fake.captured["model"] == "deepseek-v4-flash"
+    # text-only: messages carry a plain string, not a multimodal content list
+    assert isinstance(fake.captured["messages"][1]["content"], str)
+
+
+def test_make_synth_client_routes_deepseek(monkeypatch):
+    from neuro_core.config import load_config
+    from neuro_core.synth_clients import make_synth_client, DeepSeekSynthClient
+    for k in ("SYNTH_PROVIDER", "DEEPSEEK_MODEL", "DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("SYNTH_PROVIDER", "deepseek")
+    monkeypatch.setenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
+    cfg = load_config(env_file="/nonexistent")
+    client = make_synth_client(cfg)
+    assert isinstance(client, DeepSeekSynthClient)
+    assert client.model == "deepseek-v4-flash"
+    assert client.base_url == "https://api.deepseek.com"

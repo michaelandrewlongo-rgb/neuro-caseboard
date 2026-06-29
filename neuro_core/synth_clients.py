@@ -66,6 +66,16 @@ class LocalSynthClient(OpenRouterSynthClient):
         return resp.choices[0].message.content or ""
 
 
+class DeepSeekSynthClient(LocalSynthClient):
+    """DeepSeek direct API (OpenAI-compatible). Text-only by design — DeepSeek chat
+    models don't accept image parts, and the figure sources/captions are already in the
+    prompt text, so citations are unaffected (same rationale as LocalSynthClient). Used
+    by the guidelines sandbox for fast/cheap synthesis."""
+
+    def __init__(self, api_key, model, base_url="https://api.deepseek.com", client=None):
+        super().__init__(base_url=base_url, model=model, api_key=api_key, client=client)
+
+
 class VertexSynthClient:
     """Vertex AI Gemini backend (default). Spends the GCP credit.
     Auth via Application Default Credentials (gcloud auth application-default login).
@@ -110,6 +120,9 @@ def make_synth_client(config):
     if config.synth_provider == "openrouter":
         return OpenRouterSynthClient(config.openrouter_api_key,
                                      config.openrouter_model)
+    if config.synth_provider == "deepseek":
+        return DeepSeekSynthClient(config.deepseek_api_key, config.deepseek_model,
+                                   config.deepseek_base_url)
     return VertexSynthClient(config.google_cloud_project,
                              config.google_cloud_location,
                              config.vertex_model)
@@ -130,5 +143,7 @@ def make_analyze_client(config):
         return LocalSynthClient(config.local_base_url, model)
     if provider == "openrouter":
         return OpenRouterSynthClient(config.openrouter_api_key, model)
+    if provider == "deepseek":
+        return DeepSeekSynthClient(config.deepseek_api_key, model, config.deepseek_base_url)
     return VertexSynthClient(config.google_cloud_project,
                              config.google_cloud_location, model)

@@ -9,6 +9,9 @@ DEFAULTS = {
     "RERANK_MODEL": "BAAI/bge-reranker-v2-m3",
     "OPENROUTER_MODEL": "z-ai/glm-5.2",
     "OPENROUTER_API_KEY": "",
+    "DEEPSEEK_API_KEY": "",
+    "DEEPSEEK_MODEL": "deepseek-v4-flash",
+    "DEEPSEEK_BASE_URL": "https://api.deepseek.com",
     "LOCAL_BASE_URL": "http://localhost:11434/v1",
     "LOCAL_MODEL": "qwen2.5:7b",
     "GPU_GUARD": "true",
@@ -89,6 +92,9 @@ class Config:
     rerank_model: str
     openrouter_model: str
     openrouter_api_key: str
+    deepseek_api_key: str
+    deepseek_model: str
+    deepseek_base_url: str
     local_base_url: str
     local_model: str
     gpu_guard: bool
@@ -138,6 +144,9 @@ def load_config(env_file=".env"):
         rerank_model=get("RERANK_MODEL"),
         openrouter_model=get("OPENROUTER_MODEL"),
         openrouter_api_key=get("OPENROUTER_API_KEY"),
+        deepseek_api_key=get("DEEPSEEK_API_KEY"),
+        deepseek_model=get("DEEPSEEK_MODEL"),
+        deepseek_base_url=get("DEEPSEEK_BASE_URL"),
         local_base_url=get("LOCAL_BASE_URL"),
         local_model=get("LOCAL_MODEL"),
         gpu_guard=get("GPU_GUARD").strip().lower() in ("1", "true", "yes", "on"),
