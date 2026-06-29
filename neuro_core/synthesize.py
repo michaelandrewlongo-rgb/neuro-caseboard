@@ -86,19 +86,32 @@ def _format_appended(appended):
     return "\n\nAdditional figure sources:\n" + "\n".join(lines)
 
 
-def synthesize(question, hits, figures, images, synth_client, variant_directive=None):
+def build_citations(hits, figures):
+    """Citations for an answer: one per passage hit (numbered 1..n, carrying chunk text),
+    then appended figure sources (source_n > n, no chunk text). Shared by synthesize() and
+    the woven path so the [n] namespace is constructed identically everywhere."""
+    citations = [
+        Citation(n=i, book=h.book, chapter=h.chapter or "", page=h.page, text=h.text)
+        for i, h in enumerate(hits, 1)
+    ]
+    for f in _appended_figures(hits, figures):
+        citations.append(Citation(n=f.source_n, book=f.book,
+                                  chapter=f.chapter or "", page=f.page))
+    return citations
+
+
+def build_synth_prompt(question, hits, figures, variant_directive=None):
+    """The non-woven user prompt: question + passages + appended figures + figure note."""
     appended = _appended_figures(hits, figures)
     user = f"Question: {question}\n\nPassages:\n{_format_passages(hits)}"
     user += _format_appended(appended)
     user += _figure_note(figures)
     if variant_directive:
         user += "\n\n" + variant_directive
+    return user
+
+
+def synthesize(question, hits, figures, images, synth_client, variant_directive=None):
+    user = build_synth_prompt(question, hits, figures, variant_directive)
     answer = synth_client.generate(SYSTEM_PROMPT, user, images)
-    citations = [
-        Citation(n=i, book=h.book, chapter=h.chapter or "", page=h.page, text=h.text)
-        for i, h in enumerate(hits, 1)
-    ]
-    for f in appended:
-        citations.append(Citation(n=f.source_n, book=f.book,
-                                  chapter=f.chapter or "", page=f.page))
-    return Synthesis(answer=answer, citations=citations)
+    return Synthesis(answer=answer, citations=build_citations(hits, figures))
