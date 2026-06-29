@@ -2,8 +2,10 @@
 # Multi-stage SERVE image for neuro-caseboard. This is the runtime/serve target — DISTINCT from
 # required CI (which deliberately omits torch). It legitimately includes .[models] (sentence-
 # transformers + open-clip-torch) for query-time embedding against the LanceDB index, plus
-# .[vertex] (google-genai) for Vertex synthesis. NO corpus, NO index, NO secrets are baked in;
-# those are mounted/injected at runtime by docker-compose.yml.
+# .[vertex] (google-genai) for the Vertex-backed Build/Case Explorer + operative briefing.
+# Ask synthesis runs on OpenRouter glm-5.2, whose `openai` client is a core dependency (so it
+# is installed by the base `.` install — no extra). NO corpus, NO index, NO secrets are baked
+# in; those are mounted/injected at runtime by docker-compose.yml.
 
 # ---- Stage 1: build the React/Vite SPA -> /web/dist ----
 FROM node:20-slim AS web-build

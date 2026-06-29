@@ -14,7 +14,13 @@ services:
       - "${CASEBOARD_PORT:-8001}:8001"        # 0.0.0.0:8001 -> phone-reachable
     restart: unless-stopped
     environment:
-      SYNTH_PROVIDER: vertex
+      # Ask SYNTHESIS runs on OpenRouter glm-5.2 (PR #80 default), disambiguation on a fast
+      # model. The Build/Case Explorer + the operative briefing stay on Vertex Gemini (below),
+      # so both keys/creds are supplied.
+      SYNTH_PROVIDER: openrouter
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?set OPENROUTER_API_KEY in the box .env}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-z-ai/glm-5.2}
+      ANALYZE_MODEL: ${ANALYZE_MODEL:-google/gemini-3.1-flash-lite}
       CASEBOARD_PDF_STYLE: ${CASEBOARD_PDF_STYLE:-signal}
       CASEBOARD_LLM_PROVIDER: ${CASEBOARD_LLM_PROVIDER:-vertex}
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:?set GOOGLE_CLOUD_PROJECT in the box .env}

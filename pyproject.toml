@@ -32,6 +32,11 @@ dependencies = [
     "pandas>=2.3.3",
     "pydantic>=2.13.4",
     "markdown>=3.10.2",
+    # Default Ask-synthesis client. OpenRouter is the default SYNTH_PROVIDER (PR #80) and
+    # OpenRouterSynthClient / LocalSynthClient use the OpenAI-compatible SDK, so `openai` is
+    # required for the default Ask path to work from a plain install. (Vertex stays an optional
+    # extra below, used for the Build/Case Explorer + the operative briefing.)
+    "openai>=1.0",
 ]
 
 # neuro_core (the retrieval/figure engine, formerly the textbook-rag repo) now lives in this
@@ -54,10 +59,10 @@ dev = ["pytest>=7", "pytest-asyncio>=0.23", "pdfplumber>=0.11", "jsonschema>=4"]
 # caseprep's optional semantic retriever (corpus_topology). The retriever module itself is
 # discovered at runtime via $CORPUS_CLUSTERING_PATH; these are only its heavy backends.
 semantic = ["sentence-transformers>=2.2", "psycopg[binary]>=3.1", "pgvector>=0.2"]
-# Vertex AI provider for the LLM-backed Explorer (GCP free credits, quality-first) — the
-# default LLM lane. Needs GOOGLE_CLOUD_PROJECT + ADC at runtime; falls back to the
-# deterministic Explorer without it. (The optional OpenRouter lane needs only OPENROUTER_API_KEY
-# and the core `requests` dep — no extra.)
+# Vertex AI provider for the LLM-backed Build/Case Explorer and the operative briefing
+# (GCP free credits). Needs GOOGLE_CLOUD_PROJECT + ADC at runtime; falls back to the
+# deterministic Explorer without it. (Ask synthesis defaults to OpenRouter glm-5.2, whose
+# OpenAI-compatible client `openai` is a core dependency above — no extra needed for it.)
 vertex = ["google-genai>=1.0"]
 # Signal-styled briefing PDF export (neuro_caseboard.briefing_pdf). After install also run:
 #   playwright install chromium
