@@ -145,3 +145,45 @@ human) · **LOW** = low value/latent, deferred.
 B1 → B2 → B10 → B13 → B12 → B11 → B3 → B4(fold) → B5 → B17 → B6 → B8 → B9.
 Re-evaluate after each; stop on any of the charter stop conditions. B7/B19 → CEO report as
 human/eval-gated.
+
+---
+
+## STATUS AFTER PHASE 3 (final)
+
+**Delivered (blind-evaluator gated):** B1, B2, B10, B13, B12, B11, B3, B17, B5 — all PASS /
+PASS-with-limitations and committed. B6, B8 — implemented + tested + self-reviewed, in blind
+evaluation at wrap-up (verdicts recorded in `EXPERIMENT_LOG.md` / `CEO_REPORT.md`).
+
+**B4 (CitationAudit relabel) — SUPERSEDED / deferred.** B3 added a prominent needs-verification
+banner surfacing the *real* verdict (unsupported / dangling / uncited-clinical), which addresses the
+core "overstates verification" concern. The residual is the collapsed audit's "CITED" wording — a
+**cosmetic** (priority-10) polish; deferred per the charter (don't promote easy/cosmetic work).
+
+**B9 (cited non-answer → insufficiency) — DEFERRED as unsafe with the current verifier.** Adversarial
+review: converting "verifier flagged all cited claims" into "no answer" would, given the **imprecise
+default LexicalVerifier** (topicality, not entailment — see B19), risk **suppressing a genuinely
+correct answer** (the dangerous direction — hiding a real answer). Safe only once a real entailment
+(NLI) verifier is the default (B19). → human/eval-gated.
+
+**Human/eval-gated (unchanged) — for the report, not autonomous change:**
+- **B7** retrieval coverage/defer gate — needs benchmark calibration of a reranker-score floor + is
+  shared with Dossier retrieval. Highest-impact remaining correctness lever.
+- **B19** ship an NLI entailment verifier as default — adds a heavy dependency + needs calibration +
+  shifts Dossier counts. Unblocks B9 and lifts A7 from topicality to real entailment.
+
+**Low-value / latent (logged, not done):** B14 (force not forwarded — latent), B15 (woven lit lane
+degraded marker), B16 (no stream cancellation — cost), B18 (mark uncited sources), B20 (`[C#]`
+latent strip), B21 (`get_engine` cache doc).
+
+**New follow-ups surfaced during execution (→ CEO report):**
+- B5: unit-unaware digit match (a wrong "70 mmHg" missed if premise contains "70" elsewhere);
+  spelled-out units/"percent" uncovered; decimals may soft-flag p-values/ORs. All under-flag/soft.
+- B17: caption is a proxy for the figure image → a substantive non-matching caption soft-flags a
+  figure-supported claim (needs-verification, never removal).
+- B6: only suffix-bearing entities (-oma/-itis/…) + measurements detected; clinical terms without a
+  suffix ("hydrocephalus", "aneurysm", "infarct") and pure-anatomy claims are NOT detected
+  (under-detection, safe direction). A real clinical-sentence classifier would widen coverage.
+- B2: a `LitCitation` with `n: null` would render `id="src-literature-null"` (backend
+  data-consistency).
+- B8: only operator-visible (logged); user-visible degraded state on a gate-trip+analyzer-outage is
+  a larger Engine/answer-flow change.

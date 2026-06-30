@@ -127,3 +127,75 @@ architecture (retrieval → synthesis → post-hoc verify → attribution) but *
 the safety keystone: the verification gate under-reports (dangling markers, numerics, uncited
 claims), is advisory-not-authoritative, and is **invisible on the primary surface** — the exact
 "overstates verification confidence" failure the charter flags. Proceeding to Phase 3.
+
+---
+
+## Phase 3 — Execution loop (validated changes)
+
+Verification path: Python = `python3 -m pytest` (the only CI gate). Web = `cd web && npx vitest run`
+(`npm ci` done; 75 existing tests green; **no DOM-render harness — convention is pure-function
+`lib/` tests**, so web fixes extract a tiny testable predicate into `lib/`). Each change is the
+smallest coherent edit, TDD-first, self-reviewed through the lenses, and **gated by a Blind Evaluator
+given only requirement+criteria+diff+test-output (never my rationale)**. Never commit a FAIL.
+
+| # | Task | Baseline | Blind verdict | Commit |
+|---|------|----------|---------------|--------|
+| 1 | **B1** dangling/invented citation markers flagged in `verify_answer` (+`dangling_markers()`, additive dict key, honest notice) | A1 (data integrity) | **PASS** | `edf0392` |
+| 2 | **B2** render `[L#]` PubMed list in default woven mode (`shouldRenderLiterature` predicate; chips no longer dangle) | A1/A10 | **PASS** | `b4a45ed` |
+| 3 | **B10** drop literature block on a textbook refusal (separate path; mirror woven) | A5 | **PASS** | `5595fbc` |
+| 4 | **B13** `/api/ask/start` empty-question error carries `kind` (parity with `/api/ask`) | A6 | **PASS** | `14c0282` |
+| 5 | **B12** `startAsk` validates `res.ok`/`job_id`, throws → visible "Request failed" card | A6 | **PASS** | `ac5467a` |
+| 6 | **B11** fatal stream error (404 expired/evicted job) → visible "unavailable" + form re-enabled (`streamErrorState`) | A6 | **PASS** | `e592885` |
+| 7 | **B3** verifier verdict surfaced as an amber needs-verification banner (`verificationWarning`; was computed but never rendered) | A2/§4/A6 | **PASS** | `6e2ce95` |
+| 8 | **B17** figure-cited claims checked against the caption (was empty-premise abstain) | A3/A7 | **PASS+lim** | `04189e6` |
+| 9 | **B5** numeric backstop — model-originated dose/threshold/% flagged | A3 | **PASS+lim** (1st FAIL caught `%` hole → fixed) | `6637855` |
+
+| 10 | **B8** disambiguation analyzer outage logged WARNING (was silent); unparseable reply stays DEBUG | A6 | **PASS** | `43d6785` |
+| 11 | **B6** uncited clinical sentences flagged (named pathology/operation or measurement) | A2 (partial) | **PASS+lim** | `71c9f50` |
+
+**B5 FAIL→fix (the gate working):** the 1st blind eval reproduced a real false-negative — a trailing
+`\b` after the non-word `%` never matched, so integer percentages (a wrong `50%` stenosis threshold)
+silently passed. Fixed with a dedicated percent pattern + dropped paraphrase-prone durations; re-eval
+PASS. **Documented limitations (B5):** digit match is unit-unaware (under-flag, safe); spelled-out
+units/"percent" uncovered (under-flag); decimals may flag p-values/ORs (soft needs-verification).
+**B17 limitation:** caption is a proxy for the figure image — substantive captions can soft-flag a
+figure-supported claim (needs-verification, never removal; strictly more coverage).
+**B6 limitation:** partial A2 net — only suffix-bearing entities + measurements; suffix-less terms
+(hydrocephalus/aneurysm/infarct) and pure-anatomy claims not detected (under-detection, safe).
+
+> **Evaluator-availability note:** one B6 evaluator run aborted on a transient session/safety-classifier
+> limit (no verdict); a fresh re-run returned PASS-with-limitations. No change was committed without a
+> completed blind-evaluator verdict.
+
+---
+
+## Phase 3 — close-out
+
+**Stopped at 11 validated commits** (not the 25 cap) — a deliberate, charter-sanctioned early stop:
+the high-value Ask-pathway data-integrity / correctness / safety / reliability / transparency gaps
+the assessment found are addressed, and **every remaining backlog item is either human/eval-gated
+(B7 retrieval-coverage floor, B19 NLI verifier — both need benchmark calibration + Dossier
+regression), unsafe with the current verifier (B9 — would risk suppressing a real answer), or
+cosmetic (B4 — superseded by B3).** Continuing would be padding, not value.
+
+**Final regression (committed state) — VERIFIED:**
+- Python: **394 passed** across every changed-module suite + `neuro_core` + `evaluation` + `cli` +
+  `briefing`; `python -m compileall` OK (CI sanity gate).
+- Web: **91 vitest passed**, `tsc --noEmit` clean, `eslint .` clean.
+- Held-out **`eval/quality_gate.py` → Gate: PASS** (all 16 metrics at baseline; the gate is
+  independent of the answer-verification path I modified).
+- 11 commits, each its own coherent change, each blind-evaluator-gated. No FAIL committed.
+
+**Regression evidence (after B1/B10):** held-out `eval/quality_gate.py` → **Gate: PASS** (all 16
+metrics at baseline; the gate is independent of the answer-verification path). Web harness:
+`npm ci` done, `npx vitest run` green throughout (no DOM harness in repo → web fixes extract a
+testable `lib/` predicate per convention).
+
+**🩺 CLINICIAN-REVIEW (B1):** changes verification *output* — an answer carrying a marker that
+resolves to no source now reports groundedness < 1.0 + a needs-verification notice (previously
+silently "grounded"). Gate tightens only (adds flags, never removes; answer text untouched). The
+mis-named `test_missing_premise_is_non_destructive` (which used `{}` to stand in for a figure-only
+source) was corrected to the production-accurate `{"3": ""}`; absent-key behavior is now covered by
+new dangling tests — coverage increased, nothing hidden. *Known minor limitation:* a claim
+co-citing a real-but-entailment-failing marker AND a dangling marker omits the real marker from the
+human notice's "not entailed" line (still counted in `n_unsupported`/`unsupported_markers()`).
