@@ -305,3 +305,54 @@ changes here alter verification behavior and explicitly require clinician review
 
 *Generated as the autonomous run's completion report. All commits are local to
 `experiment/neuro-caseboard`; nothing was pushed, deployed, or shared externally.*
+
+---
+
+## ADDENDUM — cumulative adversarial review + retrieval A/B (post-completion, on request)
+
+**Updated tally: 14 validated code commits** (the 11 above + 3 review-fix commits), plus process/doc
+commits and one `chore(eval)` gitignore. All blind-evaluator-gated; no FAIL committed.
+
+### A. Cumulative adversarial review (high value)
+A holistic **find → verify** workflow over the cumulative 11-change diff (the per-change blind-evals
+only saw each change in isolation) surfaced **5 CONFIRMED interaction findings**. **[FACT]** Four were
+fixed (TDD + blind-eval PASS), one documented:
+
+- **#3 [MED, fixed `d6650ed`]** — the streaming path verified the system disambiguation *prefix*
+  ("**Assuming `<variant>`**") as a clinical claim; a variant label with a medical-suffix word (e.g.
+  "hemicraniectomy") false-flagged the first sentence → a **false needs-verification banner on every
+  disambiguated streaming answer**. This was a pre-existing latent mis-verification that **B3 made
+  visible**. Fix: verify the body, matching the blocking path. *(This is exactly the kind of
+  interaction a per-change review cannot catch — the strongest argument for the holistic pass.)*
+- **#2 [MED, fixed `d6650ed`]** — a non-woven (`LITERATURE_WEAVE=false`) refusal could render beside
+  sources (`_emit_batch` hardcoded `refusal:false`; B10 cleared only literature). Fix: full woven
+  parity + `refusal:true` wire. (Mostly latent — the real `query()` already clears citations — but
+  the wire-shape bug was real.)
+- **#4 [LOW, fixed `a4aa827`]** — B8 narrowed `query_analyze`'s "never raises" contract (null-text hit
+  → `TypeError`). Fix: guard + re-wrap. **[JUDGMENT]** a genuine regression I introduced.
+- **#1 [LOW, fixed `a3c78e4`]** — `verification_notice` mislabeled numeric/bleed-only claims as "not
+  entailed" + double-listed. Fix: `entailment_unsupported_markers()`.
+- **#5 [MED, DOCUMENTED — not fixed]** — B17×B5: a co-cited figure caption's incidental number can
+  satisfy B5's unit-unaware digit match, masking a fabricated dose. A deepening of B5's documented
+  unit-unaware limitation; the robust fix (unit-aware numeric matching) has its own precision/recall
+  tradeoff and **needs calibration → human/eval-gated follow-up.**
+
+**[FACT]** All fixes regression-clean: 399 Python passed, `compileall` OK, `quality_gate.py` PASS.
+**[JUDGMENT]** Net effect: the verification surfacing is now correct on the default streaming path,
+and the gate's never-raises and refusal-parity contracts are restored.
+
+### B. Retrieval A/B (pivot from B19)
+**[FACT]** B19 (NLI verifier) was correctly judged **not answer-A/B-measurable** (advisory/post-hoc —
+answer prose unchanged); on the user's decision we pivoted to **retrieval**, the bake-off-flagged
+lever. **Single variable: `RERANK_K` 12 → 16**, synth held constant on Vertex `gemini-2.5-flash`
+(free GCP credits), over a balanced 20-question subset (all 7 specialties). Smoke validated the
+engine + the live-variable provenance gate (`rerank_k` recorded per arm).
+
+**[FACT] Per the standing rule, the USER grades the blinded pairs.** The deliverable is
+`PAIRS.md` (Answer-A / Answer-B, order randomized, arm labels hidden) + a blank `scoresheet.csv`;
+I do **not** self-grade or unblind. The result (paired delta + significance + regression scan) is
+produced only after grading. **[UNCERTAIN]** Until graded, whether `RERANK_K=16` yields clear value
+is unknown — and the bake-off history notes the 67-Q harness has no noise floor, so a small mean
+delta should be read against head-to-head + the regression scan, not the mean alone. **[JUDGMENT]**
+the flash synth is a cheap proxy; a result there may not transfer to the production glm-5.2/2.5-pro
+synth — a caveat to weigh before shipping any `RERANK_K` change.

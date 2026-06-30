@@ -186,6 +186,47 @@ cosmetic (B4 — superseded by B3).** Continuing would be padding, not value.
   independent of the answer-verification path I modified).
 - 11 commits, each its own coherent change, each blind-evaluator-gated. No FAIL committed.
 
+---
+
+## Phase 3b — Cumulative adversarial review + fixes (post-hoc, on request)
+
+Ran a holistic adversarial **find → verify** workflow over the cumulative 11-change diff (the
+per-change blind-evals checked each change in isolation; this hunts INTERACTIONS). 7 candidates →
+**5 CONFIRMED** (each reproduced by an independent verify agent). Fixed the clean ones, each
+TDD-first + blind-eval-gated:
+
+| Finding | Sev | Fix | Verdict | Commit |
+|---|---|---|---|---|
+| #3 streaming verifies the disambiguation **prefix** → false needs-verification banner on disambiguated streaming answers (B3 surfaced a pre-existing mis-verification; verify body not prefix+body) | MED | verify `body` | **PASS** | `d6650ed` |
+| #2 non-woven refusal could show beside sources (`_emit_batch` hardcoded `refusal:false`; B10 only cleared literature) → full woven parity + `refusal:true` wire | MED | (same commit) | **PASS** | `d6650ed` |
+| #4 B8 moved the passages-join outside `try` → null-text hit raises (narrowed never-raises) | LOW | guard + re-wrap | **PASS** | `a4aa827` |
+| #1 `verification_notice` mislabeled numeric/bleed-only claims as "not entailed" + double-listed | LOW | `entailment_unsupported_markers()` | **PASS** | `a3c78e4` |
+
+**#5 [MEDIUM] — DOCUMENTED LIMITATION (not fixed):** B17×B5 interaction — a co-cited figure
+caption's incidental number can satisfy B5's unit-unaware digit match, masking a fabricated dose.
+This is a deepening of B5's already-documented unit-unaware limitation; the robust fix
+(unit-aware numeric matching) has its own precision/recall tradeoff (a premise number stated
+without a unit would then over-flag) and needs calibration → **follow-up, not an autonomous fix.**
+
+**Take-away:** the holistic review was high-value — it caught a real default-path false-positive
+(#3) that B3 *surfaced* and that no per-change review could see in isolation. **All fixes
+regression-clean:** 399 python passed, compileall OK, `quality_gate.py` PASS.
+
+---
+
+## Phase 3c — Retrieval A/B (user pivot from B19)
+
+B19 (NLI verifier) was correctly identified as **not answer-A/B-measurable** (advisory/post-hoc;
+answer prose unchanged) — so on the user's call we **pivoted to retrieval**, the lever the bake-off
+notes flag as the real, blind-A/B-measurable driver. **Single variable: `RERANK_K` 12 → 16**
+(passages reaching synthesis; hypothesis: more grounded context → more comprehensive answers, at the
+risk of retrieval crowding). Both arms held constant on Vertex `gemini-2.5-flash` (cheap/fast, free
+GCP credits; the sandbox's DeepSeek path isn't wired on this branch — `make_synth_client` falls
+through to Vertex). 20-question balanced subset (3 per specialty across all 7). Provenance gate
+passed (smoke: `rerank_k=12` recorded, 3849-char cited answer). **Per the standing rule, the USER
+grades the blinded pairs; I produce `PAIRS.md` + a blank scoresheet and never self-grade/unblind.**
+*(Run + blinded pack status appended on completion.)*
+
 **Regression evidence (after B1/B10):** held-out `eval/quality_gate.py` → **Gate: PASS** (all 16
 metrics at baseline; the gate is independent of the answer-verification path). Web harness:
 `npm ci` done, `npx vitest run` green throughout (no DOM harness in repo → web fixes extract a
