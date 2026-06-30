@@ -437,7 +437,9 @@ def run_ask_job(job: AskJob, question: str, skip_disambiguation: bool) -> None:
 def ask_start(req: AskRequest):
     question = (req.question or "").strip()
     if not question:
-        return JSONResponse(status_code=422, content={"error": "empty question"})
+        # Carry `kind` so the SPA's AskResponse discriminator recognizes this as an error
+        # (matches /api/ask); otherwise the body reads as {job_id: undefined} and hangs the stream.
+        return JSONResponse(status_code=422, content={"kind": "error", "error": "empty question"})
     job_id = uuid.uuid4().hex[:16]
     job = AskJob(job_id)
     _ASK_JOBS[job_id] = job

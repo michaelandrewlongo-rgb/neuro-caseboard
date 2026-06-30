@@ -62,3 +62,14 @@ def test_unknown_job_404():
     import api.server as server
     client = TestClient(server.app)
     assert client.get("/api/ask/stream/nope?cursor=0").status_code == 404
+
+
+def test_ask_start_empty_question_carries_kind_error():
+    # The SPA discriminates the AskResponse union on `kind`. /api/ask/start must match /api/ask
+    # so an empty-question error is a recognizable error rather than being consumed as a body with
+    # job_id=undefined (which opens a stream to /stream/undefined and hangs silently).
+    import api.server as server
+    client = TestClient(server.app)
+    r = client.post("/api/ask/start", json={"question": "   "})
+    assert r.status_code == 422
+    assert r.json() == {"kind": "error", "error": "empty question"}
