@@ -1,6 +1,7 @@
 import ReactMarkdown, { type Components } from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { citify } from "@/lib/citations"
+import { shouldRenderLiterature } from "@/lib/askLayout"
 import type { Literature } from "@/lib/api"
 
 // Muted plum — contemporary-literature lane accent (per design: only surface that uses plum).
@@ -20,7 +21,10 @@ const components: Components = {
 /** Contemporary-literature lane (PubMed). Plum accent throughout; [L#] markers resolve to
     the PMID/DOI list below. Separate citation axis from the corpus [n] sources. */
 export default function LiteratureBlock({ literature }: { literature: Literature }) {
-  if (!literature.narrative) return null
+  // Render whenever there is anything to show. In default woven mode narrative is "" but the
+  // citations list is populated; that list IS the #src-literature-N anchor set the inline [L#]
+  // chips link to, so it must render even with no narrative prose.
+  if (!shouldRenderLiterature(literature)) return null
   return (
     <section
       className="rounded-[var(--radius-lg)] p-6"
@@ -36,9 +40,11 @@ export default function LiteratureBlock({ literature }: { literature: Literature
       <h2 className="eyebrow mb-3" style={{ color: PLUM }}>
         Contemporary Literature · PubMed
       </h2>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {literature.narrative}
-      </ReactMarkdown>
+      {literature.narrative && (
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+          {literature.narrative}
+        </ReactMarkdown>
+      )}
       {literature.citations.length > 0 && (
         <ol
           className="mt-4 flex flex-col gap-2.5 pt-4"
