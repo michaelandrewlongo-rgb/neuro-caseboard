@@ -19,6 +19,30 @@ that run's row from its score files (see the command at the bottom). Do not hand
 | youmans-full67-20260620-2210 · recent | 2026-06-20 | 3-arm corpus A/B (recent) | 9f5138a dirty | 67 | 78.66 | +0.92 | 0/44/22/0 | — | length confound on composed arm |
 | youmans-full67-20260620-2210 · youmans | 2026-06-20 | 3-arm corpus A/B (youmans) | 9f5138a dirty | 67 | 80.03 | +2.29 | 0/55/11/0 | — | length confound on composed arm |
 | youmans-full67-20260620-2210 · youmans_pubmed | 2026-06-20 | 3-arm corpus A/B (youmans_pubmed) | 9f5138a dirty | 67 | 83.87 | +6.13 | 0/61/5/0 | — | length confound on composed arm |
+| clamp-change-20260630 · ref | 2026-06-30 | PubMed neurosurgical domain clamp (ref) | b9a7e37 dirty | 67 | 86.40 | +8.66 | 0/67/0/0 | — | DeepSeek-v4-flash sandbox synth (NOT deploy glm-5.2) — compare ref-vs-change (delta -0.13, ns), NOT vs baseline. Quality wash; clamp arm ~4% faster median. |
+| clamp-change-20260630 · change | 2026-06-30 | PubMed neurosurgical domain clamp (change) | b9a7e37 dirty | 67 | 86.27 | +8.53 | 1/66/0/0 | — | DeepSeek-v4-flash sandbox synth (NOT deploy glm-5.2) — compare ref-vs-change (delta -0.13, ns), NOT vs baseline. Quality wash; clamp arm ~4% faster median. |
+
+
+## Knob-sweep runs — generated + blinded, NOT yet score-logged
+
+Single-variable retrieval/embedder knob arms generated **2026-06-27 on the deploy OpenRouter synth**
+(`control` = current defaults). Each arm's 67 answers were produced and a **blinded grading pack was
+built** (`evaluation/runs/blinded-grading-2/` — `reranker-set-1.md`, `reranker-set-2.md`,
+`embedder-set.md`; key in `blinding-key.json`), but the grades were **never captured into a
+machine-readable score**, so there is **no Mean/Δ to log as a table row above**. Recorded here so the
+work isn't lost; re-grade the blinded packs to promote any of these to a scored row.
+
+| Arm (run dir) | Knob vs control | Commit | Status |
+|---|---|---|---|
+| `control-fixed` / `control-bakeoff21` | control: bge-reranker-v2-m3, retrieve_k=40, rerank_k=12, bge-large embed | 9c7ea16 / 06c0b7f | answers only (control) |
+| `rerank-none` | **reranker OFF** | f00a9d5 | generated + blinded, ungraded |
+| `rerank-qwen3` | **reranker → Qwen3-Reranker-0.6B** | 3a268ea | generated + blinded, ungraded |
+| `rerank_k-20-fixed` | **rerank_k 12 → 20** (more reranked context) | 9c7ea16 | generated + blinded, ungraded |
+| `retrieve_k-80-fixed` | **retrieve_k 40 → 80** (2× retrieval breadth) | 9c7ea16 | generated + blinded, ungraded |
+| `embed-qwen3` | **embedder → Qwen3-Embedding-0.6B** | 3a268ea | generated + blinded, ungraded |
+
+These are the reranker / retrieval-breadth / embedder knobs flagged as the top *unexplored* Ask-quality
+levers — they were run and blinded but the A/B grading was not finished into numbers.
 
 
 ## Groundedness (citation faithfulness) — a separate metric, not a score row
