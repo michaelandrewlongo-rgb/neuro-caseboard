@@ -77,6 +77,20 @@ def test_verification_to_dict_includes_dangling_markers_when_present():
     assert d["dangling_markers"] == ["7"]
 
 
+def test_notice_does_not_mislabel_numeric_only_claim_as_not_entailed():
+    # A claim that IS lexically entailed but flagged only for a numeric mismatch must appear on the
+    # numeric line ONLY, never double-listed under "not entailed by the cited source".
+    from neuro_caseboard.answer_verify import verification_notice
+    v = verify_answer(
+        "The recommended threshold is maintained at 70 mmHg in this guidance setting [1].",
+        {"1": "The recommended threshold is maintained in this clinical guidance setting at a "
+              "documented value on review."})
+    note = verification_notice(v)
+    assert "70" in note                                      # numeric line fires
+    assert "not entailed by the cited source" not in note    # but NOT mislabeled as an entailment failure
+    assert v.entailment_unsupported_markers() == []          # no pure-lexical failures here
+
+
 def test_verification_notice_names_dangling_distinctly():
     from neuro_caseboard.answer_verify import verification_notice
     v = verify_answer("Claim with a fabricated source [7].", {"1": "Unrelated real premise text about anatomy."})

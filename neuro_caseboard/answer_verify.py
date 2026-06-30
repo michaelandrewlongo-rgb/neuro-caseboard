@@ -138,6 +138,20 @@ class AnswerVerification:
         NO citation marker (A2). The text of each, in answer order."""
         return [v.text for v in self.claims if getattr(v, "uncited_clinical", False)]
 
+    def entailment_unsupported_markers(self) -> list:
+        """Markers of claims that failed PURE lexical entailment — unsupported but NOT (solely) for a
+        dangling marker, a numeric mismatch, or a bleed term (each of those has its own dedicated
+        line/field). Avoids mislabeling a numeric/bleed/dangling flag as 'not entailed'."""
+        out = []
+        for c in self.claims:
+            if (c.markers and not c.supported and not getattr(c, "dangling", None)
+                    and not getattr(c, "numeric_flags", None)
+                    and not getattr(c, "bleed_terms", None)):
+                for m in c.markers:
+                    if m not in out:
+                        out.append(m)
+        return out
+
 
 def _strip_markers(text: str) -> str:
     return _MARKER.sub("", text).strip()
@@ -233,14 +247,10 @@ def verification_notice(v) -> str:
         return ""
     lines = []
     dangling = v.dangling_markers()
-    # Entailment failures only: a claim flagged *solely* for a dangling marker is reported on the
-    # dedicated line below, so it is not mislabeled "not entailed by the cited source".
-    entail_unsupported = []
-    for c in v.claims:
-        if c.markers and not c.supported and not getattr(c, "dangling", None):
-            for m in c.markers:
-                if m not in entail_unsupported:
-                    entail_unsupported.append(m)
+    # Entailment failures only: a claim flagged *solely* for a dangling marker, a numeric mismatch,
+    # or a bleed term is reported on its own dedicated line below, so it is not mislabeled (nor
+    # double-listed) as "not entailed by the cited source".
+    entail_unsupported = v.entailment_unsupported_markers()
     if entail_unsupported:
         markers = ", ".join(f"[{m}]" for m in entail_unsupported)
         lines.append(f"⚠ {len(entail_unsupported)} cited claim(s) flagged needs-verification "
