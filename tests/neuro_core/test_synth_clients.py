@@ -195,11 +195,12 @@ class FakeRaisingOpenAI:
 
 
 def test_openrouter_retries_text_only_when_model_rejects_images():
-    # A text-only model (z-ai/glm-5.2) 404s on figure images. The client must drop the
-    # images and retry text-only so figure-bearing Ask queries still answer (captions
-    # are already in the prompt text, so citations are unaffected).
+    # An *unknown* text-only model (not in _TEXT_ONLY_MODEL_HINTS) 404s on figure images.
+    # It starts optimistic, so the client must drop the images and retry text-only so
+    # figure-bearing Ask queries still answer (captions are already in the prompt text).
+    # (Known text-only ids like z-ai/glm-5.2 start text-only and never make this round-trip.)
     fake = FakeImageRejectingOpenAI()
-    c = OpenRouterSynthClient(api_key="k", model="z-ai/glm-5.2", client=fake)
+    c = OpenRouterSynthClient(api_key="k", model="some/unknown-text-model", client=fake)
     out = c.generate("SYS", "USER", images=[b"PNGBYTES"])
     assert out == "answer text"
     assert fake.calls == 2  # first attempt with image (rejected), retry text-only
@@ -207,15 +208,27 @@ def test_openrouter_retries_text_only_when_model_rejects_images():
 
 
 def test_openrouter_skips_images_after_image_rejection():
-    # Once a model is known text-only, later calls must not re-send images (no wasted
-    # failing round-trip per query).
+    # Once a model is learned text-only at runtime, later calls must not re-send images
+    # (no wasted failing round-trip per query).
     fake = FakeImageRejectingOpenAI()
-    c = OpenRouterSynthClient(api_key="k", model="z-ai/glm-5.2", client=fake)
+    c = OpenRouterSynthClient(api_key="k", model="some/unknown-text-model", client=fake)
     c.generate("SYS", "USER", images=[b"PNG"])  # learns: text-only (2 calls)
     fake.calls = 0
     c.generate("SYS", "USER2", images=[b"PNG"])  # must skip image upfront -> 1 call
     assert fake.calls == 1
     assert fake.last_content == [{"type": "text", "text": "USER2"}]
+
+
+def test_glm_starts_text_only_no_wasted_image_roundtrip():
+    # Known text-only model: generate() must skip images on the very first call (1 call,
+    # no rejection round-trip) — the streaming path depends on this default.
+    fake = FakeImageRejectingOpenAI()
+    c = OpenRouterSynthClient(api_key="k", model="z-ai/glm-5.2", client=fake)
+    assert c._supports_images is False
+    out = c.generate("SYS", "USER", images=[b"PNGBYTES"])
+    assert out == "answer text"
+    assert fake.calls == 1
+    assert fake.last_content == [{"type": "text", "text": "USER"}]
 
 
 def test_openrouter_propagates_non_image_errors():

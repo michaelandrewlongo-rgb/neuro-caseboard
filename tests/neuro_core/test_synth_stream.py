@@ -31,6 +31,28 @@ def test_openrouter_generate_stream_concats():
     assert fake.kwargs["model"] == "m"
 
 
+def test_glm_defaults_text_only_so_stream_omits_images():
+    # glm-5.x has no image endpoint. generate_stream has no image-retry, so sending figure
+    # images makes it throw and silently fall back to blocking synthesis — killing token
+    # streaming on every figure-bearing query. So glm must start text-only up front.
+    fake = _FakeOpenAI(["x"])
+    c = OpenRouterSynthClient(api_key="k", model="z-ai/glm-5.2", client=fake)
+    assert c._supports_images is False
+    list(c.generate_stream("sys", "user", [b"IMAGEBYTES"]))
+    content = fake.kwargs["messages"][1]["content"]
+    assert all(part.get("type") != "image_url" for part in content)  # no images leak to glm
+
+
+def test_vision_model_defaults_to_sending_images():
+    # Non-text-only models keep the optimistic default (+ runtime learn-down on rejection).
+    fake = _FakeOpenAI(["x"])
+    c = OpenRouterSynthClient(api_key="k", model="anthropic/claude-3.5-sonnet", client=fake)
+    assert c._supports_images is True
+    list(c.generate_stream("sys", "user", [b"IMAGEBYTES"]))
+    content = fake.kwargs["messages"][1]["content"]
+    assert any(part.get("type") == "image_url" for part in content)
+
+
 def test_local_generate_stream_is_text_only():
     fake = _FakeOpenAI(["a", "b"])
     c = LocalSynthClient(base_url="http://local", model="m", client=fake)

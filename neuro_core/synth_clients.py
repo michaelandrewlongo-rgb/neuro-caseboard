@@ -7,6 +7,20 @@ def _is_image_input_error(exc):
     return "image input" in str(exc).lower()
 
 
+# OpenRouter model-id substrings with no image endpoint. The streaming path has no
+# image-retry (generate_stream relies on the blocking fallback to self-heal), but a fresh
+# client is built per request so the learned flag never carries over — every figure-bearing
+# query cold-attempts images, throws, and falls back to blocking, killing token streaming.
+# Starting these models text-only up front lets generate_stream actually stream.
+# ponytail: substring list, not a capabilities API — add an id when a text-only model lands.
+_TEXT_ONLY_MODEL_HINTS = ("glm-5",)
+
+
+def _is_text_only_model(model):
+    m = (model or "").lower()
+    return any(h in m for h in _TEXT_ONLY_MODEL_HINTS)
+
+
 class OpenRouterSynthClient:
     """OpenAI-compatible (OpenRouter) backend. Fallback when GCP credit runs out."""
 
@@ -14,9 +28,10 @@ class OpenRouterSynthClient:
         self.api_key = api_key
         self.model = model
         self._client = client
-        # Optimistically send figure images; flipped off the first time the model
-        # rejects them (text-only models like z-ai/glm-5.2 have no image endpoint).
-        self._supports_images = True
+        # Send figure images by default, but start known text-only models (e.g. z-ai/glm-5.2)
+        # off so the no-retry streaming path never cold-attempts images and falls back to
+        # blocking. Vision models keep the optimistic default + learn-down on rejection below.
+        self._supports_images = not _is_text_only_model(model)
 
     @property
     def client(self):
