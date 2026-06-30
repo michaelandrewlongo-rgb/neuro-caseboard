@@ -90,6 +90,25 @@ export function applyAskEvent(state: AskState, ev: AskEvent, index: number): Ask
   return s
 }
 
+/** Map a fatal EventSource error to a visible degraded state, or null if it should be ignored.
+ *  `readyState === 2` is EventSource.CLOSED — a fatal failure (e.g. a 404 for an expired/evicted
+ *  job) that the browser will NOT auto-reconnect; CONNECTING(0)/OPEN(1) is a transient drop the
+ *  browser retries, so we leave it alone (progress is persisted). Once the stream is already
+ *  terminal (done/answer/etc.) there is nothing to surface. The returned state is marked done so a
+ *  remount does not reconnect to the dead job; it renders via the existing "unavailable" card and,
+ *  being non-"streaming", re-enables the input. */
+export function streamErrorState(state: AskState | null, readyState: number): AskState | null {
+  if (readyState !== 2) return null
+  if (!state || state.done || state.status !== "streaming") return null
+  return {
+    ...applyAskEvent(state, {
+      type: "unavailable",
+      reason: "Connection lost or the request expired — please ask again.",
+    }, state.nextIndex),
+    done: true,
+  }
+}
+
 const KEY = "neuro.ask.v1"
 
 export function loadAsk(storage: { getItem(k: string): string | null }): AskState | null {

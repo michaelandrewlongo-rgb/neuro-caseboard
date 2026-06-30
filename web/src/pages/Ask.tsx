@@ -6,6 +6,7 @@ import {
   loadAsk,
   saveAsk,
   clearAsk,
+  streamErrorState,
   type AskState,
   type AskEvent,
 } from "@/lib/askStore"
@@ -67,8 +68,17 @@ export default function Ask() {
         saveAsk(localStorage, next)
         if (next.done || TERMINAL.has(ev.type)) es.close()
       },
-      // EventSource auto-retries on a transport drop; progress is already persisted.
-      onError: () => {},
+      // EventSource auto-retries a transient drop (progress is persisted), but a CLOSED state is a
+      // fatal failure (e.g. a 404 for an expired/evicted job) that would otherwise hang on the
+      // loader forever — surface it as a visible "unavailable" state and re-enable the form.
+      onError: () => {
+        const next = streamErrorState(stateRef.current, esRef.current?.readyState ?? 2)
+        if (!next) return
+        stateRef.current = next
+        setState(next)
+        saveAsk(localStorage, next)
+        esRef.current?.close()
+      },
     })
     esRef.current = es
   }

@@ -1,5 +1,28 @@
 import { describe, it, expect } from "vitest"
-import { applyAskEvent, emptyAskState, loadAsk, saveAsk, type AskEvent } from "./askStore"
+import {
+  applyAskEvent, emptyAskState, loadAsk, saveAsk, streamErrorState, type AskEvent,
+} from "./askStore"
+
+describe("streamErrorState (fatal EventSource error → visible degraded state)", () => {
+  it("turns a CLOSED (fatal, e.g. 404 expired job) error mid-stream into a visible unavailable state", () => {
+    const streaming = emptyAskState("q", "job1") // status:"streaming", done:false
+    const next = streamErrorState(streaming, 2 /* EventSource.CLOSED */)
+    expect(next).not.toBeNull()
+    expect(next!.status).toBe("unavailable")
+    expect(next!.done).toBe(true) // terminal, so a remount won't retry the dead job
+    expect(next!.reason).toMatch(/connection lost|expired/i)
+  })
+  it("ignores a transient (CONNECTING) error — the browser auto-reconnects", () => {
+    expect(streamErrorState(emptyAskState("q", "job1"), 0 /* CONNECTING */)).toBeNull()
+  })
+  it("does nothing once the stream is already terminal (done/answer)", () => {
+    const done = { ...emptyAskState("q", "job1"), done: true, status: "answer" as const }
+    expect(streamErrorState(done, 2)).toBeNull()
+  })
+  it("does nothing with no state", () => {
+    expect(streamErrorState(null, 2)).toBeNull()
+  })
+})
 
 function feed(events: AskEvent[]) {
   let s = emptyAskState("q", "job1")
