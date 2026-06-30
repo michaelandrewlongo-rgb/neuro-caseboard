@@ -57,6 +57,33 @@ class OpenRouterSynthClient:
         )
         return resp.choices[0].message.content or ""
 
+    def generate_stream(self, system, user, images):
+        """Yield answer text deltas (concatenation == generate()'s text). Respects the
+        learned text-only flag. A cold image rejection surfaces as an exception that the
+        caller degrades to the blocking generate() path, which owns the retry + flag flip.
+        # ponytail: no mid-stream image retry — the blocking fallback already self-heals."""
+        send = images if self._supports_images else []
+        content = [{"type": "text", "text": user}]
+        for img in send:
+            b64 = base64.b64encode(img).decode("ascii")
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/png;base64,{b64}"},
+            })
+        stream = self.client.chat.completions.create(
+            model=self.model,
+            temperature=0.1,
+            stream=True,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": content},
+            ],
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content if chunk.choices else None
+            if delta:
+                yield delta
+
 
 class LocalSynthClient(OpenRouterSynthClient):
     """Local OpenAI-compatible backend (Ollama / llama.cpp). Runs on your own GPU:
@@ -86,6 +113,22 @@ class LocalSynthClient(OpenRouterSynthClient):
             ],
         )
         return resp.choices[0].message.content or ""
+
+    def generate_stream(self, system, user, images):
+        """Text-only streaming (mirrors generate(): a local text model ignores figure images)."""
+        stream = self.client.chat.completions.create(
+            model=self.model,
+            temperature=0.1,
+            stream=True,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content if chunk.choices else None
+            if delta:
+                yield delta
 
 
 class VertexSynthClient:
@@ -124,6 +167,22 @@ class VertexSynthClient:
                 system_instruction=system, temperature=0.1),
         )
         return resp.text or ""
+
+    def generate_stream(self, system, user, images):
+        """Yield answer text deltas (concatenation == generate()'s text)."""
+        from google.genai import types
+        parts = [types.Part.from_text(text=user)]
+        for img in images:
+            parts.append(types.Part.from_bytes(data=img, mime_type="image/png"))
+        stream = self.client.models.generate_content_stream(
+            model=self.model,
+            contents=[types.Content(role="user", parts=parts)],
+            config=types.GenerateContentConfig(
+                system_instruction=system, temperature=0.1),
+        )
+        for chunk in stream:
+            if getattr(chunk, "text", None):
+                yield chunk.text
 
 
 def make_synth_client(config):

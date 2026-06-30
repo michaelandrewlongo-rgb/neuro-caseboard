@@ -14,16 +14,34 @@ def _all_sources():
 
 
 def test_no_hidden_polling_or_streaming_in_app_code():
-    """No long-lived streams or background polling in app code (the dev-only Vite HMR socket is
-    separate and absent from production builds)."""
-    forbidden = ("new WebSocket", "new EventSource", "refetchInterval")
+    """No HIDDEN/perpetual streams or background polling in app code (the dev-only Vite HMR socket
+    is separate and absent from production builds).
+
+    The Ask answer stream is the one allowed EventSource: it is user-initiated and request-scoped
+    (opened on submit, closed on the terminal `done` event and on unmount), so it is confined to
+    the dedicated client (lib/api.ts) and its bounded lifecycle is asserted in
+    test_ask_stream_is_bounded — not the perpetual background activity this guard forbids."""
+    forbidden = ("new WebSocket", "refetchInterval")
     offenders = []
     for f in _all_sources():
         text = f.read_text()
+        rel = f.relative_to(WEB_SRC).as_posix()
         for pat in forbidden:
             if pat in text:
-                offenders.append(f"{f.relative_to(WEB_SRC)}: {pat}")
+                offenders.append(f"{rel}: {pat}")
+        # EventSource is allowed only in the dedicated Ask stream client — nowhere else.
+        if "new EventSource" in text and rel != "lib/api.ts":
+            offenders.append(f"{rel}: new EventSource (only lib/api.ts may open the Ask stream)")
     assert not offenders, f"unexpected persistent-activity sources: {offenders}"
+
+
+def test_ask_stream_is_bounded():
+    """The Ask EventSource must be request-scoped, not perpetual: the consumer closes it on the
+    terminal event and on unmount, so no stream survives navigation or a backgrounded tab."""
+    ask = (WEB_SRC / "pages" / "Ask.tsx").read_text()
+    assert ".close()" in ask, "Ask.tsx must close the EventSource (bounded lifecycle)"
+    assert "return () => esRef.current?.close()" in ask, \
+        "Ask.tsx must close the stream on unmount"
 
 
 def test_every_setInterval_is_cleared():
