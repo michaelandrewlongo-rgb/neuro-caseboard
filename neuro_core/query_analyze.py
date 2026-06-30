@@ -9,8 +9,11 @@ Like live_reconcile.py, query_analyze() NEVER raises into the answer path: any
 failure -> QueryAnalysis(ambiguous=False), so the normal answer always stands.
 """
 import json
+import logging
 import re
 from dataclasses import dataclass, field
+
+_log = logging.getLogger(__name__)
 
 # Curated neuro procedure-variant taxonomy.
 #   triggers: terms in the QUESTION that name the (ambiguous) parent procedure.
@@ -145,11 +148,25 @@ def _parse_analysis(text):
 
 def query_analyze(question, hits, synth_client):
     """One LLM pass: detect the variant axis, rewrite per variant, pick + score.
-    NEVER raises: any failure -> QueryAnalysis(ambiguous=False)."""
+    NEVER raises: any failure -> QueryAnalysis(ambiguous=False).
+
+    An analyzer-model OUTAGE (the generate call raises) is a real failure and is logged at WARNING
+    so it is observable to operators — distinct from the model simply returning unparseable output
+    ("declined"), which is logged at DEBUG to avoid noise. Both still fail open so the answer path is
+    never blocked; a gate-tripped question whose analyzer errored is answered as-is (its ambiguity
+    is not resolved). Full user-visible surfacing of that degraded state is a separate, larger
+    change in the Engine/answer flow."""
+    passages = "\n\n".join(getattr(h, "text", "") for h in hits)
+    user = f"Question: {question}\n\nPassages:\n{passages}"
     try:
-        passages = "\n\n".join(getattr(h, "text", "") for h in hits)
-        user = f"Question: {question}\n\nPassages:\n{passages}"
         reply = synth_client.generate(ANALYZE_SYSTEM_PROMPT, user, [])
+    except Exception:
+        _log.warning("disambiguation analyzer call failed; answering without variant "
+                     "disambiguation (ambiguity unresolved)", exc_info=True)
+        return QueryAnalysis(ambiguous=False)
+    try:
         return _parse_analysis(reply)
     except Exception:
+        _log.debug("disambiguation analyzer returned unparseable output; treating as not ambiguous",
+                   exc_info=True)
         return QueryAnalysis(ambiguous=False)

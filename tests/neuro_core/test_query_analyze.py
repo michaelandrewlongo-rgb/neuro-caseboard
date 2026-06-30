@@ -83,6 +83,31 @@ def test_query_analyze_fails_open_on_garbage():
     assert a.ambiguous is False
 
 
+def test_query_analyze_logs_warning_on_analyzer_outage(caplog):
+    # An analyzer-model OUTAGE (generate raises) is a real failure distinct from the model declining
+    # to disambiguate; it must be observable (logged WARNING) while still failing open so the answer
+    # path is never blocked. Previously it was completely silent.
+    import logging
+
+    class _Down:
+        def generate(self, system, user, images):
+            raise RuntimeError("analyzer model unavailable")
+
+    with caplog.at_level(logging.WARNING, logger="neuro_core.query_analyze"):
+        a = query_analyze("decompressive craniectomy steps?", [], _Down())
+    assert a.ambiguous is False
+    assert any(rec.levelno == logging.WARNING for rec in caplog.records)
+
+
+def test_query_analyze_garbage_reply_does_not_warn(caplog):
+    # The model returning unparseable output is a quiet "declined", not an outage -> no WARNING noise.
+    import logging
+    with caplog.at_level(logging.WARNING, logger="neuro_core.query_analyze"):
+        a = query_analyze("q", [], FakeSynth("no json here"))
+    assert a.ambiguous is False
+    assert not any(rec.levelno == logging.WARNING for rec in caplog.records)
+
+
 def test_query_analyze_not_ambiguous_when_fewer_than_two_variants():
     reply = '{"ambiguous": true, "variants": [{"label":"x","rewrite":"x"}], "chosen":"x", "confidence":0.9}'
     a = query_analyze("q", [], FakeSynth(reply))
