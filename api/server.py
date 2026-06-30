@@ -27,16 +27,20 @@ Run (from the repo root): uvicorn api.server:app --port 8001 --reload
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import json
 import os
 import tempfile
+import threading
+import uuid
 from collections import OrderedDict
 from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from neuro_caseboard.answer_verify import verification_to_dict
@@ -356,6 +360,114 @@ def _literature_dict(lit) -> dict | None:
             "link": f"https://doi.org/{doi}" if doi else url,
         })
     return {"narrative": lit.narrative, "citations": cites}
+
+
+# --- Ask streaming jobs ----------------------------------------------------------------------
+# An Ask request is a server-owned job: a daemon thread runs the (synchronous) streaming
+# orchestrator, appending serialized events to an append-only log. The SSE endpoint replays the
+# log from a cursor and tails it live, so a refresh/reconnect resumes exactly where it left off.
+# In-memory + single-process is intentional (single-user local tool); a server restart drops
+# in-flight jobs and the client re-asks.  # ponytail: in-memory LRU, swap for a store if multi-user.
+
+class AskJob:
+    def __init__(self, job_id: str):
+        self.id = job_id
+        self.events: list[dict] = []
+        self.done = False
+        self._lock = threading.Lock()
+
+    def emit(self, event: dict) -> None:
+        with self._lock:
+            self.events.append(_serialize_ask_event(event))
+            if event.get("type") == "done":
+                self.done = True
+
+    def slice_from(self, cursor: int) -> "tuple[list[dict], bool]":
+        with self._lock:
+            return self.events[cursor:], self.done
+
+
+_ASK_JOBS: "OrderedDict[str, AskJob]" = OrderedDict()
+_ASK_JOBS_MAX = 8
+
+
+def _serialize_ask_event(ev: dict) -> dict:
+    t = ev.get("type")
+    if t == "sources":
+        return {"type": "sources", "citations": [_citation_dict(c) for c in ev["citations"]]}
+    if t == "figures":
+        return {"type": "figures", "figures": [_figure_dict(f) for f in ev["figures"]]}
+    if t == "answer_delta":
+        return {"type": "answer_delta", "text": ev["text"]}
+    if t == "answer":
+        return {"type": "answer", "answer": ev["answer"], "refusal": bool(ev.get("refusal")),
+                "citations": [_citation_dict(c) for c in ev.get("citations") or []],
+                "figures": [_figure_dict(f) for f in ev.get("figures") or []]}
+    if t == "literature":
+        return {"type": "literature", "literature": _literature_dict(ev.get("literature"))}
+    if t == "verification":
+        return {"type": "verification",
+                "verification": verification_to_dict(ev.get("verification"))}
+    if t == "clarification":
+        return {"type": "clarification", "question": ev.get("question", ""),
+                "variants": [{"label": getattr(v, "label", ""), "rewrite": getattr(v, "rewrite", "")}
+                             for v in ev.get("variants") or []]}
+    # unavailable / error / done pass through unchanged
+    return ev
+
+
+def run_ask_job(job: AskJob, question: str, skip_disambiguation: bool) -> None:
+    from neuro_core.gpu_guard import GpuNotReadyError
+    from neuro_caseboard import qa_stream
+    try:
+        qa_stream.stream_answer(question, job.emit, force=True,
+                                skip_disambiguation=skip_disambiguation)
+    except GpuNotReadyError as e:
+        job.emit({"type": "unavailable", "reason": f"GPU not ready: {e}"})
+        job.emit({"type": "done"})
+    except Exception as e:
+        job.emit({"type": "error", "error": f"{type(e).__name__}: {e}"})
+        job.emit({"type": "done"})
+    finally:
+        if not job.done:                       # the orchestrator always ends with done, but be safe
+            job.emit({"type": "done"})
+
+
+@app.post("/api/ask/start")
+def ask_start(req: AskRequest):
+    question = (req.question or "").strip()
+    if not question:
+        return JSONResponse(status_code=422, content={"error": "empty question"})
+    job_id = uuid.uuid4().hex[:16]
+    job = AskJob(job_id)
+    _ASK_JOBS[job_id] = job
+    _ASK_JOBS.move_to_end(job_id)
+    while len(_ASK_JOBS) > _ASK_JOBS_MAX:
+        _ASK_JOBS.popitem(last=False)
+    threading.Thread(target=run_ask_job, args=(job, question, req.skip_disambiguation),
+                     daemon=True).start()
+    return {"job_id": job_id}
+
+
+@app.get("/api/ask/stream/{job_id}")
+async def ask_stream(job_id: str, cursor: int = 0):
+    job = _ASK_JOBS.get(job_id)
+    if job is None:
+        return JSONResponse(status_code=404, content={"error": "unknown or expired job"})
+
+    async def gen():
+        i = cursor
+        while True:
+            pending, done = job.slice_from(i)
+            for ev in pending:
+                yield f"id: {i}\ndata: {json.dumps(ev)}\n\n"
+                i += 1
+            if done and i >= len(job.events):
+                return
+            await asyncio.sleep(0.05)          # ponytail: poll loop; threading.Condition if needed
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.post("/api/ask")

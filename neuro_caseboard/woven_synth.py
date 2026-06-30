@@ -44,10 +44,11 @@ class WovenSynthesis:
     records: list = field(default_factory=list)      # literature records used, for [L#]
 
 
-def synthesize_woven(question, hits, figures, images, records, synth_client,
-                     *, variant_directive=None) -> WovenSynthesis:
+def build_woven_prompt(question, hits, figures, records, variant_directive=None):
+    """The woven user prompt: question + textbook passages + appended figures + figure note +
+    contemporary studies. Shared by synthesize_woven() and the streaming orchestrator."""
     from neuro_core.synthesize import (
-        _format_passages, _appended_figures, _format_appended, _figure_note, Citation)
+        _format_passages, _appended_figures, _format_appended, _figure_note)
     from neuro_caseboard.literature.synth import _format_studies
 
     appended = _appended_figures(hits, figures)
@@ -58,12 +59,13 @@ def synthesize_woven(question, hits, figures, images, records, synth_client,
         user += f"\n\nContemporary studies:\n{_format_studies(records)}"
     if variant_directive:
         user += "\n\n" + variant_directive
+    return user
 
+
+def synthesize_woven(question, hits, figures, images, records, synth_client,
+                     *, variant_directive=None) -> WovenSynthesis:
+    from neuro_core.synthesize import build_citations
+    user = build_woven_prompt(question, hits, figures, records, variant_directive)
     answer = synth_client.generate(WOVEN_SYSTEM, user, images)
-
-    citations = [Citation(n=i, book=h.book, chapter=h.chapter or "", page=h.page, text=h.text)
-                 for i, h in enumerate(hits, 1)]
-    for f in appended:
-        citations.append(Citation(n=f.source_n, book=f.book, chapter=f.chapter or "",
-                                  page=f.page))
-    return WovenSynthesis(answer=answer, citations=citations, records=list(records))
+    return WovenSynthesis(answer=answer, citations=build_citations(hits, figures),
+                          records=list(records))
