@@ -117,11 +117,13 @@ class LiteratureRetriever:
     """question -> ranked LiteratureRecords. `client` is any object exposing the
     PubMedClient async methods (search/summaries/structured_abstracts/abstracts)."""
 
-    def __init__(self, client, *, k: int = 8, recency_years: int = 7, recency_boost: int = 0):
+    def __init__(self, client, *, k: int = 8, recency_years: int = 7, recency_boost: int = 0,
+                 domain_clamp: bool = False):
         self._client = client
         self._k = k
         self._recency_years = recency_years
         self._recency_boost = recency_boost
+        self._domain_clamp = domain_clamp
         # Set by retrieve(): explains thin coverage (BACKLOG P2 #7) for the caller to surface.
         self.last_coverage_note = ""
 
@@ -133,6 +135,12 @@ class LiteratureRetriever:
         # back to the token-dump of the whole question. The latter AND-conjuncts every
         # word at PubMed, which tanks recall on natural-language questions.
         term = query or build_query_terms(question)
+        # Optional neurosurgical-domain clamp: narrow the candidate pool to the specialty before
+        # ranking. Applied once to the shared term so all axes inherit it; the per-axis clinical
+        # filter (CLINICAL_FILTERS) is still appended on top inside the client's search().
+        if self._domain_clamp:
+            from neuro_caseboard.literature.pubmed_client import apply_domain_clamp
+            term = apply_domain_clamp(term)
         # Fan out across clinical question types (plan B.1) so the pool covers therapy,
         # evidence syntheses, etiology/risk, diagnosis and prognosis — not just the plain
         # query + systematic reviews. Filters refine by pub-type/MeSH WITHIN the same topic

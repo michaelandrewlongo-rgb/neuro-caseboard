@@ -1,8 +1,23 @@
 import asyncio
 
 from neuro_caseboard.literature.pubmed_client import (
-    PubMedClient, apply_filter, CLINICAL_FILTERS,
+    PubMedClient, apply_filter, CLINICAL_FILTERS, apply_domain_clamp, DOMAIN_CLAMP,
 )
+
+
+def test_apply_domain_clamp_ands_domain_clause():
+    out = apply_domain_clamp("subdural hematoma MMA")
+    assert out == f"(subdural hematoma MMA) AND {DOMAIN_CLAMP}"
+
+
+def test_apply_domain_clamp_is_idempotent():
+    once = apply_domain_clamp("glioma resection")
+    assert apply_domain_clamp(once) == once  # already clamped -> no double-wrap
+
+
+def test_apply_domain_clamp_empty_passthrough():
+    assert apply_domain_clamp("") == ""
+    assert apply_domain_clamp("   ") == ""
 
 ESEARCH_XML = """<?xml version="1.0"?>
 <eSearchResult><Count>42</Count><IdList>

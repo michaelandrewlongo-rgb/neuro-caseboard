@@ -41,6 +41,25 @@ def apply_filter(query: str, filter_type: str | None) -> str:
     return query + CLINICAL_FILTERS[ft] if ft in CLINICAL_FILTERS else query
 
 
+# Neurosurgical-domain clamp (high-yield import from PterionPrep's freshness crawler): AND a
+# permissive specialty OR-clause onto the query so it constrains the candidate POOL before the
+# retriever's relevance/tier ranking runs. Targets ambiguous terms ("ICA", "shunt", "Wernicke")
+# that otherwise pull in off-domain papers. Truncation (*) + a broad OR-list keep recall loss
+# low; opt-in via LITERATURE_DOMAIN_CLAMP so it can be A/B'd as a single variable.
+DOMAIN_CLAMP = (
+    '(neurosurg*[tiab] OR craniotom*[tiab] OR craniectom*[tiab] OR intracranial[tiab] '
+    'OR "skull base"[tiab] OR spine[tiab] OR spinal[tiab] OR vertebral[tiab])'
+)
+
+
+def apply_domain_clamp(query: str) -> str:
+    """AND the neurosurgical-domain OR-clause onto ``query``. Idempotent; empty -> empty."""
+    q = (query or "").strip()
+    if not q or DOMAIN_CLAMP in q:
+        return q
+    return f"({q}) AND {DOMAIN_CLAMP}"
+
+
 def _parse_doi(elocationid: str) -> str:
     s = (elocationid or "").strip()
     if s.lower().startswith("doi:"):

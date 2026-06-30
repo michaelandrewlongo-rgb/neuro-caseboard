@@ -89,6 +89,22 @@ def test_retrieve_uses_explicit_query_override():
     assert build_query_terms(question) not in c.terms
 
 
+def test_domain_clamp_applied_to_every_axis_when_enabled():
+    from neuro_caseboard.literature.pubmed_client import DOMAIN_CLAMP
+    c = _RecordingClient()
+    asyncio.run(LiteratureRetriever(c, k=2, domain_clamp=True).retrieve(
+        "glioma resection", query="glioma resection"))
+    assert c.terms
+    # every axis searches the clamped query; clinical-filter clauses are appended by the client.
+    assert all(t.startswith("(glioma resection) AND ") and DOMAIN_CLAMP in t for t in c.terms)
+
+
+def test_domain_clamp_off_by_default():
+    c = _RecordingClient()
+    asyncio.run(LiteratureRetriever(c, k=2).retrieve("glioma resection", query="glioma resection"))
+    assert c.terms and all(t == "glioma resection" for t in c.terms)
+
+
 def test_retrieve_falls_back_to_build_query_terms_without_override():
     c = _RecordingClient()
     asyncio.run(LiteratureRetriever(c, k=2).retrieve("distal MCA occlusion"))

@@ -72,6 +72,7 @@ class LiteratureConfig:
     recency_boost: int = 0
     precision_gate: bool = True
     precision_min_overlap: int = 1
+    domain_clamp: bool = False
 
 
 def load_literature_config() -> LiteratureConfig:
@@ -89,4 +90,5 @@ def load_literature_config() -> LiteratureConfig:
         recency_boost=int(os.environ.get("LITERATURE_RECENCY_BOOST", "0")),
         precision_gate=_flag(os.environ.get("LITERATURE_PRECISION_GATE", "true")),
         precision_min_overlap=int(os.environ.get("LITERATURE_PRECISION_MIN_OVERLAP", "1")),
+        domain_clamp=_flag(os.environ.get("LITERATURE_DOMAIN_CLAMP", "false")),
     )

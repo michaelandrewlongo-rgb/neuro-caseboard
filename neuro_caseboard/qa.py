@@ -55,7 +55,8 @@ def retrieve_records(question, *, lit_config, client=None, synth_client, cache=N
         cache = LiteratureCache(lit_config.cache_dir, ttl_days=lit_config.cache_ttl_days)
     term = build_query_terms(question)
     search_query = term
-    key = f"{term}|{lit_config.k}|{lit_config.recency_years}|{lit_config.recency_boost}"
+    key = (f"{term}|{lit_config.k}|{lit_config.recency_years}|{lit_config.recency_boost}"
+           f"|clamp={lit_config.domain_clamp}")
     records = cache.get(key)
     if records is None:
         owns_client = client is None
@@ -65,7 +66,8 @@ def retrieve_records(question, *, lit_config, client=None, synth_client, cache=N
         # recency_boost is a general ranking knob (default 0 = no-op); applies in both separate and woven modes.
         retriever = LiteratureRetriever(client, k=lit_config.k,
                                         recency_years=lit_config.recency_years,
-                                        recency_boost=lit_config.recency_boost)
+                                        recency_boost=lit_config.recency_boost,
+                                        domain_clamp=lit_config.domain_clamp)
         search_query = rewrite_pubmed_query(question, synth_client) or term
 
         async def _retrieve():
