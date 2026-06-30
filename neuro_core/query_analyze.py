@@ -156,9 +156,11 @@ def query_analyze(question, hits, synth_client):
     never blocked; a gate-tripped question whose analyzer errored is answered as-is (its ambiguity
     is not resolved). Full user-visible surfacing of that degraded state is a separate, larger
     change in the Engine/answer flow."""
-    passages = "\n\n".join(getattr(h, "text", "") for h in hits)
-    user = f"Question: {question}\n\nPassages:\n{passages}"
     try:
+        # `or ""` guards a hit whose .text is None (a real hit can carry None); building the prompt
+        # and the generate call share one try so ANY failure here fails open (never raises).
+        passages = "\n\n".join((getattr(h, "text", "") or "") for h in hits)
+        user = f"Question: {question}\n\nPassages:\n{passages}"
         reply = synth_client.generate(ANALYZE_SYSTEM_PROMPT, user, [])
     except Exception:
         _log.warning("disambiguation analyzer call failed; answering without variant "

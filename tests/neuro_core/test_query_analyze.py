@@ -99,6 +99,17 @@ def test_query_analyze_logs_warning_on_analyzer_outage(caplog):
     assert any(rec.levelno == logging.WARNING for rec in caplog.records)
 
 
+def test_query_analyze_never_raises_on_null_text_hit():
+    # NEVER-raises contract: a hit whose .text is None must not crash the passages-join (a real
+    # hit can carry text=None). Must fail open to ambiguous=False, never propagate.
+    class _NullHit:
+        text = None
+
+    a = query_analyze("q", [_NullHit()], FakeSynth("the model rambled, no json here"))
+    assert isinstance(a, QueryAnalysis)
+    assert a.ambiguous is False
+
+
 def test_query_analyze_garbage_reply_does_not_warn(caplog):
     # The model returning unparseable output is a quiet "declined", not an outage -> no WARNING noise.
     import logging
