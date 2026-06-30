@@ -17,11 +17,17 @@ _log = logging.getLogger(__name__)
 
 def _emit_batch(emit, qr):
     """Emit a completed QAResult (from the blocking fallback) as one batch + done."""
-    emit({"type": "sources", "citations": list(qr.citations or [])})
-    emit({"type": "figures", "figures": list(qr.figures or [])})
-    emit({"type": "answer", "answer": qr.answer, "citations": list(qr.citations or []),
-          "figures": list(qr.figures or []), "refusal": False})
-    emit({"type": "literature", "literature": getattr(qr, "literature", None)})
+    from neuro_core.synthesize import is_refusal
+    # A refusal must wire as refusal:True with empty sources/figures (parity with the streaming
+    # woven refusal path), never a clean answer beside a populated Sources list.
+    refusal = is_refusal(qr.answer)
+    citations = [] if refusal else list(qr.citations or [])
+    figures = [] if refusal else list(qr.figures or [])
+    emit({"type": "sources", "citations": citations})
+    emit({"type": "figures", "figures": figures})
+    emit({"type": "answer", "answer": qr.answer, "citations": citations,
+          "figures": figures, "refusal": refusal})
+    emit({"type": "literature", "literature": None if refusal else getattr(qr, "literature", None)})
     emit({"type": "verification", "verification": getattr(qr, "verification", None)})
     emit({"type": "done"})
 
@@ -144,7 +150,12 @@ def stream_answer(question, emit, *, config=None, force=False, skip_disambiguati
                     for i, c in enumerate(citations, 1)}
         for i, r in enumerate(records or [], 1):
             premises[f"L{i}"] = getattr(r, "abstract", "") or ""
-        emit({"type": "verification", "verification": verify_answer(full_answer, premises)})
+        # Verify the BODY, not prefix+body: the "**Assuming <variant>**" prefix is a system
+        # annotation, not a clinical claim, and it merges into the first sentence (it ends ".**\n\n",
+        # which the sentence splitter does not break on) — a variant label with a medical-suffix word
+        # would then false-flag. This matches the blocking path (qa.answer_question verifies the
+        # un-prefixed answer).
+        emit({"type": "verification", "verification": verify_answer(body, premises)})
         emit({"type": "done"})
     except Exception:
         # Any streaming-path failure degrades to the proven blocking path (still persisted).

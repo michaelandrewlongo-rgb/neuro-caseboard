@@ -218,6 +218,18 @@ def test_answer_question_drops_literature_on_textbook_refusal():
     assert out.literature is None
 
 
+def test_answer_question_drops_citations_and_figures_on_refusal():
+    # Full parity with the woven path (qa.py:185-187): a textbook abstention carries NO
+    # sources/figures/literature, so the UI never shows the refusal beside a populated Sources list.
+    from neuro_core.synthesize import REFUSAL
+    qr = SimpleNamespace(answer=REFUSAL,
+                         citations=[SimpleNamespace(n=1, book="B", chapter="", page=5)],
+                         figures=["F"])
+    out = answer_question("q", lane_a=lambda: qr, lane_b=lambda: None)
+    assert out.answer == REFUSAL
+    assert out.citations == [] and out.figures == [] and out.literature is None
+
+
 def test_answer_question_keeps_literature_on_normal_answer():
     """Guard the converse: a normal (non-refusal) textbook answer still carries the literature."""
     section = LiteratureSection(narrative="Recent RCTs [L1].", citations=[])

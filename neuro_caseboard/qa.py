@@ -252,10 +252,11 @@ def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=N
             lit = None
     from neuro_core.synthesize import is_refusal
     if is_refusal(qr.answer):
-        # A textbook abstention ("Not found in the provided sources.") must not be paired with a
-        # contemporary-literature block — that would attach sources to a "no answer". Mirror the
-        # woven path (_answer_question_woven), which drops citations/figures/literature on refusal.
-        lit = None
+        # A textbook abstention ("Not found in the provided sources.") carries NO
+        # sources/figures/literature — mirror the woven path (_answer_question_woven) exactly, so
+        # the UI never shows the "no answer" beside a populated Sources list / figure grid.
+        # (verification defaults None; a refusal has no claims to verify.)
+        return QAResult(answer=qr.answer, citations=[], figures=[], literature=None)
     from neuro_caseboard.answer_verify import merge_verifications, verify_answer
     premises = {str(getattr(c, "n", i)): getattr(c, "text", "") or ""
                 for i, c in enumerate(qr.citations or [], 1)}
