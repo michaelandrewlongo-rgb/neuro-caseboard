@@ -32,3 +32,6 @@ gui-council/axe/
 # local throwaway venvs
 .testvenv/
 .project-loop/
+
+# Benchmark A/B run artifacts (per skill convention: runs are not tracked).
+evaluation/runs/
