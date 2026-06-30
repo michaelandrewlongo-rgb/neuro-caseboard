@@ -1,7 +1,7 @@
 # Continuous Delivery
 
 This repo's CD is the other half of the pipeline from [`ci.md`](ci.md): CI proves a change is good
-on every PR; **CD packages a tagged release as a container, publishes it to GHCR, and a self-hosted
+on every PR; **CD packages every master commit as a container, publishes it to GHCR, and a self-hosted
 box pulls and runs it**. CD runs *after* CI is green and never touches the required PR gate
 (`.github/workflows/ci.yml`).
 
@@ -49,14 +49,14 @@ CD only fires on a tag, but two **required** PR workflows must stay green for a 
 
 ## `cd.yml` — what each stage does
 
-Triggered by a `v*` tag push (`git tag v0.2.0 && git push --tags`) or **Run workflow** (manual
+Triggered by a push to `master` (auto-deploy) or **Run workflow** (manual
 dispatch with a `version` input).
 
 | Job | What it does |
 |-----|--------------|
 | **gate** | If the repo **variable** `CD_ENABLED` is not `true`, every later job is skipped → a clean, green **no-op** (mirrors `live-judge.yml`; forks / unconfigured repos never fail). |
 | **web** | `lint` + `test` + `build` — a fast pre-build guard on the bundle being shipped. |
-| **build-push** | Resolves the version (tag name or dispatch input) and the lowercased `ghcr.io/<owner>/<repo>` ref; a `./ci/install.sh ".[dev]"` fail-fast sanity; logs in to GHCR with the built-in `GITHUB_TOKEN`; `docker/build-push-action` builds and pushes the image tagged by **version**, **git sha**, and **latest** (with GHA layer cache). |
+| **build-push** | Resolves the version (`master` for auto-deploy, or dispatch input) and the lowercased `ghcr.io/<owner>/<repo>` ref; a `./ci/install.sh ".[dev]"` fail-fast sanity; logs in to GHCR with the built-in `GITHUB_TOKEN`; `docker/build-push-action` builds and pushes the image tagged by **version**, **git sha**, and **latest** (with GHA layer cache). |
 
 The actual rollout is **pull-based** — `cd.yml` stops at "image pushed". It never pushes to the box
 (the box is an intermittent WSL2 host; a push that assumes a runner is always online would be
