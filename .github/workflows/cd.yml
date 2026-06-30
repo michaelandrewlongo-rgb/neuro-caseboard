@@ -1,7 +1,8 @@
 name: CD
 
-# Runs AFTER the required CI is green — it does not re-run or duplicate ci.yml's PR gate. Triggers
-# on every push to master (auto-deploy) or a manual dispatch (versioned release). Builds the SPA +
+# Fires on every push to master (auto-deploy, concurrent with ci.yml) or a manual dispatch
+# (versioned release). Does not duplicate ci.yml's PR gate — that gate runs on the PR branch
+# before merge; CD fires on the resulting master push. Builds the SPA +
 # serve image and pushes to GHCR tagged by sha + latest (branch push) or version + sha + latest
 # (dispatch). Secret/variable-gated: with CD_ENABLED unset it is a clean, green no-op. The actual
 # rollout is PULL-based — the self-hosted box's cd-pull-deploy.sh timer picks up the new image
@@ -19,6 +20,12 @@ on:
 permissions:
   contents: read
   packages: write
+
+# Cancel an in-progress CD run if a newer master push arrives — prevents :latest
+# from ending up pointing at an older image when two merges land in quick succession.
+concurrency:
+  group: cd-${{ github.workflow }}
+  cancel-in-progress: true
 
 env:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
