@@ -41,6 +41,11 @@ def test_local_generate_stream_is_text_only():
 
 
 def test_vertex_generate_stream_concats():
+    import pytest
+    # google-genai is an optional extra (the `[vertex]` SDK), absent from the required `.[dev]`
+    # CI env; generate_stream builds real types.Part objects, so skip where the SDK is missing.
+    pytest.importorskip("google.genai")
+
     class _Chunk:
         def __init__(self, t): self.text = t
     class _Models:
