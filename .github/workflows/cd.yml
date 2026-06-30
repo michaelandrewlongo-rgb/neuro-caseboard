@@ -1,18 +1,19 @@
 name: CD
 
 # Runs AFTER the required CI is green — it does not re-run or duplicate ci.yml's PR gate. Triggers
-# only on a version tag (v*) or a manual dispatch. Builds the SPA + serve image and pushes it to
-# GHCR tagged by version AND git sha (+ latest). Secret/variable-gated: with CD_ENABLED unset it is
-# a clean, green no-op (mirrors live-judge.yml). The actual rollout is PULL-based — the self-hosted
-# box's cd-pull-deploy.sh timer picks up the new image (see docs/cd.md); CD does not push to the box.
+# on every push to master (auto-deploy) or a manual dispatch (versioned release). Builds the SPA +
+# serve image and pushes to GHCR tagged by sha + latest (branch push) or version + sha + latest
+# (dispatch). Secret/variable-gated: with CD_ENABLED unset it is a clean, green no-op. The actual
+# rollout is PULL-based — the self-hosted box's cd-pull-deploy.sh timer picks up the new image
+# (see docs/cd.md); CD does not push to the box.
 
 on:
   push:
-    tags: ["v*"]
+    branches: [master]
   workflow_dispatch:
     inputs:
       version:
-        description: "Version tag to build/push (e.g. v0.2.0)"
+        description: "Version label to build/push (e.g. v0.2.0)"
         required: true
 
 permissions:
