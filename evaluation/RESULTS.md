@@ -19,6 +19,8 @@ that run's row from its score files (see the command at the bottom). Do not hand
 | youmans-full67-20260620-2210 · recent | 2026-06-20 | 3-arm corpus A/B (recent) | 9f5138a dirty | 67 | 78.66 | +0.92 | 0/44/22/0 | — | length confound on composed arm |
 | youmans-full67-20260620-2210 · youmans | 2026-06-20 | 3-arm corpus A/B (youmans) | 9f5138a dirty | 67 | 80.03 | +2.29 | 0/55/11/0 | — | length confound on composed arm |
 | youmans-full67-20260620-2210 · youmans_pubmed | 2026-06-20 | 3-arm corpus A/B (youmans_pubmed) | 9f5138a dirty | 67 | 83.87 | +6.13 | 0/61/5/0 | — | length confound on composed arm |
+| sandbox-guidelines-cheap-20260630 · baseline | 2026-06-30 | guidelines(60) vs textbooks(18), cheap stack deepseek-v4-flash+vertex2.5-flash (baseline) | a7c0d4e dirty | 67 | 84.07 | +6.33 | 0/60/7/0 | — | delta +1.22 n.s. (t=1.33); not attributable; crowding TRAUMA-02 -44; held out; revert |
+| sandbox-guidelines-cheap-20260630 · treatment | 2026-06-30 | guidelines(60) vs textbooks(18), cheap stack deepseek-v4-flash+vertex2.5-flash (treatment) | a7c0d4e dirty | 67 | 85.30 | +7.56 | 0/65/1/0 | — | delta +1.22 n.s. (t=1.33); not attributable; crowding TRAUMA-02 -44; held out; revert |
 
 
 ## Groundedness (citation faithfulness) — a separate metric, not a score row
