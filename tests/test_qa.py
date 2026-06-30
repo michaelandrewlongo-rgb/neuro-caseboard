@@ -202,6 +202,29 @@ def test_answer_question_verifies_literature_narrative_in_default_path():
     assert "L1" in out.verification.unsupported_markers()
 
 
+def test_answer_question_drops_literature_on_textbook_refusal():
+    """A5: a textbook abstention ("Not found in the provided sources.") must NOT be paired with a
+    contemporary-literature block — that pairs a "no answer" with sources and misleads. Mirrors the
+    woven path, which already drops citations/figures/literature on refusal."""
+    from neuro_core.synthesize import REFUSAL
+    from neuro_caseboard.qa import LiteratureCitation
+    qr = SimpleNamespace(answer=REFUSAL, citations=[], figures=[])
+    section = LiteratureSection(
+        narrative="Recent RCTs [L1].",
+        citations=[LiteratureCitation(n=1, pmid="1", title="T", journal="J", year=2024,
+                                      doi="d", url="u")])
+    out = answer_question("q", lane_a=lambda: qr, lane_b=lambda: section)
+    assert out.answer == REFUSAL
+    assert out.literature is None
+
+
+def test_answer_question_keeps_literature_on_normal_answer():
+    """Guard the converse: a normal (non-refusal) textbook answer still carries the literature."""
+    section = LiteratureSection(narrative="Recent RCTs [L1].", citations=[])
+    out = answer_question("q", lane_a=_query_result, lane_b=lambda: section)
+    assert out.literature is section
+
+
 def test_answer_question_flags_unsupported_textbook_claim():
     """SHOULD-1/2 (separate path): alignment-sensitive — a [1] claim whose cited passage is
     clearly unrelated must be flagged unsupported with the right marker. Guards against a
