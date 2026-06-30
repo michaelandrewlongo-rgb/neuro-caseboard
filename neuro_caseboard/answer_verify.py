@@ -39,6 +39,8 @@ class ClaimVerdict:
     supported: bool
     premise_chars: int
     bleed_terms: list = field(default_factory=list)
+    # Markers on this claim that resolve to NO source in the premise key-set (invented/dangling).
+    dangling: list = field(default_factory=list)
 
 
 @dataclass
@@ -71,6 +73,18 @@ class AnswerVerification:
                     out.append(t)
         return out
 
+    def dangling_markers(self) -> list:
+        """Citation markers that resolve to NO source in the premise key-set (invented/dangling),
+        unique, in claim order. Distinct from ``unsupported_markers`` (markers on claims the verifier
+        could not *entail*): a dangling marker points at a source that does not exist — a hard A1
+        data-integrity failure that must surface, never abstain-into-supported."""
+        out = []
+        for v in self.claims:
+            for m in getattr(v, "dangling", None) or []:
+                if m not in out:
+                    out.append(m)
+        return out
+
 
 def _strip_markers(text: str) -> str:
     return _MARKER.sub("", text).strip()
@@ -84,6 +98,12 @@ def verify_answer(answer: str, premises: dict, *, verifier=None) -> "AnswerVerif
             verdicts.append(ClaimVerdict(span.text, span.markers, True, 0))
             continue
         n_cited += 1
+        # A1: a marker whose key is absent from the premise map resolves to NO source at all
+        # (an invented/dangling [n] or [L#] beyond the real sources). That is distinct from a
+        # PRESENT key with thin/empty text (a figure-only source), which should_cite abstain-keeps.
+        # Collapsing the missing key into an empty premise would silently abstain-keep the bogus
+        # marker; instead, flag it.
+        dangling = [m for m in span.markers if m not in premises]
         premise = " ".join(p for m in span.markers for p in [premises.get(m)] if p)
         claim_text = _strip_markers(span.text)
         supported = should_cite(premise, claim_text, verifier)
@@ -97,9 +117,11 @@ def verify_answer(answer: str, premises: dict, *, verifier=None) -> "AnswerVerif
             bleed = sorted(unsupported_entities(claim_text, premise))
         if bleed:
             supported = False
+        if dangling:  # a citation that points at a source that does not exist is never "supported"
+            supported = False
         if not supported:  # count once per claim (don't double-count a recall-fail that also bleeds)
             n_unsup += 1
-        verdicts.append(ClaimVerdict(span.text, span.markers, supported, len(premise), bleed))
+        verdicts.append(ClaimVerdict(span.text, span.markers, supported, len(premise), bleed, dangling))
     return AnswerVerification(verdicts, n_cited, n_unsup)
 
 
@@ -129,6 +151,9 @@ def verification_to_dict(v) -> "dict | None":
     bleed = v.bleed_terms()
     if bleed:  # only when present, so the dict shape is unchanged for bleed-free verifications
         d["bleed_terms"] = bleed
+    dangling = v.dangling_markers()
+    if dangling:  # additive (like bleed_terms): dict shape unchanged when there are none
+        d["dangling_markers"] = dangling
     return d
 
 
@@ -137,10 +162,23 @@ def verification_notice(v) -> str:
     if v is None:
         return ""
     lines = []
-    if v.n_unsupported > 0:
-        markers = ", ".join(f"[{m}]" for m in v.unsupported_markers())
-        lines.append(f"⚠ {v.n_unsupported} cited claim(s) flagged needs-verification "
+    dangling = v.dangling_markers()
+    # Entailment failures only: a claim flagged *solely* for a dangling marker is reported on the
+    # dedicated line below, so it is not mislabeled "not entailed by the cited source".
+    entail_unsupported = []
+    for c in v.claims:
+        if c.markers and not c.supported and not getattr(c, "dangling", None):
+            for m in c.markers:
+                if m not in entail_unsupported:
+                    entail_unsupported.append(m)
+    if entail_unsupported:
+        markers = ", ".join(f"[{m}]" for m in entail_unsupported)
+        lines.append(f"⚠ {len(entail_unsupported)} cited claim(s) flagged needs-verification "
                      f"(not entailed by the cited source): {markers}")
+    if dangling:
+        markers = ", ".join(f"[{m}]" for m in dangling)
+        lines.append(f"⚠ {len(dangling)} citation marker(s) reference a source not in the source "
+                     f"list (invented/dangling): {markers}")
     n_bleed = sum(1 for c in v.claims if getattr(c, "bleed_terms", None))
     if n_bleed:
         terms = ", ".join(v.bleed_terms())

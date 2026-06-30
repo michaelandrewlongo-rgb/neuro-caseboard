@@ -30,9 +30,59 @@ def test_uncited_excluded_from_denominator():
     assert v.n_cited_claims == 1
 
 
-def test_missing_premise_is_non_destructive():
-    v = verify_answer("A figure-only reference [3].", {})
+def test_figure_only_empty_premise_is_non_destructive():
+    # A real figure-only source IS a PRESENT key with empty premise text (no body to verify
+    # against) -> abstain and keep, not flagged. Contrast: an ABSENT key is a dangling marker
+    # (see the dangling-marker tests below). This is the pipeline shape: build_citations appends
+    # figure sources whose Citation.text == "" so premises["3"] == "".
+    v = verify_answer("A figure-only reference [3].", {"3": ""})
     assert v.n_unsupported == 0
+    assert v.dangling_markers() == []
+
+
+def test_dangling_marker_is_flagged():
+    # [9] resolves to NO key in the premises map -> an invented/dangling citation. A1: a marker
+    # that points at a source that does not exist must be flagged, not abstain-kept as supported.
+    v = verify_answer(
+        "The middle cerebral artery supplies the lateral cerebral cortex [9].",
+        {"1": "The middle cerebral artery supplies the lateral cerebral cortex and the insula."})
+    assert v.n_unsupported == 1
+    assert "9" in v.unsupported_markers()
+    assert v.dangling_markers() == ["9"]
+    assert v.groundedness() == 0.0
+
+
+def test_dangling_literature_marker_is_flagged():
+    v = verify_answer(
+        "Bridging therapy improves recanalization in proximal occlusion [L5].",
+        {"L1": "Bridging therapy improves recanalization and functional outcomes in proximal occlusion."})
+    assert v.n_unsupported == 1
+    assert "L5" in v.dangling_markers()
+
+
+def test_dangling_marker_flagged_even_with_valid_cocitation():
+    # A claim citing both a real [1] (which entails) and an invented [9] must still surface the
+    # dangling [9]; the claim as a whole is not clean.
+    v = verify_answer(
+        "The middle cerebral artery supplies the lateral cerebral cortex [1][9].",
+        {"1": "The middle cerebral artery supplies the lateral cerebral cortex and the insula."})
+    assert v.dangling_markers() == ["9"]
+    assert v.n_unsupported == 1
+
+
+def test_verification_to_dict_includes_dangling_markers_when_present():
+    from neuro_caseboard.answer_verify import verification_to_dict
+    v = verify_answer("Claim with a fabricated source [7].", {"1": "Unrelated real premise text about anatomy."})
+    d = verification_to_dict(v)
+    assert d["dangling_markers"] == ["7"]
+
+
+def test_verification_notice_names_dangling_distinctly():
+    from neuro_caseboard.answer_verify import verification_notice
+    v = verify_answer("Claim with a fabricated source [7].", {"1": "Unrelated real premise text about anatomy."})
+    note = verification_notice(v).lower()
+    assert "[7]" in note
+    assert "not in the source list" in note or "does not exist" in note
 
 
 def test_merge_verifications_concatenates_counts_and_markers():
