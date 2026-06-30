@@ -85,6 +85,81 @@ def test_verification_notice_names_dangling_distinctly():
     assert "not in the source list" in note or "does not exist" in note
 
 
+def test_numeric_not_in_premise_is_flagged():
+    # A3: a dose asserted in a cited claim but absent from the cited premise is a possible
+    # model-originated numeric. Lexical overlap alone passes (mannitol/ICP words match), so the
+    # numeric backstop is what catches the wrong dose.
+    v = verify_answer(
+        "Give mannitol 0.5 g/kg for raised intracranial pressure [1].",
+        {"1": "Mannitol is an osmotic diuretic used to lower intracranial pressure; the usual "
+              "dose is 0.25 g/kg."})
+    assert v.n_unsupported == 1
+    assert "0.5" in v.numeric_flags()
+    assert "1" in v.unsupported_markers()
+
+
+def test_numeric_present_in_premise_passes():
+    v = verify_answer(
+        "Give mannitol 0.25 g/kg for raised intracranial pressure [1].",
+        {"1": "Mannitol is an osmotic diuretic used to lower intracranial pressure; the usual "
+              "dose is 0.25 g/kg."})
+    assert v.n_unsupported == 0
+    assert v.numeric_flags() == []
+
+
+def test_non_measurement_integers_not_flagged():
+    # Anatomical levels / figure refs / counts are NOT measurement numbers -> must not false-flag
+    # (high precision: only unit-adjacent numbers and decimals are checked).
+    v = verify_answer(
+        "A C5-6 anterior cervical discectomy addresses the disc at that level [1].",
+        {"1": "Anterior cervical discectomy removes a herniated cervical disc to decompress the "
+              "spinal cord and the exiting nerve roots."})
+    assert v.n_unsupported == 0
+    assert v.numeric_flags() == []
+
+
+def test_percentage_not_in_premise_is_flagged():
+    # Integer percentages are a safety-critical threshold class (A3): a wrong stenosis threshold
+    # must flag. (Regression guard: a trailing \b after the non-word '%' previously never matched,
+    # so integer percentages silently passed.)
+    v = verify_answer(
+        "Carotid endarterectomy is indicated for 50% symptomatic stenosis [1].",
+        {"1": "Carotid endarterectomy is indicated for symptomatic carotid stenosis of 70% or "
+              "greater on imaging."})
+    assert "50" in v.numeric_flags()
+    assert v.n_unsupported == 1
+
+
+def test_percentage_present_in_premise_passes():
+    v = verify_answer(
+        "Carotid endarterectomy is indicated for 70% symptomatic stenosis [1].",
+        {"1": "Carotid endarterectomy is indicated for symptomatic carotid stenosis of 70% or "
+              "greater on imaging."})
+    assert v.numeric_flags() == []
+
+
+def test_duration_numbers_not_flagged_for_precision():
+    # Follow-up durations are paraphrase-prone and not safety-critical dosing; excluded from the
+    # measurement set to keep the backstop high-precision (avoid cry-wolf).
+    v = verify_answer(
+        "Follow-up imaging at 6 months showed no tumor recurrence [1].",
+        {"1": "Surveillance magnetic resonance imaging showed no tumor recurrence at clinical "
+              "follow-up after the operation."})
+    assert v.numeric_flags() == []
+
+
+def test_numeric_flag_in_dict_and_notice():
+    from neuro_caseboard.answer_verify import verification_to_dict, verification_notice
+    v = verify_answer(
+        "The recommended CPP treatment threshold is 70 mmHg [1].",
+        {"1": "Cerebral perfusion pressure should generally be maintained above 60 mmHg in this "
+              "clinical setting per the cited guidance passage."})
+    assert "70" in v.numeric_flags()
+    d = verification_to_dict(v)
+    assert d["numeric_flags"] == ["70"]
+    assert "70" in verification_notice(v)
+
+
 def test_merge_verifications_concatenates_counts_and_markers():
     from neuro_caseboard.answer_verify import merge_verifications, AnswerVerification, ClaimVerdict
     a = AnswerVerification([ClaimVerdict("x [1].", ["1"], True, 20)], 1, 0)

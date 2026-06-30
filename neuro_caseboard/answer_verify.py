@@ -13,6 +13,38 @@ from neuro_caseboard.entailment import (
 _MARKER = re.compile(r"\[(L?\d+)\]")
 _SENT = re.compile(r"(?<=[.!?])\s+")
 
+# --- Numeric backstop (A3): a dose/threshold/percentage asserted in a cited claim but absent from
+# the cited premise is a possible model-originated numeric. Lexical token-overlap ignores numbers
+# (the tokenizer drops <3-char tokens), so this is a separate high-PRECISION check: only
+# measurement-like numbers (dose/concentration/dimension units, percentages, or decimals) are
+# checked — NOT bare integers like anatomical levels (C5-6), figure refs, counts, or follow-up
+# durations ("6 months"), which would false-flag. Units are the safety-critical dose/dimension set
+# (durations deliberately excluded as paraphrase-prone), longest-first so a word-boundary
+# alternation does not match a prefix (e.g. "mm" inside "mmHg"). Percent is matched separately
+# because a trailing \b never fires after the non-word '%'.
+_UNIT = r"mmhg|mmol|mcg|meq|mg|ml|kg|gy|iu|cm|mm|mol|µg|ug|g|l"
+_MEASUREMENT_NUM = re.compile(r"(\d+(?:\.\d+)?)\s?(?:" + _UNIT + r")\b", re.IGNORECASE)
+_PERCENT_NUM = re.compile(r"(\d+(?:\.\d+)?)\s?%")
+_DECIMAL_NUM = re.compile(r"\d+\.\d+")
+_ANY_NUM = re.compile(r"\d+(?:\.\d+)?")
+
+
+def claim_numerics(text: str) -> set:
+    """Measurement-like numbers in ``text``: a number adjacent to a clinical dose/dimension unit, a
+    percentage, or a decimal. Bare integers (counts, ordinals, spine levels, figure refs, follow-up
+    durations) are excluded so the backstop stays high-precision."""
+    text = text or ""
+    return (set(_MEASUREMENT_NUM.findall(text))
+            | set(_PERCENT_NUM.findall(text))
+            | set(_DECIMAL_NUM.findall(text)))
+
+
+def unsupported_numerics(claim: str, premise: str) -> set:
+    """Measurement numbers asserted in ``claim`` but absent from the cited ``premise`` number set —
+    a possible model-originated dose/threshold/percentage (A3). Compares bare numeric strings."""
+    premise_nums = set(_ANY_NUM.findall(premise or ""))
+    return {n for n in claim_numerics(claim) if n not in premise_nums}
+
 
 @dataclass
 class ClaimSpan:
@@ -41,6 +73,8 @@ class ClaimVerdict:
     bleed_terms: list = field(default_factory=list)
     # Markers on this claim that resolve to NO source in the premise key-set (invented/dangling).
     dangling: list = field(default_factory=list)
+    # Measurement numbers asserted in this claim but absent from the cited premise (A3).
+    numeric_flags: list = field(default_factory=list)
 
 
 @dataclass
@@ -85,6 +119,16 @@ class AnswerVerification:
                     out.append(m)
         return out
 
+    def numeric_flags(self) -> list:
+        """Measurement numbers (dose/threshold/percentage) asserted in a cited claim but absent from
+        its cited premise — possible model-originated numerics (A3). Unique, in claim order."""
+        out = []
+        for v in self.claims:
+            for n in getattr(v, "numeric_flags", None) or []:
+                if n not in out:
+                    out.append(n)
+        return out
+
 
 def _strip_markers(text: str) -> str:
     return _MARKER.sub("", text).strip()
@@ -113,15 +157,20 @@ def verify_answer(answer: str, premises: dict, *, verifier=None) -> "AnswerVerif
         # empty PubMed abstract), skip the bleed check rather than flag an unjudgeable [L#] claim.
         min_tok = getattr(verifier, "min_premise_tokens", 5)
         bleed = []
+        numerics = []
         if len(_content_tokens(premise)) >= min_tok:
             bleed = sorted(unsupported_entities(claim_text, premise))
+            numerics = sorted(unsupported_numerics(claim_text, premise))
         if bleed:
+            supported = False
+        if numerics:  # a dose/threshold/percentage not present in the cited premise (A3)
             supported = False
         if dangling:  # a citation that points at a source that does not exist is never "supported"
             supported = False
         if not supported:  # count once per claim (don't double-count a recall-fail that also bleeds)
             n_unsup += 1
-        verdicts.append(ClaimVerdict(span.text, span.markers, supported, len(premise), bleed, dangling))
+        verdicts.append(ClaimVerdict(span.text, span.markers, supported, len(premise), bleed,
+                                     dangling, numerics))
     return AnswerVerification(verdicts, n_cited, n_unsup)
 
 
@@ -154,6 +203,9 @@ def verification_to_dict(v) -> "dict | None":
     dangling = v.dangling_markers()
     if dangling:  # additive (like bleed_terms): dict shape unchanged when there are none
         d["dangling_markers"] = dangling
+    numerics = v.numeric_flags()
+    if numerics:  # additive
+        d["numeric_flags"] = numerics
     return d
 
 
@@ -179,6 +231,11 @@ def verification_notice(v) -> str:
         markers = ", ".join(f"[{m}]" for m in dangling)
         lines.append(f"⚠ {len(dangling)} citation marker(s) reference a source not in the source "
                      f"list (invented/dangling): {markers}")
+    numerics = v.numeric_flags()
+    if numerics:
+        nums = ", ".join(numerics)
+        lines.append(f"⚠ {len(numerics)} claim(s) cite a number not found in the cited source "
+                     f"(possible model-originated value): {nums}")
     n_bleed = sum(1 for c in v.claims if getattr(c, "bleed_terms", None))
     if n_bleed:
         terms = ", ".join(v.bleed_terms())
