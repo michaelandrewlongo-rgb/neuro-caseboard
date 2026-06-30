@@ -1,5 +1,35 @@
 import { describe, it, expect } from "vitest"
-import { auditSummaryLabel, shouldRenderLiterature } from "./askLayout"
+import { auditSummaryLabel, shouldRenderLiterature, verificationWarning } from "./askLayout"
+import type { Verification } from "./askStore"
+
+function ver(p: Partial<Verification>): Verification {
+  return { n_cited_claims: 1, n_unsupported: 0, groundedness: 1, unsupported_markers: [], ...p }
+}
+
+describe("verificationWarning (surface the verifier verdict to the reader)", () => {
+  it("returns null when nothing is flagged", () => {
+    expect(verificationWarning(ver({}))).toBeNull()
+    expect(verificationWarning(null)).toBeNull()
+  })
+  it("lists entailment-failed markers", () => {
+    const w = verificationWarning(ver({ n_unsupported: 1, unsupported_markers: ["1"] }))
+    expect(w).toEqual({ unsupportedMarkers: ["1"], danglingMarkers: [] })
+  })
+  it("separates dangling markers from entailment failures (honest wording)", () => {
+    // backend unsupported_markers includes dangling ones; the banner must split them so a dangling
+    // marker is labeled "not in the source list", not "not entailed".
+    const w = verificationWarning(ver({
+      n_unsupported: 1, unsupported_markers: ["1", "9"], dangling_markers: ["9"],
+    }))
+    expect(w).toEqual({ unsupportedMarkers: ["1"], danglingMarkers: ["9"] })
+  })
+  it("flags a pure dangling marker even if no entailment failures", () => {
+    const w = verificationWarning(ver({
+      n_unsupported: 1, unsupported_markers: ["7"], dangling_markers: ["7"],
+    }))
+    expect(w).toEqual({ unsupportedMarkers: [], danglingMarkers: ["7"] })
+  })
+})
 
 describe("shouldRenderLiterature (default woven mode has citations but no narrative)", () => {
   it("renders when there are citations even though the narrative is empty (woven default)", () => {

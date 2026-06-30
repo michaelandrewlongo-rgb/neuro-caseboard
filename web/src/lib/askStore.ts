@@ -8,6 +8,9 @@ export interface Verification {
   n_unsupported: number
   groundedness: number
   unsupported_markers: string[]
+  // Present only when non-empty (additive, like the backend dict): markers that resolve to no
+  // source in the list (invented/dangling). A subset of unsupported_markers, surfaced distinctly.
+  dangling_markers?: string[]
 }
 
 export type AskEvent =

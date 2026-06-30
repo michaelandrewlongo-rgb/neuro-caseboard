@@ -1,4 +1,5 @@
 import { citationSummary } from "@/lib/citationSummary"
+import type { Verification } from "@/lib/askStore"
 
 /** The Citation Audit donut and the old standalone status line restated the SAME counts.
     We keep ONE source of truth (citationSummary) and surface it as the collapsed <details>
@@ -18,4 +19,23 @@ export function shouldRenderLiterature(
 ): boolean {
   if (!literature) return false
   return Boolean(literature.narrative) || (literature.citations?.length ?? 0) > 0
+}
+
+export interface VerificationWarning {
+  unsupportedMarkers: string[] // cited but not entailed by the cited source
+  danglingMarkers: string[] // reference a source not in the list (invented/dangling)
+}
+
+/** What the answer's needs-verification banner should show, or null when the verifier flagged
+    nothing. The backend's `unsupported_markers` already INCLUDES any dangling markers, so we split
+    them for honest wording: entailment-failures vs "cites a source not in the list". This mirrors
+    the backend's verification_notice so the web banner and the CLI/notice stay consistent. */
+export function verificationWarning(
+  v: Verification | null | undefined,
+): VerificationWarning | null {
+  if (!v) return null
+  const dangling = v.dangling_markers ?? []
+  const unsupported = (v.unsupported_markers ?? []).filter((m) => !dangling.includes(m))
+  if (unsupported.length === 0 && dangling.length === 0) return null
+  return { unsupportedMarkers: unsupported, danglingMarkers: dangling }
 }

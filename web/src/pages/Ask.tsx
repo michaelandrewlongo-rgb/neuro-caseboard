@@ -17,7 +17,7 @@ import FigureGrid from "@/components/ask/FigureGrid"
 import SourcesList from "@/components/ask/SourcesList"
 import LiteratureBlock from "@/components/ask/LiteratureBlock"
 import { CitationAudit } from "@/components/ask/CitationAudit"
-import { auditSummaryLabel } from "@/lib/askLayout"
+import { auditSummaryLabel, verificationWarning } from "@/lib/askLayout"
 
 const HINTS = [
   "borders of the cavernous sinus",
@@ -243,9 +243,39 @@ function ResultView({
   // Streaming or completed answer — render each piece as soon as it exists. The Citation Audit
   // is secondary (it restates counts the sources already carry), so it stays collapsed below and
   // only once the answer is final.
+  const warning = verificationWarning(state.verification)
   return (
     <div className="flex flex-col gap-6">
       {state.answer && <AnswerView text={state.answer} />}
+      {warning && (
+        <div
+          role="status"
+          className="rounded-[var(--radius-lg)] p-4 text-sm"
+          style={{
+            background: "rgba(255,201,77,.08)",
+            border: "1px solid rgba(255,201,77,.3)",
+            borderLeft: "3px solid var(--color-amber)",
+          }}
+        >
+          <p className="font-bold" style={{ color: "var(--color-amber)" }}>
+            ⚠ Needs verification
+          </p>
+          {warning.unsupportedMarkers.length > 0 && (
+            <p className="mt-1 text-muted-foreground">
+              {warning.unsupportedMarkers.length} cited claim(s) are not entailed by the cited
+              source ({warning.unsupportedMarkers.map((m) => `[${m}]`).join(", ")}). Verify against
+              the primary source before relying on them.
+            </p>
+          )}
+          {warning.danglingMarkers.length > 0 && (
+            <p className="mt-1 text-muted-foreground">
+              {warning.danglingMarkers.length} citation(s) reference a source not in the list
+              ({warning.danglingMarkers.map((m) => `[${m}]`).join(", ")}) — likely invented; do not
+              rely on them.
+            </p>
+          )}
+        </div>
+      )}
       {state.figures.length > 0 && <FigureGrid figures={state.figures} />}
       {state.sources.length > 0 && <SourcesList citations={state.sources} />}
       {state.literature && <LiteratureBlock literature={state.literature} />}
