@@ -95,8 +95,12 @@ def build_citations(hits, figures):
         for i, h in enumerate(hits, 1)
     ]
     for f in _appended_figures(hits, figures):
-        citations.append(Citation(n=f.source_n, book=f.book,
-                                  chapter=f.chapter or "", page=f.page))
+        # Carry the figure CAPTION as the premise text so a claim cited to a figure-only source is
+        # entailment-checked against the caption (A3/A7) rather than abstain-kept on an empty
+        # premise. A genuinely empty caption stays "" (still abstain-keeps). Display is unaffected:
+        # Citation.text is internal (premise/prompt), never serialized to the API/UI.
+        citations.append(Citation(n=f.source_n, book=f.book, chapter=f.chapter or "",
+                                  page=f.page, text=getattr(f, "caption", "") or ""))
     return citations
 
 

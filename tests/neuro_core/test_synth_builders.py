@@ -23,7 +23,17 @@ def test_build_citations_numbers_hits_then_appends_figures():
     assert [(c.n, c.book, c.page) for c in cites] == [
         (1, "BookA", 10), (2, "BookB", 20), (3, "BookC", 30)]
     assert cites[0].text == "passage one"      # hit citations carry the chunk text
-    assert cites[2].text == ""                 # appended-figure citation has no chunk text
+    # A figure-only citation carries its CAPTION as the premise text so a claim cited to a figure
+    # is entailment-checked against the caption (A3/A7) instead of abstain-kept on an empty premise.
+    assert cites[2].text == "a plate"
+
+
+def test_build_citations_figure_with_no_caption_stays_empty():
+    from neuro_core.synthesize import build_citations
+    hits = [_Hit("BookA", "Ch1", 10, "passage one")]
+    figs = [_Fig(source_n=2, book="BookC", chapter="Ch9", page=30, caption="")]
+    cites = build_citations(hits, figs)
+    assert cites[1].text == ""                  # no caption -> empty premise -> still abstain-keeps
 
 
 def test_build_synth_prompt_contains_question_and_passages():
