@@ -124,7 +124,10 @@ export async function askQuestion(question: string, signal?: AbortSignal,
 // openAskStream replays/tails the job's SSE event log from a cursor; the caller reduces events
 // into state. See askStore.ts for the event shapes and the reducer.
 
-/** Create an Ask job; returns its id immediately (generation runs server-side). */
+/** Create an Ask job; returns its id immediately (generation runs server-side).
+ *  Throws on a non-ok response or a body without a string job_id so the caller surfaces a visible
+ *  error — otherwise an error body would be consumed as {job_id: undefined} and a stream opened to
+ *  /stream/undefined, hanging silently with no failure shown. */
 export async function startAsk(
   question: string,
   skipDisambiguation = false,
@@ -134,7 +137,14 @@ export async function startAsk(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question, skip_disambiguation: skipDisambiguation }),
   })
-  return (await res.json()) as { job_id: string }
+  const data = (await res.json().catch(() => null)) as { job_id?: unknown; error?: string } | null
+  if (!res.ok) {
+    throw new Error(data?.error || `Ask failed to start (${res.status})`)
+  }
+  if (!data || typeof data.job_id !== "string") {
+    throw new Error("Ask failed to start: no job id returned")
+  }
+  return { job_id: data.job_id }
 }
 
 /**
