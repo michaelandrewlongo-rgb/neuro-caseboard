@@ -13,7 +13,7 @@ describe("verificationWarning (surface the verifier verdict to the reader)", () 
   })
   it("lists entailment-failed markers", () => {
     const w = verificationWarning(ver({ n_unsupported: 1, unsupported_markers: ["1"] }))
-    expect(w).toEqual({ unsupportedMarkers: ["1"], danglingMarkers: [] })
+    expect(w).toEqual({ unsupportedMarkers: ["1"], danglingMarkers: [], uncitedClinical: 0 })
   })
   it("separates dangling markers from entailment failures (honest wording)", () => {
     // backend unsupported_markers includes dangling ones; the banner must split them so a dangling
@@ -21,13 +21,17 @@ describe("verificationWarning (surface the verifier verdict to the reader)", () 
     const w = verificationWarning(ver({
       n_unsupported: 1, unsupported_markers: ["1", "9"], dangling_markers: ["9"],
     }))
-    expect(w).toEqual({ unsupportedMarkers: ["1"], danglingMarkers: ["9"] })
+    expect(w).toEqual({ unsupportedMarkers: ["1"], danglingMarkers: ["9"], uncitedClinical: 0 })
   })
   it("flags a pure dangling marker even if no entailment failures", () => {
     const w = verificationWarning(ver({
       n_unsupported: 1, unsupported_markers: ["7"], dangling_markers: ["7"],
     }))
-    expect(w).toEqual({ unsupportedMarkers: [], danglingMarkers: ["7"] })
+    expect(w).toEqual({ unsupportedMarkers: [], danglingMarkers: ["7"], uncitedClinical: 0 })
+  })
+  it("flags uncited clinical statements even with no marker problems (A2)", () => {
+    const w = verificationWarning(ver({ n_uncited_clinical: 2 }))
+    expect(w).toEqual({ unsupportedMarkers: [], danglingMarkers: [], uncitedClinical: 2 })
   })
 })
 

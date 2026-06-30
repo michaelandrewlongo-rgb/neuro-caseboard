@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from neuro_caseboard.entailment import (
     _content_tokens,
     get_default_verifier,
+    medical_entities,
     should_cite,
     unsupported_entities,
 )
@@ -75,6 +76,9 @@ class ClaimVerdict:
     dangling: list = field(default_factory=list)
     # Measurement numbers asserted in this claim but absent from the cited premise (A3).
     numeric_flags: list = field(default_factory=list)
+    # True when this sentence asserts a clinical claim (named pathology/operation or a measurement)
+    # but carries NO citation marker (A2: an uncited clinical claim).
+    uncited_clinical: bool = False
 
 
 @dataclass
@@ -129,6 +133,11 @@ class AnswerVerification:
                     out.append(n)
         return out
 
+    def uncited_clinical_claims(self) -> list:
+        """Sentences that assert a clinical claim (named pathology/operation or a measurement) with
+        NO citation marker (A2). The text of each, in answer order."""
+        return [v.text for v in self.claims if getattr(v, "uncited_clinical", False)]
+
 
 def _strip_markers(text: str) -> str:
     return _MARKER.sub("", text).strip()
@@ -139,7 +148,13 @@ def verify_answer(answer: str, premises: dict, *, verifier=None) -> "AnswerVerif
     verdicts, n_cited, n_unsup = [], 0, 0
     for span in segment_claims(answer):
         if not span.markers:
-            verdicts.append(ClaimVerdict(span.text, span.markers, True, 0))
+            # A2: an uncited sentence that asserts a named pathology/operation/deficit or a
+            # measurement number is an uncited clinical claim (it should carry a citation). Plain
+            # connective prose (no named entity, no measurement) is fine uncited. High-precision:
+            # medical_entities is a low-false-positive named-entity proxy.
+            is_clinical = bool(medical_entities(span.text)) or bool(claim_numerics(span.text))
+            verdicts.append(ClaimVerdict(span.text, span.markers, True, 0,
+                                         uncited_clinical=is_clinical))
             continue
         n_cited += 1
         # A1: a marker whose key is absent from the premise map resolves to NO source at all
@@ -206,6 +221,9 @@ def verification_to_dict(v) -> "dict | None":
     numerics = v.numeric_flags()
     if numerics:  # additive
         d["numeric_flags"] = numerics
+    n_uncited = len(v.uncited_clinical_claims())
+    if n_uncited:  # additive
+        d["n_uncited_clinical"] = n_uncited
     return d
 
 
@@ -236,6 +254,10 @@ def verification_notice(v) -> str:
         nums = ", ".join(numerics)
         lines.append(f"⚠ {len(numerics)} claim(s) cite a number not found in the cited source "
                      f"(possible model-originated value): {nums}")
+    n_uncited = len(v.uncited_clinical_claims())
+    if n_uncited:
+        lines.append(f"⚠ {n_uncited} clinical statement(s) have no citation — verify against a "
+                     f"source before relying on them.")
     n_bleed = sum(1 for c in v.claims if getattr(c, "bleed_terms", None))
     if n_bleed:
         terms = ", ".join(v.bleed_terms())

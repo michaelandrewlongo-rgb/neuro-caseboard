@@ -85,6 +85,41 @@ def test_verification_notice_names_dangling_distinctly():
     assert "not in the source list" in note or "does not exist" in note
 
 
+def test_uncited_clinical_sentence_with_named_pathology_is_flagged():
+    # A2: an uncited sentence asserting a named pathology/operation is an uncited clinical claim and
+    # must be flagged (no silent uncited clinical claims), not auto-supported.
+    v = verify_answer(
+        "The glioma was resected via a craniotomy. The dural repair was watertight [1].",
+        {"1": "A watertight dural repair was achieved at closure."})
+    flagged = v.uncited_clinical_claims()
+    assert any("glioma" in s.lower() for s in flagged)
+
+
+def test_uncited_connective_prose_is_not_flagged():
+    # Plain non-clinical connective tissue (no named entity, no measurement) is fine uncited.
+    v = verify_answer(
+        "In summary, these structures are closely related. The MCA supplies the cortex [1].",
+        {"1": "The middle cerebral artery supplies the lateral cerebral cortex."})
+    assert v.uncited_clinical_claims() == []
+
+
+def test_uncited_measurement_sentence_is_flagged():
+    v = verify_answer(
+        "The maintenance dose is 0.5 g/kg. Further detail is in the cited passage [1].",
+        {"1": "Osmotic therapy detail is provided in the referenced textbook passage here."})
+    assert v.uncited_clinical_claims()
+
+
+def test_uncited_clinical_in_dict_and_notice():
+    from neuro_caseboard.answer_verify import verification_to_dict, verification_notice
+    v = verify_answer(
+        "A meningioma recurred postoperatively. The dural repair held [1].",
+        {"1": "The dural repair was watertight and intact on follow-up imaging."})
+    d = verification_to_dict(v)
+    assert d["n_uncited_clinical"] == 1
+    assert "no citation" in verification_notice(v).lower()
+
+
 def test_numeric_not_in_premise_is_flagged():
     # A3: a dose asserted in a cited claim but absent from the cited premise is a possible
     # model-originated numeric. Lexical overlap alone passes (mannitol/ICP words match), so the

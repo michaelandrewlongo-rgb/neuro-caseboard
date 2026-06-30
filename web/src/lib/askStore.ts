@@ -11,6 +11,9 @@ export interface Verification {
   // Present only when non-empty (additive, like the backend dict): markers that resolve to no
   // source in the list (invented/dangling). A subset of unsupported_markers, surfaced distinctly.
   dangling_markers?: string[]
+  // Count of sentences that assert a clinical claim (named pathology/operation or a measurement)
+  // but carry no citation marker (A2). Present only when > 0.
+  n_uncited_clinical?: number
 }
 
 export type AskEvent =

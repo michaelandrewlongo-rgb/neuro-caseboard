@@ -274,6 +274,12 @@ function ResultView({
               rely on them.
             </p>
           )}
+          {warning.uncitedClinical > 0 && (
+            <p className="mt-1 text-muted-foreground">
+              {warning.uncitedClinical} clinical statement(s) carry no citation — verify against a
+              source before relying on them.
+            </p>
+          )}
         </div>
       )}
       {state.figures.length > 0 && <FigureGrid figures={state.figures} />}

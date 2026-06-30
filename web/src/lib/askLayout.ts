@@ -24,6 +24,7 @@ export function shouldRenderLiterature(
 export interface VerificationWarning {
   unsupportedMarkers: string[] // cited but not entailed by the cited source
   danglingMarkers: string[] // reference a source not in the list (invented/dangling)
+  uncitedClinical: number // clinical statements with no citation at all (A2)
 }
 
 /** What the answer's needs-verification banner should show, or null when the verifier flagged
@@ -36,6 +37,7 @@ export function verificationWarning(
   if (!v) return null
   const dangling = v.dangling_markers ?? []
   const unsupported = (v.unsupported_markers ?? []).filter((m) => !dangling.includes(m))
-  if (unsupported.length === 0 && dangling.length === 0) return null
-  return { unsupportedMarkers: unsupported, danglingMarkers: dangling }
+  const uncitedClinical = v.n_uncited_clinical ?? 0
+  if (unsupported.length === 0 && dangling.length === 0 && uncitedClinical === 0) return null
+  return { unsupportedMarkers: unsupported, danglingMarkers: dangling, uncitedClinical }
 }
