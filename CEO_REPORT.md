@@ -348,11 +348,20 @@ lever. **Single variable: `RERANK_K` 12 → 16**, synth held constant on Vertex 
 (free GCP credits), over a balanced 20-question subset (all 7 specialties). Smoke validated the
 engine + the live-variable provenance gate (`rerank_k` recorded per arm).
 
-**[FACT] Per the standing rule, the USER grades the blinded pairs.** The deliverable is
+**[FACT] Per the standing rule, the USER graded the blinded pairs.** The deliverable was
 `PAIRS.md` (Answer-A / Answer-B, order randomized, arm labels hidden) + a blank `scoresheet.csv`;
-I do **not** self-grade or unblind. The result (paired delta + significance + regression scan) is
-produced only after grading. **[UNCERTAIN]** Until graded, whether `RERANK_K=16` yields clear value
-is unknown — and the bake-off history notes the 67-Q harness has no noise floor, so a small mean
-delta should be read against head-to-head + the regression scan, not the mean alone. **[JUDGMENT]**
-the flash synth is a cheap proxy; a result there may not transfer to the production glm-5.2/2.5-pro
-synth — a caveat to weigh before shipping any `RERANK_K` change.
+I did **not** self-grade or unblind — the user returned the graded sheet (2026-07-01) and I unblinded
+via `score.py`.
+
+**[FACT] GRADED RESULT (n=20).** mean **87.45 (k=12) vs 88.40 (k=16), Δ +0.95, paired_t 2.29**
+(just past the |t|>2 ≈ p<0.05 line — on the noise boundary at n=20); **head-to-head 14–6 for k=16,
+0 ties**; six regressions, all ≤3 pts and **none from retrieval crowding** (the failure mode this arm
+risked did not appear); k=16 **~23% slower at the median** (47.9s vs 39.0s). **[JUDGMENT] Verdict:
+weak-positive, NOT decisive → the `RERANK_K` default is left UNCHANGED.** The direction favours k=16
+and the crowding risk didn't materialise, but the effect is **<1 point on 100**, the t-stat is on the
+noise boundary at n=20, and it was measured on a **cheap `gemini-2.5-flash` proxy, not the deploy
+`glm-5.2`/`gemini-2.5-pro` synth**. Per the charter's "don't convert an uncertain result into a
+confident output," flipping the default would need a **paid deploy-synth confirmation and ideally the
+full 67-Q** — a budget decision for the user, not an autonomous spend. Logged to `evaluation/RESULTS.md`
+**on master** (commit `9de8aa3`) as a prose subsection (not a table row — a subset+proxy Δ-vs-base
+would mislead); experiment-log detail in `EXPERIMENT_LOG.md` (Phase 3c).
