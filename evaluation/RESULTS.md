@@ -45,6 +45,32 @@ These are the reranker / retrieval-breadth / embedder knobs flagged as the top *
 levers — they were run and blinded but the A/B grading was not finished into numbers.
 
 
+## RERANK_K sensitivity — first *graded* knob A/B (20-Q subset, cheap-proxy synth)
+
+Completes one of the ungraded knobs above (`rerank_k`): a single-variable blind A/B — **rerank_k 12
+(current default) vs 16** — everything else held constant. **Not a 67-Q score row.** It is a 20-question
+subset (`caseboard-ab-sandbox`, human blind-graded 2026-06-30) on a **cheap Vertex `gemini-2.5-flash`
+proxy, NOT the deploy `glm-5.2` / `gemini-2.5-pro` synth**, so the means sit on a different scale than
+the baseline table above — **do not read a Δ-vs-base**; the only valid comparison is k=12 vs k=16.
+
+| Arm | rerank_k | n | Mean | Head-to-head wins | Latency median | Commit |
+|---|---|---|---|---|---|---|
+| ref | 12 | 20 | 87.45 | 6 | 39.0s | aad1a0e |
+| **change** | **16** | 20 | **88.40** | **14** | 47.9s | aad1a0e |
+
+**Δ (change − ref) = +0.95, paired_t = 2.29** (just past the |t|>2 ≈ p<0.05 line); **head-to-head 14–6
+for k=16, 0 ties**. Six regressions, all small (≤3 pts) and **none from retrieval crowding** — graders
+read them as co-equal / marginally thinner on one prong, not off-topic dilution from the extra reranked
+passages. Cost: k=16 is **~23% slower at the median** (47.9s vs 39.0s; mean 59.4 vs 55.2s; p95 slightly
+*lower*, 79.3 vs 88.7).
+
+**Read honestly:** the direction favors k=16, but the effect is **<1 point on 100** and the t-stat sits
+**right on the noise boundary at n=20**, measured on a **cheap proxy synth**. Promising, not decisive.
+**Do not flip the `RERANK_K` default on this alone** — confirm on the deploy synth and ideally the full
+67-Q set first. This promotes the previously "generated + blinded, ungraded" `rerank_k` knob to
+**graded → weak-positive, unconfirmed on deploy synth**.
+
+
 ## Groundedness (citation faithfulness) — a separate metric, not a score row
 
 PR#50 added a computed **groundedness / unsupported-claim-rate** metric (does each cited sentence
