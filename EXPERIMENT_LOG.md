@@ -225,7 +225,25 @@ GCP credits; the sandbox's DeepSeek path isn't wired on this branch — `make_sy
 through to Vertex). 20-question balanced subset (3 per specialty across all 7). Provenance gate
 passed (smoke: `rerank_k=12` recorded, 3849-char cited answer). **Per the standing rule, the USER
 grades the blinded pairs; I produce `PAIRS.md` + a blank scoresheet and never self-grade/unblind.**
-*(Run + blinded pack status appended on completion.)*
+
+**GRADED OUTCOME (2026-07-01, user returned the blind scoresheet; unblinded via `score.py`).**
+n=20, all graded. **mean 87.45 (k=12) vs 88.40 (k=16), Δ +0.95, paired_t = 2.29** (just past the
+|t|>2 ≈ p<0.05 line — right on the noise boundary at n=20). **Head-to-head 14–6 for k=16, 0 ties.**
+Six regressions, all small (≤3 pts) and — per the grader notes — **none from retrieval crowding**
+(co-equal / marginally thinner on one prong, not off-topic dilution from the extra reranked
+passages, which was the specific failure mode this arm risked). Cost: k=16 **~23% slower at the
+median** (47.9s vs 39.0s; mean 59.4 vs 55.2s; p95 slightly *lower*, 79.3 vs 88.7).
+
+**Verdict — weak-positive, NOT decisive → default UNCHANGED.** The direction favours k=16 and the
+crowding risk did not materialise, but the effect is **<1 point on 100**, the t-stat is on the noise
+boundary at n=20, and it was measured on a **cheap `gemini-2.5-flash` proxy, not the deploy
+`glm-5.2`/`gemini-2.5-pro` synth**. Per the charter's "don't convert an uncertain result into a
+confident output," I am **not flipping the `RERANK_K` default** on this evidence. Promoting it would
+need a **deploy-synth confirmation (paid) and ideally the full 67-Q** — a paid-budget decision for
+the user, not an autonomous spend. Logged to `evaluation/RESULTS.md` **on master** (commit `9de8aa3`)
+as a prose subsection (not a table row, to avoid a misleading subset+proxy Δ-vs-base). This promotes
+the previously "generated + blinded, ungraded" `rerank_k` knob to **graded → weak-positive,
+unconfirmed on deploy synth.**
 
 **Regression evidence (after B1/B10):** held-out `eval/quality_gate.py` → **Gate: PASS** (all 16
 metrics at baseline; the gate is independent of the answer-verification path). Web harness:
