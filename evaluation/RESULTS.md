@@ -38,7 +38,12 @@ best-matching premise *sentence*; off-topic spans still rejected). Re-scored off
 | Verifier | groundedness | unsupported rate |
 |---|---|---|
 | shipped (whole-premise precision) | 0.07 | 0.93 |
-| **fixed (best-sentence precision)** | **0.80** | **0.20** |
+| fixed (best-sentence precision) | 0.80 | 0.20 |
+| semantic NLI @0.2 (initial) | 0.951 | 0.049 |
+| **semantic NLI @0.3 (default since 2026-07-02)** | **0.904** | **0.096** |
+
+(The NLI "unsupported rate" here is just the flag rate = flags/1380; it is *not* the true bad rate.
+At 0.3 the gate flags 9.6% of claims to buy fabrication recall — see the recall study below.)
 
 Per-domain (fixed): Neurointerventional 0.86 · Open-CV 0.82 · Spine 0.80 · Functional 0.80 ·
 General 0.78 · Trauma 0.79 · Tumor 0.73. This is a conservative *lexical* proxy (it flags paraphrase
@@ -60,8 +65,62 @@ as worth-a-look — not as an absolute quality number.**
 *Provenance caveat:* this is an **LLM-judge** validation, not human-expert ground truth. The judge is
 independent, semantic, and blinded (a strong proxy), but it can share blind spots with LLM-generated
 answers, so "agreement with the judge" is not "agreement with truth." A clinician spot-check of a
-subset would upgrade this from *strong proxy* to *confirmed*. To de-noise the flags, swap in the
-semantic NLI verifier (`CASEBOARD_NLI_MODEL`) and validate it against the saved gold set.
+subset would upgrade this from *strong proxy* to *confirmed*.
+
+**Semantic NLI verifier is the production default (2026-07-02).** `get_default_verifier()` returns
+an `NLIVerifier` on `tasksource/deberta-base-long-nli` (long-context doc-NLI cross-encoder; markdown
+stripped from both sides), flagging a cited claim when `P(entailment) < 0.3`. The 0.3 threshold is
+chosen for **fabrication recall, not precision** — see the recall study below. Design note: strict
+SNLI-style models (`cross-encoder/nli-deberta-v3-base`) fail this task entirely — they read
+paraphrased clinical claims as "neutral" and flag 40/40; long-context *document*-NLI is what works.
+
+*Terms* (each cited claim is judged by a frontier panel as supported, or **bad** = partial `P` /
+not-supported `N`): **flags/1380** = how many of the run's 1380 cited claims the gate marks
+needs-verification. **precision** = fraction of flags that are truly bad. **recall** = fraction of
+all truly-bad claims the gate catches. **fabrication (N) recall** = recall restricted to the worst
+class (`N`, passage doesn't support the claim at all). The aggregate "groundedness" number is just
+`1 − flags/1380` — a flag-volume proxy, NOT precision or recall.
+
+**Out-of-sample validation — two-lab judge panel over the verifier's ACTUAL verdicts on the full
+pr50 run (2026-07-02).** `evaluation/scripts/judge_verifier.py` built fresh blind gold sets from the
+verifier's real verdicts on all 1380 cited claims and had two independent-lab judges
+(`anthropic/claude-sonnet-4.5` + `openai/gpt-5.1`, blind and distinct from the answer model glm-5.2
+and the deberta checker) label each supported/partial/not. Two sets: (a) a 147-item precision panel
+= all 67 flags + an 80-pass stride sample (89% inter-judge agreement,
+`evaluation/nli-verifier-oos-validation.jsonl`); (b) a **500-pass recall study** — GPT-5.1 screened
+500 passed claims, Sonnet confirmed the positives → consensus missed-bad rate with a Wilson CI
+(`evaluation/nli-verifier-recall-study.jsonl`). Total judge cost **$2.17**.
+
+*Threshold sweep* (consensus labels; 567 claims; passes reweighted ×1313/500 to the full run):
+
+| threshold | flags/1380 | precision | overall recall | fabrication (N) recall |
+|---|---|---|---|---|
+| 0.2 (initial) | 48 (3.5%) | 0.33 | 26% | 43% |
+| **0.3 (shipped default)** | **132 (9.6%)** | **0.24** | **52%** | **100%** |
+| 0.4 | 298 (22%) | 0.13 | 64% | 100% |
+
+Read this honestly:
+
+- **Recall, not the aggregate metric, is the safety axis — and at the old 0.2 it was too low.** The
+  500-pass recall study puts the consensus missed-bad rate at **3.4%, 95% CI [2.1%, 5.4%]** (≈28–71
+  of 1313 passes truly bad). Combined with the ~17 the gate catches, **overall recall at 0.2 was
+  only ~27% (CI ≈[19%, 38%])**, and it caught just **43% of hard `N` fabrications** — it missed more
+  than half of the worst class, including a both-judges-confirmed miss (item 103, GENERAL-03).
+- **0.3 is the knee, chosen for fabrication recall.** It catches **100% of the panel's hard `N`
+  fabrications** and doubles overall recall (26%→52%), at a modest precision cost (0.33→0.24, whose
+  CIs overlap) and ~3× the flag volume (3.5%→9.6% of claims). Past 0.3, precision craters (0.13 at
+  0.4) with no `N`-recall gain, so higher buys only noise.
+- **Still a screen, not a guarantee.** Even at 0.3 a flag is majority false-alarm (precision ~0.24 —
+  *worth-a-look*, not proof) and overall recall is ~52% — a "supported" verdict is a *screen
+  passed*, not a proof of grounding.
+- **Retraction:** an earlier revision of this note claimed 0.2 gave "flag precision 1.00" and
+  well-calibrated groundedness. Both were artifacts of tuning/measuring on the 40-claim in-sample
+  set; the out-of-sample numbers above supersede them.
+- Cost/footprint: local model (~740MB, first-use download), ~33 ms/claim GPU, ~1.4 s/claim + ~2 GB
+  RSS CPU. Opt out with `CASEBOARD_NLI_MODEL=lexical`; retune with `CASEBOARD_NLI_THRESHOLD`.
+
+*Same provenance caveat as above:* LLM-judge panels, not human-expert ground truth — a clinician
+spot-check of the confirmed misses would upgrade *strong proxy* to *confirmed*.
 
 ---
 

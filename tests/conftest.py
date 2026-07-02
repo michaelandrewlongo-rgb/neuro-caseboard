@@ -16,3 +16,6 @@ def _literature_lane_off_by_default(monkeypatch):
     # Keep the suite hermetic: never auto-load a developer's local .env into the
     # controlled test environment (config._load_dotenv_once honors this opt-out).
     monkeypatch.setenv("NEURO_CASEBOARD_SKIP_DOTENV", "1")
+    # The default claim verifier is now a real NLI cross-encoder (downloads/loads a model on
+    # first use). Force the deterministic lexical verifier suite-wide; NLI tests inject stubs.
+    monkeypatch.setenv("CASEBOARD_NLI_MODEL", "lexical")
