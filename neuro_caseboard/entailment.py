@@ -196,15 +196,16 @@ class NLIVerifier:
         return probs[self._entail_index] >= self.entail_threshold
 
 
-# Default semantic gate. Threshold 0.2 tuned on the 40-claim gold set (evaluation/scripts/
-# validate_verifier.py); honestly validated OUT-OF-SAMPLE by a two-lab judge panel over the
-# verifier's real verdicts on the full pr50 run (evaluation/scripts/judge_verifier.py, see
-# evaluation/RESULTS.md): consensus flag precision 0.25 and false-pass 0.037 — 2.5-4x better than
-# LexicalVerifier's flag precision (0.10), and the aggregate groundedness metric (0.951) tracks the
-# panel-estimated true rate (~0.95). It's a calibrated SCREEN, not a high-recall guarantee (catches
-# ~26% of truly-unsupported claims). ~33 ms/claim GPU, ~1.4 s/claim + ~2 GB RSS CPU.
+# Default semantic gate, threshold chosen for SAFETY recall, not precision. Validated out-of-sample
+# by a two-lab judge panel over the verifier's real verdicts on the full pr50 run
+# (evaluation/scripts/judge_verifier.py; 500-pass recall study; see evaluation/RESULTS.md). At the
+# original 0.2 the gate was quiet but low-recall (~26% overall, only 43% of hard "not-supported"
+# fabrications caught). At 0.3 it catches 100% of the panel's hard fabrications and ~52% overall, at
+# a modest precision cost (0.33->0.24, CIs overlap) and ~3x the flag volume (3.5%->9.6% of claims).
+# Beyond 0.3 precision craters for little recall gain, so 0.3 is the knee. ~33 ms/claim GPU,
+# ~1.4 s/claim + ~2 GB RSS CPU. Raise/lower with CASEBOARD_NLI_THRESHOLD.
 DEFAULT_NLI_MODEL = "tasksource/deberta-base-long-nli"
-DEFAULT_NLI_THRESHOLD = 0.2
+DEFAULT_NLI_THRESHOLD = 0.3
 
 # Model load is ~seconds and get_default_verifier() runs per request: cache per (model, threshold).
 # A failed load is cached as None so an offline/dep-less box degrades to LexicalVerifier once,

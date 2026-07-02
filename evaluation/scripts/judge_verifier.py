@@ -97,7 +97,9 @@ def prep(args) -> None:
     n = min(args.passes, len(judgeable_passes))
     stride = max(1, len(judgeable_passes) // n) if n else 1
     sample_passes = judgeable_passes[::stride][:n]
-    sample = flagged + sample_passes
+    # --passes-only: emit ONLY passes (for a recall estimate — the missed-bad denominator). Flags
+    # don't enter the recall denominator, and they're already judged, so don't re-pay for them.
+    sample = sample_passes if args.passes_only else flagged + sample_passes
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -183,7 +185,12 @@ def judge(args) -> None:
             temperature=0, max_tokens=400,
         )
         u = resp.usage
-        cost = (u.prompt_tokens * p_in) + (u.completion_tokens * p_out)
+        if u is not None:
+            in_tok, out_tok = u.prompt_tokens, u.completion_tokens
+        else:  # OpenRouter occasionally omits usage — estimate from lengths (~4 chars/token)
+            in_tok = (len(JUDGE_SYSTEM) + len(user)) // 4
+            out_tok = len(resp.choices[0].message.content or "") // 4
+        cost = (in_tok * p_in) + (out_tok * p_out)
         spent += cost
         verdict = _parse_verdict(resp.choices[0].message.content)
         rec = {"key": b["key"], "qid": b["qid"], "judge_label": verdict,
@@ -232,6 +239,8 @@ def main() -> None:
     p.add_argument("--nli", help="NLI model (omit for lexical)")
     p.add_argument("--threshold", type=float, default=0.2)
     p.add_argument("--passes", type=int, default=80, help="how many passed claims to sample")
+    p.add_argument("--passes-only", action="store_true",
+                   help="emit only passes (recall-estimate denominator; skip flags)")
     p.add_argument("--out", required=True)
     p.set_defaults(func=prep)
     j = sub.add_parser("judge")
