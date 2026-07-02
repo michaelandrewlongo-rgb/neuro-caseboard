@@ -84,8 +84,10 @@ def test_should_cite_withholds_on_substantial_disjoint_premise():
     assert should_cite(premise, "Preserve the recurrent artery of Heubner.", LexicalVerifier()) is False
 
 
-def test_default_verifier_is_lexical_without_model_env(monkeypatch):
-    monkeypatch.delenv("CASEBOARD_NLI_MODEL", raising=False)
+def test_default_verifier_is_lexical_when_env_opts_out(monkeypatch):
+    monkeypatch.setenv("CASEBOARD_NLI_MODEL", "lexical")
+    assert isinstance(get_default_verifier(), LexicalVerifier)
+    monkeypatch.setenv("CASEBOARD_NLI_MODEL", "")
     assert isinstance(get_default_verifier(), LexicalVerifier)
 
 
@@ -141,7 +143,7 @@ def test_pipeline_passes_verifier_through(monkeypatch):
     def spy(*a, **k):
         captured["verifier"] = k.get("verifier")
         return real(*a, **k)
-    monkeypatch.delenv("CASEBOARD_NLI_MODEL", raising=False)
+    monkeypatch.setenv("CASEBOARD_NLI_MODEL", "lexical")
     monkeypatch.setattr(pipe, "compile_case_dossier", spy)
     pipe.build_case_dossier(_case(), enrich=False, use_llm=False, literature=False)
     assert isinstance(captured["verifier"], ClaimVerifier)
@@ -197,3 +199,75 @@ def test_nli_rejects_unusable_label_space():
     # A scalar/regression head (single label) is rejected so get_default_verifier() can fall back.
     with pytest.raises(ValueError):
         NLIVerifier(model=_StubModel({0: "LABEL_0"}, scores=[1.0]))
+
+
+class _RecordingStub(_StubModel):
+    def predict(self, pairs):
+        self.seen = pairs
+        return super().predict(pairs)
+
+
+def test_nli_strips_markdown_from_both_sides():
+    model = _RecordingStub(_MNLI, scores=[0.1, 0.2, 5.0])
+    NLIVerifier(model=model).entails("### Header\nThe *premise* text.", "*   **Claim:** it holds.")
+    premise, hypothesis = model.seen[0]
+    assert premise == "Header The premise text."
+    assert hypothesis == "Claim: it holds."
+
+
+# ------------------------------------------------------------------- get_default_verifier (NLI on)
+
+import neuro_caseboard.entailment as entailment_mod
+
+
+def test_default_verifier_is_nli_and_cached(monkeypatch):
+    # Default (no env): the NLI verifier is constructed ONCE per (model, threshold) — a per-request
+    # model reload would add seconds to every Ask.
+    monkeypatch.delenv("CASEBOARD_NLI_MODEL", raising=False)
+    monkeypatch.delenv("CASEBOARD_NLI_THRESHOLD", raising=False)
+    monkeypatch.setattr(entailment_mod, "_NLI_CACHE", {})
+    calls = []
+
+    def fake_nli(model_name, *, entail_threshold):
+        calls.append((model_name, entail_threshold))
+        return NLIVerifier(model=_StubModel(_MNLI, scores=[0.1, 0.2, 5.0]),
+                           entail_threshold=entail_threshold)
+
+    monkeypatch.setattr(entailment_mod, "NLIVerifier", fake_nli)
+    v1 = entailment_mod.get_default_verifier()
+    v2 = entailment_mod.get_default_verifier()
+    assert v1 is v2
+    assert calls == [(entailment_mod.DEFAULT_NLI_MODEL, entailment_mod.DEFAULT_NLI_THRESHOLD)]
+
+
+def test_default_verifier_falls_back_and_caches_failure(monkeypatch, caplog):
+    monkeypatch.delenv("CASEBOARD_NLI_MODEL", raising=False)
+    monkeypatch.setattr(entailment_mod, "_NLI_CACHE", {})
+    calls = []
+
+    def broken_nli(model_name, *, entail_threshold):
+        calls.append(model_name)
+        raise RuntimeError("no such model")
+
+    monkeypatch.setattr(entailment_mod, "NLIVerifier", broken_nli)
+    with caplog.at_level("WARNING"):
+        assert isinstance(entailment_mod.get_default_verifier(), LexicalVerifier)
+    assert "falling back to LexicalVerifier" in caplog.text
+    # The failure is cached: a second call must not retry the (slow, networked) load.
+    assert isinstance(entailment_mod.get_default_verifier(), LexicalVerifier)
+    assert len(calls) == 1
+
+
+def test_default_verifier_threshold_env_override(monkeypatch):
+    monkeypatch.delenv("CASEBOARD_NLI_MODEL", raising=False)
+    monkeypatch.setenv("CASEBOARD_NLI_THRESHOLD", "0.7")
+    monkeypatch.setattr(entailment_mod, "_NLI_CACHE", {})
+    seen = {}
+
+    def fake_nli(model_name, *, entail_threshold):
+        seen["threshold"] = entail_threshold
+        return NLIVerifier(model=_StubModel(_MNLI, scores=[0.1, 0.2, 5.0]))
+
+    monkeypatch.setattr(entailment_mod, "NLIVerifier", fake_nli)
+    entailment_mod.get_default_verifier()
+    assert seen["threshold"] == 0.7

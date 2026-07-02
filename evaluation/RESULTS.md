@@ -38,7 +38,8 @@ best-matching premise *sentence*; off-topic spans still rejected). Re-scored off
 | Verifier | groundedness | unsupported rate |
 |---|---|---|
 | shipped (whole-premise precision) | 0.07 | 0.93 |
-| **fixed (best-sentence precision)** | **0.80** | **0.20** |
+| fixed (best-sentence precision) | 0.80 | 0.20 |
+| **semantic NLI (default since 2026-07-02)** | **0.951** | **0.049** |
 
 Per-domain (fixed): Neurointerventional 0.86 · Open-CV 0.82 · Spine 0.80 · Functional 0.80 ·
 General 0.78 · Trauma 0.79 · Tumor 0.73. This is a conservative *lexical* proxy (it flags paraphrase
@@ -60,8 +61,24 @@ as worth-a-look — not as an absolute quality number.**
 *Provenance caveat:* this is an **LLM-judge** validation, not human-expert ground truth. The judge is
 independent, semantic, and blinded (a strong proxy), but it can share blind spots with LLM-generated
 answers, so "agreement with the judge" is not "agreement with truth." A clinician spot-check of a
-subset would upgrade this from *strong proxy* to *confirmed*. To de-noise the flags, swap in the
-semantic NLI verifier (`CASEBOARD_NLI_MODEL`) and validate it against the saved gold set.
+subset would upgrade this from *strong proxy* to *confirmed*.
+
+**Semantic NLI verifier is the production default (2026-07-02).** `get_default_verifier()` now
+returns an `NLIVerifier` on `tasksource/deberta-base-long-nli` (long-context doc-NLI cross-encoder;
+flag when `P(entailment) < 0.2`; markdown stripped from both sides), chosen and thresholded against
+the 40-claim gold set via `evaluation/scripts/validate_verifier.py`:
+
+- **flag precision 2/2 = 1.00** (vs lexical 2/20 = 0.10) — it flags exactly the two judge-confirmed
+  bad claims, including the one true fabrication; the lexical checker's 18 false alarms all flip to
+  supported. Flags are now actionable, not noise.
+- **false-pass 1/38 ≈ 0.03** (vs lexical 1/20 = 0.05); the single miss is the same "partial" claim
+  the lexical checker also passed (a plausible percentage the source states in a narrower context).
+- Strict SNLI-style models (`cross-encoder/nli-deberta-v3-base`) fail this task — they judge
+  paraphrased clinical claims "neutral" and flagged 40/40; long-context doc-NLI is what works.
+- Re-scored on the same pr50 run: **groundedness 0.951** — in line with the judge-estimated true
+  rate of ≈0.94, so the headline number is now trustworthy, not a conservative floor.
+- Cost: local model (~740MB, downloaded on first use), ~33 ms/claim GPU, ~1.4 s/claim + ~2 GB RSS
+  CPU. Opt out with `CASEBOARD_NLI_MODEL=lexical`; tune with `CASEBOARD_NLI_THRESHOLD`.
 
 ---
 

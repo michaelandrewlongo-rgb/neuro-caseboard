@@ -8,6 +8,7 @@ a weak citation — never add or re-point one.
 """
 from __future__ import annotations
 
+import logging
 import math
 import os
 import re
@@ -144,6 +145,17 @@ def _softmax(scores) -> list[float]:
     return [e / total for e in exps] if total else [0.0] * len(exps)
 
 
+# Markdown syntax in synthesized claims ("*   **Myelomeningocele:** ...", "### Header") reads as
+# noise to an NLI cross-encoder (measured on the 40-claim gold set: uncleaned bullets pushed
+# well-supported claims to "neutral"); strip it from both sides before scoring.
+_MARKDOWN = re.compile(r"[*_#`]+")
+_MULTI_WS = re.compile(r"\s+")
+
+
+def _clean_markdown(text: str) -> str:
+    return _MULTI_WS.sub(" ", _MARKDOWN.sub(" ", text or "")).strip()
+
+
 class NLIVerifier:
     """Off-the-shelf cross-encoder NLI backend (inference-only; lazily imported). Premise =
     retrieved corpus span; hypothesis = the claim. Production path only — the test suite must never
@@ -173,22 +185,47 @@ class NLIVerifier:
             self._entail_index = _ENTAIL_INDEX
 
     def entails(self, premise: str, hypothesis: str) -> bool:
-        scores = self._model.predict([(premise, hypothesis)])[0]
+        scores = self._model.predict([(_clean_markdown(premise), _clean_markdown(hypothesis))])[0]
         probs = _softmax(scores)
         if not probs:
             return False
-        best = max(range(len(probs)), key=lambda i: probs[i])
-        # Conservative: entailment must be the argmax AND clear the confidence threshold, so a
-        # near-uniform split (e.g. 0.34/0.33/0.33) is not counted as entailment.
-        return best == self._entail_index and probs[self._entail_index] >= self.entail_threshold
+        # Pure probability threshold — no argmax requirement. Summarized clinical claims often
+        # score entailment below neutral yet well above chance (e.g. 0.45 entail / 0.50 neutral on
+        # a judge-confirmed supported claim); requiring argmax at a low threshold re-flags them.
+        # The gold-set-validated operating point is P(entail) >= threshold alone.
+        return probs[self._entail_index] >= self.entail_threshold
+
+
+# Default semantic gate. Validated 2026-07-02 against the 40-claim blind gold set
+# (evaluation/groundedness-gold-set.jsonl, frontier-judge labels) via
+# evaluation/scripts/validate_verifier.py: at threshold 0.2, whole-premise scoring, it flags exactly
+# the 2 judge-confirmed bad claims (flag precision 2/2 vs LexicalVerifier's 2/20) including the one
+# true fabrication, with 0 false alarms. ~33 ms/claim on this box's GPU, ~1.4 s/claim CPU, ~2 GB RSS.
+DEFAULT_NLI_MODEL = "tasksource/deberta-base-long-nli"
+DEFAULT_NLI_THRESHOLD = 0.2
+
+# Model load is ~seconds and get_default_verifier() runs per request: cache per (model, threshold).
+# A failed load is cached as None so an offline/dep-less box degrades to LexicalVerifier once,
+# not with a network-timeout retry on every Ask.
+_NLI_CACHE: dict = {}
 
 
 def get_default_verifier() -> ClaimVerifier:
-    """NLIVerifier when CASEBOARD_NLI_MODEL is set and the backend imports; else LexicalVerifier."""
-    model = os.environ.get("CASEBOARD_NLI_MODEL")
-    if model:
+    """The production claim verifier: the default NLI cross-encoder (or ``CASEBOARD_NLI_MODEL``),
+    falling back to LexicalVerifier when the model can't load or the env is ``lexical``/empty."""
+    model = (os.environ.get("CASEBOARD_NLI_MODEL", DEFAULT_NLI_MODEL) or "").strip()
+    if not model or model.lower() == "lexical":
+        return LexicalVerifier()
+    try:
+        threshold = float(os.environ.get("CASEBOARD_NLI_THRESHOLD") or DEFAULT_NLI_THRESHOLD)
+    except ValueError:
+        threshold = DEFAULT_NLI_THRESHOLD
+    key = (model, threshold)
+    if key not in _NLI_CACHE:
         try:
-            return NLIVerifier(model)
-        except Exception:
-            pass
-    return LexicalVerifier()
+            _NLI_CACHE[key] = NLIVerifier(model, entail_threshold=threshold)
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                "NLI verifier %r unavailable (%s); falling back to LexicalVerifier", model, exc)
+            _NLI_CACHE[key] = None
+    return _NLI_CACHE[key] or LexicalVerifier()
