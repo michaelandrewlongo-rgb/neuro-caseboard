@@ -362,6 +362,29 @@ def _literature_dict(lit) -> dict | None:
     return {"narrative": lit.narrative, "citations": cites}
 
 
+def _corpus_record_dict(r) -> dict:
+    # Lane C ([D#]) source card: metadata + a resolvable link; the passage content stays
+    # server-side (it's the verification premise, not display copy).
+    doi = getattr(r, "doi", "") or ""
+    pmid = getattr(r, "pmid", "") or ""
+    link = (f"https://doi.org/{doi}" if doi
+            else f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else "")
+    return {
+        "title": getattr(r, "title", ""),
+        "journal": getattr(r, "journal", ""),
+        "year": getattr(r, "year", None),
+        "study_design": getattr(r, "study_design", ""),
+        "section_type": getattr(r, "section_type", ""),
+        "pmid": pmid,
+        "doi": doi,
+        "link": link,
+    }
+
+
+def _corpus_list(records) -> list:
+    return [_corpus_record_dict(r) for r in (records or [])]
+
+
 # --- Ask streaming jobs ----------------------------------------------------------------------
 # An Ask request is a server-owned job: a daemon thread runs the (synchronous) streaming
 # orchestrator, appending serialized events to an append-only log. The SSE endpoint replays the
@@ -405,6 +428,8 @@ def _serialize_ask_event(ev: dict) -> dict:
                 "figures": [_figure_dict(f) for f in ev.get("figures") or []]}
     if t == "literature":
         return {"type": "literature", "literature": _literature_dict(ev.get("literature"))}
+    if t == "corpus":
+        return {"type": "corpus", "corpus": _corpus_list(ev.get("corpus"))}
     if t == "verification":
         return {"type": "verification",
                 "verification": verification_to_dict(ev.get("verification"))}
@@ -507,6 +532,7 @@ def ask(req: AskRequest):
         "citations": [_citation_dict(c) for c in (result.citations or [])],
         "figures": [_figure_dict(f) for f in (result.figures or [])],
         "literature": _literature_dict(getattr(result, "literature", None)),
+        "corpus": _corpus_list(getattr(result, "corpus", None)),
         "verification": verification_to_dict(getattr(result, "verification", None)),
     }
 

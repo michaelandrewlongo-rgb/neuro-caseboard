@@ -10,7 +10,7 @@ from neuro_caseboard.entailment import (
     unsupported_entities,
 )
 
-_MARKER = re.compile(r"\[(L?\d+)\]")
+_MARKER = re.compile(r"\[((?:L|D)?\d+)\]")  # [n] textbook, [L#] PubMed, [D#] corpus lane
 _SENT = re.compile(r"(?<=[.!?])\s+")
 
 

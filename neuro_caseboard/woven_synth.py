@@ -36,17 +36,28 @@ WOVEN_SYSTEM = (
     "clinical judgment."
 )
 
+WOVEN_CORPUS_RULE = (
+    "\n- A THIRD evidence source is provided below: numbered journal full-text passages "
+    "(cited [D#], e.g. [D2]) from a frozen contemporary neurosurgical literature corpus "
+    "(through March 2026). Prefer [D#] for currency-sensitive, trial-specific, and "
+    "quantitative claims. Keep ALL THREE citation styles DISTINCT — textbook [n], PubMed "
+    "[L#], corpus [D#] — and never merge or renumber them."
+)
+
 
 @dataclass
 class WovenSynthesis:
     answer: str
     citations: list = field(default_factory=list)   # neuro_core Citation, [n]
     records: list = field(default_factory=list)      # literature records used, for [L#]
+    corpus_records: list = field(default_factory=list)  # corpus passages used, for [D#]
 
 
-def build_woven_prompt(question, hits, figures, records, variant_directive=None):
+def build_woven_prompt(question, hits, figures, records, variant_directive=None,
+                       *, corpus_records=None):
     """The woven user prompt: question + textbook passages + appended figures + figure note +
-    contemporary studies. Shared by synthesize_woven() and the streaming orchestrator."""
+    contemporary studies + journal-corpus passages. Shared by synthesize_woven() and the
+    streaming orchestrator (corpus_records is keyword-only so positional callers are unaffected)."""
     from neuro_core.synthesize import (
         _format_passages, _appended_figures, _format_appended, _figure_note)
     from neuro_caseboard.literature.synth import _format_studies
@@ -57,15 +68,20 @@ def build_woven_prompt(question, hits, figures, records, variant_directive=None)
     user += _figure_note(figures)
     if records:
         user += f"\n\nContemporary studies:\n{_format_studies(records)}"
+    if corpus_records:
+        from neuro_caseboard.corpus import format_corpus_studies
+        user += f"\n\nJournal literature corpus (full text):\n{format_corpus_studies(corpus_records)}"
     if variant_directive:
         user += "\n\n" + variant_directive
     return user
 
 
 def synthesize_woven(question, hits, figures, images, records, synth_client,
-                     *, variant_directive=None) -> WovenSynthesis:
+                     *, variant_directive=None, corpus_records=None) -> WovenSynthesis:
     from neuro_core.synthesize import build_citations
-    user = build_woven_prompt(question, hits, figures, records, variant_directive)
-    answer = synth_client.generate(WOVEN_SYSTEM, user, images)
+    user = build_woven_prompt(question, hits, figures, records, variant_directive,
+                              corpus_records=corpus_records)
+    system = WOVEN_SYSTEM + (WOVEN_CORPUS_RULE if corpus_records else "")
+    answer = synth_client.generate(system, user, images)
     return WovenSynthesis(answer=answer, citations=build_citations(hits, figures),
-                          records=list(records))
+                          records=list(records), corpus_records=list(corpus_records or []))
