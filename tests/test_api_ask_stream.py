@@ -62,3 +62,18 @@ def test_unknown_job_404():
     import api.server as server
     client = TestClient(server.app)
     assert client.get("/api/ask/stream/nope?cursor=0").status_code == 404
+
+
+def test_corpus_event_serializes_to_source_cards():
+    """A Lane C ([D#]) corpus event → JSON source cards with a resolvable link; the passage
+    content is NOT leaked to the wire (it's the server-side verification premise)."""
+    import api.server as server
+    from neuro_caseboard.corpus import CorpusRecord
+    rec = CorpusRecord(work_id="w1", title="TESLA", journal="JAMA", year=2024,
+                       study_design="rct", section_type="results", content="SECRET premise",
+                       doi="10.1/x", pmid="40000001", source_db="cerebrovascular")
+    out = server._serialize_ask_event({"type": "corpus", "corpus": [rec]})
+    assert out["type"] == "corpus" and len(out["corpus"]) == 1
+    card = out["corpus"][0]
+    assert card["title"] == "TESLA" and card["link"] == "https://doi.org/10.1/x"
+    assert "SECRET premise" not in json.dumps(card)  # content stays server-side

@@ -22,6 +22,7 @@ def _emit_batch(emit, qr):
     emit({"type": "answer", "answer": qr.answer, "citations": list(qr.citations or []),
           "figures": list(qr.figures or []), "refusal": False})
     emit({"type": "literature", "literature": getattr(qr, "literature", None)})
+    emit({"type": "corpus", "corpus": list(getattr(qr, "corpus", None) or [])})
     emit({"type": "verification", "verification": getattr(qr, "verification", None)})
     emit({"type": "done"})
 
@@ -40,10 +41,11 @@ def _fallback(question, emit, *, config, force, skip_disambiguation):
 
 
 def stream_answer(question, emit, *, config=None, force=False, skip_disambiguation=False,
-                  lit_config=None, synth_client=None, plan_a=None, retrieve_b=None):
+                  lit_config=None, synth_client=None, plan_a=None, retrieve_b=None,
+                  retrieve_c=None, corpus_config=None, corpus_query=None):
     from neuro_core.query import Clarification, _variant_directive
     from neuro_core.synthesize import REFUSAL, is_refusal, build_citations
-    from neuro_caseboard.woven_synth import WOVEN_SYSTEM, build_woven_prompt
+    from neuro_caseboard.woven_synth import WOVEN_SYSTEM, WOVEN_CORPUS_RULE, build_woven_prompt
 
     if lit_config is None and plan_a is None and retrieve_b is None:
         from neuro_caseboard.literature.config import load_literature_config
@@ -67,10 +69,17 @@ def stream_answer(question, emit, *, config=None, force=False, skip_disambiguati
             def retrieve_b():
                 return _retrieve_literature_for_weave(question, lit_config=lit_config,
                                                       synth_client=synth_client)
+        if retrieve_c is None:
+            from neuro_caseboard.corpus import load_corpus_config, retrieve_corpus_for_weave
+            cc = corpus_config if corpus_config is not None else load_corpus_config()
+            _cq = corpus_query or question  # clinical query decouples corpus FTS from framing
+            def retrieve_c():
+                return retrieve_corpus_for_weave(_cq, cc)
 
-        with ThreadPoolExecutor(max_workers=2) as ex:
+        with ThreadPoolExecutor(max_workers=3) as ex:
             fa = ex.submit(plan_a)
             fb = ex.submit(retrieve_b)
+            fc = ex.submit(retrieve_c)                  # Lane C (corpus): failure-safe → []
             plan = fa.result()                          # Lane A errors propagate
             if isinstance(plan, Clarification):
                 emit({"type": "clarification",
@@ -83,6 +92,11 @@ def stream_answer(question, emit, *, config=None, force=False, skip_disambiguati
             except Exception:
                 _log.debug("woven literature lane raised", exc_info=True)
                 records = []
+            try:
+                corpus_records = fc.result()
+            except Exception:
+                _log.debug("woven corpus lane raised", exc_info=True)
+                corpus_records = []
 
         citations = build_citations(plan.hits, plan.figures)
         emit({"type": "sources", "citations": citations})
@@ -95,10 +109,13 @@ def stream_answer(question, emit, *, config=None, force=False, skip_disambiguati
                       "sources).**\n\n")
             emit({"type": "answer_delta", "text": prefix})
 
+        system = WOVEN_SYSTEM + (WOVEN_CORPUS_RULE if corpus_records else "")
+
         def _stream_body():
-            user = build_woven_prompt(plan.question, plan.hits, plan.figures, records, directive)
+            user = build_woven_prompt(plan.question, plan.hits, plan.figures, records, directive,
+                                      corpus_records=corpus_records)
             parts = []
-            for delta in synth_client.generate_stream(WOVEN_SYSTEM, user, plan.images):
+            for delta in synth_client.generate_stream(system, user, plan.images):
                 if not delta:
                     continue
                 parts.append(delta)
@@ -113,16 +130,18 @@ def stream_answer(question, emit, *, config=None, force=False, skip_disambiguati
                 emit({"type": "answer", "answer": REFUSAL, "citations": [], "figures": [],
                       "refusal": True})
                 emit({"type": "literature", "literature": None})
+                emit({"type": "corpus", "corpus": []})
                 emit({"type": "verification", "verification": None})
                 emit({"type": "done"})
                 return
 
         full_answer = prefix + body
         if is_refusal(body):
-            # Abstention: retrieval-derived sources/figures/literature are spurious.
+            # Abstention: retrieval-derived sources/figures/literature/corpus are spurious.
             emit({"type": "answer", "answer": body, "citations": [], "figures": [],
                   "refusal": True})
             emit({"type": "literature", "literature": None})
+            emit({"type": "corpus", "corpus": []})
             emit({"type": "verification", "verification": None})
             emit({"type": "done"})
             return
@@ -138,12 +157,15 @@ def stream_answer(question, emit, *, config=None, force=False, skip_disambiguati
                      for i, r in enumerate(records, 1)]
             lit = LiteratureSection(narrative="", citations=cites)
         emit({"type": "literature", "literature": lit})
+        emit({"type": "corpus", "corpus": list(corpus_records or [])})
 
         from neuro_caseboard.answer_verify import verify_answer
         premises = {str(getattr(c, "n", i)): getattr(c, "text", "") or ""
                     for i, c in enumerate(citations, 1)}
         for i, r in enumerate(records or [], 1):
             premises[f"L{i}"] = getattr(r, "abstract", "") or ""
+        for i, r in enumerate(corpus_records or [], 1):
+            premises[f"D{i}"] = getattr(r, "content", "") or ""
         emit({"type": "verification", "verification": verify_answer(full_answer, premises)})
         emit({"type": "done"})
     except Exception:

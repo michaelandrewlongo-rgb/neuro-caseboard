@@ -41,6 +41,13 @@ def _run_ask(args) -> int:
         for c in lit.citations:
             link = f"https://doi.org/{c.doi}" if c.doi else c.url
             print(f"  [L{c.n}] {c.title} — {c.journal} {c.year or ''} · {link}")
+    corpus = getattr(result, "corpus", None)
+    if corpus:
+        print("\nJournal Corpus:")
+        for i, r in enumerate(corpus, 1):
+            link = (f"https://doi.org/{r.doi}" if r.doi
+                    else f"https://pubmed.ncbi.nlm.nih.gov/{r.pmid}/" if r.pmid else "")
+            print(f"  [D{i}] {r.title} — {r.journal} {r.year or ''} · {link}")
     if result.figures:
         print("\nFigures:")
         for f in result.figures:

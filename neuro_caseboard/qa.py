@@ -38,6 +38,7 @@ class QAResult:
     figures: list = field(default_factory=list)
     literature: "LiteratureSection | None" = None
     verification: "AnswerVerification | None" = None
+    corpus: list = field(default_factory=list)      # CorpusRecord list, for [D#]
 
 
 def retrieve_records(question, *, lit_config, client=None, synth_client, cache=None):
@@ -134,8 +135,8 @@ def _retrieve_literature_for_weave(question, *, lit_config, synth_client):
 
 
 def _answer_question_woven(question, *, config=None, force=False, lit_config=None,
-                           synth_client=None, plan_a=None, retrieve_b=None,
-                           skip_disambiguation=False):
+                           synth_client=None, plan_a=None, retrieve_b=None, retrieve_c=None,
+                           corpus_config=None, corpus_query=None, skip_disambiguation=False):
     """One woven answer from textbook ([n]) + literature ([L#]). Lane A errors propagate;
     Lane B failures degrade to a textbook-only answer. Mirrors Engine._answer's empty-guard,
     refusal handling, and variant prepend (the woven path bypasses Engine._answer)."""
@@ -155,10 +156,17 @@ def _answer_question_woven(question, *, config=None, force=False, lit_config=Non
         def retrieve_b():
             return _retrieve_literature_for_weave(question, lit_config=lit_config,
                                                   synth_client=synth_client)
+    if retrieve_c is None:
+        from neuro_caseboard.corpus import load_corpus_config, retrieve_corpus_for_weave
+        cc = corpus_config if corpus_config is not None else load_corpus_config()
+        _cq = corpus_query or question  # clinical query decouples corpus FTS from pedagogical framing
+        def retrieve_c():
+            return retrieve_corpus_for_weave(_cq, cc)
 
-    with ThreadPoolExecutor(max_workers=2) as ex:
+    with ThreadPoolExecutor(max_workers=3) as ex:
         fa = ex.submit(plan_a)
         fb = ex.submit(retrieve_b)
+        fc = ex.submit(retrieve_c)  # Lane C (corpus) is failure-safe → [] on any error
         plan = fa.result()  # Lane A errors propagate (e.g. GpuNotReadyError)
         if isinstance(plan, Clarification):
             return plan
@@ -167,12 +175,18 @@ def _answer_question_woven(question, *, config=None, force=False, lit_config=Non
         except Exception:
             _log.debug("woven literature lane raised in executor", exc_info=True)
             records = []
+        try:
+            corpus_records = fc.result()
+        except Exception:
+            _log.debug("woven corpus lane raised in executor", exc_info=True)
+            corpus_records = []
 
     directive = _variant_directive(plan.variant.label) if plan.variant else None
 
     def _synth():
         return synthesize_woven(plan.question, plan.hits, plan.figures, plan.images,
-                                records, synth_client, variant_directive=directive)
+                                records, synth_client, variant_directive=directive,
+                                corpus_records=corpus_records)
 
     syn = _synth()
     # Empty-answer guard (parity with Engine._answer / TKT-C5): a transient empty/whitespace
@@ -202,13 +216,16 @@ def _answer_question_woven(question, *, config=None, force=False, lit_config=Non
                 for i, c in enumerate(syn.citations or [], 1)}
     for i, r in enumerate(syn.records or [], 1):
         premises[f"L{i}"] = getattr(r, "abstract", "") or ""
+    for i, r in enumerate(syn.corpus_records or [], 1):
+        premises[f"D{i}"] = getattr(r, "content", "") or ""
     verification = verify_answer(syn.answer, premises)
     return QAResult(answer=answer, citations=syn.citations, figures=plan.figures,
-                    literature=lit, verification=verification)
+                    literature=lit, verification=verification,
+                    corpus=list(syn.corpus_records or []))
 
 
 def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=None,
-                    skip_disambiguation=False) -> QAResult:
+                    skip_disambiguation=False, corpus_query=None) -> QAResult:
     """Run Lane A and Lane B concurrently. Lane A errors propagate; Lane B failures drop
     the section. `lane_a`/`lane_b` are injectable no-arg callables (for tests).
 
@@ -221,7 +238,7 @@ def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=N
         lit_config = load_literature_config()
         if lit_config.weave:
             return _answer_question_woven(question, config=config, force=force,
-                                          lit_config=lit_config,
+                                          lit_config=lit_config, corpus_query=corpus_query,
                                           skip_disambiguation=skip_disambiguation)
 
     if lane_a is None:
