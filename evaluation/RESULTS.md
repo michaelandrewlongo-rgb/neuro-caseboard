@@ -65,20 +65,48 @@ subset would upgrade this from *strong proxy* to *confirmed*.
 
 **Semantic NLI verifier is the production default (2026-07-02).** `get_default_verifier()` now
 returns an `NLIVerifier` on `tasksource/deberta-base-long-nli` (long-context doc-NLI cross-encoder;
-flag when `P(entailment) < 0.2`; markdown stripped from both sides), chosen and thresholded against
-the 40-claim gold set via `evaluation/scripts/validate_verifier.py`:
+flag when `P(entailment) < 0.2`; markdown stripped from both sides). Model and threshold were
+selected against the 40-claim gold set via `evaluation/scripts/validate_verifier.py` — but because
+the threshold is *tuned* on that set, its in-sample numbers (flag precision 2/2, false-pass 1/38)
+are optimistic. The honest evaluation is the **out-of-sample panel** below. Design note: strict
+SNLI-style models (`cross-encoder/nli-deberta-v3-base`) fail this task entirely — they read
+paraphrased clinical claims as "neutral" and flag 40/40; long-context *document*-NLI is what works.
 
-- **flag precision 2/2 = 1.00** (vs lexical 2/20 = 0.10) — it flags exactly the two judge-confirmed
-  bad claims, including the one true fabrication; the lexical checker's 18 false alarms all flip to
-  supported. Flags are now actionable, not noise.
-- **false-pass 1/38 ≈ 0.03** (vs lexical 1/20 = 0.05); the single miss is the same "partial" claim
-  the lexical checker also passed (a plausible percentage the source states in a narrower context).
-- Strict SNLI-style models (`cross-encoder/nli-deberta-v3-base`) fail this task — they judge
-  paraphrased clinical claims "neutral" and flagged 40/40; long-context doc-NLI is what works.
-- Re-scored on the same pr50 run: **groundedness 0.951** — in line with the judge-estimated true
-  rate of ≈0.94, so the headline number is now trustworthy, not a conservative floor.
-- Cost: local model (~740MB, downloaded on first use), ~33 ms/claim GPU, ~1.4 s/claim + ~2 GB RSS
-  CPU. Opt out with `CASEBOARD_NLI_MODEL=lexical`; tune with `CASEBOARD_NLI_THRESHOLD`.
+**Out-of-sample validation — a two-lab judge panel over the verifier's ACTUAL verdicts on the full
+pr50 run (2026-07-02).** `evaluation/scripts/judge_verifier.py` built a fresh blind gold set from
+the NLI verifier's real verdicts on all 1380 cited claims — every one of its **67 flags** plus an
+80-claim stride sample of its passes — and had two independent-lab frontier judges
+(`anthropic/claude-sonnet-4.5` + `openai/gpt-5.1`), blind to the verdict and distinct from both the
+answer model (glm-5.2) and the checker (deberta), label each supported/partial/not. Judge cost
+**$0.95** total. Panel agreement 131/147 = **89%**. Merged labels:
+`evaluation/nli-verifier-oos-validation.jsonl`.
+
+| metric (consensus = both judges agree) | NLI (out-of-sample) | lexical (in-sample, 40-Q) |
+|---|---|---|
+| flag precision | **17/67 = 0.25** (either-judge 0.39) | 2/20 = 0.10 |
+| false-pass rate | **3/80 = 0.037** (either-judge 0.125) | 1/20 = 0.05 |
+| aggregate groundedness metric | **0.951** (panel-estimated true ≈ 0.95) | 0.80 (floor, true ≈ 0.94) |
+
+Read this honestly:
+
+- **The aggregate metric is now well-calibrated.** Measured 0.951 vs a panel-estimated true rate of
+  ≈0.952 (67·0.25 truly-bad flags + 1313·0.037 missed ≈ 66/1380 bad). Unlike the lexical 0.80
+  *conservative floor*, 0.951 tracks the real rate — trustworthy as an aggregate quality number and
+  a regression tripwire.
+- **Flags are 2.5–4× more actionable than lexical** (precision 0.25–0.39 vs 0.10) but still
+  majority false-alarm — treat a flag as *worth-a-look*, not proof of a bad claim.
+- **It is a low-recall safety screen, NOT a guarantee.** It catches only ≈26% of the ~66
+  truly-unsupported claims; it passes real misses, including one **both-judges-confirmed hard "not
+  supported"** (item 103, GENERAL-03) and two partials (NIS-05, TUMOR-04). A "supported" verdict is
+  a *screen passed*, not a proof of grounding.
+- Net vs lexical: better on every measured axis (flag precision, false-pass, metric calibration), so
+  it is the better default — but the earlier "flag precision 1.00" claim was in-sample overfitting
+  and is retracted here.
+- Cost/footprint: local model (~740MB, first-use download), ~33 ms/claim GPU, ~1.4 s/claim + ~2 GB
+  RSS CPU. Opt out with `CASEBOARD_NLI_MODEL=lexical`; tune with `CASEBOARD_NLI_THRESHOLD`.
+
+*Same provenance caveat as above:* LLM-judge panel, not human-expert ground truth — a clinician
+spot-check of the confirmed false-passes would upgrade *strong proxy* to *confirmed*.
 
 ---
 

@@ -196,11 +196,13 @@ class NLIVerifier:
         return probs[self._entail_index] >= self.entail_threshold
 
 
-# Default semantic gate. Validated 2026-07-02 against the 40-claim blind gold set
-# (evaluation/groundedness-gold-set.jsonl, frontier-judge labels) via
-# evaluation/scripts/validate_verifier.py: at threshold 0.2, whole-premise scoring, it flags exactly
-# the 2 judge-confirmed bad claims (flag precision 2/2 vs LexicalVerifier's 2/20) including the one
-# true fabrication, with 0 false alarms. ~33 ms/claim on this box's GPU, ~1.4 s/claim CPU, ~2 GB RSS.
+# Default semantic gate. Threshold 0.2 tuned on the 40-claim gold set (evaluation/scripts/
+# validate_verifier.py); honestly validated OUT-OF-SAMPLE by a two-lab judge panel over the
+# verifier's real verdicts on the full pr50 run (evaluation/scripts/judge_verifier.py, see
+# evaluation/RESULTS.md): consensus flag precision 0.25 and false-pass 0.037 — 2.5-4x better than
+# LexicalVerifier's flag precision (0.10), and the aggregate groundedness metric (0.951) tracks the
+# panel-estimated true rate (~0.95). It's a calibrated SCREEN, not a high-recall guarantee (catches
+# ~26% of truly-unsupported claims). ~33 ms/claim GPU, ~1.4 s/claim + ~2 GB RSS CPU.
 DEFAULT_NLI_MODEL = "tasksource/deberta-base-long-nli"
 DEFAULT_NLI_THRESHOLD = 0.2
 
