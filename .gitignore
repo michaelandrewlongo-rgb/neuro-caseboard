@@ -32,3 +32,6 @@ gui-council/axe/
 # local throwaway venvs
 .testvenv/
 .project-loop/
+
+# chunking benchmark: regenerable extraction cache (machine paths, ~6MB/book)
+eval/chunking-benchmark/records_cache/
