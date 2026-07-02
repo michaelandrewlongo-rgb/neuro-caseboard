@@ -20,7 +20,7 @@ DEFAULTS = {
     # synthesizer has no token cap, so more passages => more comprehensive grounded answers
     # at marginal cost. (Plan section A.1: 20->40 / 6->12.)
     "RETRIEVE_K": "40",
-    "RERANK_K": "12",
+    "RERANK_K": "20",
     "EMBED_DEVICE": "auto",
     "SYNTH_PROVIDER": "openrouter",
     # Query-disambiguation ("analyze") runs a separate, cheaper/faster model than synthesis.
