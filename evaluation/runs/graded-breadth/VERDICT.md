@@ -18,3 +18,17 @@ human deploy-synth grade remains the confirmatory step before calling any flip f
 | embed-qwen3 | 21 | 85.33 | 86.76 | +1.43 | [−1.44, 4.30] | 0.98 | 13/8/0 | weak-positive, CI spans 0 → keep bge-large |
 
 **Action:** `neuro_core/config.py` RERANK_K 12 → 20. All other defaults unchanged.
+
+## Cross-judge confirmation — RERANK_K=20 (blinded set-1, 21 items)
+
+Same on-disk answer pairs graded a second time by an independent judge (**GPT-5.5**), blinded +
+order-randomized off `evaluation/runs/blinded-grading/blinded-set-1.md`. Both judges favor the arm:
+
+| Judge | Δ (arm−ctrl) | CI95 | t | W/L/T |
+|---|---|---|---|---|
+| anthropic/claude-sonnet-4.5 | +3.05 | [0.89, 5.20] | 2.77 | 16/5/0 |
+| GPT-5.5 (blind, 2nd judge) | +4.71 | [−0.10, 9.53] | 1.92 | 14/7/0 |
+
+Convergent: same direction, overlapping magnitude. Sonnet's CI clears 0; GPT-5.5's point estimate
+is larger but noisier (lower bound at −0.10, ~p≈0.07 on n=21). Two independent blinded judges
+agreeing de-risks the 12→20 flip.

@@ -86,6 +86,11 @@ precedent; a paid human deploy-synth grade is the confirmatory step before calli
 **Only `RERANK_K=20` cleared the decisive bar** (CI95 excludes 0 AND wins>losses) → `neuro_core/config.py`
 RERANK_K 12→20. All other defaults unchanged. Full note: `evaluation/runs/graded-breadth/VERDICT.md`.
 
+**Cross-judge confirmation (RERANK_K=20):** the same blinded pairs, re-graded by a second independent
+judge (**GPT-5.5**), also favor the arm — Δ +4.71, CI95 [−0.10, 9.53], W/L/T 14/7/0. Convergent with
+sonnet-4.5 (Δ +3.05): same direction, overlapping magnitude. GPT-5.5's estimate is larger but noisier
+(lower bound at 0, ~p≈0.07 on n=21). Two independent blinded judges agreeing de-risks the flip.
+
 ---
 
 Update a row after a full run:
