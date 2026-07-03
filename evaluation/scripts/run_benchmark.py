@@ -179,7 +179,7 @@ def model_configuration() -> dict:
         "google_cloud_project": env("GOOGLE_CLOUD_PROJECT", ""),
         "google_cloud_location": env("GOOGLE_CLOUD_LOCATION", "us-central1"),
         "retrieve_k": env("RETRIEVE_K", "40"),
-        "rerank_k": env("RERANK_K", "12"),
+        "rerank_k": env("RERANK_K", "20"),  # keep in sync with neuro_core/config.py default
         "rerank_model": env("RERANK_MODEL", "BAAI/bge-reranker-v2-m3"),
         "embed_model": env("EMBED_MODEL", "BAAI/bge-large-en-v1.5"),
         "literature_weave": env("LITERATURE_WEAVE", "true"),
