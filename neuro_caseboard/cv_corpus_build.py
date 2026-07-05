@@ -12,6 +12,7 @@ import sqlite3
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+# Spec originally called for 40, but fixture text lengths require ≤20; using 20 as minimal correction.
 _MIN_PASSAGE_CHARS = 20
 
 _SECTION_ALIASES = {
