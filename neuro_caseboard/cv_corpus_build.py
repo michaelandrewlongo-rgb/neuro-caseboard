@@ -7,6 +7,7 @@ overlaps, and freshly parsing the rest from JATS XML or plaintext.
 """
 from __future__ import annotations
 
+import csv
 import os
 import re
 import sqlite3
@@ -188,3 +189,23 @@ def copy_from_big_db(big_db_path: str, pmid: str):
         }
     finally:
         con.close()
+
+
+_CHAPTER_DIR_RE = re.compile(r"^Ch(\d+)_")
+
+
+def load_have_list(csv_path: str) -> list:
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def chapter_dir_map(cv_full_text_root: str) -> dict:
+    root = Path(cv_full_text_root)
+    out = {}
+    for d in root.iterdir():
+        if not d.is_dir():
+            continue
+        m = _CHAPTER_DIR_RE.match(d.name)
+        if m:
+            out[int(m.group(1))] = d
+    return out

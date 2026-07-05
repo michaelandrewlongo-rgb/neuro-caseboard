@@ -149,3 +149,31 @@ def test_copy_from_big_db_returns_none_for_missing_pmid(tmp_path):
 
 def test_copy_from_big_db_returns_none_when_db_missing(tmp_path):
     assert copy_from_big_db(str(tmp_path / "nope.sqlite"), "23387822") is None
+
+
+from neuro_caseboard.cv_corpus_build import load_have_list, chapter_dir_map
+
+
+def test_load_have_list_parses_csv_rows(tmp_path):
+    csv_path = tmp_path / "have-list.csv"
+    csv_path.write_text(
+        "pmid,chapter,format,file,access,year,journal,doi,title,authors\n"
+        "111,3,pdf,papers/x.pdf,Open access,2020,Stroke,10.1/a,A Title,Smith J\n"
+    )
+    rows = load_have_list(str(csv_path))
+    assert rows == [{
+        "pmid": "111", "chapter": "3", "format": "pdf", "file": "papers/x.pdf",
+        "access": "Open access", "year": "2020", "journal": "Stroke",
+        "doi": "10.1/a", "title": "A Title", "authors": "Smith J",
+    }]
+
+
+def test_chapter_dir_map_resolves_by_leading_chapter_number(tmp_path):
+    root = tmp_path / "cv_full_text"
+    (root / "Ch03_Noninvasive-imaging").mkdir(parents=True)
+    (root / "Ch47_Spinal-angiography-anatomy").mkdir(parents=True)
+    (root / "not_a_chapter_dir").mkdir(parents=True)
+    mapping = chapter_dir_map(str(root))
+    assert mapping[3].name == "Ch03_Noninvasive-imaging"
+    assert mapping[47].name == "Ch47_Spinal-angiography-anatomy"
+    assert set(mapping) == {3, 47}
