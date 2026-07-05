@@ -46,6 +46,7 @@ export default function Ask() {
   })
   const [question, setQuestion] = useState(() => stateRef.current?.question ?? "")
   const [netError, setNetError] = useState<string | null>(null)
+  const [cerebrovascular, setCerebrovascular] = useState(false)
 
   // If a restored job was still streaming, reconnect at its cursor (pure subscription setup;
   // the connect's onEvent callback updates state, which is the allowed pattern).
@@ -81,7 +82,7 @@ export default function Ask() {
     setQuestion(text)
     setNetError(null)
     try {
-      const { job_id } = await startAsk(text, opts?.skipDisambiguation ?? false)
+      const { job_id } = await startAsk(text, opts?.skipDisambiguation ?? false, cerebrovascular)
       const fresh = emptyAskState(text, job_id)
       stateRef.current = fresh
       setState(fresh)
@@ -151,6 +152,16 @@ export default function Ask() {
           {streaming ? "Asking…" : "Ask"}
         </Button>
       </form>
+
+      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={cerebrovascular}
+          onChange={(e) => setCerebrovascular(e.target.checked)}
+          disabled={streaming}
+        />
+        Cerebrovascular question (search curated full-text literature)
+      </label>
 
       {!submitted && (
         <div className="flex flex-wrap gap-2">
