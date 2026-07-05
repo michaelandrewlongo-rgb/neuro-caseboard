@@ -103,3 +103,51 @@ def split_plaintext_sections(text: str) -> list:
         if len(chunk) >= _MIN_PASSAGE_CHARS:
             passages.append((_normalize_section(m.group(1)), chunk))
     return passages
+
+
+_SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS works (
+    id TEXT PRIMARY KEY, title TEXT, normalized_title TEXT, pub_year INTEGER,
+    journal_title TEXT, primary_domain TEXT, study_design TEXT, evidence_tier TEXT,
+    abstract TEXT
+);
+CREATE TABLE IF NOT EXISTS identifiers (
+    id TEXT PRIMARY KEY, work_id TEXT, scheme TEXT, value TEXT
+);
+CREATE TABLE IF NOT EXISTS text_passages (
+    id TEXT, work_id TEXT, section_type TEXT, content TEXT, sequence_number INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_identifiers_scheme_value ON identifiers(scheme, value);
+CREATE INDEX IF NOT EXISTS idx_text_passages_work_id ON text_passages(work_id);
+"""
+
+
+def create_schema(con: sqlite3.Connection) -> None:
+    con.executescript(_SCHEMA_SQL)
+
+
+def existing_pmids(con: sqlite3.Connection) -> set:
+    return {row[0] for row in con.execute(
+        "SELECT value FROM identifiers WHERE scheme='pmid'")}
+
+
+def insert_work(con, pmid, title, journal, year, doi, passages, *, study_design=None,
+                abstract=None, primary_domain="cerebrovascular") -> None:
+    con.execute(
+        "INSERT OR REPLACE INTO works (id, title, normalized_title, pub_year, "
+        "journal_title, primary_domain, study_design, evidence_tier, abstract) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        (pmid, title or "", (title or "").strip().lower(), year, journal or "",
+         primary_domain, study_design, None, abstract))
+    con.execute("DELETE FROM identifiers WHERE work_id=?", (pmid,))
+    con.execute("INSERT INTO identifiers (id, work_id, scheme, value) VALUES (?,?,?,?)",
+               (f"{pmid}-pmid", pmid, "pmid", pmid))
+    if doi:
+        con.execute("INSERT INTO identifiers (id, work_id, scheme, value) VALUES (?,?,?,?)",
+                   (f"{pmid}-doi", pmid, "doi", doi))
+    con.execute("DELETE FROM text_passages WHERE work_id=?", (pmid,))
+    for seq, (section_type, content) in enumerate(passages):
+        con.execute(
+            "INSERT INTO text_passages (id, work_id, section_type, content, "
+            "sequence_number) VALUES (?,?,?,?,?)",
+            (f"{pmid}-{seq}", pmid, section_type, content, seq))
