@@ -239,3 +239,42 @@ def test_build_is_idempotent_on_rerun(tmp_path):
     second = build(str(csv_path), str(root), str(big_db), str(out_db))
     assert first == {"copied": 0, "extracted": 1, "skipped": 0}
     assert second == {"copied": 0, "extracted": 0, "skipped": 0}  # nothing left to do
+
+
+def test_build_falls_back_to_txt_when_xml_yields_no_passages(tmp_path):
+    """Test that when XML exists but parses to no sections, .txt file is tried as fallback."""
+    big_db = tmp_path / "cerebrovascular_fulltext.sqlite"
+    _make_big_db_fixture(big_db)
+    root = tmp_path / "cv_full_text"
+    ch3 = root / "Ch03_Noninvasive-imaging"
+    # Non-JATS XML (e.g., Elsevier DTD) with no recognizable abstract/body/sec tags
+    # This will parse without error but yield zero passages.
+    _write(ch3 / "555.xml", (
+        "<?xml version=\"1.0\"?><article><metadata>"
+        "<title>Some Article</title><author>Author Name</author>"
+        "</metadata></article>"))
+    # TXT file with good content that should be extracted via fallback
+    _write(ch3 / "555.txt", (
+        "Introduction\n"
+        "This is a sufficient passage of plaintext content that spans multiple lines.\n"
+        "It has enough characters to pass the minimum threshold.\n"))
+    csv_path = tmp_path / "have-list.csv"
+    csv_path.write_text(
+        "pmid,chapter,format,file,access,year,journal,doi,title,authors\n"
+        "555,3,xml,x,Open access,2021,Stroke,10.1/xyz,Test XML Fallback,Smith J\n")
+    out_db = tmp_path / "cv_curated_fulltext.sqlite"
+
+    result = build(str(csv_path), str(root), str(big_db), str(out_db))
+    # Should be extracted (not skipped), because .txt fallback was used
+    assert result == {"copied": 0, "extracted": 1, "skipped": 0}
+
+    con = sqlite3.connect(str(out_db))
+    assert existing_pmids(con) == {"555"}
+    passages = con.execute(
+        "SELECT section_type, content FROM text_passages WHERE work_id='555' "
+        "ORDER BY sequence_number").fetchall()
+    # Should have title + introduction from the fallback .txt file
+    assert len(passages) >= 2
+    assert passages[0][0] == "title"  # title from CSV
+    assert passages[1][0] == "introduction"  # from plaintext split
+    assert "sufficient passage" in passages[1][1]  # content from .txt

@@ -243,7 +243,7 @@ def build(csv_path, cv_full_text_root, big_db_path, out_db_path, log=print) -> d
             if xml_path.exists():
                 passages = parse_jats_sections(
                     xml_path.read_text(encoding="utf-8", errors="ignore"))
-            elif txt_path.exists():
+            if not passages and txt_path.exists():
                 passages = split_plaintext_sections(
                     txt_path.read_text(encoding="utf-8", errors="ignore"))
 
