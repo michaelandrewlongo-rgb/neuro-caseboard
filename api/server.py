@@ -298,6 +298,22 @@ class AskRequest(BaseModel):
     # Set by the SPA on a variant-pick re-entry: the question is already a disambiguated
     # variant rewrite (unambiguous by construction), so skip the gate + analyze pass.
     skip_disambiguation: bool = False
+    # Per-request opt-in: scopes Lane C ([D#]) to the curated cerebrovascular corpus
+    # instead of the global (default-off) CORPUS_RETRIEVAL env setting.
+    cerebrovascular: bool = False
+
+
+def _cerebrovascular_corpus_config():
+    """Lane C config scoped to the standalone curated corpus (see
+    neuro_caseboard/cv_corpus_build.py), never the sibling cv-curric project's DB."""
+    import dataclasses
+    import os
+    from pathlib import Path
+    from neuro_caseboard.corpus import load_corpus_config
+    source_dir = os.environ.get(
+        "CV_CURATED_SOURCE_DIR", str(Path.home() / "neuro-caseboard-corpus" / "fulltext"))
+    return dataclasses.replace(load_corpus_config(), enabled=True,
+                               dbs=["cv_curated"], source_dir=source_dir)
 
 
 def _citation_location(book: str, chapter: str, page) -> str:
@@ -441,12 +457,14 @@ def _serialize_ask_event(ev: dict) -> dict:
     return ev
 
 
-def run_ask_job(job: AskJob, question: str, skip_disambiguation: bool) -> None:
+def run_ask_job(job: AskJob, question: str, skip_disambiguation: bool,
+                corpus_config=None) -> None:
     from neuro_core.gpu_guard import GpuNotReadyError
     from neuro_caseboard import qa_stream
     try:
         qa_stream.stream_answer(question, job.emit, force=True,
-                                skip_disambiguation=skip_disambiguation)
+                                skip_disambiguation=skip_disambiguation,
+                                corpus_config=corpus_config)
     except GpuNotReadyError as e:
         job.emit({"type": "unavailable", "reason": f"GPU not ready: {e}"})
         job.emit({"type": "done"})
@@ -469,7 +487,9 @@ def ask_start(req: AskRequest):
     _ASK_JOBS.move_to_end(job_id)
     while len(_ASK_JOBS) > _ASK_JOBS_MAX:
         _ASK_JOBS.popitem(last=False)
-    threading.Thread(target=run_ask_job, args=(job, question, req.skip_disambiguation),
+    corpus_config = _cerebrovascular_corpus_config() if req.cerebrovascular else None
+    threading.Thread(target=run_ask_job,
+                     args=(job, question, req.skip_disambiguation, corpus_config),
                      daemon=True).start()
     return {"job_id": job_id}
 
@@ -505,9 +525,11 @@ def ask(req: AskRequest):
     from neuro_core.query import Clarification
     from neuro_caseboard.qa import answer_question
 
+    corpus_config = _cerebrovascular_corpus_config() if req.cerebrovascular else None
     try:
         result = answer_question(question, force=req.force,
-                                 skip_disambiguation=req.skip_disambiguation)
+                                 skip_disambiguation=req.skip_disambiguation,
+                                 corpus_config=corpus_config)
     except GpuNotReadyError as e:
         # Honest "try again" state — the retrieval models need GPU headroom right now.
         return JSONResponse(status_code=503,

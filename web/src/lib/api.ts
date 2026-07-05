@@ -105,11 +105,14 @@ export type AskResponse =
   | { kind: "error"; error: string }
 
 export async function askQuestion(question: string, signal?: AbortSignal,
-                                  skipDisambiguation = false): Promise<AskResponse> {
+                                  skipDisambiguation = false,
+                                  cerebrovascular = false): Promise<AskResponse> {
   const res = await fetch("/api/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, skip_disambiguation: skipDisambiguation }),
+    body: JSON.stringify({
+      question, skip_disambiguation: skipDisambiguation, cerebrovascular,
+    }),
     signal,
   })
   // Every outcome (answer / clarification / unavailable / error) is a JSON body carrying `kind`,
@@ -128,11 +131,14 @@ export async function askQuestion(question: string, signal?: AbortSignal,
 export async function startAsk(
   question: string,
   skipDisambiguation = false,
+  cerebrovascular = false,
 ): Promise<{ job_id: string }> {
   const res = await fetch("/api/ask/start", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, skip_disambiguation: skipDisambiguation }),
+    body: JSON.stringify({
+      question, skip_disambiguation: skipDisambiguation, cerebrovascular,
+    }),
   })
   return (await res.json()) as { job_id: string }
 }
