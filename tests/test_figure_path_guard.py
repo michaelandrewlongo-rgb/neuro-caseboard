@@ -46,6 +46,7 @@ ALLOWLIST = {
     "api/server.py: if not cand.is_file():",                             # _safe_image_path, post-reroot
     "api/server.py: if not index.is_file():",                            # SPA index.html
     "api/server.py: if candidate.is_file() and (candidate == dist_root or dist_root in candidate.parents):",  # SPA bundle
+    "neuro_caseboard/cv_corpus_build.py: if not os.path.exists(big_db_path):",  # Lane C corpus DB, not a figure path
 }
 
 
