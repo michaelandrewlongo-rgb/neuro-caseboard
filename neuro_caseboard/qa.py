@@ -225,12 +225,15 @@ def _answer_question_woven(question, *, config=None, force=False, lit_config=Non
 
 
 def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=None,
-                    skip_disambiguation=False, corpus_query=None) -> QAResult:
+                    skip_disambiguation=False, corpus_query=None,
+                    corpus_config=None) -> QAResult:
     """Run Lane A and Lane B concurrently. Lane A errors propagate; Lane B failures drop
     the section. `lane_a`/`lane_b` are injectable no-arg callables (for tests).
 
     When `LITERATURE_WEAVE` is on and no lanes are injected, delegates to the woven
-    orchestrator (_answer_question_woven) which produces one integrated answer."""
+    orchestrator (_answer_question_woven) which produces one integrated answer.
+    `corpus_config`, when given, scopes/enables Lane C for this call only (e.g. the
+    per-request cerebrovascular-corpus opt-in) instead of the global env default."""
     # Woven mode (flag-gated): one integrated answer. Only when no lanes were injected, so
     # the separate-path tests (which inject lane_a/lane_b) are unaffected.
     if lane_a is None and lane_b is None:
@@ -239,6 +242,7 @@ def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=N
         if lit_config.weave:
             return _answer_question_woven(question, config=config, force=force,
                                           lit_config=lit_config, corpus_query=corpus_query,
+                                          corpus_config=corpus_config,
                                           skip_disambiguation=skip_disambiguation)
 
     if lane_a is None:

@@ -217,3 +217,19 @@ def test_answer_question_flags_unsupported_textbook_claim():
     out = answer_question("q", lane_a=lambda: qr, lane_b=lambda: None)
     assert out.verification.n_unsupported == 1
     assert "1" in out.verification.unsupported_markers()
+
+
+def test_answer_question_forwards_corpus_config(monkeypatch):
+    monkeypatch.setenv("NEURO_CASEBOARD_SKIP_DOTENV", "1")
+    monkeypatch.setenv("LITERATURE_WEAVE", "1")
+    import neuro_caseboard.qa as qa
+    captured = {}
+
+    def _spy(*a, **k):
+        captured.update(k)
+        return "WOVEN"
+
+    monkeypatch.setattr(qa, "_answer_question_woven", _spy)
+    sentinel = object()
+    assert qa.answer_question("q", corpus_config=sentinel) == "WOVEN"
+    assert captured.get("corpus_config") is sentinel
