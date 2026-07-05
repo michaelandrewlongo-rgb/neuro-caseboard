@@ -177,3 +177,65 @@ def test_chapter_dir_map_resolves_by_leading_chapter_number(tmp_path):
     assert mapping[3].name == "Ch03_Noninvasive-imaging"
     assert mapping[47].name == "Ch47_Spinal-angiography-anatomy"
     assert set(mapping) == {3, 47}
+
+
+from neuro_caseboard.cv_corpus_build import build
+
+
+def _write(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def test_build_copies_overlap_and_extracts_new_and_skips_missing(tmp_path):
+    # Big DB has PMID 111 (the "already extracted" case).
+    big_db = tmp_path / "cerebrovascular_fulltext.sqlite"
+    _make_big_db_fixture(big_db)  # defines pmid 23387822 from Task 3's fixture
+
+    root = tmp_path / "cv_full_text"
+    ch3 = root / "Ch03_Noninvasive-imaging"
+    # PMID with real XML → parsed via parse_jats_sections.
+    _write(ch3 / "222.xml", (
+        "<article><body><sec sec-type=\"results\"><title>Results</title>"
+        "<p>Fresh XML results text of sufficient length to keep as a passage.</p>"
+        "</sec></body></article>"))
+    # PMID with only .txt → parsed via split_plaintext_sections.
+    _write(ch3 / "333.txt", (
+        "Introduction\nThis plaintext-only article has an introduction section here.\n"))
+    # PMID with neither file present → must be skipped, not error the whole run.
+    csv_path = tmp_path / "have-list.csv"
+    csv_path.write_text(
+        "pmid,chapter,format,file,access,year,journal,doi,title,authors\n"
+        "23387822,3,xml,x,PMC free,2013,Neurosurgery,,Overlap Title,\n"
+        "222,3,xml,x,Open access,2022,Stroke,10.1/xyz,Fresh XML Title,\n"
+        "333,3,txt,x,Open access,2021,JNS,,Plaintext Title,\n"
+        "444,3,pdf,x,NEEDS LIBRARY,2019,JNS,,Missing File Title,\n"
+    )
+    out_db = tmp_path / "out" / "cv_curated_fulltext.sqlite"
+
+    result = build(str(csv_path), str(root), str(big_db), str(out_db))
+    assert result == {"copied": 1, "extracted": 2, "skipped": 1}
+
+    con = sqlite3.connect(str(out_db))
+    assert existing_pmids(con) == {"23387822", "222", "333"}
+    overlap_title = con.execute(
+        "SELECT title FROM works WHERE id='23387822'").fetchone()[0]
+    assert overlap_title == "Big DB Title"  # came from the big DB, not the CSV
+
+
+def test_build_is_idempotent_on_rerun(tmp_path):
+    big_db = tmp_path / "cerebrovascular_fulltext.sqlite"
+    _make_big_db_fixture(big_db)
+    root = tmp_path / "cv_full_text"
+    _write(root / "Ch03_Noninvasive-imaging" / "222.txt",
+          "Introduction\nSome fresh plaintext article introduction content lives here.\n")
+    csv_path = tmp_path / "have-list.csv"
+    csv_path.write_text(
+        "pmid,chapter,format,file,access,year,journal,doi,title,authors\n"
+        "222,3,txt,x,Open access,2022,Stroke,,Title,\n")
+    out_db = tmp_path / "cv_curated_fulltext.sqlite"
+
+    first = build(str(csv_path), str(root), str(big_db), str(out_db))
+    second = build(str(csv_path), str(root), str(big_db), str(out_db))
+    assert first == {"copied": 0, "extracted": 1, "skipped": 0}
+    assert second == {"copied": 0, "extracted": 0, "skipped": 0}  # nothing left to do

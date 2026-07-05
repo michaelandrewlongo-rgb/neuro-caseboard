@@ -209,3 +209,78 @@ def chapter_dir_map(cv_full_text_root: str) -> dict:
         if m:
             out[int(m.group(1))] = d
     return out
+
+
+def build(csv_path, cv_full_text_root, big_db_path, out_db_path, log=print) -> dict:
+    chapters = chapter_dir_map(cv_full_text_root)
+    rows = load_have_list(csv_path)
+
+    Path(out_db_path).parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(out_db_path)
+    create_schema(con)
+    have = existing_pmids(con)
+
+    copied = extracted = skipped = 0
+    for row in rows:
+        pmid = (row.get("pmid") or "").strip()
+        if not pmid or pmid in have:
+            continue
+
+        big = copy_from_big_db(big_db_path, pmid)
+        if big is not None:
+            insert_work(con, pmid, big["title"], big["journal"], big["year"],
+                       row.get("doi") or big["doi"], big["passages"],
+                       study_design=big["study_design"], abstract=big["abstract"])
+            copied += 1
+            continue
+
+        chapter_num = int(row["chapter"]) if (row.get("chapter") or "").strip().isdigit() else None
+        chapter_dir = chapters.get(chapter_num) if chapter_num is not None else None
+        passages = []
+        if chapter_dir is not None:
+            xml_path = chapter_dir / f"{pmid}.xml"
+            txt_path = chapter_dir / f"{pmid}.txt"
+            if xml_path.exists():
+                passages = parse_jats_sections(
+                    xml_path.read_text(encoding="utf-8", errors="ignore"))
+            elif txt_path.exists():
+                passages = split_plaintext_sections(
+                    txt_path.read_text(encoding="utf-8", errors="ignore"))
+
+        if not passages:
+            log(f"[skip] {pmid}: no source text found under chapter {chapter_num}")
+            skipped += 1
+            continue
+
+        title = row.get("title") or ""
+        if title:
+            passages = [("title", title)] + passages
+        year = int(row["year"]) if (row.get("year") or "").strip().isdigit() else None
+        insert_work(con, pmid, title, row.get("journal") or "", year,
+                   row.get("doi") or None, passages)
+        extracted += 1
+
+    con.commit()
+    con.close()
+    log(f"[done] copied={copied} extracted={extracted} skipped={skipped}")
+    return {"copied": copied, "extracted": extracted, "skipped": skipped}
+
+
+def main(argv=None) -> None:
+    import argparse
+    import os as _os
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--csv", default="cv_full_text/have-list.csv")
+    parser.add_argument("--source-root", default="cv_full_text")
+    parser.add_argument("--big-db", default=_os.path.join(
+        _os.environ.get("CORPUS_SOURCE_DIR", "/mnt/c/dev/NSGY_DB_lean/fulltext"),
+        "cerebrovascular_fulltext.sqlite"))
+    parser.add_argument("--out", default=str(
+        Path.home() / "neuro-caseboard-corpus" / "fulltext" / "cv_curated_fulltext.sqlite"))
+    args = parser.parse_args(argv)
+    build(args.csv, args.source_root, args.big_db, args.out)
+
+
+if __name__ == "__main__":
+    main()
