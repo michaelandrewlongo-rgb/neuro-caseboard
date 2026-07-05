@@ -77,3 +77,38 @@ def test_corpus_event_serializes_to_source_cards():
     card = out["corpus"][0]
     assert card["title"] == "TESLA" and card["link"] == "https://doi.org/10.1/x"
     assert "SECRET premise" not in json.dumps(card)  # content stays server-side
+
+
+def test_cerebrovascular_flag_scopes_corpus_config_on_stream_start(monkeypatch):
+    import api.server as server
+    captured = {}
+
+    def _fake_stream_answer(question, emit, **kwargs):
+        captured.update(kwargs)
+        emit({"type": "done"})
+
+    monkeypatch.setattr("neuro_caseboard.qa_stream.stream_answer", _fake_stream_answer)
+    client = TestClient(server.app)
+    job_id = client.post("/api/ask/start",
+                         json={"question": "q", "cerebrovascular": True}).json()["job_id"]
+    client.get(f"/api/ask/stream/{job_id}?cursor=0")  # drive the job thread to completion
+
+    cfg = captured.get("corpus_config")
+    assert cfg is not None
+    assert cfg.enabled is True
+    assert cfg.dbs == ["cv_curated"]
+
+
+def test_cerebrovascular_flag_defaults_off(monkeypatch):
+    import api.server as server
+    captured = {}
+
+    def _fake_stream_answer(question, emit, **kwargs):
+        captured.update(kwargs)
+        emit({"type": "done"})
+
+    monkeypatch.setattr("neuro_caseboard.qa_stream.stream_answer", _fake_stream_answer)
+    client = TestClient(server.app)
+    job_id = client.post("/api/ask/start", json={"question": "q"}).json()["job_id"]
+    client.get(f"/api/ask/stream/{job_id}?cursor=0")
+    assert captured.get("corpus_config") is None
