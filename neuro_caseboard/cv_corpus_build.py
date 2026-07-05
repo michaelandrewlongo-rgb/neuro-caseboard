@@ -7,6 +7,7 @@ overlaps, and freshly parsing the rest from JATS XML or plaintext.
 """
 from __future__ import annotations
 
+import os
 import re
 import sqlite3
 import xml.etree.ElementTree as ET
@@ -151,3 +152,39 @@ def insert_work(con, pmid, title, journal, year, doi, passages, *, study_design=
             "INSERT INTO text_passages (id, work_id, section_type, content, "
             "sequence_number) VALUES (?,?,?,?,?)",
             (f"{pmid}-{seq}", pmid, section_type, content, seq))
+
+
+def copy_from_big_db(big_db_path: str, pmid: str):
+    """Look up `pmid` in an already-built Lane C source DB (e.g. the sibling
+    cv-curric project's cerebrovascular_fulltext.sqlite) and return its work +
+    passages, or None if the DB or PMID isn't present. Read-only; never writes."""
+    if not os.path.exists(big_db_path):
+        return None
+    con = sqlite3.connect(f"file:{big_db_path}?mode=ro", uri=True)
+    try:
+        row = con.execute(
+            "SELECT work_id FROM identifiers WHERE scheme='pmid' AND value=?",
+            (pmid,)).fetchone()
+        if row is None:
+            return None
+        work_id = row[0]
+        w = con.execute(
+            "SELECT title, journal_title, pub_year, study_design, abstract "
+            "FROM works WHERE id=?", (work_id,)).fetchone()
+        if w is None:
+            return None
+        title, journal, year, study_design, abstract = w
+        doi_row = con.execute(
+            "SELECT value FROM identifiers WHERE scheme='doi' AND work_id=?",
+            (work_id,)).fetchone()
+        passages = con.execute(
+            "SELECT section_type, content FROM text_passages WHERE work_id=? "
+            "ORDER BY sequence_number", (work_id,)).fetchall()
+        return {
+            "title": title, "journal": journal, "year": year,
+            "study_design": study_design, "abstract": abstract,
+            "doi": doi_row[0] if doi_row else None,
+            "passages": [(s, c) for s, c in passages],
+        }
+    finally:
+        con.close()

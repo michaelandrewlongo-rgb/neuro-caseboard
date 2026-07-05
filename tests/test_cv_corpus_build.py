@@ -103,3 +103,49 @@ def test_insert_work_is_idempotent_via_or_replace():
     passages = con.execute("SELECT content FROM text_passages WHERE work_id=?",
                            ("1",)).fetchall()
     assert passages == [("y" * 50,)]
+
+
+from neuro_caseboard.cv_corpus_build import copy_from_big_db
+
+
+def _make_big_db_fixture(path):
+    con = sqlite3.connect(str(path))
+    con.executescript("""
+        CREATE TABLE works (id TEXT PRIMARY KEY, title TEXT, journal_title TEXT,
+                            pub_year INTEGER, study_design TEXT, abstract TEXT);
+        CREATE TABLE identifiers (id TEXT PRIMARY KEY, work_id TEXT, scheme TEXT, value TEXT);
+        CREATE TABLE text_passages (id TEXT, work_id TEXT, section_type TEXT,
+                                    content TEXT, sequence_number INTEGER);
+    """)
+    con.execute("INSERT INTO works VALUES ('w1', 'Big DB Title', 'Neurosurgery', 2018, "
+               "'rct', 'Abstract text.')")
+    con.execute("INSERT INTO identifiers VALUES ('i1', 'w1', 'pmid', '23387822')")
+    con.execute("INSERT INTO identifiers VALUES ('i2', 'w1', 'doi', '10.1/abc')")
+    con.execute("INSERT INTO text_passages VALUES ('p1', 'w1', 'introduction', "
+               "'Intro text here.', 0)")
+    con.execute("INSERT INTO text_passages VALUES ('p2', 'w1', 'results', "
+               "'Results text here.', 1)")
+    con.commit()
+    con.close()
+
+
+def test_copy_from_big_db_returns_work_and_ordered_passages(tmp_path):
+    db_path = tmp_path / "cerebrovascular_fulltext.sqlite"
+    _make_big_db_fixture(db_path)
+    out = copy_from_big_db(str(db_path), "23387822")
+    assert out["title"] == "Big DB Title"
+    assert out["journal"] == "Neurosurgery"
+    assert out["year"] == 2018
+    assert out["doi"] == "10.1/abc"
+    assert out["passages"] == [("introduction", "Intro text here."),
+                               ("results", "Results text here.")]
+
+
+def test_copy_from_big_db_returns_none_for_missing_pmid(tmp_path):
+    db_path = tmp_path / "cerebrovascular_fulltext.sqlite"
+    _make_big_db_fixture(db_path)
+    assert copy_from_big_db(str(db_path), "00000000") is None
+
+
+def test_copy_from_big_db_returns_none_when_db_missing(tmp_path):
+    assert copy_from_big_db(str(tmp_path / "nope.sqlite"), "23387822") is None
