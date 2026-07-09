@@ -15,9 +15,20 @@ class Chunk:
     figure_path: Optional[str] = None
 
 
+# A page with fewer than this many words and no figure/caption is a running-head, title, or
+# table-of-contents fragment (e.g. "History of Spine Surgery 17.e1 1"), not indexable content.
+# Dropping it removes the sub-threshold chunks the bibliography line-strip can otherwise leave
+# behind. Figure/caption pages are kept regardless — their caption IS the content.
+MIN_PAGE_WORDS = 20
+
+
 def chunk_page(record, max_words, overlap):
     words = record.text.split()
     if not words:
+        return []
+    if (len(words) < MIN_PAGE_WORDS
+            and not (record.caption or "").strip()
+            and not record.has_figure):
         return []
     step = max(1, max_words - overlap)
     # Fold the figure caption into the chunk's indexed text so the plate that NAMES the queried

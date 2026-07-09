@@ -200,11 +200,19 @@ def corpus_fingerprint() -> str | None:
     try:
         import lancedb
 
-        tbl = lancedb.connect(index_dir).open_table("books").to_pandas()
-        rows = sorted(
-            (str(r["book"]), str(r.get("file_hash", "")), int(r.get("chunk_count", 0)))
-            for _, r in tbl.iterrows()
-        )
+        db = lancedb.connect(index_dir)
+        names = db.table_names()
+        if "books" in names:
+            tbl = db.open_table("books").to_pandas()
+            rows = sorted(
+                (str(r["book"]), str(r.get("file_hash", "")), int(r.get("chunk_count", 0)))
+                for _, r in tbl.iterrows()
+            )
+        else:
+            # build_index does not write a books table; derive an equivalent fingerprint from
+            # the always-present chunks table (per-book chunk counts).
+            ch = db.open_table("chunks").to_pandas()
+            rows = sorted((b, "", int(n)) for b, n in ch.groupby("book").size().items())
     except Exception:
         return None
     if not rows:
