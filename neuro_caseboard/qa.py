@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
@@ -39,6 +40,7 @@ class QAResult:
     literature: "LiteratureSection | None" = None
     verification: "AnswerVerification | None" = None
     corpus: list = field(default_factory=list)      # CorpusRecord list, for [D#]
+    evidence_spans: list = field(default_factory=list)  # EvidenceSpan sidecar (§3.3), never rendered inline
 
 
 def retrieve_records(question, *, lit_config, client=None, synth_client, cache=None):
@@ -219,9 +221,15 @@ def _answer_question_woven(question, *, config=None, force=False, lit_config=Non
     for i, r in enumerate(syn.corpus_records or [], 1):
         premises[f"D{i}"] = getattr(r, "content", "") or ""
     verification = verify_answer(syn.answer, premises)
+    # Quoted-span sidecar (§3.3): opt-in until the verbatim match-rate clears the gate on the
+    # deployed model. Additive — a failure returns [] and never blocks the answer.
+    evidence_spans = []
+    if os.environ.get("EVIDENCE_SPANS", "").lower() in ("1", "true", "yes", "on"):
+        from neuro_caseboard.evidence_spans import extract_and_verify
+        evidence_spans = extract_and_verify(syn.answer, premises, synth_client)
     return QAResult(answer=answer, citations=syn.citations, figures=plan.figures,
                     literature=lit, verification=verification,
-                    corpus=list(syn.corpus_records or []))
+                    corpus=list(syn.corpus_records or []), evidence_spans=evidence_spans)
 
 
 def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=None,
