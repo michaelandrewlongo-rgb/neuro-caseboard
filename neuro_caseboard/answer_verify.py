@@ -47,9 +47,12 @@ class AnswerVerification:
     n_cited_claims: int
     n_unsupported: int
 
-    def groundedness(self) -> float:
+    def groundedness(self):
+        """Fraction of cited claims that are supported, or ``None`` when the answer cites
+        nothing. An uncited answer has *undefined* groundedness — reporting 1.0 rewarded the
+        exact failure mode the metric exists to catch (cite nothing, score perfectly)."""
         if self.n_cited_claims == 0:
-            return 1.0
+            return None
         return 1.0 - self.n_unsupported / self.n_cited_claims
 
     def unsupported_markers(self) -> list:

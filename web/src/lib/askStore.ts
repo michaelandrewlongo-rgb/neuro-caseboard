@@ -6,7 +6,7 @@ import type { Citation, Figure, Literature, Variant } from "./api"
 export interface Verification {
   n_cited_claims: number
   n_unsupported: number
-  groundedness: number
+  groundedness: number | null
   unsupported_markers: string[]
 }
 
