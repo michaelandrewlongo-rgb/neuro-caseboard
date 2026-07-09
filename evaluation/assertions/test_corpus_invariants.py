@@ -94,7 +94,7 @@ def test_D2b_youmans_chapter_agreement():
     c = _load_chunks()
     y = c[c.book.str.contains("Youmans", case=False, na=False)].copy()
     y["true_ch"] = y.text.str.extract(r"CHAPTER (\d{1,3})\b")[0]
-    y["lbl_ch"] = y.chapter.str.extract(r"^(\d{1,3}) - ")[0]
+    y["lbl_ch"] = y.chapter.str.extract(r"(?:Chapter |^)(\d{1,3})\b")[0]
     m = y.dropna(subset=["true_ch", "lbl_ch"])
     if len(m) == 0:
         pytest.skip("no Youmans chunks with both an in-text and a labelled chapter number")
@@ -106,7 +106,8 @@ def test_D2b_youmans_chapter_agreement():
 def test_D3_printed_page_present():
     c = _load_chunks()
     assert "printed_page" in c.columns, "D3: no printed_page column (folio never extracted)"
-    resolved = c.printed_page.notna().mean()
+    # stored as "" for missing (LanceDB has no null strings), so resolved = non-empty
+    resolved = (c.printed_page.astype(str).str.len() > 0).mean()
     assert resolved >= 0.90, f"D3: only {resolved:.1%} of chunks resolved a printed_page (target >=90%)"
 
 
@@ -135,7 +136,7 @@ def _print_baseline():
     has_folio = "printed_page" in c.columns
     y = c[c.book.str.contains("Youmans", case=False, na=False)].copy()
     y["true_ch"] = y.text.str.extract(r"CHAPTER (\d{1,3})\b")[0]
-    y["lbl_ch"] = y.chapter.str.extract(r"^(\d{1,3}) - ")[0]
+    y["lbl_ch"] = y.chapter.str.extract(r"(?:Chapter |^)(\d{1,3})\b")[0]
     m = y.dropna(subset=["true_ch", "lbl_ch"])
     agree = (m.true_ch == m.lbl_ch).mean() if len(m) else float("nan")
     print(f"index: {INDEX_DIR}")

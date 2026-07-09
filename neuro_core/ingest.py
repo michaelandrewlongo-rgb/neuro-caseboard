@@ -11,14 +11,105 @@ from neuro_core.figures import page_figure_info, render_page_png, extract_figure
 @dataclass
 class PageRecord:
     book: str
-    page: int          # 1-based
+    page: int          # 1-based PDF page index
     text: str
     chapter: Optional[str]
+    printed_page: Optional[str] = None   # the folio printed in the running header/footer
     has_figure: bool = False
     caption: Optional[str] = None
     figure_path: Optional[str] = None
     # Per-figure cropped plates (crop mode only); empty in whole-page mode.
     figures: list = field(default_factory=list)
+
+
+# A folio in the running header/footer: a bare page number, optionally an Elsevier
+# electronic-only suffix (e.g. "3357", "246.e2", "9.e22"). The .eN pages are online-only
+# expanded content interleaved into the scan — which is exactly why pdf_page - folio is not
+# a constant offset, and why the folio must be read per page, never computed.
+_FOLIO = re.compile(r"^\d{1,4}(?:\.e\d+)?$")
+_BARE_INT = re.compile(r"^\d{1,3}$")
+# An in-text chapter marker ("CHAPTER 300 ..."). Sparse (opening pages / running heads), so it
+# seeds a forward-fill rather than being required per page.
+_CHAPTER_MARK = re.compile(r"CHAPTER\s+(\d{1,3})\b")
+# A reference-list boundary: once a page hits this heading, the rest of the page is bibliography.
+_REF_HEADING = re.compile(r"^\s*(REFERENCES|BIBLIOGRAPHY)\s*$", re.IGNORECASE)
+# A standalone numbered citation line ("12. Smith JD, Jones AB, et al. ...").
+_CITATION_LINE = re.compile(r"^\s*\d{1,3}\.\s+[A-Z][a-z]+\s+[A-Z]{1,3}[,\.]")
+
+
+def _band_spans(page):
+    """Text spans in the top/bottom 8% of the page (the running-header/footer band), in
+    reading order, as ``(text, is_top)`` — where folios and chapter numbers live."""
+    h = page.rect.height
+    out = []
+    for block in page.get_text("dict").get("blocks", []):
+        for line in block.get("lines", []):
+            for span in line.get("spans", []):
+                t = (span.get("text") or "").strip()
+                y = span["bbox"][1]
+                if t and (y < 0.08 * h or y > 0.92 * h):
+                    out.append((t, y < 0.08 * h))
+    return out
+
+
+def _extract_folio(page) -> Optional[str]:
+    """The printed folio for this page, read from the header/footer band. ``None`` if absent."""
+    for t, _is_top in _band_spans(page):
+        if _FOLIO.match(t):
+            return t
+    return None
+
+
+def _page_chapter_number(page, folio: Optional[str]) -> Optional[int]:
+    """The chapter number *evidenced on this page*: an in-text ``CHAPTER N`` marker in the head,
+    else a bare 1-3 digit integer in the header band that is not the folio (the running head
+    prints ``<chapter> <folio>``). ``None`` when the page shows no chapter signal — the caller
+    forward-fills. Deliberately conservative: a wrong chapter is worse than an absent one."""
+    head = "\n".join(page.get_text().split("\n")[:10])
+    m = _CHAPTER_MARK.search(head)
+    if m:
+        return int(m.group(1))
+    for t, is_top in _band_spans(page):
+        if is_top and _BARE_INT.match(t) and t != folio and 1 < int(t) <= 470:
+            return int(t)
+    return None
+
+
+_JUNK_LABEL = re.compile(r"\.pdf|p\.\d+-\d+|^[A-Za-z0-9]{40,}$", re.IGNORECASE)
+_LABEL_FRONT_MATTER = {"copyright", "dedication", "contributor", "contributors",
+                       "preface", "index", "front matter"}
+
+
+def _label_is_junk(label: str) -> bool:
+    """A TOC-derived chapter label that is a filename, page-range, hash, front-matter, or an
+    over-long run-on — anything a reader could not use. Returned as ``None`` at ingest so no
+    citation ever carries a confidently-wrong chapter (wrong is worse than absent)."""
+    c = (label or "").strip()
+    return (not c) or len(c) > 60 or bool(_JUNK_LABEL.search(c)) or c.lower() in _LABEL_FRONT_MATTER
+
+
+def _strip_bibliography(text: str) -> tuple[str, int]:
+    """Drop reference-list lines from a page's text, returning ``(clean_text, removed_chars)``.
+
+    Line-level, run BEFORE chunking (once ``chunk_page`` splits on whitespace the line
+    structure is gone). Two rules: (1) a ``REFERENCES``/``BIBLIOGRAPHY`` heading truncates the
+    page from there; (2) standalone numbered citation lines are dropped individually (the .eN
+    reference pages often have no heading). Clinical prose sharing a page with references keeps
+    its prose — this is why the strip is per-line, not per-chunk or per-page."""
+    lines = text.split("\n")
+    kept = []
+    in_refs = False
+    for ln in lines:
+        if _REF_HEADING.match(ln):
+            in_refs = True
+            continue
+        if in_refs:
+            continue
+        if _CITATION_LINE.match(ln):
+            continue
+        kept.append(ln)
+    clean = "\n".join(kept).strip()
+    return clean, len(text) - len(clean)
 
 
 # A real medical-chapter bookmark in this corpus looks like "1 - History",
@@ -150,6 +241,15 @@ def extract_pages(pdf_path, render=False, assets_dir=None, dpi=160,
     book = pdf_path.stem
     doc = fitz.open(pdf_path)
     entries, content_end = _classify_toc(doc)
+    # Does this book carry in-text chapter numbers at all? (Youmans does; Rhoton/Greenberg
+    # don't.) If so, prefer them over the sparse/garbled TOC bookmarks; if not, fall back to
+    # the TOC-based label as before. Decided per book from the first 400 content pages.
+    book_has_chapter_marks = any(
+        _CHAPTER_MARK.search("\n".join(doc[i].get_text().split("\n")[:10]))
+        for i in range(min(len(doc), 400))
+    )
+    cur_chapter_num = None
+    bib_removed = 0
     records = []
     for i in range(len(doc)):
         pageno = i + 1
@@ -158,7 +258,19 @@ def extract_pages(pdf_path, render=False, assets_dir=None, dpi=160,
         if content_end is not None and pageno >= content_end:
             continue
         page = doc[i]
-        text = page.get_text().strip()
+        raw = page.get_text().strip()
+        text, removed = _strip_bibliography(raw)
+        bib_removed += removed
+        folio = _extract_folio(page)
+        if book_has_chapter_marks:
+            n = _page_chapter_number(page, folio)
+            if n is not None:
+                cur_chapter_num = n
+            chapter = f"Chapter {cur_chapter_num}" if cur_chapter_num is not None else None
+        else:
+            chapter = _chapter_for_page(entries, pageno)
+            if chapter is not None and _label_is_junk(chapter):
+                chapter = None
         info = page_figure_info(page, area_threshold)
         figure_path = None
         plates = []
@@ -174,12 +286,20 @@ def extract_pages(pdf_path, render=False, assets_dir=None, dpi=160,
                 render_page_png(page, dpi, out)
                 figure_path = str(out)
         records.append(
-            PageRecord(book=book, page=pageno, text=text,
-                       chapter=_chapter_for_page(entries, pageno),
+            PageRecord(book=book, page=pageno, text=text, chapter=chapter,
+                       printed_page=folio,
                        has_figure=info.has_figure, caption=info.caption,
                        figure_path=figure_path, figures=plates)
         )
     doc.close()
+    # Fail-loud guard (CLAUDE.md): a parser that nukes a whole book removes ~everything; a book
+    # legitimately has few references. Upper-bound only, so a low-reference atlas doesn't false-fail.
+    total_chars = sum(len(r.text) + 0 for r in records) + bib_removed
+    if total_chars and bib_removed / total_chars > 0.40:
+        raise ValueError(
+            f"{book}: bibliography strip removed {100*bib_removed/total_chars:.0f}% of characters "
+            f"(>40%) — likely a parser fault, not references. Refusing to index."
+        )
     return records
 
 
