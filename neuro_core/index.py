@@ -13,6 +13,7 @@ class Hit:
     chapter: Optional[str]
     page: int
     text: str
+    printed_page: Optional[str] = None
     score: float = 0.0
     has_figure: bool = False
     caption: Optional[str] = None
@@ -101,6 +102,7 @@ class Index:
             id=row["id"], book=row["book"],
             chapter=row["chapter"] or None, page=int(row["page"]),
             text=row["text"],
+            printed_page=(row.get("printed_page") or None),
             has_figure=bool(row.get("has_figure", False)),
             caption=(row.get("caption") or None),
             figure_path=(row.get("figure_path") or None),
