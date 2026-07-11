@@ -329,11 +329,15 @@ def _citation_dict(c) -> dict:
     book = getattr(c, "book", "")
     chapter = getattr(c, "chapter", "") or ""
     page = getattr(c, "page", None)
+    printed_page = getattr(c, "printed_page", "") or ""
+    page_ref = getattr(c, "page_ref", None)   # Citation.page_ref is a @property (str), not a method
     return {
         "n": getattr(c, "n", None),
         "book": book,
         "chapter": chapter,
         "page": page,
+        "printed_page": printed_page,   # the folio a reader can actually open ("" when unrecoverable)
+        "page_ref": page_ref,           # display string: "p.3357" or "p.42 (pdf)"
         "location": _citation_location(book, chapter, page),
     }
 

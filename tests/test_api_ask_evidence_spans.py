@@ -32,3 +32,25 @@ def test_api_ask_evidence_spans_empty_when_absent(monkeypatch):
     monkeypatch.setattr("neuro_caseboard.qa.answer_question", lambda *a, **k: fake)
     body = TestClient(server.app).post("/api/ask", json={"question": "q"}).json()
     assert body["evidence_spans"] == []
+
+
+def test_citation_dict_exposes_folio():
+    import api.server as server
+    from neuro_core.synthesize import Citation
+
+    c = Citation(n=1, book="Youmans", chapter="Ch419", page=5710, text="body",
+                 printed_page="3357")
+    d = server._citation_dict(c)
+    assert d["printed_page"] == "3357"
+    assert d["page_ref"] == "p.3357"
+    assert d["page"] == 5710          # back-compat field unchanged
+
+
+def test_citation_dict_folio_absent_is_pdf_marked():
+    import api.server as server
+    from neuro_core.synthesize import Citation
+
+    c = Citation(n=1, book="B", chapter="C", page=42, text="t")   # printed_page defaults ""
+    d = server._citation_dict(c)
+    assert d["printed_page"] == ""
+    assert d["page_ref"] == "p.42 (pdf)"
