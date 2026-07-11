@@ -401,6 +401,22 @@ def _corpus_list(records) -> list:
     return [_corpus_record_dict(r) for r in (records or [])]
 
 
+def _evidence_spans_list(spans) -> list:
+    """Serialize the §3.3 quoted-span sidecar. Each span is the model's verbatim supporting
+    sentence + whether it string-matched its cited chunk (precision-1.0 fabrication check). The
+    quote IS display copy here (unlike corpus content) — it is what the reader opens on a click."""
+    out = []
+    for s in spans or []:
+        out.append({
+            "claim": getattr(s, "claim", ""),
+            "marker": getattr(s, "marker", ""),
+            "quote": getattr(s, "quote", ""),
+            "matched": bool(getattr(s, "matched", False)),
+            "score": getattr(s, "score", 0.0),
+        })
+    return out
+
+
 # --- Ask streaming jobs ----------------------------------------------------------------------
 # An Ask request is a server-owned job: a daemon thread runs the (synchronous) streaming
 # orchestrator, appending serialized events to an append-only log. The SSE endpoint replays the
@@ -556,6 +572,7 @@ def ask(req: AskRequest):
         "literature": _literature_dict(getattr(result, "literature", None)),
         "corpus": _corpus_list(getattr(result, "corpus", None)),
         "verification": verification_to_dict(getattr(result, "verification", None)),
+        "evidence_spans": _evidence_spans_list(getattr(result, "evidence_spans", None)),
     }
 
 
