@@ -502,6 +502,9 @@ def _serialize_ask_event(ev: dict) -> dict:
     if t == "evidence":
         return {"type": "evidence",
                 "evidence_spans": _evidence_spans_list(ev.get("evidence_spans"))}
+    if t == "decision":
+        return {"type": "decision",
+                "decision_card": _decision_card_dict(ev.get("decision_card"))}
     if t == "clarification":
         return {"type": "clarification", "question": ev.get("question", ""),
                 "variants": [{"label": getattr(v, "label", ""), "rewrite": getattr(v, "rewrite", "")}

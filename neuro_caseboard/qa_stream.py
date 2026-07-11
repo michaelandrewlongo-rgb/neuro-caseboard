@@ -168,13 +168,32 @@ def stream_answer(question, emit, *, config=None, force=False, skip_disambiguati
         for i, r in enumerate(corpus_records or [], 1):
             premises[f"D{i}"] = getattr(r, "content", "") or ""
         emit({"type": "verification", "verification": verify_answer(full_answer, premises)})
-        # §3.3 quoted-span sidecar (parity with _answer_question_woven): opt-in until the verbatim
-        # match-rate clears the gate on the deployed model. Reuses the in-scope synth_client +
-        # premises; additive — extraction failure returns [] and never blocks the stream.
-        if os.environ.get("EVIDENCE_SPANS", "").lower() in ("1", "true", "yes", "on"):
+        # §3.3 quoted-span sidecar + §5 Decision Card (parity with _answer_question_woven): opt-in,
+        # additive. Reuses the in-scope synth_client + premises; a failure returns [] / a prose-only
+        # card and never blocks the stream. DECISION_CARD implies the spans (the gate needs them).
+        def _flag(name):
+            return os.environ.get(name, "").lower() in ("1", "true", "yes", "on")
+        spans = []
+        if _flag("EVIDENCE_SPANS") or _flag("DECISION_CARD"):
             from neuro_caseboard.evidence_spans import extract_and_verify
-            emit({"type": "evidence",
-                  "evidence_spans": extract_and_verify(full_answer, premises, synth_client)})
+            spans = extract_and_verify(full_answer, premises, synth_client)
+        if _flag("EVIDENCE_SPANS"):
+            emit({"type": "evidence", "evidence_spans": spans})
+        if _flag("DECISION_CARD"):
+            from datetime import date
+            from neuro_caseboard.claim_review import build_decision_card
+            marker_year = {}
+            for i, r in enumerate(records or [], 1):
+                marker_year[f"L{i}"] = getattr(r, "year", None)
+            for i, r in enumerate(corpus_records or [], 1):
+                marker_year[f"D{i}"] = getattr(r, "year", None)
+            try:
+                staleness_years = int(os.environ.get("STALENESS_YEARS") or 5)
+            except ValueError:
+                staleness_years = 5
+            emit({"type": "decision", "decision_card": build_decision_card(
+                full_answer, spans=spans, marker_year=marker_year, now_year=date.today().year,
+                question=question, staleness_years=staleness_years)})
         emit({"type": "done"})
     except Exception:
         # Any streaming-path failure degrades to the proven blocking path (still persisted).
