@@ -405,6 +405,36 @@ def _corpus_list(records) -> list:
     return [_corpus_record_dict(r) for r in (records or [])]
 
 
+def _reviewed_claim_dict(r) -> dict:
+    return {
+        "text": getattr(r, "text", ""),
+        "markers": list(getattr(r, "markers", []) or []),
+        "category": getattr(r, "category", "other"),
+        "quote": getattr(r, "quote", ""),
+        "span_matched": bool(getattr(r, "span_matched", False)),
+        "status": getattr(r, "status", "settled"),
+        "flags": list(getattr(r, "flags", []) or []),
+        "year": getattr(r, "year", None),
+    }
+
+
+def _decision_card_dict(card) -> "dict | None":
+    """Serialize the §5 Decision Card. `prose` is the verbatim answer (the card is a lens, never a
+    rewrite); the reader sees bottom-line + decision furniture up top and the amber uncertainties
+    lane, with the full prose expandable below."""
+    if card is None:
+        return None
+    return {
+        "prose": getattr(card, "prose", ""),
+        "bottom_line": [_reviewed_claim_dict(r) for r in getattr(card, "bottom_line", []) or []],
+        "decision_furniture": [_reviewed_claim_dict(r)
+                               for r in getattr(card, "decision_furniture", []) or []],
+        "uncertainties": [_reviewed_claim_dict(r) for r in getattr(card, "uncertainties", []) or []],
+        "coverage_gaps": list(getattr(card, "coverage_gaps", []) or []),
+        "conflicts": list(getattr(card, "conflicts", []) or []),
+    }
+
+
 def _evidence_spans_list(spans) -> list:
     """Serialize the §3.3 quoted-span sidecar. Each span is the model's verbatim supporting
     sentence + whether it string-matched its cited chunk (precision-1.0 fabrication check). The
@@ -580,6 +610,7 @@ def ask(req: AskRequest):
         "corpus": _corpus_list(getattr(result, "corpus", None)),
         "verification": verification_to_dict(getattr(result, "verification", None)),
         "evidence_spans": _evidence_spans_list(getattr(result, "evidence_spans", None)),
+        "decision_card": _decision_card_dict(getattr(result, "decision_card", None)),
     }
 
 
