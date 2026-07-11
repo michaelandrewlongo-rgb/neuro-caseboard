@@ -7,6 +7,7 @@ shape lives in the API layer (api.server._serialize_ask_event)."""
 from __future__ import annotations
 
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor
 
 from neuro_caseboard.qa import (LiteratureSection, LiteratureCitation,
@@ -167,6 +168,13 @@ def stream_answer(question, emit, *, config=None, force=False, skip_disambiguati
         for i, r in enumerate(corpus_records or [], 1):
             premises[f"D{i}"] = getattr(r, "content", "") or ""
         emit({"type": "verification", "verification": verify_answer(full_answer, premises)})
+        # §3.3 quoted-span sidecar (parity with _answer_question_woven): opt-in until the verbatim
+        # match-rate clears the gate on the deployed model. Reuses the in-scope synth_client +
+        # premises; additive — extraction failure returns [] and never blocks the stream.
+        if os.environ.get("EVIDENCE_SPANS", "").lower() in ("1", "true", "yes", "on"):
+            from neuro_caseboard.evidence_spans import extract_and_verify
+            emit({"type": "evidence",
+                  "evidence_spans": extract_and_verify(full_answer, premises, synth_client)})
         emit({"type": "done"})
     except Exception:
         # Any streaming-path failure degrades to the proven blocking path (still persisted).

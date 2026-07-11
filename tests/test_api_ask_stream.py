@@ -112,3 +112,22 @@ def test_cerebrovascular_flag_defaults_off(monkeypatch):
     job_id = client.post("/api/ask/start", json={"question": "q"}).json()["job_id"]
     client.get(f"/api/ask/stream/{job_id}?cursor=0")
     assert captured.get("corpus_config") is None
+
+
+def test_evidence_event_serializes(monkeypatch):
+    """An 'evidence' domain event → JSON spans on the wire (quote is display copy)."""
+    import api.server as server
+    from neuro_caseboard.evidence_spans import EvidenceSpan
+
+    def fake(question, emit, **kwargs):
+        emit({"type": "evidence", "evidence_spans": [
+            EvidenceSpan(claim="c [1]", marker="1", quote="q", matched=True, score=1.0)]})
+        emit({"type": "done"})
+
+    monkeypatch.setattr("neuro_caseboard.qa_stream.stream_answer", fake)
+    client = TestClient(server.app)
+    job_id = client.post("/api/ask/start", json={"question": "q"}).json()["job_id"]
+    events = _events_from_sse(client.get(f"/api/ask/stream/{job_id}?cursor=0").text)
+    ev = next(e for e in events if e["type"] == "evidence")
+    assert ev["evidence_spans"][0]["quote"] == "q"
+    assert ev["evidence_spans"][0]["matched"] is True

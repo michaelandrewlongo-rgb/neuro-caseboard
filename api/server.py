@@ -469,6 +469,9 @@ def _serialize_ask_event(ev: dict) -> dict:
     if t == "verification":
         return {"type": "verification",
                 "verification": verification_to_dict(ev.get("verification"))}
+    if t == "evidence":
+        return {"type": "evidence",
+                "evidence_spans": _evidence_spans_list(ev.get("evidence_spans"))}
     if t == "clarification":
         return {"type": "clarification", "question": ev.get("question", ""),
                 "variants": [{"label": getattr(v, "label", ""), "rewrite": getattr(v, "rewrite", "")}
