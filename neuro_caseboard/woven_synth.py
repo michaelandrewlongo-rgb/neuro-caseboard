@@ -46,7 +46,9 @@ WOVEN_DECISION_RULES = (
     "interval. If a source does not establish one of these, say so explicitly (\"the sources do "
     "not give a threshold\") — never silently omit it.\n"
     "- Match the evidence's certainty. Avoid absolute words (always, never, all, none, "
-    "contraindicated) unless a source states them; prefer calibrated language."
+    "contraindicated) unless a source states them; prefer calibrated language.\n"
+    "- When a claim rests on a study with a year ([L#]/[D#] carry one), name the year inline so "
+    "the reader can price its currency (e.g. \"the 2023 SELECT2 trial\")."
 )
 
 WOVEN_CORPUS_RULE = (
