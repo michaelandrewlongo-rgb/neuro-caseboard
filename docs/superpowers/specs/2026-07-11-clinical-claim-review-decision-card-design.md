@@ -133,11 +133,18 @@ A claim that is not management-relevant (`category=="other"`) stays in prose, ou
 free.
 
 **Step 3 — Deterministic checks (model-free):**
-- **Freshness.** `_currency_language(claim)` regex for `latest|current|now standard|approved|newest`.
-  If present AND the freshest cited source `year` is older than `CURRENCY_MAX_AGE` (default 3 y from a
-  passed `now_year`, never `Date.now()` in a determinism-sensitive path) → `flags += ["stale_currency"]`.
-  Year source: `[L#]`/`[D#]` records carry `year`; `[n]` textbook uses the book's publication year
-  (static map, Youmans 8e = 2022).
+- **Freshness (LOCKED 2026-07-11, domain-blind advisory).** `currency_cue(claim)` returns
+  `"strong"` (`newly|latest|newest|just approved|most recent|breakthrough`), `"soft"`
+  (`now standard|current|present-day|state of the art|contemporary|modern`), or `None`. The flag
+  fires ONLY when a cue is present. Threshold `STALENESS_YEARS` (default **5**, anchored on guideline
+  half-life ≈5.8 y); the strong-cue tier is `ceil(0.6 × STALENESS_YEARS)` = **3**. If the freshest
+  cited source `year` (from `[L#]`/`[D#]`; `[n]` textbook = `None`) exceeds the tier's age →
+  `flags += ["stale_currency"]`. A **strong**-cue claim citing NO dated (`[L#]`/`[D#]`) marker also
+  flags — a "newly approved / latest" claim resting only on a textbook is exactly the stale case.
+  `now_year` is passed in (never `Date.now()` in a determinism-sensitive path). One knob,
+  `STALENESS_YEARS`; the strong-tier ratio rides along. *(Chosen over a flat 3 y and over a topic
+  classifier: cue-strength tiering gets most of the topic-sensitivity with zero new machinery, and
+  keeps the flag rare — the false-positive discipline the 0.24-precision ⚠ badge failed.)*
 - **Coverage.** Split the question into limbs (deterministic: split on `and|vs|versus|,` + `?`), and
   assert each limb's head noun appears in the answer. A missing limb → `flags += ["coverage_gap"]` on
   the card (not on a claim) → surfaced under uncertainties as "did not address: <limb>".
@@ -149,10 +156,15 @@ free.
   `[D#]`/`[L#]` record's subspecialty ≠ the question's routed subspecialty → `flags += ["off_domain"]`
   on that claim. Guards the documented crowding failure (a stroke guideline answering a TBI question).
 
-**Step 4 — Soften / withhold.** Any claim with a non-empty `flags` → `status="uncertain"`, routed to
-`uncertainties`, rendered amber ("uncertain — verify current guidance: <reason>"). A settled claim is
-one that is span-matched AND flag-free. **Nothing is deleted from prose** — the full answer stays
-expandable; the card is a *lens* over it, not a rewrite. (This respects Sentinel-21: no claim is dropped.)
+**Step 4 — Soften / withhold (LOCKED: soften in place, never hide by default).** Any claim with a
+non-empty `flags` → `status="uncertain"`, routed to `uncertainties`, rendered amber ("uncertain —
+verify current guidance: <reason>"). A settled claim is span-matched AND flag-free. **Nothing is
+deleted from prose** — the full answer stays expandable; the card is a *lens* over it, not a rewrite.
+(Respects Sentinel-21: no claim silently dropped.) *Rationale (advisory): hiding turns a false-positive
+check into a silent deletion of a possibly-correct claim — the worst mode, since the user can't dispute
+what they never saw; softening keeps the verifier's error cost near zero.* The soften-vs-collapse
+choice is an SP2 **render** knob (`FAIL_ACTION`, default `soften`, per check type) — the SP1 data layer
+always carries every uncertain claim; the renderer decides how loudly to show it.
 
 **Step 5 — Assemble.** `bottom_line` = settled management claims, deduped, in answer order.
 `decision_furniture` = the threshold/comparator/exclusion/effect-size claims the furniture prompt
