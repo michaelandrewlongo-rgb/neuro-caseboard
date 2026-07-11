@@ -247,7 +247,7 @@ function ResultView({
   // only once the answer is final.
   return (
     <div className="flex flex-col gap-6">
-      {state.decisionCard && <DecisionCard card={state.decisionCard} />}
+      {state.decisionCard && <DecisionCard card={state.decisionCard} sources={state.sources} />}
       {state.answer && <AnswerView text={state.answer} />}
       {state.figures.length > 0 && <FigureGrid figures={state.figures} />}
       {state.sources.length > 0 && <SourcesList citations={state.sources} />}

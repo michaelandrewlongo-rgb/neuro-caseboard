@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { claimReason, hasCardContent } from "./decisionCard"
-import type { DecisionCard, ReviewedClaim } from "./api"
+import { claimReason, firstPageUrl, hasCardContent, pageImageUrl } from "./decisionCard"
+import type { Citation, DecisionCard, ReviewedClaim } from "./api"
 
 const claim = (over: Partial<ReviewedClaim>): ReviewedClaim => ({
   text: "x", markers: ["1"], category: "other", quote: "", span_matched: true,
@@ -39,5 +39,34 @@ describe("hasCardContent", () => {
 
   it("is true when any lane is populated", () => {
     expect(hasCardContent({ ...emptyCard, coverage_gaps: ["did not address: beta"] })).toBe(true)
+  })
+})
+
+const sources: Citation[] = [
+  { n: 1, book: "Youmans and Winn", chapter: "Ch419", page: 5710, location: "Youmans, Ch419, p.5710" },
+]
+
+describe("pageImageUrl", () => {
+  it("builds a page URL for a textbook marker", () => {
+    expect(pageImageUrl("1", sources)).toBe("/api/page-image?book=Youmans%20and%20Winn&page=5710")
+  })
+
+  it("returns null for literature / corpus markers", () => {
+    expect(pageImageUrl("L1", sources)).toBeNull()
+    expect(pageImageUrl("D2", sources)).toBeNull()
+  })
+
+  it("returns null when no source matches the marker", () => {
+    expect(pageImageUrl("9", sources)).toBeNull()
+  })
+})
+
+describe("firstPageUrl", () => {
+  it("picks the first resolvable marker", () => {
+    expect(firstPageUrl(["L1", "1"], sources)).toContain("page=5710")
+  })
+
+  it("is null when no marker resolves", () => {
+    expect(firstPageUrl(["L1", "D2"], sources)).toBeNull()
   })
 })

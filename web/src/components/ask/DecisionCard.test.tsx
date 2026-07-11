@@ -37,6 +37,6 @@ describe("DecisionCard render", () => {
     expect(out).toContain("Uncertain")
     expect(out).toContain("2018 source")            // the amber staleness reason
     expect(out).toContain("did not address: thrombolysis")
-    expect(out).toContain("show source quote")      // click-to-quote affordance present
+    expect(out).toContain("show source")            // click-to-source affordance present
   })
 })
