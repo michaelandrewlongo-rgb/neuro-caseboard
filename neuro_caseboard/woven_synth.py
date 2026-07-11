@@ -36,6 +36,19 @@ WOVEN_SYSTEM = (
     "clinical judgment."
 )
 
+# Phase 4.1 (decision furniture) + 4.3 (over-absolute language). Appended when
+# PROMPT_DECISION_FURNITURE is set, so the change is an A/B arm, not a silent baseline shift.
+# Targets ledger clusters missing_decision_threshold (33) / missing_comparator (34) /
+# missing_risk_or_tradeoff (24) / missing_patient_selection (11) / overabsolute_language (38).
+WOVEN_DECISION_RULES = (
+    "\n- For any management recommendation, give the decision furniture the sources support: the "
+    "threshold WITH ITS UNITS, the comparator, who is excluded, and the effect size with its "
+    "interval. If a source does not establish one of these, say so explicitly (\"the sources do "
+    "not give a threshold\") — never silently omit it.\n"
+    "- Match the evidence's certainty. Avoid absolute words (always, never, all, none, "
+    "contraindicated) unless a source states them; prefer calibrated language."
+)
+
 WOVEN_CORPUS_RULE = (
     "\n- A THIRD evidence source is provided below: numbered journal full-text passages "
     "(cited [D#], e.g. [D2]) from a frozen contemporary neurosurgical literature corpus "
@@ -79,9 +92,12 @@ def build_woven_prompt(question, hits, figures, records, variant_directive=None,
 def synthesize_woven(question, hits, figures, images, records, synth_client,
                      *, variant_directive=None, corpus_records=None) -> WovenSynthesis:
     from neuro_core.synthesize import build_citations
+    import os
     user = build_woven_prompt(question, hits, figures, records, variant_directive,
                               corpus_records=corpus_records)
     system = WOVEN_SYSTEM + (WOVEN_CORPUS_RULE if corpus_records else "")
+    if os.environ.get("PROMPT_DECISION_FURNITURE", "").lower() in ("1", "true", "yes", "on"):
+        system += WOVEN_DECISION_RULES
     answer = synth_client.generate(system, user, images)
     return WovenSynthesis(answer=answer, citations=build_citations(hits, figures),
                           records=list(records), corpus_records=list(corpus_records or []))
