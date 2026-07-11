@@ -76,6 +76,28 @@ export interface EvidenceSpan {
   score: number
 }
 
+// §5 Clinical Claim Review — one reviewed decision-changing claim.
+export interface ReviewedClaim {
+  text: string
+  markers: string[]
+  category: string   // indication|contraindication|threshold|comparative|regulatory|trial|other
+  quote: string      // verbatim supporting sentence (sidecar; shown on click, never inline)
+  span_matched: boolean
+  status: "settled" | "uncertain"
+  flags: string[]    // stale_currency | unmatched_span
+  year: number | null
+}
+
+// The Decision Card: a lens over the answer. `prose` is the verbatim answer (never a rewrite).
+export interface DecisionCard {
+  prose: string
+  bottom_line: ReviewedClaim[]
+  decision_furniture: ReviewedClaim[]
+  uncertainties: ReviewedClaim[]
+  coverage_gaps: string[]
+  conflicts: string[]
+}
+
 export interface Figure {
   source_n: number | null
   book: string

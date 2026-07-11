@@ -57,6 +57,31 @@ describe("applyAskEvent", () => {
     const s = feed([{ type: "done" }])
     expect(s.done).toBe(true)
   })
+
+  it("reduces evidence + decision events into state", () => {
+    const s = feed([
+      { type: "answer", answer: "It is indicated [1].", refusal: false, citations: [], figures: [] },
+      {
+        type: "evidence",
+        evidence_spans: [{ claim: "It is indicated [1].", marker: "1", quote: "q", matched: true, score: 1 }],
+      },
+      {
+        type: "decision",
+        decision_card: {
+          prose: "It is indicated [1].",
+          bottom_line: [{ text: "It is indicated.", markers: ["1"], category: "indication",
+                          quote: "q", span_matched: true, status: "settled", flags: [], year: null }],
+          decision_furniture: [],
+          uncertainties: [],
+          coverage_gaps: ["did not address: beta"],
+          conflicts: [],
+        },
+      },
+    ])
+    expect(s.evidenceSpans[0].matched).toBe(true)
+    expect(s.decisionCard?.bottom_line[0].category).toBe("indication")
+    expect(s.decisionCard?.coverage_gaps).toEqual(["did not address: beta"])
+  })
 })
 
 describe("store round-trip", () => {

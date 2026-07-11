@@ -1,7 +1,7 @@
 // Persistent mirror of an in-flight / completed Ask response. The server owns the truth (a
 // replayable event log); this is a local cache so a refresh/tab-change restores instantly and a
 // reconnect resumes from `nextIndex`. Dedup is by event index — events already applied are ignored.
-import type { Citation, Figure, Literature, Variant } from "./api"
+import type { Citation, DecisionCard, EvidenceSpan, Figure, Literature, Variant } from "./api"
 
 export interface Verification {
   n_cited_claims: number
@@ -17,6 +17,8 @@ export type AskEvent =
   | { type: "answer"; answer: string; refusal: boolean; citations: Citation[]; figures: Figure[] }
   | { type: "literature"; literature: Literature | null }
   | { type: "verification"; verification: Verification | null }
+  | { type: "evidence"; evidence_spans: EvidenceSpan[] }
+  | { type: "decision"; decision_card: DecisionCard | null }
   | { type: "clarification"; question: string; variants: Variant[] }
   | { type: "unavailable"; reason: string }
   | { type: "error"; error: string }
@@ -33,6 +35,8 @@ export interface AskState {
   figures: Figure[]
   literature: Literature | null
   verification: Verification | null
+  evidenceSpans: EvidenceSpan[]
+  decisionCard: DecisionCard | null
   variants: Variant[]
   reason: string // unavailable/error message
   nextIndex: number // next un-applied event index (the reconnect cursor)
@@ -42,7 +46,8 @@ export interface AskState {
 export function emptyAskState(question: string, jobId: string): AskState {
   return {
     question, jobId, status: "streaming", answer: "", sources: [], figures: [],
-    literature: null, verification: null, variants: [], reason: "", nextIndex: 0, done: false,
+    literature: null, verification: null, evidenceSpans: [], decisionCard: null,
+    variants: [], reason: "", nextIndex: 0, done: false,
   }
 }
 
@@ -70,6 +75,12 @@ export function applyAskEvent(state: AskState, ev: AskEvent, index: number): Ask
       break
     case "verification":
       s.verification = ev.verification
+      break
+    case "evidence":
+      s.evidenceSpans = ev.evidence_spans
+      break
+    case "decision":
+      s.decisionCard = ev.decision_card
       break
     case "clarification":
       s.status = "clarification"
