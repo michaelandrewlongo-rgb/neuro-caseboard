@@ -23,7 +23,45 @@ _log = logging.getLogger(__name__)
 
 # cerebrovascular-relevant subspecialties (see cv-curric/BUILD_STATE.md "only use relevant data").
 RELEVANT_DBS = ["cerebrovascular", "neurointerventional", "radiosurgery", "neurocritical_care",
-                "trauma_general", "pediatrics", "tumor_skull_base"]
+                "trauma_general", "pediatrics", "tumor_skull_base",
+                "spine", "functional_epilepsy", "peripheral_nerve"]
+
+# Phase 2.1 domain router: map a question to the subspecialty corpora worth querying, so the [D#]
+# lane does not pull (say) a stroke trial into a spine answer — the documented crowding regression.
+# Keyword-only (deterministic, no LLM). Recall-safe: a question matching nothing queries ALL DBs.
+_DOMAIN_KEYWORDS = {
+    "cerebrovascular": ("aneurysm", "avm", "arteriovenous", "subarachnoid", " sah", "moyamoya",
+                        "cavernoma", "cavernous malformation", "bypass", "carotid", "vascular",
+                        "hemorrhage", "haemorrhage", "vasospasm", "dural fistula"),
+    "neurointerventional": ("thrombectomy", "embolization", "embolisation", "coiling", "flow divert",
+                            "stent", "endovascular", "large vessel occlusion", " lvo", "aspiration",
+                            "middle meningeal"),
+    "radiosurgery": ("radiosurgery", "gamma knife", " srs", "stereotactic radiation", "cyberknife"),
+    "neurocritical_care": (" icp", "intracranial pressure", "neurocritical", " icu", "ventilator",
+                           "status epilepticus", "hyperosmolar", "cerebral edema"),
+    "trauma_general": ("trauma", " tbi", "head injury", "traumatic brain", " gcs", "decompressive",
+                       "contusion", "epidural hematoma", "subdural"),
+    "pediatrics": ("pediatric", "paediatric", "child", "infant", "congenital", "neonat"),
+    "tumor_skull_base": ("tumor", "tumour", "glioma", "glioblastoma", " gbm", "meningioma",
+                         "schwannoma", "metastas", "skull base", "pituitary", "adenoma",
+                         "vestibular", "chordoma", "ependymoma"),
+    "spine": ("spine", "spinal", "vertebr", "fusion", "discectomy", "laminectomy", "cervical",
+              "lumbar", "thoracic", "myelopathy", "scoliosis", "stenosis", "spondyl", "corpectomy",
+              "pedicle"),
+    "functional_epilepsy": ("epilepsy", "seizure", " dbs", "deep brain", "parkinson", "tremor",
+                            "functional neurosurg", "movement disorder", "dystonia", "vagus nerve"),
+    "peripheral_nerve": ("peripheral nerve", "carpal tunnel", "ulnar", "brachial plexus",
+                         "entrapment", "cubital", "nerve graft", "neuroma"),
+}
+
+
+def route_domains(question: str, available: "list[str]") -> "list[str]":
+    """The subset of ``available`` DBs whose keywords appear in ``question``. Recall-safe: no match
+    -> all available (never returns []). Deterministic; used to scope the [D#] lane per question."""
+    q = f" {(question or '').lower()} "
+    hit = [db for db in available if db in _DOMAIN_KEYWORDS
+           and any(k in q for k in _DOMAIN_KEYWORDS[db])]
+    return hit or list(available)
 
 # Evidence sections weigh more than framing sections; title/intro/other weigh less.
 _SECTION_BOOST = {"results": 1.15, "conclusion": 1.15, "methods": 1.08, "discussion": 1.08,
@@ -184,7 +222,7 @@ def retrieve_corpus(question: str, cfg: "CorpusConfig | None" = None) -> list:
     if not match:
         return []
     pooled = []
-    for name in cfg.dbs:
+    for name in route_domains(question, cfg.dbs):   # scope to the question's subspecialty (§2.1)
         pooled.extend(_query_db(name, cfg, match))
     pooled.sort(key=lambda r: r.score, reverse=True)
     picked, per_work = [], defaultdict(int)
