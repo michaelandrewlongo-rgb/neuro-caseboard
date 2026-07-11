@@ -38,9 +38,11 @@ from collections import OrderedDict
 from pathlib import Path
 from urllib.parse import quote
 
+from functools import lru_cache
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from neuro_caseboard.answer_verify import verification_to_dict
@@ -282,6 +284,63 @@ def figure(path: str):
     if p is None:
         return JSONResponse(status_code=404, content={"error": "image not found or not allowed"})
     return FileResponse(p)
+
+
+# --- Page images (SP2b): render a cited textbook page on demand -------------------------------
+# The click-to-quote drawer links a textbook [n] citation to its rendered folio. `book` is the PDF
+# stem (ingest sets book = pdf_path.stem) and `page` is the stored 1-based PDF page. Whitelisted to
+# CORPUS_DIR (no traversal) and failure-safe: no PDFs on disk (query-only deploy) -> 404, not a 500.
+
+def _corpus_dir() -> "Path | None":
+    try:
+        from neuro_core.config import load_config
+        return Path(load_config().corpus_dir)
+    except Exception:
+        return None
+
+
+def _corpus_pdf_path(book: str) -> "Path | None":
+    """Resolve a citation `book` (a PDF stem) to its source PDF *directly inside* CORPUS_DIR, or
+    None. The resolved path's parent must equal the corpus dir — blocks `../` traversal."""
+    corpus = _corpus_dir()
+    if not book or corpus is None:
+        return None
+    try:
+        corpus = corpus.resolve()
+        cand = (corpus / f"{book}.pdf").resolve()
+    except Exception:
+        return None
+    if cand.parent != corpus or not cand.is_file():
+        return None
+    return cand
+
+
+@lru_cache(maxsize=64)
+def _render_page_png(pdf_str: str, page: int) -> bytes:
+    """Render a 1-based PDF page to PNG bytes at 150 DPI. Cached per (pdf, page).
+    ponytail: LRU on the file path — the corpus is static at runtime; if a PDF is ever replaced
+    in place, clear the cache or restart."""
+    import fitz
+    doc = fitz.open(pdf_str)
+    try:
+        idx = max(0, min(page - 1, doc.page_count - 1))   # clamp: stored page is 1-based
+        return doc[idx].get_pixmap(dpi=150).tobytes("png")
+    finally:
+        doc.close()
+
+
+@app.get("/api/page-image")
+def page_image(book: str, page: int = 1):
+    """Serve the rendered image of a cited textbook page (book stem + 1-based PDF page)."""
+    pdf = _corpus_pdf_path(book)
+    if pdf is None:
+        return JSONResponse(status_code=404, content={"error": "page image unavailable"})
+    try:
+        png = _render_page_png(str(pdf), page)
+    except Exception:
+        return JSONResponse(status_code=404, content={"error": "page render failed"})
+    return Response(content=png, media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=86400"})
 
 
 # ---------------------------------------------------------------------------------------------
