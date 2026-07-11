@@ -1,6 +1,24 @@
 // web/src/lib/api.test.ts
 import { describe, expect, it, vi, beforeEach, type Mock } from "vitest"
 import { askQuestion, startAsk } from "./api"
+import type { AskResponse } from "./api"
+
+describe("Ask answer wire type", () => {
+  it("accepts evidence_spans + citation folio fields", () => {
+    const r: AskResponse = {
+      kind: "answer",
+      answer: "Claim [1].",
+      citations: [{ n: 1, book: "Youmans", chapter: "Ch419", page: 5710,
+                    printed_page: "3357", page_ref: "p.3357", location: "Youmans, Ch419, p.5710" }],
+      figures: [],
+      literature: null,
+      evidence_spans: [{ claim: "Claim [1].", marker: "1", quote: "the sentence",
+                         matched: true, score: 1.0 }],
+    }
+    expect(r.kind === "answer" && r.evidence_spans[0].matched).toBe(true)
+    expect(r.kind === "answer" && r.citations[0].page_ref).toBe("p.3357")
+  })
+})
 
 describe("Ask request bodies", () => {
   beforeEach(() => {

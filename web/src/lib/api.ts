@@ -63,7 +63,17 @@ export interface Citation {
   book: string
   chapter: string
   page: number | null
+  printed_page?: string        // the openable folio ("" when unrecoverable)
+  page_ref?: string | null     // display string: "p.3357" or "p.42 (pdf)"
   location: string
+}
+
+export interface EvidenceSpan {
+  claim: string
+  marker: string   // "1" | "L3" | "D2" — the [n]/[L#]/[D#] this claim cited
+  quote: string    // the model's verbatim supporting sentence (what the reader opens)
+  matched: boolean // did the quote string-match its cited chunk (precision-1.0 fabrication check)
+  score: number
 }
 
 export interface Figure {
@@ -99,7 +109,8 @@ export interface Variant {
 }
 
 export type AskResponse =
-  | { kind: "answer"; answer: string; citations: Citation[]; figures: Figure[]; literature: Literature | null }
+  | { kind: "answer"; answer: string; citations: Citation[]; figures: Figure[];
+      literature: Literature | null; evidence_spans: EvidenceSpan[] }
   | { kind: "clarification"; question: string; variants: Variant[] }
   | { kind: "unavailable"; reason: string }
   | { kind: "error"; error: string }

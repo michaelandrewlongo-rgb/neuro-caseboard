@@ -334,10 +334,12 @@ describe("Ask answer wire type", () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Run the type-checker to verify it fails**
 
-Run: `cd web && npx vitest run src/lib/api.test.ts`
-Expected: FAIL — `tsc`/vitest type error: `evidence_spans` / `page_ref` not on the types.
+Run: `cd web && npx tsc -b`
+Expected: FAIL — 3 errors: `printed_page`/`page_ref` not on `Citation`, `evidence_spans` not on the
+answer variant. (NOTE: `vitest run` alone will NOT fail here — it transpiles without type-checking,
+so the type gate is `tsc -b`, which is what `npm run build` uses.)
 
 - [ ] **Step 3: Add the `EvidenceSpan` interface and extend `Citation`**
 
