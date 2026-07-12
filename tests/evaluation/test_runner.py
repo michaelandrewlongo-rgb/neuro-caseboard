@@ -28,6 +28,16 @@ def _load_runner():
 runner = _load_runner()
 
 
+@pytest.fixture(autouse=True)
+def _stub_fingerprints(monkeypatch):
+    """The reproducibility gate (FIX_PLAN D7) hard-stops run_benchmark() when the corpus/prompt
+    fingerprint can't be computed — by design, since it requires a live LanceDB index at
+    INDEX_DIR. This suite is dependency-free/engine-free (see module docstring), so stub both to
+    deterministic values rather than depending on a real index being present (CI has none)."""
+    monkeypatch.setattr(runner, "corpus_fingerprint", lambda: "stub-corpus-fp")
+    monkeypatch.setattr(runner, "prompt_fingerprint", lambda: "stub-prompt-fp")
+
+
 # ---- stand-in objects mimicking the real shapes -------------------------------------------------
 def make_qaresult(answer="An answer.", citations=None, figures=None, literature=None,
                   verification=None):
