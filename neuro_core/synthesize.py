@@ -37,8 +37,15 @@ class Citation:
     n: int
     book: str
     chapter: str
-    page: int
-    text: str = ""   # cited chunk passage; "" for appended-figure citations (source_n > len(hits))
+    page: int          # PDF page index (retrieval bookkeeping; not what a reader opens)
+    text: str = ""     # cited chunk passage; "" for appended-figure citations (source_n > len(hits))
+    printed_page: str = ""   # the folio a reader can actually open; "" when unrecoverable (pure scans)
+
+    @property
+    def page_ref(self) -> str:
+        """The page string to SHOW a reader: the printed folio when known, else the PDF page
+        explicitly marked so it is never mistaken for a book page."""
+        return f"p.{self.printed_page}" if self.printed_page else f"p.{self.page} (pdf)"
 
 
 @dataclass
@@ -53,7 +60,8 @@ def _format_passages(hits):
         loc = h.book
         if h.chapter:
             loc += f", {h.chapter}"
-        loc += f", p.{h.page}"
+        folio = getattr(h, "printed_page", "") or ""
+        loc += f", p.{folio}" if folio else f", p.{h.page}"
         lines.append(f"[{i}] {loc}:\n{h.text}")
     return "\n\n".join(lines)
 
@@ -91,7 +99,8 @@ def build_citations(hits, figures):
     then appended figure sources (source_n > n, no chunk text). Shared by synthesize() and
     the woven path so the [n] namespace is constructed identically everywhere."""
     citations = [
-        Citation(n=i, book=h.book, chapter=h.chapter or "", page=h.page, text=h.text)
+        Citation(n=i, book=h.book, chapter=h.chapter or "", page=h.page, text=h.text,
+                 printed_page=(getattr(h, "printed_page", "") or ""))
         for i, h in enumerate(hits, 1)
     ]
     for f in _appended_figures(hits, figures):

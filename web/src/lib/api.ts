@@ -63,7 +63,39 @@ export interface Citation {
   book: string
   chapter: string
   page: number | null
+  printed_page?: string        // the openable folio ("" when unrecoverable)
+  page_ref?: string | null     // display string: "p.3357" or "p.42 (pdf)"
   location: string
+}
+
+export interface EvidenceSpan {
+  claim: string
+  marker: string   // "1" | "L3" | "D2" — the [n]/[L#]/[D#] this claim cited
+  quote: string    // the model's verbatim supporting sentence (what the reader opens)
+  matched: boolean // did the quote string-match its cited chunk (precision-1.0 fabrication check)
+  score: number
+}
+
+// §5 Clinical Claim Review — one reviewed decision-changing claim.
+export interface ReviewedClaim {
+  text: string
+  markers: string[]
+  category: string   // indication|contraindication|threshold|comparative|regulatory|trial|other
+  quote: string      // verbatim supporting sentence (sidecar; shown on click, never inline)
+  span_matched: boolean
+  status: "settled" | "uncertain"
+  flags: string[]    // stale_currency | unmatched_span
+  year: number | null
+}
+
+// The Decision Card: a lens over the answer. `prose` is the verbatim answer (never a rewrite).
+export interface DecisionCard {
+  prose: string
+  bottom_line: ReviewedClaim[]
+  decision_furniture: ReviewedClaim[]
+  uncertainties: ReviewedClaim[]
+  coverage_gaps: string[]
+  conflicts: string[]
 }
 
 export interface Figure {
@@ -99,7 +131,8 @@ export interface Variant {
 }
 
 export type AskResponse =
-  | { kind: "answer"; answer: string; citations: Citation[]; figures: Figure[]; literature: Literature | null }
+  | { kind: "answer"; answer: string; citations: Citation[]; figures: Figure[];
+      literature: Literature | null; evidence_spans: EvidenceSpan[] }
   | { kind: "clarification"; question: string; variants: Variant[] }
   | { kind: "unavailable"; reason: string }
   | { kind: "error"; error: string }

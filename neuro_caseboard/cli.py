@@ -31,7 +31,8 @@ def _run_ask(args) -> int:
     print(result.answer)
     print("\nSources:")
     for c in result.citations:
-        loc = c.book + (f", {c.chapter}" if c.chapter else "") + f", p.{c.page}"
+        page_ref = getattr(c, "page_ref", None) or f"p.{c.page}"
+        loc = c.book + (f", {c.chapter}" if c.chapter else "") + f", {page_ref}"
         print(f"  [{c.n}] {loc}")
     lit = getattr(result, "literature", None)
     if lit and lit.citations:

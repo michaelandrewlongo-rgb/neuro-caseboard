@@ -112,3 +112,46 @@ def test_cerebrovascular_flag_defaults_off(monkeypatch):
     job_id = client.post("/api/ask/start", json={"question": "q"}).json()["job_id"]
     client.get(f"/api/ask/stream/{job_id}?cursor=0")
     assert captured.get("corpus_config") is None
+
+
+def test_evidence_event_serializes(monkeypatch):
+    """An 'evidence' domain event → JSON spans on the wire (quote is display copy)."""
+    import api.server as server
+    from neuro_caseboard.evidence_spans import EvidenceSpan
+
+    def fake(question, emit, **kwargs):
+        emit({"type": "evidence", "evidence_spans": [
+            EvidenceSpan(claim="c [1]", marker="1", quote="q", matched=True, score=1.0)]})
+        emit({"type": "done"})
+
+    monkeypatch.setattr("neuro_caseboard.qa_stream.stream_answer", fake)
+    client = TestClient(server.app)
+    job_id = client.post("/api/ask/start", json={"question": "q"}).json()["job_id"]
+    events = _events_from_sse(client.get(f"/api/ask/stream/{job_id}?cursor=0").text)
+    ev = next(e for e in events if e["type"] == "evidence")
+    assert ev["evidence_spans"][0]["quote"] == "q"
+    assert ev["evidence_spans"][0]["matched"] is True
+
+
+def test_decision_event_serializes(monkeypatch):
+    """A 'decision' domain event → the Decision Card JSON on the wire (streaming path)."""
+    import api.server as server
+    from neuro_caseboard.claim_review import DecisionCard, ReviewedClaim
+
+    def fake(question, emit, **kwargs):
+        emit({"type": "decision", "decision_card": DecisionCard(
+            prose="It is indicated [1].",
+            bottom_line=[ReviewedClaim(text="It is indicated.", markers=["1"],
+                                       category="indication", quote="q", span_matched=True,
+                                       status="settled")],
+            coverage_gaps=["did not address: beta"])})
+        emit({"type": "done"})
+
+    monkeypatch.setattr("neuro_caseboard.qa_stream.stream_answer", fake)
+    client = TestClient(server.app)
+    job_id = client.post("/api/ask/start", json={"question": "q"}).json()["job_id"]
+    events = _events_from_sse(client.get(f"/api/ask/stream/{job_id}?cursor=0").text)
+    dc = next(e for e in events if e["type"] == "decision")["decision_card"]
+    assert dc["prose"] == "It is indicated [1]."
+    assert dc["bottom_line"][0]["category"] == "indication"
+    assert dc["coverage_gaps"] == ["did not address: beta"]

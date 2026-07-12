@@ -57,8 +57,10 @@ def write_answers_md(rows: list[dict], cfg: dict, out: Path) -> None:
             lines.append("\n**Citations:**\n")
             for c in cits:
                 if isinstance(c, dict):
+                    folio = c.get("printed_page") or ""
+                    page = f"p. {folio}" if folio else f"p. {c.get('page','')} (pdf)"
                     lines.append(f"- [{c.get('n','?')}] {c.get('book','')} — {c.get('chapter','')} "
-                                 f"(p. {c.get('page','')})")
+                                 f"({page})")
                 else:
                     lines.append(f"- {c}")
             lines.append("")

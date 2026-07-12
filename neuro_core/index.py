@@ -13,6 +13,7 @@ class Hit:
     chapter: Optional[str]
     page: int
     text: str
+    printed_page: Optional[str] = None
     score: float = 0.0
     has_figure: bool = False
     caption: Optional[str] = None
@@ -72,6 +73,7 @@ def build_index(chunks, embedder, index_dir, batch_size=256, on_progress=None,
             "book": c.book,
             "chapter": c.chapter or "",
             "page": int(c.page),
+            "printed_page": c.printed_page or "",
             "text": c.text,
             "vector": [float(x) for x in v],
             "has_figure": bool(c.has_figure),
@@ -100,6 +102,7 @@ class Index:
             id=row["id"], book=row["book"],
             chapter=row["chapter"] or None, page=int(row["page"]),
             text=row["text"],
+            printed_page=(row.get("printed_page") or None),
             has_figure=bool(row.get("has_figure", False)),
             caption=(row.get("caption") or None),
             figure_path=(row.get("figure_path") or None),

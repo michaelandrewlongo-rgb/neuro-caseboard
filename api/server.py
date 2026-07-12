@@ -38,9 +38,11 @@ from collections import OrderedDict
 from pathlib import Path
 from urllib.parse import quote
 
+from functools import lru_cache
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from neuro_caseboard.answer_verify import verification_to_dict
@@ -284,6 +286,63 @@ def figure(path: str):
     return FileResponse(p)
 
 
+# --- Page images (SP2b): render a cited textbook page on demand -------------------------------
+# The click-to-quote drawer links a textbook [n] citation to its rendered folio. `book` is the PDF
+# stem (ingest sets book = pdf_path.stem) and `page` is the stored 1-based PDF page. Whitelisted to
+# CORPUS_DIR (no traversal) and failure-safe: no PDFs on disk (query-only deploy) -> 404, not a 500.
+
+def _corpus_dir() -> "Path | None":
+    try:
+        from neuro_core.config import load_config
+        return Path(load_config().corpus_dir)
+    except Exception:
+        return None
+
+
+def _corpus_pdf_path(book: str) -> "Path | None":
+    """Resolve a citation `book` (a PDF stem) to its source PDF *directly inside* CORPUS_DIR, or
+    None. The resolved path's parent must equal the corpus dir — blocks `../` traversal."""
+    corpus = _corpus_dir()
+    if not book or corpus is None:
+        return None
+    try:
+        corpus = corpus.resolve()
+        cand = (corpus / f"{book}.pdf").resolve()
+    except Exception:
+        return None
+    if cand.parent != corpus or not cand.is_file():
+        return None
+    return cand
+
+
+@lru_cache(maxsize=64)
+def _render_page_png(pdf_str: str, page: int) -> bytes:
+    """Render a 1-based PDF page to PNG bytes at 150 DPI. Cached per (pdf, page).
+    ponytail: LRU on the file path — the corpus is static at runtime; if a PDF is ever replaced
+    in place, clear the cache or restart."""
+    import fitz
+    doc = fitz.open(pdf_str)
+    try:
+        idx = max(0, min(page - 1, doc.page_count - 1))   # clamp: stored page is 1-based
+        return doc[idx].get_pixmap(dpi=150).tobytes("png")
+    finally:
+        doc.close()
+
+
+@app.get("/api/page-image")
+def page_image(book: str, page: int = 1):
+    """Serve the rendered image of a cited textbook page (book stem + 1-based PDF page)."""
+    pdf = _corpus_pdf_path(book)
+    if pdf is None:
+        return JSONResponse(status_code=404, content={"error": "page image unavailable"})
+    try:
+        png = _render_page_png(str(pdf), page)
+    except Exception:
+        return JSONResponse(status_code=404, content={"error": "page render failed"})
+    return Response(content=png, media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
 # ---------------------------------------------------------------------------------------------
 # Ask: forward neuro_caseboard.qa.answer_question (the SAME call the CLI/Streamlit use). Returns
 # a cited answer + figures + the contemporary-literature block, OR a clarification when the
@@ -329,11 +388,15 @@ def _citation_dict(c) -> dict:
     book = getattr(c, "book", "")
     chapter = getattr(c, "chapter", "") or ""
     page = getattr(c, "page", None)
+    printed_page = getattr(c, "printed_page", "") or ""
+    page_ref = getattr(c, "page_ref", None)   # Citation.page_ref is a @property (str), not a method
     return {
         "n": getattr(c, "n", None),
         "book": book,
         "chapter": chapter,
         "page": page,
+        "printed_page": printed_page,   # the folio a reader can actually open ("" when unrecoverable)
+        "page_ref": page_ref,           # display string: "p.3357" or "p.42 (pdf)"
         "location": _citation_location(book, chapter, page),
     }
 
@@ -401,6 +464,52 @@ def _corpus_list(records) -> list:
     return [_corpus_record_dict(r) for r in (records or [])]
 
 
+def _reviewed_claim_dict(r) -> dict:
+    return {
+        "text": getattr(r, "text", ""),
+        "markers": list(getattr(r, "markers", []) or []),
+        "category": getattr(r, "category", "other"),
+        "quote": getattr(r, "quote", ""),
+        "span_matched": bool(getattr(r, "span_matched", False)),
+        "status": getattr(r, "status", "settled"),
+        "flags": list(getattr(r, "flags", []) or []),
+        "year": getattr(r, "year", None),
+    }
+
+
+def _decision_card_dict(card) -> "dict | None":
+    """Serialize the §5 Decision Card. `prose` is the verbatim answer (the card is a lens, never a
+    rewrite); the reader sees bottom-line + decision furniture up top and the amber uncertainties
+    lane, with the full prose expandable below."""
+    if card is None:
+        return None
+    return {
+        "prose": getattr(card, "prose", ""),
+        "bottom_line": [_reviewed_claim_dict(r) for r in getattr(card, "bottom_line", []) or []],
+        "decision_furniture": [_reviewed_claim_dict(r)
+                               for r in getattr(card, "decision_furniture", []) or []],
+        "uncertainties": [_reviewed_claim_dict(r) for r in getattr(card, "uncertainties", []) or []],
+        "coverage_gaps": list(getattr(card, "coverage_gaps", []) or []),
+        "conflicts": list(getattr(card, "conflicts", []) or []),
+    }
+
+
+def _evidence_spans_list(spans) -> list:
+    """Serialize the §3.3 quoted-span sidecar. Each span is the model's verbatim supporting
+    sentence + whether it string-matched its cited chunk (precision-1.0 fabrication check). The
+    quote IS display copy here (unlike corpus content) — it is what the reader opens on a click."""
+    out = []
+    for s in spans or []:
+        out.append({
+            "claim": getattr(s, "claim", ""),
+            "marker": getattr(s, "marker", ""),
+            "quote": getattr(s, "quote", ""),
+            "matched": bool(getattr(s, "matched", False)),
+            "score": getattr(s, "score", 0.0),
+        })
+    return out
+
+
 # --- Ask streaming jobs ----------------------------------------------------------------------
 # An Ask request is a server-owned job: a daemon thread runs the (synchronous) streaming
 # orchestrator, appending serialized events to an append-only log. The SSE endpoint replays the
@@ -449,6 +558,12 @@ def _serialize_ask_event(ev: dict) -> dict:
     if t == "verification":
         return {"type": "verification",
                 "verification": verification_to_dict(ev.get("verification"))}
+    if t == "evidence":
+        return {"type": "evidence",
+                "evidence_spans": _evidence_spans_list(ev.get("evidence_spans"))}
+    if t == "decision":
+        return {"type": "decision",
+                "decision_card": _decision_card_dict(ev.get("decision_card"))}
     if t == "clarification":
         return {"type": "clarification", "question": ev.get("question", ""),
                 "variants": [{"label": getattr(v, "label", ""), "rewrite": getattr(v, "rewrite", "")}
@@ -556,6 +671,8 @@ def ask(req: AskRequest):
         "literature": _literature_dict(getattr(result, "literature", None)),
         "corpus": _corpus_list(getattr(result, "corpus", None)),
         "verification": verification_to_dict(getattr(result, "verification", None)),
+        "evidence_spans": _evidence_spans_list(getattr(result, "evidence_spans", None)),
+        "decision_card": _decision_card_dict(getattr(result, "decision_card", None)),
     }
 
 

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 DEFAULTS = {
-    "CORPUS_DIR": "/mnt/d/textbook_pdfs",
+    "CORPUS_DIR": str(Path.home() / "textbook_pdfs"),
     "INDEX_DIR": str(Path.home() / "neuro-textbook-rag" / "index"),
     "EMBED_MODEL": "BAAI/bge-large-en-v1.5",
     "RERANK_MODEL": "BAAI/bge-reranker-v2-m3",

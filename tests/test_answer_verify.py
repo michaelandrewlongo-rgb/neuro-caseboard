@@ -50,7 +50,8 @@ def test_merge_verifications_all_none_is_empty():
     from neuro_caseboard.answer_verify import merge_verifications
     merged = merge_verifications(None, None)
     assert merged.n_cited_claims == 0 and merged.n_unsupported == 0
-    assert merged.groundedness() == 1.0 and merged.claims == []
+    # D13: zero cited claims -> groundedness is UNDEFINED (None), not a perfect 1.0.
+    assert merged.groundedness() is None and merged.claims == []
 
 
 def test_verification_to_dict_shape():

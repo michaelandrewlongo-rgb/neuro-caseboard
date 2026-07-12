@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
@@ -39,6 +40,8 @@ class QAResult:
     literature: "LiteratureSection | None" = None
     verification: "AnswerVerification | None" = None
     corpus: list = field(default_factory=list)      # CorpusRecord list, for [D#]
+    evidence_spans: list = field(default_factory=list)  # EvidenceSpan sidecar (§3.3), never rendered inline
+    decision_card: "object | None" = None           # claim_review.DecisionCard (§5, SP1); None unless DECISION_CARD
 
 
 def retrieve_records(question, *, lit_config, client=None, synth_client, cache=None):
@@ -219,9 +222,38 @@ def _answer_question_woven(question, *, config=None, force=False, lit_config=Non
     for i, r in enumerate(syn.corpus_records or [], 1):
         premises[f"D{i}"] = getattr(r, "content", "") or ""
     verification = verify_answer(syn.answer, premises)
+    # Quoted-span sidecar (§3.3): opt-in until the verbatim match-rate clears the gate on the
+    # deployed model. Additive — a failure returns [] and never blocks the answer. The Decision
+    # Card (§5) needs the spans too, so compute them when either flag is on.
+    def _flag(name):
+        return os.environ.get(name, "").lower() in ("1", "true", "yes", "on")
+    evidence_spans = []
+    if _flag("EVIDENCE_SPANS") or _flag("DECISION_CARD"):
+        from neuro_caseboard.evidence_spans import extract_and_verify
+        evidence_spans = extract_and_verify(syn.answer, premises, synth_client)
+    # Clinical Claim Review gate (§5, SP1): deterministic Decision Card. Flag-gated, failure-safe,
+    # soften-not-hide (the prose is unchanged; the card is a lens over it).
+    decision_card = None
+    if _flag("DECISION_CARD"):
+        from datetime import date
+        from neuro_caseboard.claim_review import build_decision_card
+        marker_year = {}
+        for i, r in enumerate(syn.records or [], 1):
+            marker_year[f"L{i}"] = getattr(r, "year", None)
+        for i, r in enumerate(syn.corpus_records or [], 1):
+            marker_year[f"D{i}"] = getattr(r, "year", None)
+        # textbook [n] markers carry no claim-level year -> None (freshness skips them).
+        try:
+            staleness_years = int(os.environ.get("STALENESS_YEARS") or 5)
+        except ValueError:
+            staleness_years = 5
+        decision_card = build_decision_card(
+            syn.answer, spans=evidence_spans, marker_year=marker_year,
+            now_year=date.today().year, question=question, staleness_years=staleness_years)
     return QAResult(answer=answer, citations=syn.citations, figures=plan.figures,
                     literature=lit, verification=verification,
-                    corpus=list(syn.corpus_records or []))
+                    corpus=list(syn.corpus_records or []), evidence_spans=evidence_spans,
+                    decision_card=decision_card)
 
 
 def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=None,

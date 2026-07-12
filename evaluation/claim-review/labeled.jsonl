@@ -1,0 +1,16 @@
+{"id": "indication-current", "claim": "Mechanical thrombectomy is indicated for anterior large-vessel occlusion.", "year": 2023, "expect_stale": false, "expect_category": "indication"}
+{"id": "reg-strong-stale", "claim": "This is the latest FDA-approved flow diverter for wide-neck aneurysms.", "year": 2018, "expect_stale": true, "expect_category": "regulatory"}
+{"id": "soft-undated-ok", "claim": "Early aneurysm securing is the current standard in aneurysmal SAH.", "year": null, "expect_stale": false, "expect_category": "other"}
+{"id": "soft-old-dated", "claim": "Endovascular therapy is now standard for basilar artery occlusion.", "year": 2015, "expect_stale": true, "expect_category": "other"}
+{"id": "soft-recent", "claim": "Vessel-wall MRI is the current modality for intracranial vasculitis.", "year": 2024, "expect_stale": false, "expect_category": "other"}
+{"id": "threshold-icp", "claim": "The ICP treatment threshold is 22 mmHg.", "year": 2021, "expect_stale": false, "expect_category": "threshold"}
+{"id": "strong-undated", "claim": "This is a newly described endoscopic approach.", "year": null, "expect_stale": true, "expect_category": "other"}
+{"id": "plain-fact-guard", "claim": "The anterior choroidal artery supplies the posterior limb of the internal capsule.", "year": null, "expect_stale": false, "expect_category": "other"}
+{"id": "comparative", "claim": "Thrombectomy is superior to intravenous thrombolysis alone for large-vessel occlusion.", "year": 2022, "expect_stale": false, "expect_category": "comparative"}
+{"id": "threshold-time", "claim": "A door-to-groin time under 6 hours improves outcomes.", "year": 2023, "expect_stale": false, "expect_category": "threshold"}
+{"id": "strong-recent-boundary", "claim": "This newly approved device shows promise.", "year": 2024, "expect_stale": false, "expect_category": "regulatory"}
+{"id": "strong-stale-boundary", "claim": "The latest-generation stent retriever improves recanalization.", "year": 2022, "expect_stale": true, "expect_category": "other"}
+{"id": "soft-recent-boundary", "claim": "This is the current first-line management for cavernous malformations.", "year": 2021, "expect_stale": false, "expect_category": "indication"}
+{"id": "soft-stale-boundary", "claim": "Currently, coiling is preferred for posterior circulation aneurysms.", "year": 2020, "expect_stale": true, "expect_category": "other"}
+{"id": "contraindication", "claim": "Thrombolysis is contraindicated in recent major surgery.", "year": null, "expect_stale": false, "expect_category": "contraindication"}
+{"id": "regulatory-past", "claim": "The device received FDA approval in 2024.", "year": 2024, "expect_stale": false, "expect_category": "regulatory"}

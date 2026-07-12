@@ -33,6 +33,7 @@ CLI
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import platform
@@ -188,6 +189,51 @@ def model_configuration() -> dict:
     }
 
 
+def corpus_fingerprint() -> str | None:
+    """A deterministic hash of the retrieval corpus: the embed model plus each book's content
+    hash and chunk count, read from the index's ``books`` table. Changes iff a book's content,
+    the chunker, or the embedder changes. ``None`` when the index can't be read — which the
+    start guard treats as a hard stop, because a benchmark whose corpus is unknown is not
+    reproducible (this is exactly the ``corpus_fingerprint: None`` hole in every prior run)."""
+    index_dir = os.environ.get("INDEX_DIR", str(Path.home() / "neuro-textbook-rag" / "index"))
+    embed_model = os.environ.get("EMBED_MODEL", "BAAI/bge-large-en-v1.5")
+    try:
+        import lancedb
+
+        db = lancedb.connect(index_dir)
+        names = db.table_names()
+        if "books" in names:
+            tbl = db.open_table("books").to_pandas()
+            rows = sorted(
+                (str(r["book"]), str(r.get("file_hash", "")), int(r.get("chunk_count", 0)))
+                for _, r in tbl.iterrows()
+            )
+        else:
+            # build_index does not write a books table; derive an equivalent fingerprint from
+            # the always-present chunks table (per-book chunk counts).
+            ch = db.open_table("chunks").to_pandas()
+            rows = sorted((b, "", int(n)) for b, n in ch.groupby("book").size().items())
+    except Exception:
+        return None
+    if not rows:
+        return None
+    payload = repr((embed_model, rows)).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()[:16]
+
+
+def prompt_fingerprint() -> str | None:
+    """A deterministic hash of the synthesis prompts that actually govern the answer. Changes
+    iff the prompt text changes, so a prompt edit can never be silently conflated with a corpus
+    or model change across runs. ``None`` on import failure (start guard hard-stops)."""
+    try:
+        from neuro_core.synthesize import SYSTEM_PROMPT
+        from neuro_caseboard.woven_synth import WOVEN_CORPUS_RULE, WOVEN_SYSTEM
+    except Exception:
+        return None
+    payload = " ".join([SYSTEM_PROMPT, WOVEN_SYSTEM, WOVEN_CORPUS_RULE]).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()[:16]
+
+
 def _benchmark_version(records: list[dict]) -> str | None:
     versions = {r.get("benchmark_version") for r in records if r.get("benchmark_version")}
     if len(versions) == 1:
@@ -202,6 +248,8 @@ def build_run_config(run_id: str, records: list[dict]) -> dict:
         "application_commit": application_commit(),
         "working_tree_dirty": working_tree_dirty(),
         "benchmark_version": _benchmark_version(records),
+        "corpus_fingerprint": corpus_fingerprint(),
+        "prompt_fingerprint": prompt_fingerprint(),
         "model_configuration": model_configuration(),
         "python_version": platform.python_version(),
         "host": socket.gethostname(),
@@ -459,6 +507,17 @@ def run_benchmark(
         run_id = run_id or uuid.uuid4().hex
         run_config = build_run_config(run_id, records)
         write_json_atomic(run_config_path, run_config)
+
+    # Reproducibility gate (FIX_PLAN D7): a run with no corpus/prompt fingerprint is
+    # unfalsifiable — its "run-to-run noise" could be un-recorded config drift. Refuse to start.
+    # This also rejects --resume of a legacy run whose config predates fingerprinting.
+    missing = [k for k in ("corpus_fingerprint", "prompt_fingerprint") if not run_config.get(k)]
+    if missing:
+        raise SystemExit(
+            f"run refuses to start: {', '.join(missing)} could not be computed "
+            f"(index unreadable at INDEX_DIR, or prompts unimportable, or a legacy run-config "
+            f"on --resume). A benchmark whose corpus/prompt is unknown is not reproducible."
+        )
 
     already_done = completed_question_ids(run_jsonl) if resume else set()
 
