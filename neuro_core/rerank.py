@@ -1,3 +1,5 @@
+import os
+
 from .config import resolve_device
 
 
@@ -10,9 +12,15 @@ class Reranker:
     @property
     def scorer(self):
         if self._scorer is None:
-            from sentence_transformers import CrossEncoder
-            self._scorer = CrossEncoder(
-                self.model_name, device=resolve_device(self.device))
+            # A model_name that is a DIRECTORY is an exported ONNX model (see
+            # neuro_core.scripts.quantize_cross_encoder); a plain string is a hub id for torch.
+            if os.path.isdir(self.model_name):
+                from .onnx_rerank import OnnxCrossEncoder
+                self._scorer = OnnxCrossEncoder(self.model_name)
+            else:
+                from sentence_transformers import CrossEncoder
+                self._scorer = CrossEncoder(
+                    self.model_name, device=resolve_device(self.device))
         return self._scorer
 
     def rerank(self, query, hits, top_k):

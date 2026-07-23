@@ -34,7 +34,7 @@ COPY vendor ./vendor
 RUN python -m venv /opt/venv \
  && . /opt/venv/bin/activate \
  && pip install --upgrade pip \
- && pip install ".[vertex,models,briefing]"
+ && pip install ".[vertex,models,briefing,onnx]"
 
 # ---- Stage 3: slim runtime ----
 FROM python:3.12-slim AS runtime
