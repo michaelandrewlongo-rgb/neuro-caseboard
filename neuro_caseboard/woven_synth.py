@@ -60,6 +60,39 @@ WOVEN_CORPUS_RULE = (
 )
 
 
+# "extract" style: a source-extraction variant of Ask. Same retrieval, same citation
+# namespaces, same verification gate — the ONLY delta is the synthesis instruction, which
+# turns the prose answer into bullets that report what the sources say and nothing else.
+# Prose remains the default; this is opt-in per request (style="extract").
+WOVEN_EXTRACT_RULES = (
+    "\n\nOUTPUT FORMAT — SOURCE EXTRACTION ONLY:\n"
+    "- Answer as a flat list of bullet points ('- ' at the start of each line). No preamble, "
+    "no closing summary, no headings, no prose paragraphs.\n"
+    "- Each bullet states ONE fact taken from the sources and ends with its citation "
+    "marker(s). A bullet with no citable source does not belong in the answer.\n"
+    "- Report only what the sources state. Do not add background knowledge, inference, "
+    "recommendations, or connective reasoning of your own — if the sources do not say it, "
+    "leave it out rather than filling the gap.\n"
+    "- Keep each bullet to one sentence, in the sources' own terms (their thresholds, units, "
+    "and qualifiers verbatim where possible). Do not generalize a source's specific claim.\n"
+    "- If sources disagree, give each view its own bullet with its own citation.\n"
+    "- Omit a topic entirely rather than writing a bullet hedged as unknown."
+)
+
+
+def build_woven_system(corpus_records=None, style=None) -> str:
+    """The woven system prompt: base rules + corpus rule (when [D#] passages are present)
+    + the style variant. Shared by the blocking (synthesize_woven) and streaming
+    (qa_stream.stream_answer) paths so a style can never apply to only one of them."""
+    import os
+    system = WOVEN_SYSTEM + (WOVEN_CORPUS_RULE if corpus_records else "")
+    if os.environ.get("PROMPT_DECISION_FURNITURE", "").lower() in ("1", "true", "yes", "on"):
+        system += WOVEN_DECISION_RULES
+    if style == "extract":
+        system += WOVEN_EXTRACT_RULES
+    return system
+
+
 @dataclass
 class WovenSynthesis:
     answer: str
@@ -92,14 +125,14 @@ def build_woven_prompt(question, hits, figures, records, variant_directive=None,
 
 
 def synthesize_woven(question, hits, figures, images, records, synth_client,
-                     *, variant_directive=None, corpus_records=None) -> WovenSynthesis:
+                     *, variant_directive=None, corpus_records=None,
+                     style=None) -> WovenSynthesis:
     from neuro_core.synthesize import build_citations
-    import os
     user = build_woven_prompt(question, hits, figures, records, variant_directive,
                               corpus_records=corpus_records)
-    system = WOVEN_SYSTEM + (WOVEN_CORPUS_RULE if corpus_records else "")
-    if os.environ.get("PROMPT_DECISION_FURNITURE", "").lower() in ("1", "true", "yes", "on"):
-        system += WOVEN_DECISION_RULES
-    answer = synth_client.generate(system, user, images, route="ask.synth")
+    system = build_woven_system(corpus_records, style)
+    answer = synth_client.generate(system, user, images,
+                                   route="ask.synth.extract" if style == "extract"
+                                   else "ask.synth")
     return WovenSynthesis(answer=answer, citations=build_citations(hits, figures),
                           records=list(records), corpus_records=list(corpus_records or []))

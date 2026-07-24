@@ -43,10 +43,10 @@ def _fallback(question, emit, *, config, force, skip_disambiguation):
 
 def stream_answer(question, emit, *, config=None, force=False, skip_disambiguation=False,
                   lit_config=None, synth_client=None, plan_a=None, retrieve_b=None,
-                  retrieve_c=None, corpus_config=None, corpus_query=None):
+                  retrieve_c=None, corpus_config=None, corpus_query=None, style=None):
     from neuro_core.query import Clarification, _variant_directive
     from neuro_core.synthesize import REFUSAL, is_refusal, build_citations
-    from neuro_caseboard.woven_synth import WOVEN_SYSTEM, WOVEN_CORPUS_RULE, build_woven_prompt
+    from neuro_caseboard.woven_synth import build_woven_prompt, build_woven_system
 
     if lit_config is None and plan_a is None and retrieve_b is None:
         from neuro_caseboard.literature.config import load_literature_config
@@ -110,13 +110,14 @@ def stream_answer(question, emit, *, config=None, force=False, skip_disambiguati
                       "sources).**\n\n")
             emit({"type": "answer_delta", "text": prefix})
 
-        system = WOVEN_SYSTEM + (WOVEN_CORPUS_RULE if corpus_records else "")
+        system = build_woven_system(corpus_records, style)
+        route = "ask.stream.extract" if style == "extract" else "ask.stream"
 
         def _stream_body():
             user = build_woven_prompt(plan.question, plan.hits, plan.figures, records, directive,
                                       corpus_records=corpus_records)
             parts = []
-            for delta in synth_client.generate_stream(system, user, plan.images, route="ask.stream"):
+            for delta in synth_client.generate_stream(system, user, plan.images, route=route):
                 if not delta:
                     continue
                 parts.append(delta)

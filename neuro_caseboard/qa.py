@@ -139,7 +139,8 @@ def _retrieve_literature_for_weave(question, *, lit_config, synth_client):
 
 def _answer_question_woven(question, *, config=None, force=False, lit_config=None,
                            synth_client=None, plan_a=None, retrieve_b=None, retrieve_c=None,
-                           corpus_config=None, corpus_query=None, skip_disambiguation=False):
+                           corpus_config=None, corpus_query=None, skip_disambiguation=False,
+                           style=None):
     """One woven answer from textbook ([n]) + literature ([L#]). Lane A errors propagate;
     Lane B failures degrade to a textbook-only answer. Mirrors Engine._answer's empty-guard,
     refusal handling, and variant prepend (the woven path bypasses Engine._answer)."""
@@ -189,7 +190,7 @@ def _answer_question_woven(question, *, config=None, force=False, lit_config=Non
     def _synth():
         return synthesize_woven(plan.question, plan.hits, plan.figures, plan.images,
                                 records, synth_client, variant_directive=directive,
-                                corpus_records=corpus_records)
+                                corpus_records=corpus_records, style=style)
 
     syn = _synth()
     # Empty-answer guard (parity with Engine._answer / TKT-C5): a transient empty/whitespace
@@ -258,7 +259,7 @@ def _answer_question_woven(question, *, config=None, force=False, lit_config=Non
 
 def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=None,
                     skip_disambiguation=False, corpus_query=None,
-                    corpus_config=None) -> QAResult:
+                    corpus_config=None, style=None) -> QAResult:
     """Run Lane A and Lane B concurrently. Lane A errors propagate; Lane B failures drop
     the section. `lane_a`/`lane_b` are injectable no-arg callables (for tests).
 
@@ -275,8 +276,14 @@ def answer_question(question, *, config=None, force=False, lane_a=None, lane_b=N
             return _answer_question_woven(question, config=config, force=force,
                                           lit_config=lit_config, corpus_query=corpus_query,
                                           corpus_config=corpus_config,
-                                          skip_disambiguation=skip_disambiguation)
+                                          skip_disambiguation=skip_disambiguation,
+                                          style=style)
 
+    if style:
+        # Style variants live in woven synthesis only. Reaching here means separate-lane mode
+        # (or injected lanes), where the requested style would be silently dropped — say so.
+        _log.warning("answer_question: style=%r ignored — only the woven path applies styles",
+                     style)
     if lane_a is None:
         from neuro_core.query import query
         def lane_a():

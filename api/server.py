@@ -362,6 +362,13 @@ class AskRequest(BaseModel):
     # Per-request opt-in: scopes Lane C ([D#]) to the curated cerebrovascular corpus
     # instead of the global (default-off) CORPUS_RETRIEVAL env setting.
     cerebrovascular: bool = False
+    # Answer style. "" (default) = the prose woven answer. "extract" = source-extraction
+    # mode: cited bullet points reporting only what the sources state. Retrieval, citations
+    # and the verification gate are identical either way — only the synthesis prompt differs.
+    style: str = ""
+
+
+_ASK_STYLES = ("", "extract")
 
 
 def _cerebrovascular_corpus_config():
@@ -575,13 +582,13 @@ def _serialize_ask_event(ev: dict) -> dict:
 
 
 def run_ask_job(job: AskJob, question: str, skip_disambiguation: bool,
-                corpus_config=None) -> None:
+                corpus_config=None, style: str = "") -> None:
     from neuro_core.gpu_guard import GpuNotReadyError
     from neuro_caseboard import qa_stream
     try:
         qa_stream.stream_answer(question, job.emit, force=True,
                                 skip_disambiguation=skip_disambiguation,
-                                corpus_config=corpus_config)
+                                corpus_config=corpus_config, style=style or None)
     except GpuNotReadyError as e:
         job.emit({"type": "unavailable", "reason": f"GPU not ready: {e}"})
         job.emit({"type": "done"})
@@ -598,6 +605,11 @@ def ask_start(req: AskRequest):
     question = (req.question or "").strip()
     if not question:
         return JSONResponse(status_code=422, content={"error": "empty question"})
+    if req.style not in _ASK_STYLES:
+        # Reject an unknown style loudly — silently answering in the default prose style
+        # would look like the variant worked.
+        return JSONResponse(status_code=422, content={
+            "error": f"unknown style {req.style!r} (expected one of {_ASK_STYLES})"})
     job_id = uuid.uuid4().hex[:16]
     job = AskJob(job_id)
     _ASK_JOBS[job_id] = job
@@ -606,7 +618,7 @@ def ask_start(req: AskRequest):
         _ASK_JOBS.popitem(last=False)
     corpus_config = _cerebrovascular_corpus_config() if req.cerebrovascular else None
     threading.Thread(target=run_ask_job,
-                     args=(job, question, req.skip_disambiguation, corpus_config),
+                     args=(job, question, req.skip_disambiguation, corpus_config, req.style),
                      daemon=True).start()
     return {"job_id": job_id}
 
@@ -637,6 +649,10 @@ def ask(req: AskRequest):
     question = (req.question or "").strip()
     if not question:
         return JSONResponse(status_code=422, content={"kind": "error", "error": "empty question"})
+    if req.style not in _ASK_STYLES:
+        return JSONResponse(status_code=422, content={
+            "kind": "error",
+            "error": f"unknown style {req.style!r} (expected one of {_ASK_STYLES})"})
 
     from neuro_core.gpu_guard import GpuNotReadyError
     from neuro_core.query import Clarification
@@ -646,7 +662,7 @@ def ask(req: AskRequest):
     try:
         result = answer_question(question, force=req.force,
                                  skip_disambiguation=req.skip_disambiguation,
-                                 corpus_config=corpus_config)
+                                 corpus_config=corpus_config, style=req.style or None)
     except GpuNotReadyError as e:
         # Honest "try again" state — the retrieval models need GPU headroom right now.
         return JSONResponse(status_code=503,
