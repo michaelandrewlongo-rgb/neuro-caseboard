@@ -8,7 +8,7 @@ class FakeSynth:
         self.reply = reply
         self.captured = None
 
-    def generate(self, system, user, images):
+    def generate(self, system, user, images, route=None):
         self.captured = {"system": system, "user": user, "images": images}
         return self.reply
 

@@ -149,7 +149,7 @@ def query_analyze(question, hits, synth_client):
     try:
         passages = "\n\n".join(getattr(h, "text", "") for h in hits)
         user = f"Question: {question}\n\nPassages:\n{passages}"
-        reply = synth_client.generate(ANALYZE_SYSTEM_PROMPT, user, [])
+        reply = synth_client.generate(ANALYZE_SYSTEM_PROMPT, user, [], route="query_analyze")
         return _parse_analysis(reply)
     except Exception:
         return QueryAnalysis(ambiguous=False)

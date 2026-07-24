@@ -57,7 +57,7 @@ def test_build_literature_section_uses_cache_and_synth(tmp_path):
             pass
 
     class _Synth:
-        def generate(self, system, user, images):
+        def generate(self, system, user, images, route=None):
             return "Summary [L1]."
 
     section = build_literature_section("distal MCA occlusion", lit_config=cfg,
@@ -153,7 +153,7 @@ def test_retrieve_records_cache_key_includes_recency_boost():
             pass
 
     class _Synth:
-        def generate(self, system, user, images):
+        def generate(self, system, user, images, route=None):
             return "x"
 
     def _cfg(boost):

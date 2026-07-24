@@ -12,7 +12,7 @@ class _FakeSynth:
     def __init__(self):
         self.system = self.user = None
 
-    def generate(self, system, user, images):
+    def generate(self, system, user, images, route=None):
         self.system, self.user = system, user
         return "Large-core thrombectomy benefits selected patients [D1]."
 
@@ -84,7 +84,7 @@ class _StreamSynth:
     def __init__(self):
         self.system = None
 
-    def generate_stream(self, system, user, images):
+    def generate_stream(self, system, user, images, route=None):
         self.system = system
         yield "Large-core thrombectomy benefits selected patients "
         yield "[D1]."

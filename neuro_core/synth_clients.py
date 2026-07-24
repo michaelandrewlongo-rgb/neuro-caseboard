@@ -1,5 +1,7 @@
 import base64
 
+from neuro_core import telemetry
+
 
 def _is_image_input_error(exc):
     """True for the OpenRouter rejection of figure images by a text-only model
@@ -41,20 +43,20 @@ class OpenRouterSynthClient:
                                   api_key=self.api_key)
         return self._client
 
-    def generate(self, system, user, images):
+    def generate(self, system, user, images, route="unknown"):
         send = images if self._supports_images else []
         try:
-            return self._complete(system, user, send)
+            return self._complete(system, user, send, route)
         except Exception as e:  # scoped below: re-raised unless it's the image case
             if self._supports_images and images and _is_image_input_error(e):
                 # Text-only model: drop the figure images and retry. The figure
                 # captions are already in the prompt text, so citations are
                 # unaffected. Remember it so later calls skip images upfront.
                 self._supports_images = False
-                return self._complete(system, user, [])
+                return self._complete(system, user, [], route)
             raise
 
-    def _complete(self, system, user, images):
+    def _complete(self, system, user, images, route="unknown"):
         content = [{"type": "text", "text": user}]
         for img in images:
             b64 = base64.b64encode(img).decode("ascii")
@@ -62,17 +64,22 @@ class OpenRouterSynthClient:
                 "type": "image_url",
                 "image_url": {"url": f"data:image/png;base64,{b64}"},
             })
-        resp = self.client.chat.completions.create(
-            model=self.model,
-            temperature=0.1,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": content},
-            ],
-        )
-        return resp.choices[0].message.content or ""
+        with telemetry.track(route, "openrouter", self.model) as t:
+            resp = self.client.chat.completions.create(
+                model=self.model,
+                temperature=0.1,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": content},
+                ],
+            )
+            usage = getattr(resp, "usage", None)
+            if usage:
+                t["tokens_in"] = usage.prompt_tokens
+                t["tokens_out"] = usage.completion_tokens
+            return resp.choices[0].message.content or ""
 
-    def generate_stream(self, system, user, images):
+    def generate_stream(self, system, user, images, route="unknown"):
         """Yield answer text deltas (concatenation == generate()'s text). Respects the
         learned text-only flag. A cold image rejection surfaces as an exception that the
         caller degrades to the blocking generate() path, which owns the retry + flag flip.
@@ -85,19 +92,25 @@ class OpenRouterSynthClient:
                 "type": "image_url",
                 "image_url": {"url": f"data:image/png;base64,{b64}"},
             })
-        stream = self.client.chat.completions.create(
-            model=self.model,
-            temperature=0.1,
-            stream=True,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": content},
-            ],
-        )
-        for chunk in stream:
-            delta = chunk.choices[0].delta.content if chunk.choices else None
-            if delta:
-                yield delta
+        with telemetry.track(route, "openrouter", self.model) as t:
+            stream = self.client.chat.completions.create(
+                model=self.model,
+                temperature=0.1,
+                stream=True,
+                stream_options={"include_usage": True},
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": content},
+                ],
+            )
+            for chunk in stream:
+                usage = getattr(chunk, "usage", None)
+                if usage:
+                    t["tokens_in"] = usage.prompt_tokens
+                    t["tokens_out"] = usage.completion_tokens
+                delta = chunk.choices[0].delta.content if chunk.choices else None
+                if delta:
+                    yield delta
 
 
 class LocalSynthClient(OpenRouterSynthClient):
@@ -118,32 +131,40 @@ class LocalSynthClient(OpenRouterSynthClient):
             self._client = OpenAI(base_url=self.base_url, api_key=self.api_key)
         return self._client
 
-    def generate(self, system, user, images):
-        resp = self.client.chat.completions.create(
-            model=self.model,
-            temperature=0.1,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-        )
-        return resp.choices[0].message.content or ""
+    def generate(self, system, user, images, route="unknown"):
+        with telemetry.track(route, "local", self.model) as t:
+            resp = self.client.chat.completions.create(
+                model=self.model,
+                temperature=0.1,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+            )
+            usage = getattr(resp, "usage", None)
+            if usage:
+                t["tokens_in"] = usage.prompt_tokens
+                t["tokens_out"] = usage.completion_tokens
+            return resp.choices[0].message.content or ""
 
-    def generate_stream(self, system, user, images):
+    def generate_stream(self, system, user, images, route="unknown"):
         """Text-only streaming (mirrors generate(): a local text model ignores figure images)."""
-        stream = self.client.chat.completions.create(
-            model=self.model,
-            temperature=0.1,
-            stream=True,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-        )
-        for chunk in stream:
-            delta = chunk.choices[0].delta.content if chunk.choices else None
-            if delta:
-                yield delta
+        # ponytail: no stream_options usage request here — not all local OpenAI-compatible
+        # servers (older Ollama builds) support it, and local cost is $0 either way.
+        with telemetry.track(route, "local", self.model) as t:
+            stream = self.client.chat.completions.create(
+                model=self.model,
+                temperature=0.1,
+                stream=True,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+            )
+            for chunk in stream:
+                delta = chunk.choices[0].delta.content if chunk.choices else None
+                if delta:
+                    yield delta
 
 
 class VertexSynthClient:
@@ -170,34 +191,44 @@ class VertexSynthClient:
                                         http_options=http_options)
         return self._client
 
-    def generate(self, system, user, images):
+    def generate(self, system, user, images, route="unknown"):
         from google.genai import types
         parts = [types.Part.from_text(text=user)]
         for img in images:
             parts.append(types.Part.from_bytes(data=img, mime_type="image/png"))
-        resp = self.client.models.generate_content(
-            model=self.model,
-            contents=[types.Content(role="user", parts=parts)],
-            config=types.GenerateContentConfig(
-                system_instruction=system, temperature=0.1),
-        )
-        return resp.text or ""
+        with telemetry.track(route, "vertex", self.model) as t:
+            resp = self.client.models.generate_content(
+                model=self.model,
+                contents=[types.Content(role="user", parts=parts)],
+                config=types.GenerateContentConfig(
+                    system_instruction=system, temperature=0.1),
+            )
+            usage = getattr(resp, "usage_metadata", None)
+            if usage:
+                t["tokens_in"] = usage.prompt_token_count
+                t["tokens_out"] = usage.candidates_token_count
+            return resp.text or ""
 
-    def generate_stream(self, system, user, images):
+    def generate_stream(self, system, user, images, route="unknown"):
         """Yield answer text deltas (concatenation == generate()'s text)."""
         from google.genai import types
         parts = [types.Part.from_text(text=user)]
         for img in images:
             parts.append(types.Part.from_bytes(data=img, mime_type="image/png"))
-        stream = self.client.models.generate_content_stream(
-            model=self.model,
-            contents=[types.Content(role="user", parts=parts)],
-            config=types.GenerateContentConfig(
-                system_instruction=system, temperature=0.1),
-        )
-        for chunk in stream:
-            if getattr(chunk, "text", None):
-                yield chunk.text
+        with telemetry.track(route, "vertex", self.model) as t:
+            stream = self.client.models.generate_content_stream(
+                model=self.model,
+                contents=[types.Content(role="user", parts=parts)],
+                config=types.GenerateContentConfig(
+                    system_instruction=system, temperature=0.1),
+            )
+            for chunk in stream:
+                usage = getattr(chunk, "usage_metadata", None)
+                if usage:
+                    t["tokens_in"] = usage.prompt_token_count
+                    t["tokens_out"] = usage.candidates_token_count
+                if getattr(chunk, "text", None):
+                    yield chunk.text
 
 
 def make_synth_client(config):

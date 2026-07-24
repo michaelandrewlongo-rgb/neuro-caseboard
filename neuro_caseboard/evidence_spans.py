@@ -82,7 +82,7 @@ def extract_and_verify(answer: str, premises: dict, synth_client, *,
     sources = "\n\n".join(f"[{m}] {t}" for m, t in premises.items())
     user = f"Answer:\n{answer}\n\nNumbered sources:\n{sources}"
     try:
-        raw = synth_client.generate(_EXTRACT_SYSTEM, user, [])
+        raw = synth_client.generate(_EXTRACT_SYSTEM, user, [], route="citation_extract")
         items = json.loads(_strip_code_fence(raw))
         if not isinstance(items, list):
             return []

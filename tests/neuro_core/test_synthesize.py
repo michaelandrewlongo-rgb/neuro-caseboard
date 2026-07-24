@@ -30,7 +30,7 @@ class FakeSynthClient:
     def __init__(self):
         self.captured = {}
 
-    def generate(self, system, user, images):
+    def generate(self, system, user, images, route=None):
         self.captured = {"system": system, "user": user, "images": images}
         return "ICP is 5-15 mmHg [1]."
 
@@ -114,7 +114,7 @@ def test_synthesize_appends_variant_directive_to_user_message():
         def __init__(self):
             self.user = None
 
-        def generate(self, system, user, images):
+        def generate(self, system, user, images, route=None):
             self.user = user
             return "ok"
 
@@ -132,7 +132,7 @@ def test_synthesize_without_directive_is_unchanged():
         def __init__(self):
             self.user = None
 
-        def generate(self, system, user, images):
+        def generate(self, system, user, images, route=None):
             self.user = user
             return "ok"
 
@@ -147,7 +147,7 @@ def test_citation_carries_source_text():
     from neuro_core.index import Hit
     hits = [Hit(id="a", book="Youmans", chapter="Ch1", page=42, text="The MCA supplies the lateral cortex.")]
     class _Synth:
-        def generate(self, system, user, images): return "Answer [1]."
+        def generate(self, system, user, images, route=None): return "Answer [1]."
     out = S.synthesize("q", hits, [], [], _Synth())
     assert out.citations[0].n == 1
     assert out.citations[0].text == "The MCA supplies the lateral cortex."

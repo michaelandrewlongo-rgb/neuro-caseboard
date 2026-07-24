@@ -69,7 +69,7 @@ class _Cache:
 
 
 class _Synth:
-    def generate(self, system, user, images):
+    def generate(self, system, user, images, route=None):
         return "Recent evidence supports decompression [L1]; review summarizes history [L2]."
 
 

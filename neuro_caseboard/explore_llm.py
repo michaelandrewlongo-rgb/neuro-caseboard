@@ -36,6 +36,7 @@ from caseprep.explorer.question_manifest import (
 )
 
 from neuro_caseboard.ontology import required_dimensions
+from neuro_core import telemetry
 
 # section_key -> compiler_slot, and which keys are legal for each section file.
 _SLOTS_BY_FILE = {
@@ -215,12 +216,14 @@ def llm_available() -> bool:
 
 
 def _openrouter_complete(system: str, user: str, *, model: str | None = None,
-                         temperature: float = 0.3, retries: int = 2) -> str:
+                         temperature: float = 0.3, retries: int = 2,
+                         route: str = "unknown") -> str:
     """OpenAI-compatible chat completion via OpenRouter. Retries transient failures."""
     import time
     import requests
+    resolved_model = _resolve_model(model, provider="openrouter")
     payload = {
-        "model": _resolve_model(model, provider="openrouter"),
+        "model": resolved_model,
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -235,27 +238,32 @@ def _openrouter_complete(system: str, user: str, *, model: str | None = None,
         "X-Title": "neuro-caseboard",
     }
     last = None
-    for attempt in range(retries + 1):
-        try:
-            resp = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers=headers, json=payload, timeout=240)
-            if resp.status_code == 429 or resp.status_code >= 500:
-                last = requests.HTTPError(f"{resp.status_code}: {resp.text[:200]}")
-                raise last
-            resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"]
-        except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as exc:
-            last = exc
-            if attempt < retries:
-                time.sleep(1.5 * (attempt + 1))
-            else:
-                raise
-    raise last  # pragma: no cover
+    with telemetry.track(route, "openrouter", resolved_model) as t:
+        for attempt in range(retries + 1):
+            try:
+                resp = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers=headers, json=payload, timeout=240)
+                if resp.status_code == 429 or resp.status_code >= 500:
+                    last = requests.HTTPError(f"{resp.status_code}: {resp.text[:200]}")
+                    raise last
+                resp.raise_for_status()
+                body = resp.json()
+                usage = body.get("usage") or {}
+                t["tokens_in"] = usage.get("prompt_tokens")
+                t["tokens_out"] = usage.get("completion_tokens")
+                return body["choices"][0]["message"]["content"]
+            except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as exc:
+                last = exc
+                if attempt < retries:
+                    time.sleep(1.5 * (attempt + 1))
+                else:
+                    raise
+        raise last  # pragma: no cover
 
 
 def _vertex_complete(system: str, user: str, *, model: str | None = None,
-                     temperature: float = 0.3) -> str:
+                     temperature: float = 0.3, route: str = "unknown") -> str:
     """Vertex AI Gemini completion returning JSON text. Auth via Application Default
     Credentials (``gcloud auth application-default login``); spends the GCP project's
     credit rather than a paid OpenRouter key. Targets google-genai >= 1.0.
@@ -266,25 +274,30 @@ def _vertex_complete(system: str, user: str, *, model: str | None = None,
         vertexai=True,
         project=os.environ.get("GOOGLE_CLOUD_PROJECT"),
         location=os.environ.get("GOOGLE_CLOUD_LOCATION") or "us-central1")
-    resp = client.models.generate_content(
-        model=_resolve_model(model, provider="vertex"),
-        contents=[types.Content(role="user", parts=[types.Part.from_text(text=user)])],
-        config=types.GenerateContentConfig(
-            system_instruction=system,
-            temperature=temperature,
-            max_output_tokens=32000,
-            response_mime_type="application/json"),
-    )
-    return resp.text or ""
+    resolved_model = _resolve_model(model, provider="vertex")
+    with telemetry.track(route, "vertex", resolved_model) as t:
+        resp = client.models.generate_content(
+            model=resolved_model,
+            contents=[types.Content(role="user", parts=[types.Part.from_text(text=user)])],
+            config=types.GenerateContentConfig(
+                system_instruction=system,
+                temperature=temperature,
+                max_output_tokens=32000,
+                response_mime_type="application/json"),
+        )
+        if resp.usage_metadata:
+            t["tokens_in"] = resp.usage_metadata.prompt_token_count
+            t["tokens_out"] = resp.usage_metadata.candidates_token_count
+        return resp.text or ""
 
 
 def _default_complete(system: str, user: str, *, model: str | None = None,
-                      temperature: float = 0.3) -> str:
+                      temperature: float = 0.3, route: str = "unknown") -> str:
     provider = _llm_provider()
     if provider == "vertex":
-        return _vertex_complete(system, user, model=model, temperature=temperature)
+        return _vertex_complete(system, user, model=model, temperature=temperature, route=route)
     if provider == "openrouter":
-        return _openrouter_complete(system, user, model=model, temperature=temperature)
+        return _openrouter_complete(system, user, model=model, temperature=temperature, route=route)
     raise RuntimeError(
         "no LLM provider configured: set CASEBOARD_LLM_PROVIDER=vertex "
         "(with GOOGLE_CLOUD_PROJECT + ADC) or OPENROUTER_API_KEY")
@@ -470,11 +483,11 @@ def build_llm_manifest(topic: str, *, complete_fn=None, plan_fn=None, author_fn=
         critic_fn = critic_fn or complete_fn
     else:
         author_fn = author_fn or (lambda s, u: _default_complete(
-            s, u, model=model or _model_for("author"), temperature=0.3))
+            s, u, model=model or _model_for("author"), temperature=0.3, route="explorer.author"))
         plan_fn = plan_fn or (lambda s, u: _default_complete(
-            s, u, model=_model_for("planner"), temperature=0.6))
+            s, u, model=_model_for("planner"), temperature=0.6, route="explorer.plan"))
         critic_fn = critic_fn or (lambda s, u: _default_complete(
-            s, u, model=_model_for("critic"), temperature=0.2))
+            s, u, model=_model_for("critic"), temperature=0.2, route="explorer.critique"))
 
     themes = plan_coverage(topic, plan_fn)
     cards = author_cards(topic, themes, author_fn)

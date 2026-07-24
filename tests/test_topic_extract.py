@@ -6,7 +6,7 @@ class _FakeClient:
         self.reply = reply
         self.calls = []
 
-    def generate(self, system, user, images):
+    def generate(self, system, user, images, route=None):
         self.calls.append((system, user, images))
         return self.reply
 

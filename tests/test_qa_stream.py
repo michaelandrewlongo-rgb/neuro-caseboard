@@ -17,8 +17,8 @@ class _Bundle:
 
 class _FakeStreamClient:
     def __init__(self, parts): self._parts = parts
-    def generate(self, system, user, images): return "".join(self._parts)
-    def generate_stream(self, system, user, images):
+    def generate(self, system, user, images, route=None): return "".join(self._parts)
+    def generate_stream(self, system, user, images, route=None):
         for p in self._parts: yield p
 
 

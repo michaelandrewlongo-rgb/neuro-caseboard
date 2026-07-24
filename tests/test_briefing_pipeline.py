@@ -5,7 +5,7 @@ from neuro_caseboard.briefing_model import OperativeBriefingBundle
 class FakeSynth:
     def __init__(self, fail=()):
         self.fail = set(fail)
-    def generate(self, system, user, images):
+    def generate(self, system, user, images, route=None):
         from neuro_caseboard import briefing_synth as bs
         key = next(k for k in bs.SECTION_KEYS if f"SECTION={k}" in user)
         if key in self.fail:

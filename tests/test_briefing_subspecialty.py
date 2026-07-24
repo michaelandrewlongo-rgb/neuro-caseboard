@@ -36,7 +36,7 @@ class TextRetriever:
 
 class ProfiledSynth:
     """Echoes the subspecialty into equipment so we can prove routing; emits a fixed schema."""
-    def generate(self, system, user, images):
+    def generate(self, system, user, images, route=None):
         from neuro_caseboard import briefing_synth as bs
         key = next(k for k in bs.SECTION_KEYS if f"SECTION={k}" in user)
         sub = "spine" if "Subspecialty: spine" in user else (

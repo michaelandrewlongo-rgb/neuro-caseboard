@@ -28,5 +28,9 @@ Two detection layers guard schema drift:
   and is not yet instrumented. The plumbing here (`Provenance`, `fallback_notice`, renderer
   banners, `compile_case_dossier(provenance=)`) is ready for it; wire `build_case_dossier` to
   compute provenance the same way `build_dossier` does.
-- A **fallback-rate metric/alert** was deliberately deferred — there is no metrics sink today.
-  Revisit if the tool becomes multi-user/served.
+- A **fallback-rate metric/alert** was deliberately deferred — there is still no alerting.
+  As of the LLM cost/token telemetry added in `neuro_core/telemetry.py`, every synthesis call
+  (route/provider/model/tokens/cost/latency/ok) is logged to a local SQLite DB
+  (`~/.neuro-caseboard/telemetry.db` by default); run `python scripts/telemetry_report.py` for a
+  breakdown, including error counts by route. That covers ad hoc inspection; a live alert/dashboard
+  is still deferred to when the tool becomes multi-user/served.

@@ -313,19 +313,21 @@ def build_case_dossier(case, *, enrich: bool = True, use_llm=None, literature=No
 
 
 def briefing_synth_client(config=None):
-    """A Gemini-Flash synth client for the per-section briefing calls (cheaper/faster than the
-    Pro client used for woven Ask). Honors BRIEFING_SYNTH_MODEL; falls back to make_synth_client."""
+    """Synth client for the per-section briefing calls (7 concurrent calls want a fast/cheap
+    model). Honors BRIEFING_SYNTH_MODEL; follows cfg.synth_provider like every other surface
+    (SYNTH_PROVIDER is the single provider knob — this no longer branches on
+    GOOGLE_CLOUD_PROJECT alone, which used to force Vertex even when SYNTH_PROVIDER=openrouter)."""
     from neuro_core.config import load_config
     from neuro_core.synth_clients import make_synth_client, VertexSynthClient
     cfg = config or load_config()
-    model = os.environ.get("BRIEFING_SYNTH_MODEL", "gemini-2.5-flash")
-    # Keep the cheap Gemini-Flash briefing model whenever Vertex is reachable, regardless of
-    # the synthesis provider: the 7 concurrent per-section calls want a fast/cheap model, and
-    # the global synth default (glm-5.2) would be slower and pricier for this surface. Only
-    # genuinely non-Vertex deployments fall back to their configured synth client.
-    if getattr(cfg, "google_cloud_project", ""):
+    if cfg.synth_provider == "vertex" and getattr(cfg, "google_cloud_project", ""):
+        model = os.environ.get("BRIEFING_SYNTH_MODEL", "gemini-2.5-flash")
         return VertexSynthClient(cfg.google_cloud_project, cfg.google_cloud_location, model)
-    return make_synth_client(cfg)   # non-Vertex deployments use their configured client/model
+    client = make_synth_client(cfg)
+    briefing_model = os.environ.get("BRIEFING_SYNTH_MODEL")
+    if briefing_model:
+        client.model = briefing_model
+    return client
 
 
 def build_briefing_bundle(query, *, use_llm=None, enrich=True, retriever=None,

@@ -50,5 +50,5 @@ def build_pubmed_query(question, synth_client):
     """LLM-generate (terms, pub_types) from a free-text clinical question.
 
     Raises ValueError if the reply is not usable JSON with a non-empty terms string."""
-    reply = synth_client.generate(QUERY_GEN_SYSTEM_PROMPT, question, [])
+    reply = synth_client.generate(QUERY_GEN_SYSTEM_PROMPT, question, [], route="live_reconcile")
     return _parse_query(reply)

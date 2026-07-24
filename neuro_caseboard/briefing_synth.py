@@ -382,7 +382,7 @@ def _synth_one(key, packet, case, subspecialty, synth_client, *,
     last = None
     for attempt in range(retries + 1):
         try:
-            return synth_client.generate(system, user, [])   # images unused for text synthesis
+            return synth_client.generate(system, user, [], route="briefing.section")   # images unused for text synthesis
         except Exception as e:
             last = e
             if attempt < retries:

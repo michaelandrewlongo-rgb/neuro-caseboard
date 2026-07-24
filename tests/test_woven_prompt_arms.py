@@ -9,7 +9,7 @@ def _capture_system():
     captured = {}
 
     class Client:
-        def generate(self, system, user, images):
+        def generate(self, system, user, images, route=None):
             captured["system"] = system
             return "answer."
 

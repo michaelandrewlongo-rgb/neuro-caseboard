@@ -10,7 +10,7 @@ class _Spy:
         self.user = None
         self.images = None
 
-    def generate(self, system, user, images):
+    def generate(self, system, user, images, route=None):
         self.system, self.user, self.images = system, user, images
         return self.reply
 

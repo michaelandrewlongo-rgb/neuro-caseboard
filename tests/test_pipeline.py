@@ -112,7 +112,7 @@ def test_build_case_dossier_attaches_literature_offline(monkeypatch):
             pass
 
     class _Synth:
-        def generate(self, system, user, images):
+        def generate(self, system, user, images, route=None):
             return "Recent evidence [L1]."
 
     # force the config flag on regardless of ambient env

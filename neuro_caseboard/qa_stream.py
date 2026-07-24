@@ -116,7 +116,7 @@ def stream_answer(question, emit, *, config=None, force=False, skip_disambiguati
             user = build_woven_prompt(plan.question, plan.hits, plan.figures, records, directive,
                                       corpus_records=corpus_records)
             parts = []
-            for delta in synth_client.generate_stream(system, user, plan.images):
+            for delta in synth_client.generate_stream(system, user, plan.images, route="ask.stream"):
                 if not delta:
                     continue
                 parts.append(delta)

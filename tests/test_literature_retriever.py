@@ -99,7 +99,7 @@ class _Synth:
     def __init__(self, reply):
         self.reply = reply
 
-    def generate(self, system, user, images):
+    def generate(self, system, user, images, route=None):
         if isinstance(self.reply, Exception):
             raise self.reply
         return self.reply

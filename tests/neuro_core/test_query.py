@@ -38,7 +38,7 @@ class FakeSynthClient:
     def __init__(self):
         self.captured = {}
 
-    def generate(self, system, user, images):
+    def generate(self, system, user, images, route=None):
         self.captured = {"images": images}
         return "answer"
 

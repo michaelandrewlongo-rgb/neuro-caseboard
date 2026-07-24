@@ -65,20 +65,20 @@ python -m build                                  # build sdist + wheel (matches 
 
 ## Environment & runtime (this machine)
 
-- **Default Ask synthesis is OpenRouter `glm-5.2`; Vertex Gemini is the alternate (PR #80).**
-  `SYNTH_PROVIDER=openrouter` + `OPENROUTER_MODEL=z-ai/glm-5.2` is the default (best blind-graded
-  answer quality), and query **disambiguation runs a separate fast model**,
-  `ANALYZE_MODEL=google/gemini-3.1-flash-lite` (empty `ANALYZE_MODEL` reuses the synth client).
-  This needs `OPENROUTER_API_KEY` (kept in `.env`). To revert Ask synthesis to free Vertex Gemini,
-  set `SYNTH_PROVIDER=vertex` (+ `VERTEX_MODEL=gemini-2.5-pro`).
-- **Vertex is still required for Build + briefing even on the OpenRouter synth default.** The
-  Build/Case **Explorer** is independent, selected by `CASEBOARD_LLM_PROVIDER` (`vertex` default
-  on this machine), and the operative-briefing per-section calls stay on Vertex Gemini-Flash
-  whenever `GOOGLE_CLOUD_PROJECT` is set. So keep `GOOGLE_CLOUD_PROJECT` + ADC at
-  `~/.config/gcloud/application_default_credentials.json` (+ `google-genai`); probe both Vertex
-  (ADC) and OpenRouter (`OPENROUTER_API_KEY`) in any health check. `neuro_core/config.py` defaults
-  now match this (no longer stale). On this machine the old `SYNTH_PROVIDER=vertex` export in
-  `~/.bashrc` is commented out — a fresh shell / restarted session picks up the glm-5.2 default.
+- **Everything routes through OpenRouter (`glm-5.2`) as of 2026-07-23.** `SYNTH_PROVIDER`
+  (Ask), `ANALYZE_PROVIDER` (disambiguation), and `CASEBOARD_LLM_PROVIDER` (Build/Case Explorer)
+  all default to `openrouter` in `neuro_core/config.py` / `~/.bashrc`, and
+  `neuro_caseboard/pipeline.py::briefing_synth_client` now follows `cfg.synth_provider` too
+  (it used to force Vertex whenever `GOOGLE_CLOUD_PROJECT` was set, regardless of
+  `SYNTH_PROVIDER` — fixed, since that silently defeated an all-OpenRouter setup). This needs
+  `OPENROUTER_API_KEY` in `.env` (gitignored — **each git worktree needs its own copy**, it does
+  not propagate from the main checkout). `ANALYZE_MODEL=google/gemini-3.1-flash-lite` is an
+  OpenRouter model id (Google's model served through OpenRouter), not a Vertex call.
+- **Vertex is opt-in, not required.** Set `SYNTH_PROVIDER=vertex` (+ `VERTEX_MODEL=gemini-2.5-pro`)
+  and/or `CASEBOARD_LLM_PROVIDER=vertex` to route a given surface back to Vertex; both are
+  commented out in `~/.bashrc`. `GOOGLE_CLOUD_PROJECT` + ADC
+  (`~/.config/gcloud/application_default_credentials.json`) stay configured so that opt-in and
+  the `eval/` scripts (which call Vertex directly) keep working.
 - **Live data paths live outside the repo** (so git worktrees share them automatically — no symlinks):
   - Corpus PDFs: `/home/michael/textbook_pdfs` (set `CORPUS_DIR`; the `/mnt/d/...` default is stale).
   - LanceDB index + figure assets: `/home/michael/neuro-textbook-rag/index` and `.../assets/figures`.

@@ -44,7 +44,7 @@ def test_span_match_rate_none_when_empty():
 
 def test_extract_and_verify_with_stub_client():
     class Stub:
-        def generate(self, system, user, images):
+        def generate(self, system, user, images, route=None):
             return '[{"claim":"DAWN 6-24h","marker":"1","quote":"DAWN established benefit from 6 to 24 hours"}]'
     spans = extract_and_verify("DAWN works [1].", {"1": CHUNK}, Stub())
     assert len(spans) == 1 and spans[0].matched is True
@@ -52,6 +52,6 @@ def test_extract_and_verify_with_stub_client():
 
 def test_extract_and_verify_survives_bad_json():
     class Stub:
-        def generate(self, system, user, images):
+        def generate(self, system, user, images, route=None):
             return "sorry, I cannot do that"
     assert extract_and_verify("x [1].", {"1": CHUNK}, Stub()) == []

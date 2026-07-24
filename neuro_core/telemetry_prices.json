@@ -1,0 +1,4 @@
+{
+  "_comment": "USD per 1M tokens. Verify against current OpenRouter/Vertex pricing pages before trusting cost_usd -- these are NOT auto-updated. Model id must match exactly what's passed to synth_clients / explore_llm (e.g. OPENROUTER_MODEL, VERTEX_MODEL). Unpriced models log cost_usd=null and a one-time warning instead of guessing.",
+  "qwen2.5:7b": {"in_per_1m": 0.0, "out_per_1m": 0.0, "_note": "local Ollama, no API cost"}
+}

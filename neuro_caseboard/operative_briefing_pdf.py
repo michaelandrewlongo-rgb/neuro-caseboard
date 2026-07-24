@@ -468,7 +468,7 @@ def _make_compress(synth_client):
                   "no numbering.")
         user = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(lines))
         try:
-            out = synth_client.generate(system, user, [])
+            out = synth_client.generate(system, user, [], route="bullet_tighten")
         except Exception:
             return briefing
         new = [ln.strip() for ln in (out or "").splitlines() if ln.strip()]

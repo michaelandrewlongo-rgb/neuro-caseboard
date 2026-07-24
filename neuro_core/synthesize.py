@@ -122,5 +122,5 @@ def build_synth_prompt(question, hits, figures, variant_directive=None):
 
 def synthesize(question, hits, figures, images, synth_client, variant_directive=None):
     user = build_synth_prompt(question, hits, figures, variant_directive)
-    answer = synth_client.generate(SYSTEM_PROMPT, user, images)
+    answer = synth_client.generate(SYSTEM_PROMPT, user, images, route="ask.synth")
     return Synthesis(answer=answer, citations=build_citations(hits, figures))

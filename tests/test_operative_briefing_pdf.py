@@ -248,7 +248,7 @@ def test_make_compress_none_without_client():
 def test_make_compress_tightens_item_text_via_client():
     class FakeClient:
         model = "fake"
-        def generate(self, system, user, images):
+        def generate(self, system, user, images, route=None):
             return "Short A\nShort B"          # one tightened line per input item
     brief = OperativeBriefing(title="t", sections=[BriefingSection(
         key="pathology", title="Pathology", items=[

@@ -136,7 +136,7 @@ class FakeSynth:
     def __init__(self, fail=()):
         self.fail = set(fail)
         self.seen = []
-    def generate(self, system, user, images):
+    def generate(self, system, user, images, route=None):
         key = next(k for k in bs.SECTION_KEYS if f"SECTION={k}" in user)
         self.seen.append(key)
         if key in self.fail:
@@ -225,7 +225,7 @@ def test_synthesize_retries_transient_throttle():
             super().__init__()
             self.attempts = {}
 
-        def generate(self, system, user, images):
+        def generate(self, system, user, images, route=None):
             key = next(k for k in bs.SECTION_KEYS if f"SECTION={k}" in user)
             self.attempts[key] = self.attempts.get(key, 0) + 1
             if self.attempts[key] == 1:
@@ -346,7 +346,7 @@ def test_synthesize_dangling_ref_pruned_and_unsupported():
     source_refs and unsupported stays False, violating the grounding invariant."""
 
     class DanglingFakeSynth:
-        def generate(self, system, user, images):
+        def generate(self, system, user, images, route=None):
             key = next(k for k in bs.SECTION_KEYS if f"SECTION={k}" in user)
             if key == "pathology":
                 return "[critical] some out-of-packet finding {T9}\n"

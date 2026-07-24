@@ -29,7 +29,7 @@ class _Synth:
     def __init__(self, reply):
         self.reply = reply
 
-    def generate(self, system, user, images):
+    def generate(self, system, user, images, route=None):
         return self.reply
 
 
@@ -76,7 +76,7 @@ def test_woven_empty_answer_retries_then_refuses():
     calls = {"n": 0}
 
     class _EmptySynth:
-        def generate(self, system, user, images):
+        def generate(self, system, user, images, route=None):
             calls["n"] += 1
             return "   "  # always empty/whitespace
 

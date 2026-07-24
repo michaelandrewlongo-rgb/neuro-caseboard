@@ -263,7 +263,7 @@ def _provider_complete():
         return None
     if not llm_available():
         return None
-    return lambda system, user: _default_complete(system, user, temperature=0.2)
+    return lambda system, user: _default_complete(system, user, temperature=0.2, route="case.author")
 
 
 # Sections the author itself must populate. The Case-Figures band (09) is filled by figures_gen

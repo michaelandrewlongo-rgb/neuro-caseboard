@@ -23,7 +23,7 @@ def extract_board_topic(question: str, answer: str = "", *, client=None) -> str:
     user = f"Question: {question}"
     if answer:
         user += f"\n\nAnswer (context):\n{answer[:1500]}"
-    out = (client.generate(_SYSTEM, user, []) or "").strip()
+    out = (client.generate(_SYSTEM, user, [], route="topic_extract") or "").strip()
     if not out:
         return question.strip()
     return out.splitlines()[0].strip() or question.strip()

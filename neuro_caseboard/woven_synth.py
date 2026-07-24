@@ -100,6 +100,6 @@ def synthesize_woven(question, hits, figures, images, records, synth_client,
     system = WOVEN_SYSTEM + (WOVEN_CORPUS_RULE if corpus_records else "")
     if os.environ.get("PROMPT_DECISION_FURNITURE", "").lower() in ("1", "true", "yes", "on"):
         system += WOVEN_DECISION_RULES
-    answer = synth_client.generate(system, user, images)
+    answer = synth_client.generate(system, user, images, route="ask.synth")
     return WovenSynthesis(answer=answer, citations=build_citations(hits, figures),
                           records=list(records), corpus_records=list(corpus_records or []))
