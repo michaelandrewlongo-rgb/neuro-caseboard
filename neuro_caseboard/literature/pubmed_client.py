@@ -62,7 +62,8 @@ class PubMedClient:
         self._http = http
         self._delay = delay if delay is not None else (0.15 if api_key else 0.6)
         self._last = 0.0
-        self._rate_lock = asyncio.Lock()
+        self._rate_lock = None   # built lazily, per event loop (see _loop_lock)
+        self._rate_loop = None
 
     def _transport(self):
         if self._http is None:
@@ -73,13 +74,29 @@ class PubMedClient:
             )
         return self._http
 
+    def _loop_lock(self):
+        """The rate-limit lock for the CURRENT event loop.
+
+        asyncio.Lock binds to a loop the first time it is contended, so one lock built in
+        __init__ dies with "bound to a different event loop" once a client outlives the
+        asyncio.run() that first used it. Callers do reuse clients across loops, and the
+        literature lane swallows the error into an empty result — so rebind per loop.
+        Serialization still holds: only one loop runs the client's requests at a time, and
+        self._last (the actual spacing state) is shared across all of them.
+        """
+        loop = asyncio.get_running_loop()
+        if self._rate_lock is None or self._rate_loop is not loop:
+            self._rate_lock = asyncio.Lock()
+            self._rate_loop = loop
+        return self._rate_lock
+
     async def _rate_limit(self):
         if self._delay <= 0:
             return
         # Lock around read-wait-write: concurrent callers (asyncio.gather) must not both
         # read self._last before either updates it, or they'd dispatch back-to-back and
         # blow through NCBI's req/s cap instead of respecting `delay` between requests.
-        async with self._rate_lock:
+        async with self._loop_lock():
             wait = self._last + self._delay - time.monotonic()
             if wait > 0:
                 await asyncio.sleep(wait)

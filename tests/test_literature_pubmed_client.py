@@ -130,6 +130,38 @@ def test_rate_limit_serializes_concurrent_dispatch():
     assert all(gap >= 0.04 for gap in gaps), gaps
 
 
+def test_concurrent_dispatch_works_in_a_second_event_loop():
+    """A client reused after its first asyncio.run() must still serve concurrent calls.
+
+    asyncio.Lock binds to a loop the first time it is CONTENDED, so a lock built once in
+    __init__ raises "bound to a different event loop" on the next asyncio.run() — and only
+    under gather(), which is exactly how retrieve() dispatches. The literature lane
+    swallows exceptions and returns [], so this regression would surface in production
+    only as silently-zero literature records.
+    """
+    dispatch_times = []
+
+    class _TimedHttp(_FakeHttp):
+        async def get(self, url, params=None):
+            dispatch_times.append(time.monotonic())
+            return await super().get(url, params)
+
+    c = PubMedClient(api_key="k", http=_TimedHttp(), delay=0.05)
+
+    async def burst():
+        return await asyncio.gather(*(c.search("q") for _ in range(4)))
+
+    asyncio.run(burst())          # first loop: binds the lock
+    dispatch_times.clear()
+    results = asyncio.run(burst())  # second loop: must not raise
+
+    assert len(results) == 4
+    # ...and re-binding must not silently disable the rate limit it exists to enforce.
+    gaps = [b - a for a, b in zip(dispatch_times, dispatch_times[1:])]
+    assert len(dispatch_times) == 4
+    assert all(gap >= 0.04 for gap in gaps), gaps
+
+
 def test_aclose_closes_transport():
     import asyncio
     class _Closeable(_FakeHttp):
