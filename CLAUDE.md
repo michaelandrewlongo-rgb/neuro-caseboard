@@ -95,6 +95,13 @@ python -m build                                  # build sdist + wheel (matches 
 - **Never `pip install -e ../caseprep`.** A stale external copy at `/home/michael/PROJECTS/caseprep`
   shadows the vendored one and breaks imports like
   `from caseprep.audit.card_auditor import accepted_papers`.
+- **Live retrieval needs the `models` extra.** `.[dev]` alone omits `sentence-transformers`/torch, so
+  Lane A (textbook) retrieval dies with `ModuleNotFoundError: sentence_transformers` at
+  `neuro_core/embed.py` — the unit suite still passes, because it injects retriever fakes, so this
+  only bites when you try a real query. Add `uv pip install -e '.[models]'` per worktree venv (they
+  don't share site-packages). `EMBED_DEVICE` defaults to `auto` → cuda; a first query pays ~2 min of
+  model loading, then settles to ~6s. This is a local-venv concern only — the Docker image and the
+  torch-free ONNX rerank path (`.[onnx]`) are unaffected.
 
 ## Testing (read before running pytest)
 
