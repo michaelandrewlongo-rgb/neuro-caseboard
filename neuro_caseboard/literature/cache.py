@@ -9,6 +9,14 @@ from pathlib import Path
 from .retriever import LiteratureRecord
 
 
+# An EMPTY result is cached too (to avoid hammering NCBI for a query that genuinely matches
+# nothing), but it must not outlive a transient cause. A failed LLM query-rewrite or an NCBI
+# hiccup yields [], and at the full 14-day TTL that empty answer kept the literature lane
+# silently blank for weeks after the outage ended. Short TTL: still shields NCBI, self-heals.
+# ponytail: one hour, no config knob until something actually needs a different value.
+EMPTY_TTL_SECONDS = 3600
+
+
 class LiteratureCache:
     """On-disk TTL cache of retrieved records (the rate-limited network step)."""
 
@@ -29,10 +37,12 @@ class LiteratureCache:
             blob = json.loads(p.read_text())
         except Exception:
             return None
-        if self._now() - blob.get("ts", 0) > self._ttl:
+        raw = blob.get("records", [])
+        ttl = self._ttl if raw else min(self._ttl, EMPTY_TTL_SECONDS)
+        if self._now() - blob.get("ts", 0) > ttl:
             return None
         try:
-            return [LiteratureRecord(**r) for r in blob.get("records", [])]
+            return [LiteratureRecord(**r) for r in raw]
         except Exception:
             return None
 
