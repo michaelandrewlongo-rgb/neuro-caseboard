@@ -31,8 +31,10 @@ import asyncio
 import hashlib
 import json
 import os
+import sqlite3
 import tempfile
 import threading
+import time
 import uuid
 from collections import OrderedDict
 from pathlib import Path
@@ -1085,6 +1087,323 @@ def cards(req: CardsRequest):
 def ping() -> dict:
     """Liveness check that touches nothing — proves the server itself is up."""
     return {"ok": True}
+
+
+# --- Overnight case-brief queue --------------------------------------------------------
+# Phone-first feature for the always-on VM: submit tomorrow's cases in the evening
+# (POST /api/queue or the plain-HTML page at /queue), a single background worker generates
+# each full operative briefing with the SAME _do_build_briefing call the interactive route
+# uses, and the results are durable — a SQLite store (not the in-memory LRU) holds the
+# serialized bundle + rendered PDF + per-brief cost, so they survive a server restart and
+# are waiting in the morning.  # ponytail: one sequential worker; parallelize if backlog hurts.
+
+
+def _queue_db_path() -> str:
+    # Resolved per call (like _web_dist) so tests/deploys can repoint via env after import.
+    return os.environ.get("BRIEF_QUEUE_DB",
+                          str(Path.home() / ".neuro-caseboard" / "brief_queue.db"))
+
+
+_QUEUE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS briefs (
+    id TEXT PRIMARY KEY, case_text TEXT, status TEXT,
+    created_ts REAL, done_ts REAL, error TEXT,
+    response_json TEXT, pdf BLOB,
+    cost_usd REAL, tokens_in INTEGER, tokens_out INTEGER,
+    enrich INTEGER, use_llm INTEGER, use_prefs INTEGER
+)
+"""
+
+
+def _queue_conn() -> sqlite3.Connection:
+    path = Path(_queue_db_path())
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(path), timeout=10)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute(_QUEUE_SCHEMA)
+    return conn
+
+
+def _telemetry_rowid() -> int:
+    """Highest telemetry row before a job starts — the baseline for per-brief cost."""
+    from neuro_core import telemetry
+    try:
+        conn = sqlite3.connect(telemetry.DB_PATH, timeout=5)
+        try:
+            return int(conn.execute("SELECT COALESCE(MAX(rowid), 0) FROM llm_calls").fetchone()[0])
+        finally:
+            conn.close()
+    except Exception:
+        return 0
+
+
+def _telemetry_usage_since(rowid: int) -> "tuple":
+    """(cost_usd, tokens_in, tokens_out) attributed to briefing calls after `rowid`.
+    Exact for the single sequential worker; a concurrent interactive /api/briefing build
+    would co-mingle.  # ponytail: route-prefix attribution; add a run-id column if that hurts."""
+    from neuro_core import telemetry
+    try:
+        conn = sqlite3.connect(telemetry.DB_PATH, timeout=5)
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*), SUM(cost_usd), SUM(tokens_in), SUM(tokens_out) "
+                "FROM llm_calls WHERE rowid > ? AND route LIKE 'briefing%'", (rowid,)).fetchone()
+        finally:
+            conn.close()
+        if not row or not row[0]:
+            return None, None, None
+        return row[1], row[2], row[3]
+    except Exception:
+        return None, None, None
+
+
+_QUEUE_WORKER: "threading.Thread | None" = None
+_QUEUE_LOCK = threading.Lock()
+
+
+def _queue_kick() -> None:
+    global _QUEUE_WORKER
+    with _QUEUE_LOCK:
+        if _QUEUE_WORKER is None or not _QUEUE_WORKER.is_alive():
+            _QUEUE_WORKER = threading.Thread(target=_queue_worker, daemon=True)
+            _QUEUE_WORKER.start()
+
+
+def _queue_worker() -> None:
+    """Drain queued briefs oldest-first, one at a time; exit when the queue is empty
+    (the next enqueue kicks a fresh thread)."""
+    while True:
+        conn = _queue_conn()
+        try:
+            row = conn.execute(
+                "SELECT id, case_text, enrich, use_llm, use_prefs FROM briefs "
+                "WHERE status = 'queued' ORDER BY created_ts LIMIT 1").fetchone()
+            if row is None:
+                return
+            job_id, case_text, enrich, use_llm, use_prefs = row
+            conn.execute("UPDATE briefs SET status = 'running' WHERE id = ?", (job_id,))
+            conn.commit()
+        finally:
+            conn.close()
+        _queue_process(job_id, case_text, bool(enrich), bool(use_llm), bool(use_prefs))
+
+
+def _queue_process(job_id: str, case_text: str, enrich: bool, use_llm: bool,
+                   use_prefs: bool) -> None:
+    telemetry_start = _telemetry_rowid()
+    prefs = None
+    if use_prefs:
+        try:
+            from neuro_caseboard.preferences import load_preferences, default_store_path
+            prefs = load_preferences(default_store_path()) or None
+        except Exception:
+            prefs = None
+    try:
+        bundle = _do_build_briefing(case_text, enrich, use_llm, prefs)
+    except Exception as e:
+        _queue_finish(job_id, error=f"{type(e).__name__}: {e}")
+        return
+    build_id = _cache_briefing(case_text, enrich, use_llm, use_prefs, bundle)
+    resp = _briefing_response(bundle, build_id)
+    pdf_bytes = None
+    try:
+        from neuro_caseboard.operative_briefing_pdf import render_operative_briefing_pdf
+        pdf_path = Path(tempfile.mkdtemp(prefix="brief_queue_pdf_")) / "brief.pdf"
+        render_operative_briefing_pdf(bundle, pdf_path)
+        pdf_bytes = pdf_path.read_bytes()
+    except Exception:
+        pdf_bytes = None    # brief still delivered as JSON; the PDF endpoint 404s honestly
+    cost, tokens_in, tokens_out = _telemetry_usage_since(telemetry_start)
+    _queue_finish(job_id, response_json=json.dumps(resp), pdf=pdf_bytes,
+                  cost_usd=cost, tokens_in=tokens_in, tokens_out=tokens_out)
+
+
+def _queue_finish(job_id: str, *, error: "str | None" = None,
+                  response_json: "str | None" = None, pdf: "bytes | None" = None,
+                  cost_usd=None, tokens_in=None, tokens_out=None) -> None:
+    conn = _queue_conn()
+    try:
+        conn.execute(
+            "UPDATE briefs SET status = ?, done_ts = ?, error = ?, response_json = ?, "
+            "pdf = ?, cost_usd = ?, tokens_in = ?, tokens_out = ? WHERE id = ?",
+            ("error" if error else "done", time.time(), error, response_json, pdf,
+             cost_usd, tokens_in, tokens_out, job_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+@app.on_event("startup")
+def _queue_resume() -> None:
+    # Crash recovery: a brief mid-build when the server died is re-run, not lost.
+    conn = _queue_conn()
+    try:
+        conn.execute("UPDATE briefs SET status = 'queued' WHERE status = 'running'")
+        conn.commit()
+        pending = conn.execute(
+            "SELECT COUNT(*) FROM briefs WHERE status = 'queued'").fetchone()[0]
+    finally:
+        conn.close()
+    if pending:
+        _queue_kick()
+
+
+class QueueRequest(BaseModel):
+    case: str
+    enrich: bool = True
+    use_llm: bool = True
+    use_prefs: bool = True
+
+
+@app.post("/api/queue")
+def queue_add(req: QueueRequest):
+    case_text = (req.case or "").strip()
+    if not case_text:
+        return JSONResponse(status_code=422, content={"error": "empty case"})
+    job_id = uuid.uuid4().hex[:16]
+    conn = _queue_conn()
+    try:
+        conn.execute(
+            "INSERT INTO briefs (id, case_text, status, created_ts, enrich, use_llm, use_prefs) "
+            "VALUES (?, ?, 'queued', ?, ?, ?, ?)",
+            (job_id, case_text, time.time(), int(req.enrich), int(req.use_llm),
+             int(req.use_prefs)))
+        conn.commit()
+    finally:
+        conn.close()
+    _queue_kick()
+    return {"id": job_id, "status": "queued"}
+
+
+@app.get("/api/queue")
+def queue_list():
+    conn = _queue_conn()
+    try:
+        rows = conn.execute(
+            "SELECT id, case_text, status, created_ts, done_ts, error, cost_usd, "
+            "tokens_in, tokens_out, pdf IS NOT NULL, response_json IS NOT NULL "
+            "FROM briefs ORDER BY created_ts DESC LIMIT 200").fetchall()
+    finally:
+        conn.close()
+    return {"briefs": [
+        {"id": r[0], "case": r[1], "status": r[2], "created_ts": r[3], "done_ts": r[4],
+         "error": r[5], "cost_usd": r[6], "tokens_in": r[7], "tokens_out": r[8],
+         "pdf_available": bool(r[9]), "brief_available": bool(r[10])} for r in rows]}
+
+
+@app.get("/api/queue/{job_id}")
+def queue_get(job_id: str):
+    conn = _queue_conn()
+    try:
+        row = conn.execute("SELECT status, error, response_json FROM briefs WHERE id = ?",
+                           (job_id,)).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return JSONResponse(status_code=404, content={"error": "unknown brief id"})
+    status, error, response_json = row
+    if status != "done" or not response_json:
+        return {"id": job_id, "status": status, "error": error}
+    data = json.loads(response_json)
+    data["id"] = job_id
+    data["status"] = status
+    return data
+
+
+@app.get("/api/queue/{job_id}/pdf")
+def queue_pdf(job_id: str):
+    conn = _queue_conn()
+    try:
+        row = conn.execute("SELECT case_text, pdf FROM briefs WHERE id = ?",
+                           (job_id,)).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return JSONResponse(status_code=404, content={"error": "unknown brief id"})
+    case_text, pdf = row
+    if not pdf:
+        return JSONResponse(status_code=404, content={
+            "error": "no PDF stored for this brief (renderer unavailable or brief not done)"})
+    from neuro_caseboard.pipeline import _slug
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition":
+                             f'inline; filename="{_slug(case_text)}-brief.pdf"'})
+
+
+_QUEUE_PAGE = """<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brief Queue</title>
+<style>
+  body { font-family: system-ui, -apple-system, sans-serif; margin: 0; background: #fafafa;
+         color: #1a1a1a; }
+  main { max-width: 640px; margin: 0 auto; padding: 1.25rem 1rem 4rem; }
+  h1 { font-size: 1.15rem; letter-spacing: .01em; margin: .25rem 0 1rem; }
+  form { display: flex; gap: .5rem; margin-bottom: 1.5rem; }
+  textarea { flex: 1; min-height: 3.2rem; padding: .6rem .7rem; font: inherit;
+             border: 1px solid #d0d0d0; border-radius: 8px; resize: vertical; }
+  button { align-self: flex-end; padding: .6rem 1.1rem; font: inherit; font-weight: 600;
+           border: 0; border-radius: 8px; background: #c8102e; color: #fff; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { background: #fff; border: 1px solid #e4e4e4; border-radius: 10px;
+       padding: .75rem .85rem; margin-bottom: .6rem; }
+  .case { font-weight: 600; margin-bottom: .3rem; }
+  .meta { font-size: .82rem; color: #555; display: flex; gap: .8rem; flex-wrap: wrap;
+          align-items: center; }
+  .st { text-transform: uppercase; font-size: .72rem; font-weight: 700; letter-spacing: .05em; }
+  .st.queued { color: #8a6d00; } .st.running { color: #0a5cad; }
+  .st.done { color: #1a7a35; } .st.error { color: #c8102e; }
+  a { color: #c8102e; font-weight: 600; text-decoration: none; }
+  .err { font-size: .8rem; color: #c8102e; margin-top: .3rem; }
+</style></head><body><main>
+<h1>Overnight brief queue</h1>
+<form id="f"><textarea id="case" placeholder="e.g. left MCA bifurcation aneurysm clipping"
+  required></textarea><button>Queue</button></form>
+<ul id="list"></ul>
+<script>
+const f = document.getElementById('f'), box = document.getElementById('case');
+f.onsubmit = async (e) => {
+  e.preventDefault();
+  const v = box.value.trim(); if (!v) return;
+  await fetch('/api/queue', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                             body: JSON.stringify({case: v})});
+  box.value = ''; refresh();
+};
+async function refresh() {
+  const r = await fetch('/api/queue'); if (!r.ok) return;
+  const data = await r.json(), ul = document.getElementById('list');
+  ul.textContent = '';
+  for (const b of data.briefs) {
+    const li = document.createElement('li');
+    const c = document.createElement('div'); c.className = 'case'; c.textContent = b.case;
+    const m = document.createElement('div'); m.className = 'meta';
+    const st = document.createElement('span'); st.className = 'st ' + b.status;
+    st.textContent = b.status; m.appendChild(st);
+    if (b.cost_usd != null) {
+      const cost = document.createElement('span');
+      cost.textContent = '$' + b.cost_usd.toFixed(3); m.appendChild(cost);
+    }
+    if (b.pdf_available) {
+      const a = document.createElement('a'); a.href = '/api/queue/' + b.id + '/pdf';
+      a.textContent = 'PDF'; m.appendChild(a);
+    }
+    li.appendChild(c); li.appendChild(m);
+    if (b.error) {
+      const e = document.createElement('div'); e.className = 'err'; e.textContent = b.error;
+      li.appendChild(e);
+    }
+    ul.appendChild(li);
+  }
+}
+refresh(); setInterval(refresh, 5000);
+</script></main></body></html>"""
+
+
+@app.get("/queue")
+def queue_page():
+    # Plain inline HTML so the phone flow needs no SPA rebuild; declared before the SPA
+    # catch-all so it wins the route.
+    return Response(content=_QUEUE_PAGE, media_type="text/html")
 
 
 # --- Static web SPA (single-process local deploy) --------------------------------------

@@ -2,7 +2,7 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def _literature_lane_off_by_default(monkeypatch):
+def _literature_lane_off_by_default(monkeypatch, tmp_path):
     """Keep the live PubMed network out of unit tests.
 
     The contemporary-literature lane is always-on in production, so any test that
@@ -19,3 +19,5 @@ def _literature_lane_off_by_default(monkeypatch):
     # The default claim verifier is now a real NLI cross-encoder (downloads/loads a model on
     # first use). Force the deterministic lexical verifier suite-wide; NLI tests inject stubs.
     monkeypatch.setenv("CASEBOARD_NLI_MODEL", "lexical")
+    # Never let a test enqueue into (or read) the developer's real brief queue.
+    monkeypatch.setenv("BRIEF_QUEUE_DB", str(tmp_path / "brief_queue.db"))
