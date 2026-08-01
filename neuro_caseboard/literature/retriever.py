@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import datetime as _dt
 import re
 from dataclasses import dataclass, field
@@ -145,10 +146,15 @@ class LiteratureRetriever:
             (term, "diagnosis"),
             (term, "prognosis"),
         ]
+        # The 5 axes are independent queries (no cross-axis dependency) and the client's
+        # own rate limiter serializes actual dispatch to NCBI's req/s cap, so fire them
+        # concurrently instead of paying N sequential round-trips.
+        axis_results = await asyncio.gather(
+            *(self._client.search(q, max_results=candidates, filter_type=ft) for q, ft in axes)
+        )
         pmids: list[str] = []
         seen: set[str] = set()
-        for q, ft in axes:
-            ids, _ = await self._client.search(q, max_results=candidates, filter_type=ft)
+        for ids, _ in axis_results:
             for pid in ids:
                 if pid and pid not in seen:
                     seen.add(pid)
@@ -158,9 +164,13 @@ class LiteratureRetriever:
         # keep that as the primary signal so the metadata sort below can't bury the
         # most on-topic paper under an older systematic review.
         rank_of = {pid: i for i, pid in enumerate(pmids)}
-        summaries = await self._client.summaries(pmids)
-        sections = await self._client.structured_abstracts(pmids)
-        plains = await self._client.abstracts(pmids)
+        # Same reasoning: summaries/structured_abstracts/abstracts are independent fetches
+        # over the same pmid set, not a dependency chain.
+        summaries, sections, plains = await asyncio.gather(
+            self._client.summaries(pmids),
+            self._client.structured_abstracts(pmids),
+            self._client.abstracts(pmids),
+        )
         records = [_to_record(s, sections, plains) for s in summaries]
         records = [r for r in records if r.abstract or r.sections]
 

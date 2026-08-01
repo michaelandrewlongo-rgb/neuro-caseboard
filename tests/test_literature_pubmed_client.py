@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 from neuro_caseboard.literature.pubmed_client import (
     PubMedClient, apply_filter, CLINICAL_FILTERS,
@@ -107,6 +108,26 @@ def test_summaries_rejects_non_doi_elocationid():
             return await super().get(url, params)
     rows = asyncio.run(PubMedClient(http=_Http(), delay=0).summaries(["111"]))
     assert rows[0]["doi"] == ""   # non-DOI elocationid is not stored as a DOI
+
+
+def test_rate_limit_serializes_concurrent_dispatch():
+    """asyncio.gather()-ed calls must still be spaced by `delay`, not fire back-to-back."""
+    dispatch_times = []
+
+    class _TimedHttp(_FakeHttp):
+        async def get(self, url, params=None):
+            dispatch_times.append(time.monotonic())
+            return await super().get(url, params)
+
+    c = PubMedClient(api_key="k", http=_TimedHttp(), delay=0.05)
+
+    async def run():
+        await asyncio.gather(*(c.search("q") for _ in range(4)))
+
+    asyncio.run(run())
+    assert len(dispatch_times) == 4
+    gaps = [b - a for a, b in zip(dispatch_times, dispatch_times[1:])]
+    assert all(gap >= 0.04 for gap in gaps), gaps
 
 
 def test_aclose_closes_transport():

@@ -62,6 +62,7 @@ class PubMedClient:
         self._http = http
         self._delay = delay if delay is not None else (0.15 if api_key else 0.6)
         self._last = 0.0
+        self._rate_lock = asyncio.Lock()
 
     def _transport(self):
         if self._http is None:
@@ -75,10 +76,14 @@ class PubMedClient:
     async def _rate_limit(self):
         if self._delay <= 0:
             return
-        wait = self._last + self._delay - time.monotonic()
-        if wait > 0:
-            await asyncio.sleep(wait)
-        self._last = time.monotonic()
+        # Lock around read-wait-write: concurrent callers (asyncio.gather) must not both
+        # read self._last before either updates it, or they'd dispatch back-to-back and
+        # blow through NCBI's req/s cap instead of respecting `delay` between requests.
+        async with self._rate_lock:
+            wait = self._last + self._delay - time.monotonic()
+            if wait > 0:
+                await asyncio.sleep(wait)
+            self._last = time.monotonic()
 
     async def _get(self, url: str, params: dict):
         if self._api_key:
