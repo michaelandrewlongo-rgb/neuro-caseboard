@@ -36,5 +36,25 @@ gui-council/axe/
 # chunking benchmark: regenerable extraction cache (machine paths, ~6MB/book)
 eval/chunking-benchmark/records_cache/
 
+# WSL/Windows interop artifacts
+*Zone.Identifier
+
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 graft/
+
+# --- large / private local artifacts (never push: this repo is PUBLIC) ---
+# publisher full text for the cerebrovascular corpus (1018 files, ~458MB)
+cv_full_text/
+# nested autonomous working copy (~426MB)
+..neuro-caseboard-autonomous/
+# personal local agent state
+.hermes/
+# eval run artifacts — bulky + regenerable; curated runs already tracked can
+# still be committed explicitly with `git add -f`
+evaluation/runs/
+eval/*.log
+eval/displacement-*/
+eval/mmr-*/
+eval/placebo-pilot/
+eval/pubmed-snapshot*/
+eval/index-fingerprint.json

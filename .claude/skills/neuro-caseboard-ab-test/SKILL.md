@@ -17,6 +17,16 @@ Two failure modes sink these tests; both are non-negotiable to prevent:
 2. **Grading that inflates the new answer** — grading un-blinded, against stale baseline scores, or
    with the *answer model* grading itself.
 
+## Tooling status — check before running (verified 2026-07-15)
+
+Four scripts this skill calls — `build_ab_payloads.py`, `unblind_grades.py`, `ab_progress.py`,
+`export_ab.py` — were **never committed to git**. They exist only in the stale worktree
+`.claude/worktrees/session-2026-06-20-1253/evaluation/scripts/`. Before step 5, copy them into
+`evaluation/scripts/` and commit them (or invoke them from that worktree path). The committed
+scripts (`make_blinded_pair.py`, `make_pair.py`, `summarize_grades.py`) are older single-pair
+tooling, **not** drop-in replacements. If the worktree has been deleted, stop and say so — do not
+improvise unblinding logic.
+
 ## Hard Gate — do not run answers until BOTH are true
 
 - **The change is live in the pipeline.** Corpus add → re-index (`build_index --new-only`) and

@@ -33,6 +33,7 @@ services:
       NCBI_API_KEY: ${NCBI_API_KEY:-}
       GPU_GUARD: "false"                       # CPU container: never block on GPU readiness
       EMBED_DEVICE: ${EMBED_DEVICE:-cpu}
+      DECISION_CARD: ${DECISION_CARD:-true}    # Clinical Claim Review layer (PR #97); default ON here
     volumes:
       - ${CASEBOARD_CORPUS_DIR:-/home/michael/textbook_pdfs}:/data/corpus:ro
       - ${CASEBOARD_INDEX_DIR:-/home/michael/neuro-textbook-rag/index}:/data/index:ro
