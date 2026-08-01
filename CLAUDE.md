@@ -150,3 +150,13 @@ python -m build                                  # build sdist + wheel (matches 
 - **Phone access:** `scripts/serve-phone.sh` serves the SPA+API on `0.0.0.0:8001` and prints a
   reachability banner. WSL2 needs mirrored networking or `scripts/wsl-portproxy.ps1` (elevated).
   Full runbook: `docs/SERVE_ON_PHONE.md`.
+
+## Production deployment
+
+Deployment is NOT done from this repo. The control plane lives at
+`~/mac-app-hosting` (WSL): it pins the exact Caseboard commit it packages,
+builds immutable release bundles, and pushes them to the Mac with health-gating
+and auto-rollback. If a task involves deploying, releasing, or the Mac service,
+start from `~/mac-app-hosting/CLAUDE.md` and `CLAUDE-HANDOFF.md` — and note that
+committing to this repo moves HEAD off the pinned revision, which the control
+plane must then be updated to match.

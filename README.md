@@ -130,3 +130,13 @@ real CPU embeddings) live in a manual `optional-integration` workflow.
 history preserved) and ships inside this package, so a clean clone needs no external folder or
 pinned install — a single `pip install -e .[dev]` gets everything. Reproduce the whole required
 pipeline locally with `ci/local-ci.sh`. Full details: **[docs/ci.md](docs/ci.md)**.
+
+## Production deployment
+
+This app runs in production as a native launchd service on a private Mac
+(`127.0.0.1:8001`, tailnet-only via Tailscale Serve). All deployment is owned by
+the control plane at `~/mac-app-hosting` on the WSL machine — do not deploy from
+this repo directly. That repo pins the exact Caseboard commit it will package
+(`bin/preflight` / `bin/build-release`), builds immutable release bundles, and
+handles push, health-gating, rollback, and monitoring. Read its `README.md` and
+`CLAUDE-HANDOFF.md` before any deploy work.
