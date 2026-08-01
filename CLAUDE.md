@@ -111,6 +111,18 @@ python -m build                                  # build sdist + wheel (matches 
   shadows the vendored one and breaks imports like
   `from caseprep.audit.card_auditor import accepted_papers`.
 
+## Workflow rules
+
+- **PRs stop at the manual merge gate.** Never `gh pr merge` / self-merge — leave green PRs open
+  for Michael. Applies to /loop, project-loop, and ad-hoc sessions alike (project-loop's
+  `--autonomy=merge` is an explicit human opt-in, never a default you choose).
+- **Adding a textbook to the corpus index: use the `integrating-a-textbook` skill.** Append-only
+  (`python -m neuro_core.scripts.build_index --book STEM --new-only`), then verify totals increase
+  by exactly the new book's chunk/figure counts. Never use `~/neuro-textbook-rag`'s own
+  `scripts.build_index` — it is overwrite-only.
+- **Eval labels record provenance.** Never write `expert_label` for LLM/frontier-model output —
+  use `frontier_label` (or equivalent). `expert_label` is reserved for human grading.
+
 ## Testing (read before running pytest)
 
 - **CI is pytest only.** `.github/workflows/ci.yml` runs `python -m pytest` over
@@ -126,8 +138,7 @@ python -m build                                  # build sdist + wheel (matches 
   `pytest.importorskip("streamlit")` before the import. `streamlit` is only in the `web` extra; required
   CI installs `.[dev]` (no streamlit), so a bare module-level import raises `ModuleNotFoundError`
   **at collection** and aborts the **entire** run (exit 2), not just that file. `pillow` is core (no
-  guard needed). The `ci/hook_collect_check.py` precheck (advisory PostToolUse hook) catches this class
-  of failure in seconds via `pytest --collect-only`.
+  guard needed). A fast precheck for this class of failure: `pytest --collect-only -q` (seconds).
 
 ## Web console (`web/`)
 
