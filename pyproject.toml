@@ -25,7 +25,7 @@ dependencies = [
     # the note below). PyMuPDF / httpx / fpdf2 are already required above; these add what the
     # caseprep parser, MCP server, web surface, scoring and contracts need so its full test
     # suite runs from this one install.
-    "mcp>=1.0",
+    "mcp>=1.0,<2",
     "fastapi>=0.100",
     "uvicorn>=0.30",
     "requests>=2.34.2",
