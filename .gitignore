@@ -35,3 +35,6 @@ gui-council/axe/
 
 # chunking benchmark: regenerable extraction cache (machine paths, ~6MB/book)
 eval/chunking-benchmark/records_cache/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+graft/

@@ -35,6 +35,21 @@ One engine assembled from **three layers**; read these together to understand an
 wrapper (`api/server.py`); a legacy Streamlit app (`app/streamlit_app.py`); and a Signal-styled
 briefing PDF (`neuro_caseboard/briefing_pdf.py`).
 
+## Code navigation (graft)
+
+This repo is indexed by **graft** — a tree-sitter wiring graph (3.3k symbols, 7.1k edges) served
+over MCP from `.mcp.json`. **Use the `graft_*` tools before grep/read sweeps**: `graft_find_code`
+("how does X work"), `graft_trace_calls` (blast radius before a rename), `graft_file_api` (a file's
+surface in ~200 tokens), `graft_repo_map` (orientation). Answers come back as `file:line`, and the
+graph refreshes before each query, so uncommitted edits are already reflected.
+
+- `graft/` is a **gitignored local cache** — after a fresh clone or worktree, run `npx -y @nanonets/graft build`
+  (~20s, deterministic tree-sitter, **no LLM calls, no API key**).
+- **Don't run `graft init`** — it writes instruction files for six other agents and rewrites
+  `.claude/settings.json` with hooks + a statusline. The `.mcp.json` entry above is the whole integration.
+- `--deep` (LLM-written concept nodes) is **deliberately not used**: it spends tokens and the free
+  wiring graph already answers navigation questions correctly.
+
 ## Common commands
 
 ```bash
