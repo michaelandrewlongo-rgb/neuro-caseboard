@@ -373,7 +373,11 @@ Expected: **1582 passed, 2 skipped**, under 3 minutes.
 
 - [ ] **Confirm no vendored file was touched**
 
-Run: `cd /home/michael/PROJECTS/neuro-caseboard && git diff --stat chore/repo-cleanup~3 -- vendor/`
+Run: `cd /home/michael/PROJECTS/neuro-caseboard && git diff --stat 4548ea9 HEAD -- vendor/`
+
+`4548ea9` is the branch head immediately before Task 1 (the plan's own commit). Pin it
+explicitly rather than counting back with `~N` — the commit count varies with how many fix
+rounds each task needed, so a relative ref would silently check the wrong range.
 
 Expected: empty output. If anything appears, a global constraint was violated.
 
