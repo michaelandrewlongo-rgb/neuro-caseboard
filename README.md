@@ -34,9 +34,10 @@ One engine, two features, exposed through one CLI and one local web app:
 
 - **CLI** — `caseboard ask "<question>"` for a cited answer + figures, or
   `caseboard build "<topic>" [--pdf] [-o dir]` for a pre-op dossier.
-- **Web** — `streamlit run app/streamlit_app.py` opens a single app with **Ask**,
-  **Build board**, and **Cards** modes over the same engine. Set `APP_PASSWORD` to gate
-  access (no gate locally).
+- **Web** — a FastAPI server (`api/server.py`, `127.0.0.1:8001`, health at `/api/health`)
+  serving a React SPA built from `web/` into `web/dist`, with **Ask**, **Build board**, and
+  **Cards** modes over the same engine. Local-first, intentionally auth-free — run `./dev.sh`
+  for a dev loop (Vite `:5173` + the API together) or `scripts/serve-phone.sh` for phone access.
 - **Board-review cards** — `caseboard cards "<question>"` (or the **Cards** web tab)
   hybrid-searches a standalone board-review card bank (your SANS / ABNS deck) held in a
   `cards` table beside `chunks`/`figures`. It reuses the same BGE embedder + reranker and

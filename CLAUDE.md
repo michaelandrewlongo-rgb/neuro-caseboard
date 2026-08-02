@@ -32,8 +32,7 @@ One engine assembled from **three layers**; read these together to understand an
   → Markdown/PDF.
 
 **Surfaces over the same engine:** the `caseboard` CLI; a React SPA (`web/`) over a FastAPI
-wrapper (`api/server.py`); a legacy Streamlit app (`app/streamlit_app.py`); and a Signal-styled
-briefing PDF (`neuro_caseboard/briefing_pdf.py`).
+wrapper (`api/server.py`); and a Signal-styled briefing PDF (`neuro_caseboard/briefing_pdf.py`).
 
 ## Code navigation (graft)
 
@@ -63,7 +62,6 @@ caseboard cards "cavernous sinus"                 # search the board-review card
 
 # Web / dev
 ./dev.sh                                    # React SPA (Vite :5173) + FastAPI engine (:8001) together
-streamlit run app/streamlit_app.py          # legacy single-app UI (needs the `web` extra)
 scripts/serve-phone.sh                       # SPA+API on 0.0.0.0:8001 for phone access (see Web console)
 cd web && npm run lint && npm run test       # eslint + vitest for the SPA (NOT a Python-CI gate)
 
@@ -134,11 +132,6 @@ python -m build                                  # build sdist + wheel (matches 
   `pytest tests/neuro_core tests/test_pipeline.py tests/test_retrieve.py tests/test_qa.py` (~20s). Let
   CI run the full suite as the comprehensive gate.
 - **Never add `pytest-xdist -n auto`** — worker fan-out OOMs and crashes the WSL session.
-- **Guard `streamlit` imports in tests.** Any test importing streamlit MUST start with
-  `pytest.importorskip("streamlit")` before the import. `streamlit` is only in the `web` extra; required
-  CI installs `.[dev]` (no streamlit), so a bare module-level import raises `ModuleNotFoundError`
-  **at collection** and aborts the **entire** run (exit 2), not just that file. `pillow` is core (no
-  guard needed). A fast precheck for this class of failure: `pytest --collect-only -q` (seconds).
 
 ## Web console (`web/`)
 

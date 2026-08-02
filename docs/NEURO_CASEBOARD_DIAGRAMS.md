@@ -165,7 +165,7 @@ flowchart TD
 ```
 
 ### Figure 5 — Interfaces and deployment
-The four surfaces (CLI, Streamlit, FastAPI, React SPA) all forwarding to the same P2 engine, the P4 presenter they reuse, and the packaging path where Docker and serve_phone host the FastAPI process for browser and phone access.
+The three surfaces (CLI, FastAPI, React SPA) all forwarding to the same P2 engine, the P4 renderers, and the packaging path where Docker and serve_phone host the FastAPI process for browser and phone access. (A fourth surface, a Streamlit app, was removed — it had reused P4's `board_view` presenter and was the only surface with a password gate.)
 
 ```mermaid
 flowchart LR
@@ -175,13 +175,12 @@ flowchart LR
 
     subgraph Surfaces[P5 surfaces]
         CLI[caseboard CLI]
-        Streamlit[Streamlit app]
         API[FastAPI server]
         Web[React Vite SPA]
     end
 
     Engine[P2 engine pipeline and qa]
-    Render[P4 board_view and renderers]
+    Render[P4 renderers]
 
     subgraph Infra[Packaging and deploy]
         Docker[Docker image to GHCR]
@@ -190,23 +189,20 @@ flowchart LR
     end
 
     Term -->|argv| CLI
-    Browser -->|passcode| Streamlit
     Browser -->|HTTP| Web
     Phone -->|LAN HTTP| ServePhone
     Web -->|api proxy| API
     ServePhone -->|hosts| API
     CLI -->|answer_question| Engine
     API -->|build and ask| Engine
-    Streamlit -->|engine calls| Engine
     Engine -->|models| Render
-    Render -->|board payload| Streamlit
     API -->|JSON and SPA| Web
     CI -->|build push| Docker
     Docker -->|runs| API
 ```
 
 ### Figure 6 — Output and rendering (P4)
-How the two P2 models reach shippable artifacts: the dual renderer stacks (Chromium HTML driven by the exec_navy theme, and the offline fpdf2 fallback with guaranteed glyphs), the figure lanes that feed them, and the Markdown / Streamlit presenters. `pipeline` picks the stack by style env plus a Chromium probe.
+How the two P2 models reach shippable artifacts: the dual renderer stacks (Chromium HTML driven by the exec_navy theme, and the offline fpdf2 fallback with guaranteed glyphs), the figure lanes that feed them, and the Markdown presenter. `pipeline` picks the stack by style env plus a Chromium probe. (`board_view`'s Streamlit payload is omitted here — the Streamlit surface it fed was removed; the module itself is still present but orphaned.)
 
 ```mermaid
 flowchart TD
@@ -235,7 +231,6 @@ flowchart TD
     end
 
     MD[render_md markdown]
-    BoardView[board_view Streamlit payload]
     PDFout[PDF artifact]
 
     Dossier --> Dispatch
@@ -255,5 +250,4 @@ flowchart TD
     Captions --> Dossier
     BriefFigs --> Bundle
     Dossier --> MD
-    Dossier --> BoardView
 ```

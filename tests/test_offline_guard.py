@@ -48,6 +48,21 @@ def test_socket_guard_blocks_external_connections():
         sock.close()
 
 
+def test_socket_guard_blocks_connect_ex():
+    """connect_ex is a distinct socket method from connect -- it reports errors via
+    return code instead of an exception, so it bypasses a guard that only patches
+    connect(). Unpatched, it completes a real connection attempt: verified to return
+    EINPROGRESS against 127.0.0.1:5432 and, without settimeout, to incur the full
+    134s SYN schedule."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(0.1)
+    try:
+        with pytest.raises(RuntimeError, match="Blocked network connection to"):
+            sock.connect_ex(("127.0.0.1", 5432))
+    finally:
+        sock.close()
+
+
 def test_socket_guard_names_the_offending_test():
     """A guard that says only "blocked" is not actionable. It must report where."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

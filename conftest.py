@@ -34,11 +34,16 @@ os.environ["PAPERS_CORPUS_DB_URL"] = "disabled"
 # Without it, any test that reaches for the network silently restores a
 # 50-minute suite; with it, that test fails in milliseconds and says where.
 #
-# No allowlist: nothing in this suite legitimately opens a socket. Loopback is
-# blocked too -- the 134s stall was a connect to 127.0.0.1:5432, which a
-# "block external only" guard would have let through.
+# No allowlist: nothing in this suite legitimately opens a Python-level socket.
+# Loopback is blocked too -- the 134s stall was a connect to 127.0.0.1:5432,
+# which a "block external only" guard would have let through.
+#
+# This guard is a backstop, not the primary defense -- the env vars above are.
+# C-extension clients (libpq under psycopg2, lancedb's Rust core) never touch
+# Python's socket module, and a subprocess gets a fresh, unguarded interpreter.
 _REAL_CONNECT = socket.socket.connect
 _REAL_CREATE_CONNECTION = socket.create_connection
+_REAL_CONNECT_EX = socket.socket.connect_ex
 
 
 def _blocked(address):
@@ -63,5 +68,10 @@ def _guarded_create_connection(address, *args, **kwargs):
     _blocked(address)
 
 
+def _guarded_connect_ex(self, address):
+    _blocked(address)
+
+
 socket.socket.connect = _guarded_connect
 socket.create_connection = _guarded_create_connection
+socket.socket.connect_ex = _guarded_connect_ex
