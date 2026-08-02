@@ -16,3 +16,45 @@ def test_kg_database_url_is_neutralized():
     which happens before psycopg2.connect() is reached -- so a bad-format value
     cannot wait 134s on a TCP handshake."""
     assert os.environ.get("PAPERS_CORPUS_DB_URL") == "disabled"
+
+
+import socket
+
+import pytest
+
+
+def test_socket_guard_blocks_loopback_connections():
+    """Blocking loopback is deliberate. The 134s stall this suite suffered was a
+    connect to 127.0.0.1:5432 -- a guard that only blocked external traffic would
+    have missed the single worst offender."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # settimeout keeps THIS test fast before the guard exists: without it the
+    # pre-guard run would itself block ~134s on the dropped-packet path.
+    sock.settimeout(0.1)
+    try:
+        with pytest.raises(RuntimeError, match="Blocked network connection to"):
+            sock.connect(("127.0.0.1", 5432))
+    finally:
+        sock.close()
+
+
+def test_socket_guard_blocks_external_connections():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(0.1)
+    try:
+        with pytest.raises(RuntimeError, match="Blocked network connection to"):
+            sock.connect(("104.18.2.115", 443))  # openrouter.ai
+    finally:
+        sock.close()
+
+
+def test_socket_guard_names_the_offending_test():
+    """A guard that says only "blocked" is not actionable. It must report where."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(0.1)
+    try:
+        with pytest.raises(RuntimeError) as excinfo:
+            sock.connect(("127.0.0.1", 5432))
+        assert "test_socket_guard_names_the_offending_test" in str(excinfo.value)
+    finally:
+        sock.close()
