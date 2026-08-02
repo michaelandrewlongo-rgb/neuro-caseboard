@@ -67,8 +67,6 @@ vertex = ["google-genai>=1.0"]
 # Signal-styled briefing PDF export (neuro_caseboard.briefing_pdf). After install also run:
 #   playwright install chromium
 briefing = ["playwright>=1.40"]
-# Local web app (app/streamlit_app.py).
-web = ["streamlit>=1.30"]
 # Real (non-injected) embedding / rerank / visual backends. Heavy; CPU works but is slow.
 # Only needed to exercise the live retrieval engine — the test suite injects fakes instead.
 models = ["sentence-transformers>=2.2", "open-clip-torch>=2.20"]

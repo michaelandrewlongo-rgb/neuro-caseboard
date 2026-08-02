@@ -58,3 +58,9 @@ eval/mmr-*/
 eval/placebo-pilot/
 eval/pubmed-snapshot*/
 eval/index-fingerprint.json
+
+# Run-time guard ledgers (see global CLAUDE.md) — never durable documentation.
+.run.md
+.run-*.md
+# Claude Code session transcript dumps accidentally saved into the repo root.
+/20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-*.txt
