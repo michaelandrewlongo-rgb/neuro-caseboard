@@ -156,8 +156,10 @@ This lands as its own commit in its own repository. The two repos are not otherw
 
 1. **Guard fires when it should** — one small test that attempts a connect and asserts
    `RuntimeError`. This is the only new test.
-2. **Suite parity** — must remain **1577 passed, 2 skipped**, matching the verified baseline
-   exactly. Any deviation is investigated, not accepted.
+2. **Suite parity** — all **1577 pre-existing tests must still pass**, with **2 skipped**,
+   matching the verified baseline. The total rises only by the guard tests added alongside this
+   work. A change in any *other* count means a pre-existing test changed behaviour: investigate
+   it, do not adjust the expectation to match the output.
 3. **Wall clock** — under 3 minutes, measured.
 4. **preflight** — `bash -n bin/preflight` passes, then a real run.
 
