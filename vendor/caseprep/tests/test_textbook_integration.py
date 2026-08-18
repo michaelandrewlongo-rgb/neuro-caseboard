@@ -3,6 +3,8 @@ default search path (subprocess -> JSON -> EvidenceRecord -> builder)."""
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from caseprep.core import BuildCasePlanRequest
@@ -35,9 +37,15 @@ class EmptyCorpusRetriever:
 
 @pytest.mark.asyncio
 async def test_textbook_evidence_end_to_end(tmp_path, monkeypatch):
-    fake = tmp_path / "textbook-rag"
-    fake.write_text(f"#!/usr/bin/env bash\necho '{FAKE_JSON}'\n")
-    fake.chmod(0o755)
+    if sys.platform == "win32":
+        # CreateProcess cannot exec a shebang script; a .bat is the Windows
+        # equivalent seam (echo passes the JSON through stdout unquoted).
+        fake = tmp_path / "textbook-rag.bat"
+        fake.write_text(f"@echo {FAKE_JSON}\n", encoding="utf-8")
+    else:
+        fake = tmp_path / "textbook-rag"
+        fake.write_text(f"#!/usr/bin/env bash\necho '{FAKE_JSON}'\n")
+        fake.chmod(0o755)
     monkeypatch.setenv("CASEPREP_TEXTBOOK", "1")
     monkeypatch.setenv("TEXTBOOK_RAG_BIN", str(fake))
 

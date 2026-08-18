@@ -19,7 +19,7 @@ FIXTURE = Path(__file__).resolve().parents[2] / "evaluation" / "claim-review" / 
 
 
 def _rows():
-    return [json.loads(ln) for ln in FIXTURE.read_text().splitlines() if ln.strip()]
+    return [json.loads(ln) for ln in FIXTURE.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
 
 def _predict_stale(row) -> bool:

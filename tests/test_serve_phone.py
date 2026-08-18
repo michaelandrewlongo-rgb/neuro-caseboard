@@ -77,7 +77,7 @@ def test_reachability_banner_includes_wsl_portproxy_and_mirrored_hint():
 def test_wsl_portproxy_ps1_exists_and_is_consistent():
     ps1 = _Path("scripts/wsl-portproxy.ps1")
     assert ps1.is_file(), "scripts/wsl-portproxy.ps1 must exist"
-    text = ps1.read_text()
+    text = ps1.read_text(encoding="utf-8")
     # Default port must match the module default.
     assert f"= {sp.DEFAULT_PORT}" in text or f"={sp.DEFAULT_PORT}" in text
     # Must use the same Windows primitives the helper documents.
@@ -91,7 +91,7 @@ def test_wsl_portproxy_ps1_exists_and_is_consistent():
 def test_runbook_doc_exists_and_references_helpers():
     doc = _Path("docs/SERVE_ON_PHONE.md")
     assert doc.is_file(), "docs/SERVE_ON_PHONE.md must exist"
-    text = doc.read_text()
+    text = doc.read_text(encoding="utf-8")
     assert "scripts/serve-phone.sh" in text
     assert "scripts/wsl-portproxy.ps1" in text
     assert "8001" in text
@@ -100,5 +100,5 @@ def test_runbook_doc_exists_and_references_helpers():
 
 
 def test_vite_config_enables_lan_host():
-    cfg = _Path("web/vite.config.ts").read_text()
+    cfg = _Path("web/vite.config.ts").read_text(encoding="utf-8")
     assert "host: true" in cfg

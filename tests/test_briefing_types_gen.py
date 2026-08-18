@@ -8,7 +8,7 @@ def test_generated_ts_matches_checked_in_file():
     """The checked-in TS types must equal a fresh generation from the Pydantic schema.
     If this fails, run: python3 scripts/gen_briefing_types.py  (regenerates the file)."""
     from scripts.gen_briefing_types import generate_ts
-    assert TS_FILE.read_text() == generate_ts(), (
+    assert TS_FILE.read_text(encoding="utf-8") == generate_ts(), (
         "briefingTypes.ts is stale — run `python3 scripts/gen_briefing_types.py`")
 
 

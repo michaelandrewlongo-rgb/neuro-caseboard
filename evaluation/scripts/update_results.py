@@ -129,7 +129,7 @@ def _split_existing(text: str) -> tuple[str, list[Row], str]:
 
 def write_results(path: Path, new_rows: list[Row]) -> None:
     if path.exists():
-        preamble, rows, footer = _split_existing(path.read_text())
+        preamble, rows, footer = _split_existing(path.read_text(encoding="utf-8"))
     else:
         preamble, rows, footer = PREAMBLE, [], FOOTER
     by_key = {r.run: r for r in rows}
@@ -137,7 +137,7 @@ def write_results(path: Path, new_rows: list[Row]) -> None:
         by_key[r.run] = r
     table = render_table(list(by_key.values()))
     body = preamble.rstrip("\n") + "\n\n" + table + "\n" + footer.rstrip("\n") + "\n"
-    path.write_text(body)
+    path.write_text(body, encoding="utf-8")
 
 
 def _commit_from_config(cfg: dict) -> str:
@@ -150,13 +150,13 @@ def _commit_from_config(cfg: dict) -> str:
 def row_from_summary(summary_path: Path, run: str, label: str, *,
                      commit: str | None = None, date: str | None = None,
                      note: str = "", baseline: bool = False) -> Row:
-    data = json.loads(Path(summary_path).read_text())
+    data = json.loads(Path(summary_path).read_text(encoding="utf-8"))
     score = data.get("overall_score") or {}
     gd = data.get("grade_distribution") or {}
     cfg = {}
     cfg_path = Path(summary_path).parent / "run-config.json"
     if cfg_path.exists():
-        cfg = json.loads(cfg_path.read_text())
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
     if commit is None:
         commit = _commit_from_config(cfg)
     if date is None:
@@ -173,12 +173,12 @@ def row_from_summary(summary_path: Path, run: str, label: str, *,
 
 def rows_from_ab(run_dir: Path, label: str, *, note: str = "") -> list[Row]:
     run_dir = Path(run_dir)
-    keymap = json.loads((run_dir / "grading" / "keymap.json").read_text())
+    keymap = json.loads((run_dir / "grading" / "keymap.json").read_text(encoding="utf-8"))
     arms = keymap.get("arms", [])
     cfg = {}
     cfg_path = run_dir / "run-config.json"
     if cfg_path.exists():
-        cfg = json.loads(cfg_path.read_text())
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
     commit = _commit_from_config(cfg)
     date = (cfg.get("created_at") or "")[:10]
     rows: list[Row] = []
@@ -187,7 +187,7 @@ def rows_from_ab(run_dir: Path, label: str, *, note: str = "") -> list[Row]:
         if not gpath.exists():
             continue
         scores, counts = [], {"A": 0, "B": 0, "C": 0, "D": 0}
-        for line in gpath.read_text().splitlines():
+        for line in gpath.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if not line:
                 continue

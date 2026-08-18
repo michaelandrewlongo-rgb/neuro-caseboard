@@ -19,7 +19,7 @@ def _row(run, change, mean, notes=""):
 def test_creates_file_with_preamble_and_row(tmp_path):
     p = tmp_path / "RESULTS.md"
     ur.write_results(p, [_row("base", "baseline", 77.74)])
-    text = p.read_text()
+    text = p.read_text(encoding="utf-8")
     assert text.startswith("# 67-Question Benchmark")   # preamble present
     assert "Unsafe" in text and "must stay" in text     # explains itself
     assert "| base |" in text
@@ -31,7 +31,7 @@ def test_upsert_is_idempotent(tmp_path):
     ur.write_results(p, [_row("base", "baseline", 77.74)])
     ur.write_results(p, [_row("run2", "C5 guard", 79.36)])
     ur.write_results(p, [_row("run2", "C5 guard", 81.00, notes="rescored")])  # same run id
-    text = p.read_text()
+    text = p.read_text(encoding="utf-8")
     assert text.count("| run2 |") == 1                  # updated, not duplicated
     assert "81.00" in text and "79.36" not in text
     assert "+3.26" in text                              # 81.00 - 77.74, Δ recomputed
@@ -40,7 +40,7 @@ def test_upsert_is_idempotent(tmp_path):
 def test_preamble_preserved_across_upserts(tmp_path):
     p = tmp_path / "RESULTS.md"
     ur.write_results(p, [_row("base", "baseline", 77.74)])
-    first = p.read_text().split("| Run |")[0]
+    first = p.read_text(encoding="utf-8").split("| Run |")[0]
     ur.write_results(p, [_row("run2", "C5 guard", 79.36)])
-    second = p.read_text().split("| Run |")[0]
+    second = p.read_text(encoding="utf-8").split("| Run |")[0]
     assert first == second                              # preamble byte-identical

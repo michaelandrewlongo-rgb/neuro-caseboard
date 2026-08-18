@@ -3,6 +3,8 @@ read at another (the container mounts figures at /data/figures while the index s
 /home/.../assets/figures/... paths). The engine read (query.Engine._read_image) depends on this:
 without it, open() on the stale host path fails and figures are silently dropped from ask answers.
 """
+import pathlib
+
 from neuro_core.asset_paths import reroot_candidates, resolve_asset_path
 
 
@@ -29,7 +31,8 @@ def test_resolve_returns_literal_when_nothing_exists(tmp_path):
     runtime.mkdir(parents=True)
     stale = "/nope/assets/figures/Book/missing.png"
     # No file anywhere -> literal path back unchanged; the caller's open() then fails cleanly.
-    assert str(resolve_asset_path(stale, runtime)) == stale
+    # (Path-typed compare: Windows stringifies the same path with backslashes.)
+    assert resolve_asset_path(stale, runtime) == pathlib.PurePath(stale)
 
 
 def test_reroot_candidates_matches_each_root_by_name(tmp_path):

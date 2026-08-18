@@ -17,15 +17,15 @@ def _make_ab(tmp_path):
     (run / "grading").mkdir(parents=True)
     (run / "ab-out").mkdir()
     (run / "grading" / "keymap.json").write_text(json.dumps(
-        {"arms": ["recent", "youmans"], "questions": {}}))
+        {"arms": ["recent", "youmans"], "questions": {}}), encoding="utf-8")
     (run / "run-config.json").write_text(json.dumps(
         {"application_commit": "deadbeef1234", "working_tree_dirty": False,
-         "created_at": "2026-06-20T22:10:00+00:00"}))
+         "created_at": "2026-06-20T22:10:00+00:00"}), encoding="utf-8")
 
     def _grades(arm, scores, letters):
         lines = [json.dumps({"question_id": f"Q{i}", "score": s, "letter_grade": g})
                  for i, (s, g) in enumerate(zip(scores, letters))]
-        (run / "ab-out" / f"{arm}-grades.jsonl").write_text("\n".join(lines) + "\n")
+        (run / "ab-out" / f"{arm}-grades.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     _grades("recent", [80, 90], ["B", "A"])     # mean 85.0
     _grades("youmans", [70, 80], ["C", "B"])    # mean 75.0
@@ -53,6 +53,6 @@ def test_cli_ab_writes_two_rows(tmp_path, monkeypatch):
     (tmp_path / "evaluation").mkdir()
     rc = ur.main(["--ab", str(run), "--label", "3-arm corpus"])
     assert rc == 0
-    text = (tmp_path / "evaluation" / "RESULTS.md").read_text()
+    text = (tmp_path / "evaluation" / "RESULTS.md").read_text(encoding="utf-8")
     assert f"| {run.name} · recent |" in text
     assert f"| {run.name} · youmans |" in text

@@ -35,7 +35,7 @@ def test_phase2_defaults_present(tmp_path, monkeypatch):
     assert cfg.max_figure_images == 5
     assert cfg.figure_dpi == 160
     assert abs(cfg.figure_area_threshold - 0.1) < 1e-9
-    assert str(cfg.assets_dir).endswith("assets/figures")
+    assert cfg.assets_dir.parts[-2:] == ("assets", "figures")
 
 
 def test_env_overrides_synth_provider(tmp_path, monkeypatch):

@@ -75,3 +75,20 @@ def _guarded_connect_ex(self, address):
 socket.socket.connect = _guarded_connect
 socket.create_connection = _guarded_create_connection
 socket.socket.connect_ex = _guarded_connect_ex
+
+# Windows has no AF_UNIX socketpair(2); CPython emulates socket.socketpair()
+# with a loopback listen + self-connect, which the guard would misread as a
+# network call (asyncio creates one at import). That self-connect is IPC, not
+# network, so run socketpair with the real connect and re-arm the guard after.
+_REAL_SOCKETPAIR = socket.socketpair
+
+
+def _guarded_socketpair(*args, **kwargs):
+    socket.socket.connect = _REAL_CONNECT
+    try:
+        return _REAL_SOCKETPAIR(*args, **kwargs)
+    finally:
+        socket.socket.connect = _guarded_connect
+
+
+socket.socketpair = _guarded_socketpair

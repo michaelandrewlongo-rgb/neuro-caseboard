@@ -17,12 +17,12 @@ def _write_summary(d: Path, mean=77.74, ng=0):
         "overall_score": {"n": 66, "mean": mean},
         "grade_distribution": {"A": 0, "B": 38, "C": 22, "D": 6, "F": 0, "Not gradable": ng},
         "unsafe_answer_count": 0,
-    }))
+    }), encoding="utf-8")
     (d / "run-config.json").write_text(json.dumps({
         "application_commit": "28a6e30ab5b2697acc4dafe0a46824c8c3c42e6a",
         "working_tree_dirty": True,
         "created_at": "2026-06-20T13:47:23.871700+00:00",
-    }))
+    }), encoding="utf-8")
 
 
 def test_row_from_summary_reads_metrics_and_runconfig(tmp_path):
@@ -52,5 +52,5 @@ def test_cli_summary_writes_results(tmp_path, monkeypatch):
     rc = ur.main(["--summary", str(tmp_path / "s-summary.json"),
                   "--run", "baseline-x", "--label", "baseline", "--baseline"])
     assert rc == 0
-    text = (tmp_path / "evaluation" / "RESULTS.md").read_text()
+    text = (tmp_path / "evaluation" / "RESULTS.md").read_text(encoding="utf-8")
     assert "| baseline-x |" in text and "77.74" in text

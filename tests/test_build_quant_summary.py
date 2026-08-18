@@ -8,7 +8,7 @@ WEB = Path(__file__).resolve().parent.parent / "web" / "src"
 
 
 def test_quant_extractor_present_and_pure():
-    src = (WEB / "lib" / "quant.ts").read_text()
+    src = (WEB / "lib" / "quant.ts").read_text(encoding="utf-8")
     assert "export function extractMetrics" in src
     assert "export function summarizeDossier" in src
     # the kinds the dossier summary surfaces
@@ -17,7 +17,7 @@ def test_quant_extractor_present_and_pure():
 
 
 def test_dossier_view_renders_quant_summary_from_claims():
-    src = (WEB / "components" / "build" / "DossierView.tsx").read_text()
+    src = (WEB / "components" / "build" / "DossierView.tsx").read_text(encoding="utf-8")
     assert "summarizeDossier" in src
     assert "By the numbers" in src
     # derived from the dossier's own claims (no fabrication)

@@ -24,7 +24,7 @@ def test_no_hidden_polling_or_streaming_in_app_code():
     forbidden = ("new WebSocket", "refetchInterval")
     offenders = []
     for f in _all_sources():
-        text = f.read_text()
+        text = f.read_text(encoding="utf-8")
         rel = f.relative_to(WEB_SRC).as_posix()
         for pat in forbidden:
             if pat in text:
@@ -38,7 +38,7 @@ def test_no_hidden_polling_or_streaming_in_app_code():
 def test_ask_stream_is_bounded():
     """The Ask EventSource must be request-scoped, not perpetual: the consumer closes it on the
     terminal event and on unmount, so no stream survives navigation or a backgrounded tab."""
-    ask = (WEB_SRC / "pages" / "Ask.tsx").read_text()
+    ask = (WEB_SRC / "pages" / "Ask.tsx").read_text(encoding="utf-8")
     assert ".close()" in ask, "Ask.tsx must close the EventSource (bounded lifecycle)"
     assert "return () => esRef.current?.close()" in ask, \
         "Ask.tsx must close the stream on unmount"
@@ -48,14 +48,14 @@ def test_every_setInterval_is_cleared():
     """Animation loaders may use setInterval, but each file must also clearInterval (no leaked
     timers that keep the page active after a component unmounts)."""
     for f in _all_sources():
-        text = f.read_text()
+        text = f.read_text(encoding="utf-8")
         n_set = len(re.findall(r"\bsetInterval\s*\(", text))
         n_clear = len(re.findall(r"\bclearInterval\s*\(", text))
         assert n_set <= n_clear, f"{f.name}: {n_set} setInterval but {n_clear} clearInterval (leak)"
 
 
 def test_reduced_motion_global_killswitch_present():
-    css = (WEB_SRC / "index.css").read_text()
+    css = (WEB_SRC / "index.css").read_text(encoding="utf-8")
     assert "prefers-reduced-motion: reduce" in css
     assert "animation-iteration-count: 1 !important" in css
 
@@ -63,8 +63,8 @@ def test_reduced_motion_global_killswitch_present():
 def test_background_tab_pause_guard_present():
     """A hidden tab must pause decorative animation (resource-bounded) — CSS keyed off
     data-doc-hidden, wired from App.tsx on visibilitychange with listener cleanup."""
-    css = (WEB_SRC / "index.css").read_text()
-    app = (WEB_SRC / "App.tsx").read_text()
+    css = (WEB_SRC / "index.css").read_text(encoding="utf-8")
+    app = (WEB_SRC / "App.tsx").read_text(encoding="utf-8")
     assert "data-doc-hidden" in css and "animation-play-state: paused !important" in css
     assert "visibilitychange" in app and "data-doc-hidden" in app
     assert "removeEventListener" in app

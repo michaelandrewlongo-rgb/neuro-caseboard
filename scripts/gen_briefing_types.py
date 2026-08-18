@@ -87,5 +87,5 @@ def generate_ts() -> str:
 
 if __name__ == "__main__":
     target = Path(__file__).resolve().parent.parent / "web" / "src" / "lib" / "briefingTypes.ts"
-    target.write_text(generate_ts())
+    target.write_text(generate_ts(), encoding="utf-8")
     print(f"wrote {target}")

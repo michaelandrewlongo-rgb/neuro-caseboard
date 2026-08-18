@@ -58,7 +58,7 @@ def _scan(repo_root):
             rel = p.relative_to(repo_root).as_posix()
             if rel in EXCLUDE_FILES or set(p.parts) & EXCLUDE_DIRS:
                 continue
-            for line in p.read_text().splitlines():
+            for line in p.read_text(encoding="utf-8").splitlines():
                 if ANTIPATTERN.search(line):
                     hits.add(f"{rel}: {line.strip()}")
     return hits

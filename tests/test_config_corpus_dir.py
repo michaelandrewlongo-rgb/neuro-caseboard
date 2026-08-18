@@ -20,4 +20,4 @@ def test_default_corpus_dir_is_under_home():
 def test_env_still_overrides(monkeypatch):
     monkeypatch.setenv("CORPUS_DIR", "/some/other/path")
     monkeypatch.setenv("NEURO_CASEBOARD_SKIP_DOTENV", "1")
-    assert str(load_config().corpus_dir) == "/some/other/path"
+    assert load_config().corpus_dir == Path("/some/other/path")
