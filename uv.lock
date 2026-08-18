@@ -1387,7 +1387,7 @@ requires-dist = [
     { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4" },
     { name = "lancedb", specifier = ">=0.5" },
     { name = "markdown", specifier = ">=3.10.2" },
-    { name = "mcp", specifier = ">=1.0" },
+    { name = "mcp", specifier = ">=1.0,<2" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "open-clip-torch", marker = "extra == 'models'", specifier = ">=2.20" },
     { name = "openai", specifier = ">=1.0" },
