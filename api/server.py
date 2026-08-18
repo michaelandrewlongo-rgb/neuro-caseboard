@@ -68,7 +68,13 @@ def _adc_present() -> bool:
     explicit = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
     if explicit and Path(explicit).is_file():
         return True
-    default = Path.home() / ".config" / "gcloud" / "application_default_credentials.json"
+    # Mirror google-auth's default search path: %APPDATA%\gcloud on Windows,
+    # ~/.config/gcloud elsewhere.
+    if os.name == "nt":
+        base = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
+    else:
+        base = Path.home() / ".config"
+    default = base / "gcloud" / "application_default_credentials.json"
     return default.is_file()
 
 
