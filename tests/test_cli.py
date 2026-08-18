@@ -161,7 +161,7 @@ def test_cli_case_writes_dossier_md_and_pdf(tmp_path, monkeypatch):
         "MRI shows C5-6 cord compression; plan ACDF for decompression.",
         "--pdf", "--no-llm", "--no-literature", "-o", str(out)])
     assert rc == 0
-    md = (out / "case-dossier.md").read_text()
+    md = (out / "case-dossier.md").read_text(encoding="utf-8")
     for h in ("Clinical Summary", "Clinical Reasoning", "Operative Plan", "Alternatives",
               "Risks", "Pre-op Optimization", "Surgical Technique", "Case Figures"):
         assert f"## {h}" in md
