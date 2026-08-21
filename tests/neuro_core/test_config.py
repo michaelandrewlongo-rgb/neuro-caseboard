@@ -18,7 +18,7 @@ def test_env_file_crlf_and_precedence(tmp_path, monkeypatch):
 def test_missing_env_file_uses_defaults(tmp_path):
     cfg = load_config(env_file=str(tmp_path / "nope.env"))
     assert cfg.retrieve_k == 40
-    assert cfg.rerank_k == 12
+    assert cfg.rerank_k == 20  # bumped 12->20 (decisive breadth-sweep win, PR #95)
 
 
 def test_phase2_defaults_present(tmp_path, monkeypatch):

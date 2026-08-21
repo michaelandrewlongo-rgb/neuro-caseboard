@@ -346,9 +346,9 @@ def test_model_configuration_records_provider_and_retrieval_knobs(monkeypatch):
     assert cfg["synth_provider"] == "openrouter"
     assert cfg["openrouter_model"] == "z-ai/glm-5.2"
     assert cfg["retrieve_k"] == "40"
-    assert cfg["rerank_k"] == "12"
+    assert cfg["rerank_k"] == "20"  # bumped 12->20: decisive breadth-sweep win (PR #95)
     assert cfg["embed_model"] == "BAAI/bge-large-en-v1.5"
     # env overrides win
-    monkeypatch.setenv("RERANK_K", "20")
+    monkeypatch.setenv("RERANK_K", "16")
     monkeypatch.setenv("SYNTH_PROVIDER", "openrouter")
-    assert runner.model_configuration()["rerank_k"] == "20"
+    assert runner.model_configuration()["rerank_k"] == "16"

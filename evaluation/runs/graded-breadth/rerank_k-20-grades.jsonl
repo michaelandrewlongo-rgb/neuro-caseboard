@@ -1,0 +1,21 @@
+{"qid": "NIS-02", "domain": "Neurointerventional Surgery", "score_ctrl": 88.0, "score_arm": 90.0, "len_ctrl": 7324, "len_arm": 7431, "cost": 0.015129}
+{"qid": "OPEN-CV-04", "domain": "Open Cerebrovascular Surgery", "score_ctrl": 92.0, "score_arm": 94.0, "len_ctrl": 5990, "len_arm": 5167, "cost": 0.011769000000000002}
+{"qid": "OPEN-CV-07", "domain": "Open Cerebrovascular Surgery", "score_ctrl": 86.0, "score_arm": 88.0, "len_ctrl": 5176, "len_arm": 6776, "cost": 0.011786999999999999}
+{"qid": "TUMOR-01", "domain": "Brain Tumor Surgery", "score_ctrl": 88.0, "score_arm": 92.0, "len_ctrl": 5904, "len_arm": 8850, "cost": 0.013869}
+{"qid": "TUMOR-05", "domain": "Brain Tumor Surgery", "score_ctrl": 88.0, "score_arm": 91.0, "len_ctrl": 6624, "len_arm": 6533, "cost": 0.01077}
+{"qid": "SPINE-01", "domain": "Spine Surgery", "score_ctrl": 88.0, "score_arm": 92.0, "len_ctrl": 4262, "len_arm": 4250, "cost": 0.007098}
+{"qid": "SPINE-06", "domain": "Spine Surgery", "score_ctrl": 90.0, "score_arm": 88.0, "len_ctrl": 8575, "len_arm": 6889, "cost": 0.015057000000000001}
+{"qid": "FUNCTIONAL-02", "domain": "Functional Neurosurgery", "score_ctrl": 90.0, "score_arm": 92.0, "len_ctrl": 8378, "len_arm": 8548, "cost": 0.016821}
+{"qid": "TRAUMA-02", "domain": "Trauma Neurosurgery", "score_ctrl": 72.0, "score_arm": 88.0, "len_ctrl": 2758, "len_arm": 7041, "cost": 0.010569}
+{"qid": "GENERAL-01", "domain": "General Neurosurgery", "score_ctrl": 85.0, "score_arm": 88.0, "len_ctrl": 5572, "len_arm": 7384, "cost": 0.013803}
+{"qid": "EASY-01", "domain": "Board-style", "score_ctrl": 78.0, "score_arm": 82.0, "len_ctrl": 2158, "len_arm": 2839, "cost": 0.007875}
+{"qid": "EASY-02", "domain": "Board-style", "score_ctrl": 82.0, "score_arm": 78.0, "len_ctrl": 7097, "len_arm": 9445, "cost": 0.015873}
+{"qid": "EASY-03", "domain": "Board-style", "score_ctrl": 72.0, "score_arm": 88.0, "len_ctrl": 3319, "len_arm": 5983, "cost": 0.007536}
+{"qid": "EASY-04", "domain": "Board-style", "score_ctrl": 88.0, "score_arm": 86.0, "len_ctrl": 6659, "len_arm": 3703, "cost": 0.011184}
+{"qid": "EASY-05", "domain": "Board-style", "score_ctrl": 82.0, "score_arm": 88.0, "len_ctrl": 2326, "len_arm": 4001, "cost": 0.005271}
+{"qid": "EASY-06", "domain": "Board-style", "score_ctrl": 88.0, "score_arm": 92.0, "len_ctrl": 5104, "len_arm": 6052, "cost": 0.008892}
+{"qid": "EASY-07", "domain": "Board-style", "score_ctrl": 90.0, "score_arm": 92.0, "len_ctrl": 3119, "len_arm": 6598, "cost": 0.011337}
+{"qid": "EASY-08", "domain": "Board-style", "score_ctrl": 88.0, "score_arm": 87.0, "len_ctrl": 7112, "len_arm": 6194, "cost": 0.013524000000000001}
+{"qid": "EASY-09", "domain": "Board-style", "score_ctrl": 85.0, "score_arm": 82.0, "len_ctrl": 4937, "len_arm": 3892, "cost": 0.010209}
+{"qid": "EASY-10", "domain": "Board-style", "score_ctrl": 85.0, "score_arm": 88.0, "len_ctrl": 6549, "len_arm": 8735, "cost": 0.014891999999999999}
+{"qid": "CUSTOM-11", "domain": "Open Cerebrovascular Surgery", "score_ctrl": 85.0, "score_arm": 88.0, "len_ctrl": 4186, "len_arm": 9187, "cost": 0.013899000000000002}

@@ -1,0 +1,18 @@
+{
+  "n_paired": 21,
+  "mean_ctrl": 85.33,
+  "mean_arm": 86.76,
+  "mean_delta_arm_minus_ctrl": 1.429,
+  "sd": 6.712,
+  "se": 1.465,
+  "ci95": [
+    -1.44,
+    4.3
+  ],
+  "t": 0.975,
+  "wins": 13,
+  "losses": 8,
+  "ties": 0,
+  "judge": "anthropic/claude-sonnet-4.5",
+  "total_cost": 0.2446
+}
